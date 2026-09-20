@@ -1,3 +1,15 @@
+import { vi } from "vitest";
+
+const { installChromium } = vi.hoisted(() => ({
+  installChromium: vi.fn(() => ({
+    exitCode: 0,
+    stdout: "installed\n",
+    stderr: "",
+  })),
+}));
+
+vi.mock("@sedum-dev/core", () => ({ installChromium }));
+
 import { describe, expect, it } from "vitest";
 import { runCli } from "./run-cli.js";
 
@@ -15,7 +27,21 @@ describe("CLI arguments", () => {
     expect(runCli(["--help"], "1.2.3").stdout).toContain(
       "run command is not implemented",
     );
+    expect(runCli(["--help"], "1.2.3").stdout).toContain(
+      "browsers install chromium",
+    );
     expect(runCli(["-h"], "1.2.3").exitCode).toBe(0);
+  });
+
+  it("delegates explicit Chromium installation to core", () => {
+    expect(
+      runCli(["browsers", "install", "chromium", "--with-deps"], "1.2.3"),
+    ).toEqual({
+      stdout: "installed\n",
+      stderr: "",
+      exitCode: 0,
+    });
+    expect(installChromium).toHaveBeenCalledWith(true);
   });
 
   it("fails clearly for unavailable or malformed commands", () => {

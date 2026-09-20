@@ -18,5 +18,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist && tsup src/page-script/index.ts --format iife --platform browser --global-name SedumPageScript --out-dir dist/page-script",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright-core": "1.63.0"
   }
 }
