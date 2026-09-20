@@ -1,0 +1,22 @@
+{
+  "name": "@sedum-dev/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist && tsup src/page-script/index.ts --format iife --platform browser --global-name SedumPageScript --out-dir dist/page-script",
+    "typecheck": "tsc --noEmit"
+  }
+}

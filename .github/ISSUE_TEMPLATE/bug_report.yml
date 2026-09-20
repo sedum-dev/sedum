@@ -1,0 +1,17 @@
+name: Bug report
+description: Report a reproducible Sedum problem
+labels: [bug]
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include the expected behavior and a minimal reproduction.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Sedum and Node versions
+    validations:
+      required: true

@@ -1,0 +1,30 @@
+{
+  "name": "sedum-cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "bin": {
+    "sedum": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --dts --clean --out-dir dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sedum-dev/core": "workspace:*",
+    "@sedum-dev/provider-typesafe": "workspace:*",
+    "@sedum-dev/reporters": "workspace:*"
+  }
+}

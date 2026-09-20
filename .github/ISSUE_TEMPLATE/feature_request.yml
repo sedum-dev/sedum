@@ -1,0 +1,14 @@
+name: Feature request
+description: Suggest a user-facing improvement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the outcome you need and why.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
