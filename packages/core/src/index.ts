@@ -9,10 +9,7 @@ export interface RunResult {
   readonly message: string;
 }
 
-/** Browser effects stay behind this boundary. */
-export interface BrowserDriver {
-  perform(action: ActionRequest): Promise<void>;
-}
+export * from "./browser-driver.js";
 
 /** Future model adapters supply these separate decisions. */
 export interface Resolver {
