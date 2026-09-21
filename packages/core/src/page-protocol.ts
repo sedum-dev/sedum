@@ -69,7 +69,7 @@ export interface DigestResult {
   readonly version: PageVersion;
   readonly text: string;
   readonly complete: boolean;
-  readonly error?: "digest_too_large" | "resource_ceiling";
+  readonly error?: "digest_too_large" | "resource_ceiling" | "scope_ambiguous";
 }
 export interface Aim {
   readonly ref: string;

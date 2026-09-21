@@ -22,8 +22,11 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
     let server: Server;
     let base = "";
     let session: BrowserSession;
+    let lastReferer: string | undefined;
     beforeAll(async () => {
-      server = createServer((_request, response) => {
+      server = createServer((request, response) => {
+        if (request.url === "/referer-check")
+          lastReferer = request.headers.referer;
         response.writeHead(200, { "content-type": "text/html" });
         response.end(
           "<!doctype html><html><body><main id='app'></main></body></html>",
@@ -200,7 +203,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
     it("uses the topmost dialog for candidates and digest", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
-        "document.querySelector('#app').innerHTML = '<dialog id=\"new\"><p>NEW_TEXT</p><button>New</button></dialog><dialog id=\"old\"><p>OLD_SECRET</p><button>Old</button></dialog>'; document.querySelector('#old').showModal(); document.querySelector('#new').showModal()",
+        "document.querySelector('#app').innerHTML = '<dialog id=\"new\"><p>NEW_TEXT</p><button>New</button></dialog><dialog id=\"old\"><p>OLD_SECRET</p><button>Old</button></dialog>'; document.querySelector('#old').showModal(); document.querySelector('#new').showModal(); document.activeElement.blur()",
       );
       const found = await collectCandidates(page, "click");
       expect(found.candidates.map((candidate) => candidate.name)).toEqual([
@@ -256,6 +259,50 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(digest.text).not.toContain("draft-secret");
       await context.close();
     });
+    it("offers radios for click but not fill", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<label><input type="radio" name="size">Large</label><label>Search<input type="text"></label>\'',
+      );
+      const clicks = await collectCandidates(page, "click");
+      expect(clicks.candidates.map((candidate) => candidate.role)).toEqual([
+        "radio",
+      ]);
+      expect(clicks.candidates[0]?.editable).toBe(false);
+      const fills = await collectCandidates(page, "fill");
+      expect(fills.candidates.map((candidate) => candidate.name)).toEqual([
+        "Search",
+      ]);
+      await context.close();
+    });
+    it("does not let page code replace the provider extraction bridge", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<input value=\"private-draft-123\"><button>Submit</button><button>Cancel</button>'; try { window.__sedum.collect = () => ({ candidates: [{name:document.querySelector('input').value}] }); } catch {} try { window.__sedum = { protocol: 1, collect: () => ({ candidates: [{name:document.querySelector('input').value}] }) }; } catch {}",
+      );
+      const found = await collectCandidates(page, "click");
+      expect(found.candidates.map((candidate) => candidate.name)).toEqual([
+        "Submit",
+        "Cancel",
+      ]);
+      await page.evaluate(
+        "const live = window.__sedum.findBySignals({operation:'click'}); try { live.candidates[1].name = document.querySelector('input').value } catch {} try { live.candidates[1] = { ...live.candidates[1], name: document.querySelector('input').value } } catch {}",
+      );
+      const continuation = await collectCandidates(
+        page,
+        "click",
+        1,
+        found.version,
+      );
+      expect(continuation.candidates[0]?.name).toBe("Cancel");
+      expect(JSON.stringify(projectCandidates(found))).not.toContain(
+        "private-draft-123",
+      );
+      expect(JSON.stringify(projectCandidates(continuation))).not.toContain(
+        "private-draft-123",
+      );
+      await context.close();
+    });
     it("excludes ARIA editable values and content-visibility hidden subtrees", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
@@ -271,6 +318,17 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const digest = await pageDigest(page);
       expect(digest.text).not.toContain("secret-field-123");
       expect(digest.text).not.toContain("secret-hidden");
+      await context.close();
+    });
+    it("keeps rendered display-contents text in a complete digest", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<div style=\"display:contents\">VISIBLE_DIRECT_TEXT</div><p>Other</p>'",
+      );
+      const digest = await pageDigest(page);
+      expect(digest.complete).toBe(true);
+      expect(digest.text).toContain("VISIBLE_DIRECT_TEXT");
+      expect(digest.text).toContain("Other");
       await context.close();
     });
     it("offers readable leaves without layout wrappers", async () => {
@@ -401,12 +459,57 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(page.url).toBe(route);
       await context.close();
     });
+    it("preserves a handler that checks defaultPrevented before canceling", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<a href=\"/danger\">Open menu</a>'; document.querySelector('a').addEventListener('click', (event) => { if (event.defaultPrevented) return; event.preventDefault(); window.menuOpened=true; })",
+      );
+      const route = page.url;
+      const found = await collectCandidates(page, "click");
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(await page.evaluate("window.menuOpened === true")).toBe(true);
+      expect(page.url).toBe(route);
+      await context.close();
+    });
+    it("uses document navigation so link referrer policy is preserved", async () => {
+      const { page, context } = await fresh();
+      lastReferer = undefined;
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<a href=\"/referer-check\">Go</a>'",
+      );
+      const found = await collectCandidates(page, "click");
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      await page.clickRef(aimed.aim);
+      expect(page.url).toContain("/referer-check");
+      expect(lastReferer).toBe(`${base}/`);
+      await context.close();
+    });
     it("refuses link modes whose native behavior cannot be replayed safely", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
         'document.querySelector(\'#app\').innerHTML = \'<a href="/other" target="_blank">New tab</a><a href="/file" download>Download</a>\'',
       );
       const found = await collectCandidates(page, "click");
+      for (const candidate of found.candidates)
+        expect(await clickTarget(page, candidate.ref)).toEqual({
+          actionable: false,
+          reason: "not_actionable",
+        });
+      await context.close();
+    });
+    it("does not collect a nested control inside a new-tab or download link", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<a href="/other" target="_blank"><span role="button">New tab</span></a><a href="/file" download><span role="button">Download</span></a>\'',
+      );
+      const found = await collectCandidates(page, "click");
+      expect(found.candidates.map((candidate) => candidate.tag)).toEqual([
+        "a",
+        "a",
+      ]);
       for (const candidate of found.candidates)
         expect(await clickTarget(page, candidate.ref)).toEqual({
           actionable: false,

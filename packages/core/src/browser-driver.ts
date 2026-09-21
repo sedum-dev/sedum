@@ -395,8 +395,13 @@ class PlaywrightPage implements BrowserPage {
                 retryable: false,
               };
             if (early.pageCanceled) return { actionable: true, aim };
-            if (currentRoute === routeBeforeClick)
-              await this.page.goto(early.heldHref, { timeout: 1000 });
+            if (currentRoute === routeBeforeClick) {
+              await this.page.evaluate(
+                (href) => window.location.assign(href),
+                early.heldHref,
+              );
+              await this.page.waitForURL(early.heldHref, { timeout: 1000 });
+            }
           }
         } catch {
           return {

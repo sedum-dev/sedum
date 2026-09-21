@@ -26,7 +26,7 @@ if (!window.__sedum) {
     | {
         version: PageVersion;
         operation: Operation;
-        candidates: Candidate[];
+        candidates: readonly Candidate[];
         refs: Map<string, Element>;
         complete: boolean;
       }
@@ -41,7 +41,34 @@ if (!window.__sedum) {
     "spinbutton",
     "slider",
   ]);
+  const FILLABLE_INPUT_TYPES = new Set([
+    "text",
+    "email",
+    "password",
+    "search",
+    "tel",
+    "url",
+    "number",
+    "date",
+    "datetime-local",
+    "time",
+    "month",
+    "week",
+  ]);
+  const modalOrder = new Map<HTMLDialogElement, number>();
+  let modalSequence = 0;
   const observer = new MutationObserver((changes) => {
+    for (const change of changes) {
+      if (
+        change.type === "attributes" &&
+        change.attributeName === "open" &&
+        change.target instanceof HTMLDialogElement
+      ) {
+        if (change.oldValue === null && change.target.matches(":modal"))
+          modalOrder.set(change.target, ++modalSequence);
+        else if (!change.target.open) modalOrder.delete(change.target);
+      }
+    }
     if (
       changes.some(
         (change) =>
@@ -56,6 +83,7 @@ if (!window.__sedum) {
     childList: true,
     characterData: true,
     attributes: true,
+    attributeOldValue: true,
   });
 
   function version(): PageVersion {
@@ -108,25 +136,48 @@ if (!window.__sedum) {
         return false;
     }
     const style = getComputedStyle(element);
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      style.visibility !== "collapse" &&
-      element.getClientRects().length > 0
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      style.visibility === "collapse"
+    )
+      return false;
+    if (element.getClientRects().length > 0) return true;
+    if (style.display !== "contents") return false;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return Array.from(range.getClientRects()).some(
+      (rect) => rect.width > 0 && rect.height > 0,
     );
   }
-  function modal(): Element | null {
+  /** Undefined means multiple modal scopes exist but their top layer is unknown. */
+  function modal(): Element | null | undefined {
+    for (const dialog of modalOrder.keys())
+      if (!dialog.isConnected || !dialog.open) modalOrder.delete(dialog);
     const dialogs = Array.from(
       document.querySelectorAll(
         "dialog:modal,[role='dialog'][aria-modal='true']",
       ),
     ).filter(visible);
+    if (!dialogs.length) return null;
+    const native = dialogs.filter((element): element is HTMLDialogElement =>
+      element.matches("dialog:modal"),
+    );
+    if (native.length) {
+      const ordered = [...native].sort(
+        (a, b) => (modalOrder.get(b) ?? 0) - (modalOrder.get(a) ?? 0),
+      );
+      if ((modalOrder.get(ordered[0]!) ?? 0) > 0) return ordered[0]!;
+      return (
+        native.find((element) => element.contains(document.activeElement)) ??
+        (native.length === 1 ? native[0] : undefined)
+      );
+    }
     return (
       [...dialogs]
         .reverse()
         .find((element) => element.contains(document.activeElement)) ??
-      dialogs.at(-1) ??
-      null
+      dialogs.at(-1)!
     );
   }
   function excludedTextAncestor(
@@ -193,12 +244,21 @@ if (!window.__sedum) {
         ? "button"
         : element.type === "checkbox"
           ? "checkbox"
-          : "textbox";
+          : element.type === "radio"
+            ? "radio"
+            : element.type === "range"
+              ? "slider"
+              : element.type === "number"
+                ? "spinbutton"
+                : element.type === "search"
+                  ? "searchbox"
+                  : "textbox";
     if (element instanceof HTMLTextAreaElement) return "textbox";
     if (element instanceof HTMLSelectElement) return "combobox";
     return "";
   }
   function interactive(element: Element): boolean {
+    if (element.parentElement?.closest("a[href]")) return false;
     return (
       element.matches(
         "button,a[href],input,textarea,select,[contenteditable='true']",
@@ -234,10 +294,11 @@ if (!window.__sedum) {
     );
   }
   function editable(element: Element): boolean {
+    if (element instanceof HTMLInputElement)
+      return FILLABLE_INPUT_TYPES.has(element.type);
     return (
-      element.matches(
-        "input:not([type='button']):not([type='submit']):not([type='reset']),textarea,select,[contenteditable='true']",
-      ) || EDITABLE_ROLES.has(role(element))
+      element.matches("textarea,select,[contenteditable='true']") ||
+      EDITABLE_ROLES.has(role(element))
     );
   }
   function disabled(element: Element): boolean {
@@ -340,14 +401,17 @@ if (!window.__sedum) {
     };
   }
   function scan(operation: Operation): {
-    candidates: Candidate[];
+    candidates: readonly Candidate[];
     refs: Map<string, Element>;
     complete: boolean;
   } {
     clearRefs();
     const refs = new Map<string, Element>();
     const candidates: Candidate[] = [];
-    const root = modal() ?? document.body;
+    const selectedModal = modal();
+    if (selectedModal === undefined)
+      return { candidates, refs, complete: false };
+    const root = selectedModal ?? document.body;
     if (!root) return { candidates, refs, complete: true };
     const elements = root.querySelectorAll("*");
     if (elements.length > MAX_ELEMENTS)
@@ -372,32 +436,34 @@ if (!window.__sedum) {
       owned.set(element, { old: element.getAttribute("data-sedum-ref"), ref });
       element.setAttribute("data-sedum-ref", ref);
       refs.set(ref, element);
-      candidates.push({
-        ref,
-        tag: element.tagName.toLowerCase(),
-        role: role(element),
-        name,
-        peers: peerData.texts,
-        editable: editable(element),
-        disabled: disabled(element),
-        inputType: element instanceof HTMLInputElement ? element.type : "",
-        signals: {
-          ...(element.getAttribute("data-testid")
-            ? { hook: element.getAttribute("data-testid")! }
-            : {}),
-          ...(element.id ? { id: element.id } : {}),
-          ...(element.getAttribute("name")
-            ? { name: element.getAttribute("name")! }
-            : {}),
-          ...(element.getAttribute("href")
-            ? { href: element.getAttribute("href")! }
-            : {}),
-          path: path(element),
-          contextComplete: peerData.contextComplete,
-        },
-      });
+      candidates.push(
+        Object.freeze({
+          ref,
+          tag: element.tagName.toLowerCase(),
+          role: role(element),
+          name,
+          peers: Object.freeze(peerData.texts),
+          editable: editable(element),
+          disabled: disabled(element),
+          inputType: element instanceof HTMLInputElement ? element.type : "",
+          signals: Object.freeze({
+            ...(element.getAttribute("data-testid")
+              ? { hook: element.getAttribute("data-testid")! }
+              : {}),
+            ...(element.id ? { id: element.id } : {}),
+            ...(element.getAttribute("name")
+              ? { name: element.getAttribute("name")! }
+              : {}),
+            ...(element.getAttribute("href")
+              ? { href: element.getAttribute("href")! }
+              : {}),
+            path: path(element),
+            contextComplete: peerData.contextComplete,
+          }),
+        }),
+      );
     }
-    return { candidates, refs, complete: true };
+    return { candidates: Object.freeze(candidates), refs, complete: true };
   }
   function collect(input: {
     operation: Operation;
@@ -458,7 +524,16 @@ if (!window.__sedum) {
   }
   function digest(): DigestResult {
     const current = version();
-    const root = modal() ?? document.body;
+    const selectedModal = modal();
+    if (selectedModal === undefined)
+      return {
+        protocol: PAGE_PROTOCOL,
+        version: current,
+        text: "",
+        complete: false,
+        error: "scope_ambiguous",
+      };
+    const root = selectedModal ?? document.body;
     if (!root)
       return {
         protocol: PAGE_PROTOCOL,
@@ -539,13 +614,18 @@ if (!window.__sedum) {
       return { actionable: false, reason: "stale" };
     if (!visible(element) || disabled(element))
       return { actionable: false, reason: "not_actionable" };
-    if (
-      element instanceof HTMLAnchorElement &&
-      (element.hasAttribute("download") ||
-        !["", "_self"].includes(element.target) ||
-        !["http:", "https:"].includes(new URL(element.href).protocol))
-    )
-      return { actionable: false, reason: "not_actionable" };
+    const enclosingLink = element.closest("a[href]");
+    if (enclosingLink) {
+      if (enclosingLink !== element)
+        return { actionable: false, reason: "not_actionable" };
+      if (
+        enclosingLink instanceof HTMLAnchorElement &&
+        (enclosingLink.hasAttribute("download") ||
+          !["", "_self"].includes(enclosingLink.target) ||
+          !["http:", "https:"].includes(new URL(enclosingLink.href).protocol))
+      )
+        return { actionable: false, reason: "not_actionable" };
+    }
     if (!expected)
       element.scrollIntoView({
         block: "center",
@@ -622,6 +702,12 @@ if (!window.__sedum) {
           const cancel = event.preventDefault.bind(event);
           cancel();
           try {
+            // Keep page handlers' observable cancellation state equivalent to
+            // a native click while the browser default is held by Sedum.
+            Object.defineProperty(event, "defaultPrevented", {
+              configurable: true,
+              get: () => active.pageCanceled,
+            });
             Object.defineProperty(event, "preventDefault", {
               configurable: true,
               value: () => {
@@ -631,7 +717,7 @@ if (!window.__sedum) {
             });
             Object.defineProperty(event, "returnValue", {
               configurable: true,
-              get: () => false,
+              get: () => !active.pageCanceled,
               set: (value: boolean) => {
                 if (value === false) active.pageCanceled = true;
                 cancel();
@@ -712,5 +798,10 @@ if (!window.__sedum) {
       return { version: version(), quiet: false };
     },
   };
-  window.__sedum = bridge;
+  Object.freeze(bridge);
+  Object.defineProperty(window, "__sedum", {
+    value: bridge,
+    configurable: false,
+    writable: false,
+  });
 }
