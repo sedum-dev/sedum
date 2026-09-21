@@ -1,6 +1,8 @@
 # SED-79 spike: Playwright-native clicks and accessibility snapshots
 
-This is an exploratory branch stacked on SED-21, not an approved implementation or a review sign-off. Run the built-browser experiments with:
+This is an exploratory branch stacked on SED-21, not an approved implementation or a review sign-off. Tracking: [SED-79](https://linear.app/sedum/issue/SED-79/fix-canceled-link-navigation-in-browser-click-execution) · parent [SED-21 draft PR #2](https://github.com/sedum-dev/sedum/pull/2).
+
+Run the built-browser experiments with:
 
 ```sh
 SEDUM_BROWSER_INTEGRATION=1 corepack pnpm exec vitest run packages/core/src/playwright-native.spike.integration.test.ts
