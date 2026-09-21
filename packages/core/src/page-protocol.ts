@@ -80,12 +80,20 @@ export interface Aim {
   readonly name: string;
   readonly point: { readonly x: number; readonly y: number };
 }
+/** A fill target is tied to the exact element in a collected fill snapshot. */
+export interface FillTarget {
+  readonly ref: string;
+  readonly version: PageVersion;
+  readonly tag: string;
+  readonly name: string;
+}
 export type AimResult =
   | { readonly actionable: true; readonly aim: Aim }
   | {
       readonly actionable: false;
       readonly reason: "action_started";
       readonly retryable: false;
+      readonly callLog?: readonly string[];
     }
   | {
       readonly actionable: false;
@@ -107,6 +115,7 @@ export interface PageBridge {
   findBySignals(input: { operation: Operation }): CandidatePage;
   clickTarget(ref: string): AimResult;
   checkAim(aim: Aim): AimResult;
+  fillElement(target: FillTarget): Element | null;
   clearRefs(): void;
 }
 declare global {
