@@ -11,6 +11,14 @@ vi.mock("playwright-core", () => ({
   chromium: { launch, executablePath },
 }));
 vi.mock("node:child_process", () => ({ spawnSync }));
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    existsSync: (path: string) =>
+      path.endsWith("page-script/index.global.js") || actual.existsSync(path),
+  };
+});
 
 import {
   BrowserDriverError,
@@ -52,6 +60,7 @@ class FakePage extends EventEmitter {
 
 class FakeContext extends EventEmitter {
   readonly page = new FakePage();
+  readonly addInitScript = vi.fn(async () => undefined);
 
   async newPage(): Promise<FakePage> {
     return this.page;
@@ -158,6 +167,9 @@ describe("PlaywrightBrowserDriver", () => {
     });
     const context = await session.newContext({
       viewport: { width: 800, height: 600 },
+    });
+    expect(browser.context.addInitScript).toHaveBeenCalledWith({
+      path: expect.stringContaining("page-script/index.global.js"),
     });
     const page = await context.newPage();
 
