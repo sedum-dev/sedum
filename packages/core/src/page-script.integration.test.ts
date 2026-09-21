@@ -214,6 +214,24 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(digest.text).not.toContain("OLD_SECRET");
       await context.close();
     });
+    it("fails closed when multiple ARIA modal scopes disagree with focus or stacking", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<div role="dialog" aria-modal="true" style="position:fixed;inset:40px;z-index:200;background:white"><p>NEW_TEXT</p><button>New</button></div><div role="dialog" aria-modal="true" style="position:fixed;inset:80px;z-index:100;background:white"><p>OLD_SECRET</p><button>Old</button></div>\'; document.activeElement.blur()',
+      );
+      const found = await collectCandidates(page, "click");
+      expect(found.complete).toBe(false);
+      const digest = await pageDigest(page);
+      expect(digest.complete).toBe(false);
+      expect(digest.error).toBe("scope_ambiguous");
+      await page.evaluate(
+        "document.querySelectorAll('[role=dialog] button')[1].focus()",
+      );
+      const focused = await collectCandidates(page, "click");
+      expect(focused.complete).toBe(false);
+      expect((await pageDigest(page)).error).toBe("scope_ambiguous");
+      await context.close();
+    });
     it("handles delayed content, offscreen controls, pointer-events, and oversized digest", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
@@ -473,6 +491,25 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(page.url).toBe(route);
       await context.close();
     });
+    // Known CR11 blocker: this desired behavior currently fails. Remove
+    // `.fails` when link cancellation is repaired without unsafe replay.
+    it.fails(
+      "does not replay a link canceled through the native Event method",
+      async () => {
+        const { page, context } = await fresh();
+        await page.evaluate(
+          "document.querySelector('#app').innerHTML = '<a href=\"/danger\">Open menu</a>'; document.querySelector('a').addEventListener('click', (event) => { Event.prototype.preventDefault.call(event); window.menuOpened=true; })",
+        );
+        const route = page.url;
+        const found = await collectCandidates(page, "click");
+        const aimed = await clickTarget(page, found.candidates[0]!.ref);
+        if (!aimed.actionable) throw new Error("No aim");
+        await page.clickRef(aimed.aim);
+        expect(page.url).toBe(route);
+        expect(await page.evaluate("window.menuOpened === true")).toBe(true);
+        await context.close();
+      },
+    );
     it("uses document navigation so link referrer policy is preserved", async () => {
       const { page, context } = await fresh();
       lastReferer = undefined;

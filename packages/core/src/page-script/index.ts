@@ -173,12 +173,9 @@ if (!window.__sedum) {
         (native.length === 1 ? native[0] : undefined)
       );
     }
-    return (
-      [...dialogs]
-        .reverse()
-        .find((element) => element.contains(document.activeElement)) ??
-      dialogs.at(-1)!
-    );
+    // ARIA dialogs have no browser-maintained top-layer order. Focus is not
+    // proof of visual stacking, so multiple scopes cannot be selected safely.
+    return dialogs.length === 1 ? dialogs[0] : undefined;
   }
   function excludedTextAncestor(
     element: Element,
