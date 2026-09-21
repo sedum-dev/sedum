@@ -402,20 +402,17 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(await page.evaluate("window.clicked || 0")).toBe(0);
       await context.close();
     });
-    it("reports action-started when pointerdown mutates the page", async () => {
+    it("lets the browser complete a click when pointerdown mutates the same control", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
-        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; document.querySelector('button').addEventListener('pointerdown', function () { window.pointerCount=(window.pointerCount||0)+1; this.textContent='Changed'; })",
+        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; document.querySelector('button').addEventListener('pointerdown', function () { window.pointerCount=(window.pointerCount||0)+1; this.textContent='Changed'; }); document.querySelector('button').addEventListener('click', () => window.clickCount=(window.clickCount||0)+1)",
       );
       const found = await collectCandidates(page, "click");
       const aimed = await clickTarget(page, found.candidates[0]!.ref);
       if (!aimed.actionable) throw new Error("No aim");
-      expect(await page.clickRef(aimed.aim)).toEqual({
-        actionable: false,
-        reason: "action_started",
-        retryable: false,
-      });
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
       expect(await page.evaluate("window.pointerCount || 0")).toBe(1);
+      expect(await page.evaluate("window.clickCount || 0")).toBe(1);
       await context.close();
     });
     it("never reports a navigation click as a retryable miss", async () => {
@@ -426,27 +423,20 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const found = await collectCandidates(page, "click");
       const aimed = await clickTarget(page, found.candidates[0]!.ref);
       if (!aimed.actionable) throw new Error("No aim");
-      const result = await page.clickRef(aimed.aim);
-      expect(result.actionable || result.reason === "action_started").toBe(
-        true,
-      );
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
       expect(page.url).toContain("/navigated");
       await context.close();
     });
-    it("holds native link navigation when an earlier page capture handler changes href", async () => {
+    it("uses the browser destination when page code changes href during the click", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
-        "document.querySelector('#app').innerHTML = '<a href=\"/safe\">Go</a>'; window.addEventListener('click', (event) => { document.querySelector('a').href='/wrong'; event.stopPropagation(); }, true)",
+        "document.querySelector('#app').innerHTML = '<a href=\"/original\">Go</a>'; window.addEventListener('click', (event) => { document.querySelector('a').href='/updated'; event.stopPropagation(); }, true)",
       );
       const found = await collectCandidates(page, "click");
       const aimed = await clickTarget(page, found.candidates[0]!.ref);
       if (!aimed.actionable) throw new Error("No aim");
-      expect(await page.clickRef(aimed.aim)).toEqual({
-        actionable: false,
-        reason: "action_started",
-        retryable: false,
-      });
-      expect(page.url).not.toContain("/wrong");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(page.url).toContain("/updated");
       await context.close();
     });
     it("preserves a page-canceled link click without replaying its href", async () => {
@@ -491,25 +481,34 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(page.url).toBe(route);
       await context.close();
     });
-    // Known CR11 blocker: this desired behavior currently fails. Remove
-    // `.fails` when link cancellation is repaired without unsafe replay.
-    it.fails(
-      "does not replay a link canceled through the native Event method",
-      async () => {
-        const { page, context } = await fresh();
-        await page.evaluate(
-          "document.querySelector('#app').innerHTML = '<a href=\"/danger\">Open menu</a>'; document.querySelector('a').addEventListener('click', (event) => { Event.prototype.preventDefault.call(event); window.menuOpened=true; })",
-        );
-        const route = page.url;
-        const found = await collectCandidates(page, "click");
-        const aimed = await clickTarget(page, found.candidates[0]!.ref);
-        if (!aimed.actionable) throw new Error("No aim");
-        await page.clickRef(aimed.aim);
-        expect(page.url).toBe(route);
-        expect(await page.evaluate("window.menuOpened === true")).toBe(true);
-        await context.close();
-      },
-    );
+    it("honors link cancellation through the native Event method", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<a href=\"/danger\">Open menu</a>'; document.querySelector('a').addEventListener('click', (event) => { Event.prototype.preventDefault.call(event); window.menuOpened=true; })",
+      );
+      const route = page.url;
+      const found = await collectCandidates(page, "click");
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      await page.clickRef(aimed.aim);
+      expect(page.url).toBe(route);
+      expect(await page.evaluate("window.menuOpened === true")).toBe(true);
+      await context.close();
+    });
+    it("honors a previously cached native preventDefault method", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "window.cancelClick=Event.prototype.preventDefault; document.querySelector('#app').innerHTML = '<a href=\"/danger\">Open menu</a>'; document.querySelector('a').addEventListener('click', (event) => { window.cancelClick.call(event); window.menuOpened=true; })",
+      );
+      const route = page.url;
+      const found = await collectCandidates(page, "click");
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(page.url).toBe(route);
+      expect(await page.evaluate("window.menuOpened === true")).toBe(true);
+      await context.close();
+    });
     it("uses document navigation so link referrer policy is preserved", async () => {
       const { page, context } = await fresh();
       lastReferer = undefined;
@@ -524,7 +523,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(lastReferer).toBe(`${base}/`);
       await context.close();
     });
-    it("refuses link modes whose native behavior cannot be replayed safely", async () => {
+    it("refuses link modes outside the single-page driver contract", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
         'document.querySelector(\'#app\').innerHTML = \'<a href="/other" target="_blank">New tab</a><a href="/file" download>Download</a>\'',
@@ -613,38 +612,47 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ).toThrow("candidate_not_distinguishable");
       await context.close();
     });
-    it("treats hover side effects as non-retryable once Playwright click starts", async () => {
+    it("lets Playwright complete a native click after a hover side effect", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
-        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; document.querySelector('button').addEventListener('pointerover', function () { window.hoverCount=(window.hoverCount||0)+1; this.textContent='Changed'; })",
+        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; document.querySelector('button').addEventListener('pointerover', function () { window.hoverCount=(window.hoverCount||0)+1; this.textContent='Changed'; }); document.querySelector('button').addEventListener('click', () => window.clickCount=(window.clickCount||0)+1)",
       );
       const found = await collectCandidates(page, "click");
       const aimed = await clickTarget(page, found.candidates[0]!.ref);
       if (!aimed.actionable) throw new Error("No aim");
-      expect(await page.clickRef(aimed.aim)).toEqual({
-        actionable: false,
-        reason: "action_started",
-        retryable: false,
-      });
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
       expect(
         await page.evaluate<number>("window.hoverCount || 0"),
       ).toBeGreaterThan(0);
+      expect(await page.evaluate("window.clickCount || 0")).toBe(1);
       await context.close();
     });
-    it("treats an earlier window capture side effect as non-retryable", async () => {
+    it("lets the browser complete a click after a capture side effect", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
-        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; window.addEventListener('pointerdown', () => { window.captureCount=(window.captureCount||0)+1; document.querySelector('button').textContent='Changed'; }, true)",
+        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; window.addEventListener('pointerdown', () => { window.captureCount=(window.captureCount||0)+1; document.querySelector('button').textContent='Changed'; }, true); document.querySelector('button').addEventListener('click', () => window.clickCount=(window.clickCount||0)+1)",
       );
       const found = await collectCandidates(page, "click");
       const aimed = await clickTarget(page, found.candidates[0]!.ref);
       if (!aimed.actionable) throw new Error("No aim");
-      expect(await page.clickRef(aimed.aim)).toEqual({
-        actionable: false,
-        reason: "action_started",
-        retryable: false,
-      });
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
       expect(await page.evaluate("window.captureCount || 0")).toBe(1);
+      expect(await page.evaluate("window.clickCount || 0")).toBe(1);
+      await context.close();
+    });
+    it("does not second-guess a native click when the control removes itself", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<button>Buy</button>'; document.querySelector('button').addEventListener('pointerdown', function () { window.pointerCount=(window.pointerCount||0)+1; this.remove(); })",
+      );
+      const found = await collectCandidates(page, "click");
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(await page.evaluate("window.pointerCount || 0")).toBe(1);
+      expect(
+        await page.evaluate("document.querySelector('button') === null"),
+      ).toBe(true);
       await context.close();
     });
   },

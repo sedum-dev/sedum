@@ -663,70 +663,6 @@ if (!window.__sedum) {
     }
     return { actionable: false, reason: "not_actionable" };
   }
-  let activeClick:
-    | {
-        expected: Aim;
-        element: Element;
-        anchor: HTMLAnchorElement | null;
-        href: string | null;
-        held: boolean;
-        blocked: boolean;
-        pageCanceled: boolean;
-        cancellationUnknown: boolean;
-      }
-    | undefined;
-  // Registered by the init script before page code can register capture handlers.
-  // Link defaults are held because later handlers can mutate href and stop propagation.
-  for (const type of ["pointerdown", "mousedown", "mouseup", "click"])
-    window.addEventListener(
-      type,
-      (event) => {
-        const active = activeClick;
-        if (!active) return;
-        const receiver = event.target;
-        if (
-          !(receiver instanceof Node) ||
-          (receiver !== active.element && !active.element.contains(receiver)) ||
-          !aim(active.expected.ref, active.expected).actionable
-        ) {
-          active.blocked = true;
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          return;
-        }
-        if (type === "click" && active.anchor) {
-          active.held = true;
-          const cancel = event.preventDefault.bind(event);
-          cancel();
-          try {
-            // Keep page handlers' observable cancellation state equivalent to
-            // a native click while the browser default is held by Sedum.
-            Object.defineProperty(event, "defaultPrevented", {
-              configurable: true,
-              get: () => active.pageCanceled,
-            });
-            Object.defineProperty(event, "preventDefault", {
-              configurable: true,
-              value: () => {
-                active.pageCanceled = true;
-                cancel();
-              },
-            });
-            Object.defineProperty(event, "returnValue", {
-              configurable: true,
-              get: () => !active.pageCanceled,
-              set: (value: boolean) => {
-                if (value === false) active.pageCanceled = true;
-                cancel();
-              },
-            });
-          } catch {
-            active.cancellationUnknown = true;
-          }
-        }
-      },
-      true,
-    );
   const bridge: PageBridge = {
     protocol: PAGE_PROTOCOL,
     collect,
@@ -738,45 +674,6 @@ if (!window.__sedum) {
     },
     clickTarget: (ref) => aim(ref),
     checkAim: (expected) => aim(expected.ref, expected),
-    armClick: (expected) => {
-      if (activeClick || !aim(expected.ref, expected).actionable) return false;
-      const element = refElement(expected.ref);
-      if (!element) return false;
-      const anchor = element.closest("a[href]");
-      activeClick = {
-        expected,
-        element,
-        anchor: anchor instanceof HTMLAnchorElement ? anchor : null,
-        href: anchor instanceof HTMLAnchorElement ? anchor.href : null,
-        held: false,
-        blocked: false,
-        pageCanceled: false,
-        cancellationUnknown:
-          anchor instanceof HTMLAnchorElement &&
-          (anchor.onclick !== null ||
-            anchor.querySelector("[onclick]") !== null),
-      };
-      return true;
-    },
-    finishClick: () => {
-      const active = activeClick;
-      activeClick = undefined;
-      if (!active)
-        return {
-          blocked: true,
-          heldHref: null,
-          pageCanceled: false,
-          cancellationUnknown: true,
-        };
-      return {
-        blocked:
-          active.blocked ||
-          (active.anchor !== null && active.anchor.href !== active.href),
-        heldHref: active.held ? active.href : null,
-        pageCanceled: active.pageCanceled,
-        cancellationUnknown: active.cancellationUnknown,
-      };
-    },
     clearRefs,
     quiet: async ({ ms, timeoutMs }) => {
       const started = performance.now();

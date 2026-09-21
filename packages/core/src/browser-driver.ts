@@ -303,113 +303,11 @@ class PlaywrightPage implements BrowserPage {
         { expected: aim, element },
       );
       if (!still.actionable) return still as AimResult;
-      const guard = await this.page.evaluateHandle(
-        ({ expected, element }) => {
-          let blocked = false;
-          const types = [
-            "pointerdown",
-            "mousedown",
-            "mouseup",
-            "click",
-          ] as const;
-          const check = (event: Event) => {
-            const target = event.target;
-            const validReceiver =
-              target instanceof Node &&
-              (target === element || element.contains(target));
-            if (validReceiver && window.__sedum?.checkAim(expected).actionable)
-              return;
-            blocked = true;
-            event.preventDefault();
-            event.stopImmediatePropagation();
-          };
-          for (const type of types)
-            document.addEventListener(type, check, true);
-          return {
-            blocked: () => blocked,
-            stop: () => {
-              for (const type of types)
-                document.removeEventListener(type, check, true);
-            },
-          };
-        },
-        { expected: aim, element },
-      );
-      const routeBeforeClick = this.page.url();
-      let armed: boolean;
       try {
-        armed = await this.page.evaluate(
-          (expected) => window.__sedum?.armClick(expected) ?? false,
-          aim,
-        );
-      } catch (error) {
-        await guard.evaluate((value) => value.stop()).catch(() => undefined);
-        await guard.dispose().catch(() => undefined);
-        throw operationError(error, this.state(), "page");
-      }
-      if (!armed) {
-        await guard.evaluate((value) => value.stop()).catch(() => undefined);
-        await guard.dispose().catch(() => undefined);
-        return { actionable: false, reason: "stale" };
-      }
-      let finished = false;
-      try {
-        // Playwright may dispatch hover/capture events before pointerdown. Once it
-        // starts, a failure cannot prove that the page saw no side effect.
+        // Let Playwright and the browser own actionability, event dispatch,
+        // cancellation, and navigation. Once this starts, a failure cannot
+        // prove that page handlers saw no side effect, so it is non-retryable.
         await element.click({ position: aim.point, timeout: 1000 });
-        try {
-          const early = await this.page.evaluate(
-            () =>
-              window.__sedum?.finishClick() ?? {
-                blocked: true,
-                heldHref: null,
-                pageCanceled: false,
-                cancellationUnknown: true,
-              },
-          );
-          finished = true;
-          if (
-            early.blocked ||
-            (await guard.evaluate((value) => value.blocked()))
-          )
-            return {
-              actionable: false,
-              reason: "action_started",
-              retryable: false,
-            };
-          if (early.heldHref) {
-            if (early.cancellationUnknown)
-              return {
-                actionable: false,
-                reason: "action_started",
-                retryable: false,
-              };
-            const currentRoute = this.page.url();
-            if (
-              currentRoute !== routeBeforeClick &&
-              currentRoute !== early.heldHref
-            )
-              return {
-                actionable: false,
-                reason: "action_started",
-                retryable: false,
-              };
-            if (early.pageCanceled) return { actionable: true, aim };
-            if (currentRoute === routeBeforeClick) {
-              await this.page.evaluate(
-                (href) => window.location.assign(href),
-                early.heldHref,
-              );
-              await this.page.waitForURL(early.heldHref, { timeout: 1000 });
-            }
-          }
-        } catch {
-          return {
-            actionable: false,
-            reason: "action_started",
-            retryable: false,
-          };
-        }
         return { actionable: true, aim };
       } catch {
         return {
@@ -417,13 +315,6 @@ class PlaywrightPage implements BrowserPage {
           reason: "action_started",
           retryable: false,
         };
-      } finally {
-        if (!finished)
-          await this.page
-            .evaluate(() => window.__sedum?.finishClick())
-            .catch(() => undefined);
-        await guard.evaluate((value) => value.stop()).catch(() => undefined);
-        await guard.dispose().catch(() => undefined);
       }
     } finally {
       await handle.dispose().catch(() => undefined);

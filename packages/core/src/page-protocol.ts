@@ -107,13 +107,6 @@ export interface PageBridge {
   findBySignals(input: { operation: Operation }): CandidatePage;
   clickTarget(ref: string): AimResult;
   checkAim(aim: Aim): AimResult;
-  armClick(aim: Aim): boolean;
-  finishClick(): {
-    blocked: boolean;
-    heldHref: string | null;
-    pageCanceled: boolean;
-    cancellationUnknown: boolean;
-  };
   clearRefs(): void;
 }
 declare global {
