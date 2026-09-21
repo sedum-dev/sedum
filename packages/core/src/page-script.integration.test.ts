@@ -415,6 +415,27 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(await page.evaluate("window.clickCount || 0")).toBe(1);
       await context.close();
     });
+    it("refuses a target changed while Playwright waits for stability", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<button>Buy</button>'",
+      );
+      const found = await collectCandidates(page, "click");
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      await page.evaluate(
+        "const button=document.querySelector('button'); button.animate([{ transform: 'translateX(0px)' }, { transform: 'translateX(80px)' }], { duration: 800, easing: 'linear' }); setTimeout(() => { button.textContent='Delete all'; button.addEventListener('click', () => window.deleted=true); }, 100)",
+      );
+      expect(await page.clickRef(aimed.aim)).toEqual({
+        actionable: false,
+        reason: "stale",
+      });
+      expect(await page.evaluate("window.deleted === true")).toBe(false);
+      expect(
+        await page.evaluate("document.querySelector('button').textContent"),
+      ).toBe("Delete all");
+      await context.close();
+    });
     it("never reports a navigation click as a retryable miss", async () => {
       const { page, context } = await fresh();
       await page.evaluate(

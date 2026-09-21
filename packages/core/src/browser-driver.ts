@@ -286,25 +286,37 @@ class PlaywrightPage implements BrowserPage {
     try {
       const element = handle.asElement();
       if (!element) return { actionable: false, reason: "target_missing" };
-      const still = await this.page.evaluate(
-        ({ expected, element }) => {
-          if (
-            !element.isConnected ||
-            element.getAttribute("data-sedum-ref") !== expected.ref
-          )
-            return { actionable: false, reason: "target_missing" };
-          return (
-            window.__sedum?.checkAim(expected) ?? {
-              actionable: false,
-              reason: "stale",
-            }
-          );
-        },
-        { expected: aim, element },
-      );
+      const validateElement = () =>
+        this.page.evaluate(
+          ({ expected, element }) => {
+            if (
+              !element.isConnected ||
+              element.getAttribute("data-sedum-ref") !== expected.ref
+            )
+              return { actionable: false, reason: "target_missing" };
+            return (
+              window.__sedum?.checkAim(expected) ?? {
+                actionable: false,
+                reason: "stale",
+              }
+            );
+          },
+          { expected: aim, element },
+        );
+      const still = await validateElement();
       if (!still.actionable) return still as AimResult;
       try {
-        // Let Playwright and the browser own actionability, event dispatch,
+        // Wait for the exact element to settle without moving the pointer or
+        // dispatching pointer/input events. The page can change during this wait,
+        // so this is not the final snapshot validation.
+        await element.waitForElementState("stable", { timeout: 1000 });
+      } catch {
+        return { actionable: false, reason: "not_actionable" };
+      }
+      const ready = await validateElement();
+      if (!ready.actionable) return ready as AimResult;
+      try {
+        // Playwright and the browser own final actionability, event dispatch,
         // cancellation, and navigation. Once this starts, a failure cannot
         // prove that page handlers saw no side effect, so it is non-retryable.
         await element.click({ position: aim.point, timeout: 1000 });
