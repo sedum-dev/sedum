@@ -8,6 +8,14 @@ import {
   type BrowserContext,
   type Page,
 } from "playwright-core";
+import {
+  PlaywrightObserver,
+  type ObservedClickResult,
+} from "./playwright-observer.js";
+import type {
+  ObservationOperation,
+  PageObservation,
+} from "./snapshot-observation.js";
 
 export type BrowserKind = "chrome" | "chromium";
 
@@ -67,6 +75,10 @@ export interface BrowserPage {
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
   evaluate<T>(expression: string, argument?: unknown): Promise<T>;
+  observe(operation: ObservationOperation): Promise<PageObservation>;
+  quiet(stableMs?: number, timeoutMs?: number): Promise<boolean>;
+  selectCandidate(id: string): boolean;
+  clickCandidate(id: string): Promise<ObservedClickResult>;
   close(): Promise<void>;
 }
 
@@ -147,11 +159,13 @@ function operationError(
 class PlaywrightPage implements BrowserPage {
   private crashed = false;
   private closedByDriver = false;
+  private readonly observer: PlaywrightObserver;
 
   constructor(
     private readonly page: Page,
     private readonly contextState: () => BrowserDriverState,
   ) {
+    this.observer = new PlaywrightObserver(page);
     page.on("crash", () => {
       this.crashed = true;
     });
@@ -260,8 +274,25 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
+  observe(operation: ObservationOperation): Promise<PageObservation> {
+    return this.observer.observe(operation);
+  }
+
+  quiet(stableMs?: number, timeoutMs?: number): Promise<boolean> {
+    return this.observer.quiet(stableMs, timeoutMs);
+  }
+
+  selectCandidate(id: string): boolean {
+    return this.observer.select(id);
+  }
+
+  clickCandidate(id: string): Promise<ObservedClickResult> {
+    return this.observer.click(id);
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
+    await this.observer.dispose();
     await this.page.close();
   }
 }

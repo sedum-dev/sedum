@@ -10,6 +10,9 @@ export interface RunResult {
 }
 
 export * from "./browser-driver.js";
+export * from "./snapshot-observation.js";
+export * from "./observation-cache.js";
+export type { ObservedClickResult } from "./playwright-observer.js";
 
 /** Future model adapters supply these separate decisions. */
 export interface Resolver {

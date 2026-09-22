@@ -16,7 +16,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist && tsup src/page-script/index.ts --format iife --platform browser --global-name SedumPageScript --out-dir dist/page-script",
+    "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
