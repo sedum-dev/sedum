@@ -106,7 +106,7 @@ export function resolveData(
       if (part.literal !== undefined) text += part.literal;
       if (part.variable !== undefined) {
         const value = env[part.variable];
-        if (value === undefined)
+        if (!Object.hasOwn(env, part.variable) || typeof value !== "string")
           throw new DataResolutionError(key, part.variable, item);
         text += value;
         sensitive = true;
@@ -200,18 +200,14 @@ export function validateTypeOperand(
         (quote) => quote.start < token.start && token.end < quote.end,
       ),
   );
-  const first = candidates[0];
   let targetStart = step.text.length;
-  if (first) {
-    for (const match of step.text.matchAll(/\b(?:in|into)\b/gi)) {
-      const start = match.index;
-      if (
-        start > first.end &&
-        !quotes.some((quote) => quote.start <= start && start < quote.end)
-      ) {
-        targetStart = start;
-        break;
-      }
+  for (const match of step.text.matchAll(/\b(?:in|into)\b/gi)) {
+    const start = match.index;
+    if (
+      !step.tokens.some((token) => token.start <= start && start < token.end)
+    ) {
+      targetStart = start;
+      break;
     }
   }
   const values = candidates.filter((token) => token.start < targetStart);

@@ -60,6 +60,24 @@ steps:
     expect(unrelated.value).toBeDefined();
   });
 
+  it("requires environment values to be own string properties", () => {
+    const flow = parseFlow(
+      "data: { inherited: $constructor, method: $toString }\nsteps: [click x]",
+      "/project/inherited.test.yaml",
+      options,
+    ).value!;
+    expect(() => resolveData(flow.data, {})).toThrow(DataResolutionError);
+    expect(() => resolveData(flow.data, { constructor: "set" })).toThrow(
+      "data.method needs $toString",
+    );
+    expect(() =>
+      resolveData(flow.data, { constructor: 42 } as unknown as Record<
+        string,
+        string
+      >),
+    ).toThrow(DataResolutionError);
+  });
+
   it("accepts only the deliberate environment template grammar", () => {
     expect(parseDataTemplate("$VAR and ${OTHER} then $$9.99")).toEqual({
       parts: [
@@ -176,6 +194,25 @@ steps:
         fix: expect.stringContaining("double quotes"),
       },
     });
+  });
+
+  it("does not treat a quoted or placeholder field target as the type value", () => {
+    for (const sentence of [
+      'type in the "username" field',
+      "type in the {{user}} field",
+      'type into the "username" field',
+    ]) {
+      const parsed = parseFlow(
+        `data: { user: Ada }\nsteps:\n  - ${sentence}\n`,
+        "/project/target.test.yaml",
+        options,
+      );
+      const step = parsed.value!.steps[0]!;
+      if (step.kind !== "sentence") throw new Error("Expected sentence");
+      expect(validateTypeOperand(step)).toMatchObject({
+        diagnostic: { code: "missing_type_value" },
+      });
+    }
   });
 
   it("identifies malformed placeholders, unexpected closers, and unclosed quotes", () => {
