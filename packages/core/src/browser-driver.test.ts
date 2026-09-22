@@ -6,6 +6,7 @@ const { launch, executablePath } = vi.hoisted(() => ({
   executablePath: vi.fn(),
 }));
 const { spawnSync } = vi.hoisted(() => ({ spawnSync: vi.fn() }));
+const pageScriptPath = /(?:^|[\\/])page-script[\\/]index\.global\.js$/;
 
 vi.mock("playwright-core", () => ({
   chromium: { launch, executablePath },
@@ -16,7 +17,7 @@ vi.mock("node:fs", async (importOriginal) => {
   return {
     ...actual,
     existsSync: (path: string) =>
-      path.endsWith("page-script/index.global.js") || actual.existsSync(path),
+      pageScriptPath.test(path) || actual.existsSync(path),
   };
 });
 
@@ -171,7 +172,7 @@ describe("PlaywrightBrowserDriver", () => {
       viewport: { width: 800, height: 600 },
     });
     expect(browser.context.addInitScript).toHaveBeenCalledWith({
-      path: expect.stringContaining("page-script/index.global.js"),
+      path: expect.stringMatching(pageScriptPath),
     });
     const page = await context.newPage();
 
