@@ -43,6 +43,10 @@
     "code": "multiple_actions"
   },
   {
+    "sentence": "verify the order total and tax are correct after you click Checkout",
+    "code": "multiple_actions"
+  },
+  {
     "sentence": "click Continue as soon as you type {{password}} into the password field",
     "code": "multiple_actions"
   },

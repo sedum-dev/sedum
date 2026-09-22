@@ -134,6 +134,7 @@ describe("sentence classification", () => {
       "click Save and afterwards press Enter",
       "click Save and later press Enter",
       "click Save and afterwards verify the confirmation page appears",
+      "verify the order total and tax are correct after you click Checkout",
       "click Continue as soon as you type {{password}} into the password field",
     ];
     const result = await classifySteps(
@@ -158,6 +159,9 @@ describe("sentence classification", () => {
       "verify the button is disabled when the form is filled",
       "verify the page shows a form and a submit button",
       "verify a Search button and an Open menu are shown",
+      "verify the address and opening hours are visible",
+      "verify the address and opening times are visible",
+      "verify a Search button and Open menu are shown",
     ];
     const result = await classifySteps(
       sentences.map((sentence) => step(sentence)),
@@ -250,6 +254,7 @@ describe("sentence classification", () => {
     expect(preflightSentence("hover over the menu")).toBe("unsupported");
     expect(patternOperation("go to the cart")).toBeNull();
     expect(patternOperation("click Save and close the menu")).toBeNull();
+    expect(patternOperation("click Save, open the menu")).toBeNull();
     expect(patternOperation('click the "Save and Continue" button')).toBe(
       "click",
     );

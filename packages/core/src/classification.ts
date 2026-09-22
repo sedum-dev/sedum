@@ -134,18 +134,25 @@ const DURATION_OPERAND =
   /\b(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\b/giu;
 const KNOWN_KEY =
   /\b(?:Enter|Tab|Escape|Esc|Space|Backspace|Delete|Arrow(?:Up|Down|Left|Right)|F(?:[1-9]|1[0-2]))\b/giu;
-const SECOND_ACTION_TAIL =
-  /\b(?:and|or|but|then|after|before|while|once|when|until|afterwards|subsequently|next|later|finally|followed\s+by|as\s+soon\s+as)\b\s+(.+)/iu;
+const SECOND_ACTION_CONNECTOR =
+  /\b(and|or|but|then|after|before|while|once|when|until|afterwards|subsequently|next|later|finally|followed\s+by|as\s+soon\s+as)\b\s+/giu;
 const SECOND_INTERACTION =
   /\b(?:click(?:s|ed|ing)?|typ(?:e|es|ed|ing)|enter(?:s|ed|ing)?|fill(?:s|ed|ing)?|press(?:es|ed|ing)?|scroll(?:s|ed|ing)?|select(?:s|ed|ing)?|submit(?:s|ted|ting)?|tap(?:s|ped|ping)?|navigat(?:e|es|ed|ing)|go(?:es|ing)?|open(?:s|ed|ing)?|upload(?:s|ed|ing)?|download(?:s|ed|ing)?|drag(?:s|ged|ging)?|drop(?:s|ped|ping)?|log(?:s|ged|ging)?\s+in|sign(?:s|ed|ing)?\s+in|verify|assert|check|confirm|ensure|expect|measure|note|observe|wait|remember|capture|record)\b/iu;
-const REQUESTED_SECOND_ACTION = new RegExp(
-  `^(?:(?:also|then|afterwards|later|next|finally|immediately)\\s+)*(?:(?:you|we|I)\\s+)?${SECOND_INTERACTION.source}`,
+const ACTOR_SECOND_ACTION = new RegExp(
+  `^(?:you|we|I|they|(?:the|a)\\s+user)\\s+${SECOND_INTERACTION.source}`,
   "iu",
 );
+const ADVERB_SECOND_ACTION = new RegExp(
+  `^(?:(?:also|then|afterwards|later|next|finally|immediately)\\s+)+(?:you\\s+)?${SECOND_INTERACTION.source}`,
+  "iu",
+);
+const GERUND_SECOND_ACTION =
+  /^(?:clicking|typing|entering|filling|pressing|scrolling|selecting|submitting|tapping|navigating|uploading|downloading|dragging|dropping|verifying|checking|measuring|waiting|remembering|opening(?!\s+(?:hours|times)\b))\b/iu;
 const PASSIVE_INTERACTION =
-  /\b(?:is|are|was|were|has|have|had)(?:\s+been)?\s+(?:clicked|typed|entered|filled|pressed|scrolled|selected|submitted|opened|uploaded|downloaded)\b/giu;
+  /\b(?:is|are|was|were|has|have|had)(?:\s+been)?\s+(?:clicked|typed|entered|filled|pressed|scrolled|selected|submitted|opened|uploaded|downloaded)\b/iu;
 const ACTION_VERBS =
-  "click|type|enter|fill|press|goto|go\\s+to|navigate|verify|assert|measure|note|observe|scroll|wait|remember|capture|record|select|tap|activate|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
+  "click|type|enter|fill|press|goto|go\\s+to|navigate|verify|assert|measure|note|observe|scroll|wait|remember|capture|record|select|tap|activate|close|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
+const DIRECT_SECOND_ACTION = new RegExp(`^(?:${ACTION_VERBS})\\b`, "iu");
 
 export function canonicalSentence(sentence: string): string {
   return sentence.normalize("NFC").replace(/\s+/gu, " ").trim();
@@ -175,18 +182,19 @@ export function preflightSentence(
     ).test(exposed)
   )
     return "multiple_actions";
-  // Clauses can be one assertion; only a second interaction is unsafe.
-  const tail = exposed.match(SECOND_ACTION_TAIL)?.[1];
-  if (tail) {
-    const assertion =
-      /^(?:verify|assert|check|confirm|ensure|expect|measure|note|observe)\b/iu.test(
-        exposed,
-      );
-    const activeTail = assertion ? tail.replace(PASSIVE_INTERACTION, "") : tail;
+  const assertion =
+    /^(?:verify|assert|check|confirm|ensure|expect|measure|note|observe)\b/iu.test(
+      exposed,
+    );
+  // Inspect each clause: an earlier compound claim can precede a later action.
+  for (const connector of exposed.matchAll(SECOND_ACTION_CONNECTOR)) {
+    const tail = exposed.slice(connector.index + connector[0].length);
     if (
-      assertion
-        ? REQUESTED_SECOND_ACTION.test(activeTail)
-        : SECOND_INTERACTION.test(activeTail)
+      ACTOR_SECOND_ACTION.test(tail) ||
+      ADVERB_SECOND_ACTION.test(tail) ||
+      GERUND_SECOND_ACTION.test(tail) ||
+      DIRECT_SECOND_ACTION.test(tail) ||
+      (!assertion && PASSIVE_INTERACTION.test(tail))
     )
       return "multiple_actions";
   }
@@ -201,7 +209,8 @@ export function patternOperation(sentence: string): StepOperationKind | null {
     /^(?:click|type|enter|fill|press|goto|go\s+to|navigate\s+to|scroll|wait|remember)\b/iu.test(
       text,
     ) &&
-    SECOND_ACTION_TAIL.test(withoutQuotes(text))
+    (withoutQuotes(text).match(SECOND_ACTION_CONNECTOR) !== null ||
+      /;|,\s*[A-Za-z]/u.test(withoutQuotes(text)))
   )
     return null;
   if (/^remember\b/iu.test(text) && BINDING.test(text)) return "remember";
