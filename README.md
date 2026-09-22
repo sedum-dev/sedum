@@ -22,6 +22,8 @@ node packages/cli/dist/cli.js --version
 
 `packages/core` owns engine contracts and the browser script boundary. `packages/provider-typesafe` will own model SDK effects. `packages/reporters` will consume the core result contract. `packages/cli` handles process arguments and composition. The browser bundle is emitted at `packages/core/dist/page-script/index.global.js`.
 
+PR CI builds, lints, typechecks, and runs unit tests on Node 20, 22, and 24 on Linux and macOS, plus Node 24 on Windows. The Windows job also installs Chromium and runs a browser smoke test. For the alpha, Linux and macOS are verified; Windows remains experimental until its CI has been green consistently.
+
 The [CLI project in Linear](https://linear.app/sedum/project/cli-dabe6965b916) tracks the work. [SED-15](https://linear.app/sedum/issue/SED-15/repo-scaffold-pnpm-turbo-monorepo) covers this scaffold; [SED-16](https://linear.app/sedum/issue/SED-16) covers the PR CI matrix. Decisions in private Linear issues are not copied into this public repository.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for change guidelines and [SECURITY.md](SECURITY.md) for vulnerability reports.
