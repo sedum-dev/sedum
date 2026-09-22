@@ -143,7 +143,7 @@ const ACTOR_SECOND_ACTION = new RegExp(
   "iu",
 );
 const ADVERB_SECOND_ACTION = new RegExp(
-  `^(?:(?:also|then|afterwards|later|next|finally|immediately)\\s+)+(?:you\\s+)?${SECOND_INTERACTION.source}`,
+  `^(?:(?:also|then|afterwards|later|next|finally|immediately|please|now|first)\\s+)+(?:(?:you|we|I|they|(?:the|a)\\s+user)\\s+)?${SECOND_INTERACTION.source}`,
   "iu",
 );
 const GERUND_SECOND_ACTION =

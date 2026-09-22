@@ -135,6 +135,7 @@ describe("sentence classification", () => {
       "click Save and later press Enter",
       "click Save and afterwards verify the confirmation page appears",
       "verify the order total and tax are correct after you click Checkout",
+      "verify the order total and tax are correct and please click Checkout",
       "click Continue as soon as you type {{password}} into the password field",
     ];
     const result = await classifySteps(
