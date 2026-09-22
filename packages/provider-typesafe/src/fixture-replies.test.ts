@@ -101,6 +101,7 @@ describe("fixture reply transport", () => {
             target: {
               type: "choice",
               choice: "random-a",
+              confidence: 0.9,
               probabilities: { "random-a": 0.9, none: 0.1 },
             },
           },
@@ -136,8 +137,74 @@ describe("fixture reply transport", () => {
     file.entries[0]!.response.authorization = "must never be committed";
     await writeFile(path, JSON.stringify(file));
     await expect(FixtureReplies.load(path)).rejects.toThrow(
-      /unexpected response fields/,
+      /Unexpected fixture provider fields/,
     );
+  });
+
+  it("rejects external question text before a live request", async () => {
+    const { path } = await cassette();
+    const live = vi.fn();
+    vi.stubGlobal("fetch", live);
+    const record = await FixtureReplies.load(path, true);
+    const adapter = new TypeSafeAdapter({
+      apiKey: "fixture-key",
+      fetch: record.fetch,
+    });
+    const offered = options("random-a");
+    const candidate = offered.options[0];
+    if (candidate?.kind !== "candidate") throw new Error("Missing candidate");
+    await expect(
+      adapter.choose("Click Save", {
+        ...offered,
+        options: [
+          {
+            ...candidate,
+            candidate: {
+              ...candidate.candidate,
+              name: "https://external.example/secret",
+            },
+          },
+          offered.options[1]!,
+        ],
+      }),
+    ).rejects.toBeDefined();
+    expect(live).not.toHaveBeenCalled();
+  });
+
+  it("rejects unexpected nested live reply data before recording", async () => {
+    const { path } = await cassette();
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            answers: {
+              target: {
+                type: "choice",
+                choice: "random-a",
+                confidence: 0.9,
+                probabilities: { "random-a": 0.9, none: 0.1 },
+                authorization: "Bearer secret",
+              },
+            },
+            model: "jev-1.13.0",
+            usage: { input_tokens: 10, output_tokens: 2 },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const record = await FixtureReplies.load(path, true);
+    const adapter = new TypeSafeAdapter({
+      apiKey: "fixture-key",
+      fetch: record.fetch,
+    });
+    await expect(
+      adapter.choose("Click Save", options("random-a")),
+    ).rejects.toBeDefined();
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({
+      version: 1,
+      entries: [],
+    });
   });
 
   it("rejects a stale key before any adapter call", async () => {

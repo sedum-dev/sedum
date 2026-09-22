@@ -24,6 +24,31 @@ function object(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function assertFields(value: Record<string, unknown>, fields: string[]): void {
+  if (Object.keys(value).sort().join(",") !== fields.sort().join(","))
+    throw new Error("Unexpected fixture provider fields");
+}
+
+function assertFixtureText(value: unknown): void {
+  if (typeof value === "string") {
+    if (
+      /(?:https?:\/\/|www\.|bearer\s+|sk-[a-z0-9]{12,}|api[_-]?key\s*[:=])/iu.test(
+        value,
+      ) ||
+      (process.env.TYPESAFE_API_KEY &&
+        value.includes(process.env.TYPESAFE_API_KEY))
+    )
+      throw new Error("External URL or secret in fixture provider data");
+  } else if (Array.isArray(value)) {
+    value.forEach(assertFixtureText);
+  } else if (value && typeof value === "object") {
+    Object.entries(value).forEach(([key, nested]) => {
+      assertFixtureText(key);
+      assertFixtureText(nested);
+    });
+  }
+}
+
 function canonicalize(body: string): CanonicalRequest {
   const request = object(JSON.parse(body) as unknown);
   if (
@@ -33,6 +58,7 @@ function canonicalize(body: string): CanonicalRequest {
     throw new Error("Unexpected fixture provider request fields");
   const state = object(request.state);
   const questions = object(request.questions);
+  assertFixtureText(request);
   const questionKeys = Object.keys(questions);
   if (questionKeys.length === 0)
     throw new Error("Empty fixture provider questions");
@@ -48,19 +74,67 @@ function canonicalize(body: string): CanonicalRequest {
       Object.keys(state).sort().join(",") !== "claim,page"
     )
       throw new Error("Unexpected fixture Judge request");
+    for (const question of Object.values(questions)) {
+      const item = object(question);
+      assertFields(item, ["type", "instructions", "criteria"]);
+      if (item.type !== "noul" || typeof item.instructions !== "string")
+        throw new Error("Unexpected fixture Judge question");
+      const criteria = object(item.criteria);
+      assertFields(criteria, ["true", "false"]);
+      if (!Object.values(criteria).every((v) => typeof v === "string"))
+        throw new Error("Unexpected fixture Judge criteria");
+    }
   } else if (
     Object.keys(state).length !== 0 ||
     !questionKeys.every((key) => /^line\d+$/u.test(key))
   )
     throw new Error("Unexpected fixture classification request");
+  else {
+    for (const question of Object.values(questions)) {
+      const item = object(question);
+      assertFields(item, ["type", "instructions", "criteria"]);
+      if (item.type !== "choice" || typeof item.instructions !== "string")
+        throw new Error("Unexpected fixture classification question");
+      const criteria = object(item.criteria);
+      if (!Object.values(criteria).every((v) => typeof v === "string"))
+        throw new Error("Unexpected fixture classification criteria");
+    }
+  }
   const aliases = new Map<string, string>();
   const originals = new Map<string, string>();
   if (Object.hasOwn(questions, "target")) {
     const target = object(questions.target);
+    assertFields(target, ["type", "instructions", "criteria"]);
+    if (target.type !== "choice" || typeof target.instructions !== "string")
+      throw new Error("Unexpected fixture Resolver shape");
     const criteria = object(target.criteria);
     const normalized: Record<string, unknown> = {};
     let index = 0;
     for (const [id, description] of Object.entries(criteria)) {
+      if (id === "none") {
+        if (typeof description !== "string")
+          throw new Error("Unexpected fixture none option");
+      } else {
+        const candidate = object(description);
+        assertFields(candidate, [
+          "tag",
+          "role",
+          "name",
+          "peers",
+          "editable",
+          "disabled",
+        ]);
+        if (
+          ![candidate.tag, candidate.role, candidate.name].every(
+            (v) => typeof v === "string",
+          ) ||
+          !Array.isArray(candidate.peers) ||
+          !candidate.peers.every((v: unknown) => typeof v === "string") ||
+          typeof candidate.editable !== "boolean" ||
+          typeof candidate.disabled !== "boolean"
+        )
+          throw new Error("Unexpected fixture candidate shape");
+      }
       const alias = id === "none" ? "none" : `candidate_${index++}`;
       if (aliases.has(id) || originals.has(alias))
         throw new Error("Duplicate fixture candidate ID");
@@ -70,11 +144,6 @@ function canonicalize(body: string): CanonicalRequest {
     }
     questions.target = { ...target, criteria: normalized };
   }
-  if (
-    JSON.stringify(state).includes("http://") ||
-    JSON.stringify(state).includes("https://")
-  )
-    throw new Error("External URL in fixture provider request");
   const normalized = { model: request.model, state, questions };
   const key = createHash("sha256")
     .update("sedum-fixture-reply-v1\0")
@@ -117,6 +186,44 @@ function remapReply(
   };
 }
 
+function validateResponse(value: unknown): Record<string, unknown> {
+  const response = object(value);
+  assertFields(response, ["answers", "model", "usage"]);
+  assertFixtureText(response);
+  if (typeof response.model !== "string")
+    throw new Error("Unexpected fixture response model");
+  const usage = object(response.usage);
+  assertFields(usage, ["input_tokens", "output_tokens"]);
+  if (
+    !Object.values(usage).every(
+      (v) => Number.isSafeInteger(v) && (v as number) >= 0,
+    )
+  )
+    throw new Error("Unexpected fixture response usage");
+  for (const answer of Object.values(object(response.answers))) {
+    const item = object(answer);
+    if (item.type === "choice") {
+      assertFields(item, ["type", "choice", "confidence", "probabilities"]);
+      if (
+        typeof item.choice !== "string" ||
+        typeof item.confidence !== "number"
+      )
+        throw new Error("Unexpected fixture choice reply");
+      if (
+        !Object.values(object(item.probabilities)).every(
+          (v) => typeof v === "number",
+        )
+      )
+        throw new Error("Unexpected fixture probabilities");
+    } else if (item.type === "noul") {
+      assertFields(item, ["type", "noul"]);
+      if (typeof item.noul !== "number")
+        throw new Error("Unexpected fixture noul reply");
+    } else throw new Error("Unexpected fixture answer type");
+  }
+  return response;
+}
+
 function validateFile(value: unknown): CassetteFile {
   const file = object(value);
   if (file.version !== 1 || !Array.isArray(file.entries))
@@ -139,9 +246,7 @@ function validateFile(value: unknown): CassetteFile {
     const actual = canonicalize(JSON.stringify(entry.request));
     if (actual.key !== entry.key)
       throw new Error(`Fixture reply key is stale: ${entry.key}`);
-    const response = object(entry.response);
-    if (Object.keys(response).sort().join(",") !== "answers,model,usage")
-      throw new Error("Fixture reply contains unexpected response fields");
+    validateResponse(entry.response);
   }
   return value as CassetteFile;
 }
@@ -168,9 +273,11 @@ export class FixtureReplies {
         const response = await (globalThis.fetch as Fetch)(input, init);
         if (!response.ok) return response;
         const raw = object((await response.clone().json()) as unknown);
-        const normalized = remapReply(
-          { answers: raw.answers, model: raw.model, usage: raw.usage },
-          canonical.aliases,
+        const normalized = validateResponse(
+          remapReply(
+            { answers: raw.answers, model: raw.model, usage: raw.usage },
+            canonical.aliases,
+          ),
         );
         this.recorded.set(canonical.key, {
           key: canonical.key,

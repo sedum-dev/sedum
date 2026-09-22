@@ -25,9 +25,9 @@ import { TypeSafeAdapter } from "./index.js";
 
 const browserIntegration = process.env.SEDUM_BROWSER_INTEGRATION === "1";
 const recording = process.env.SEDUM_RECORD_REPLIES === "1";
-const replyPath = fileURLToPath(
-  new URL("../../../fixtures/replies/v1.json", import.meta.url),
-);
+const replyPath =
+  process.env.SEDUM_REPLIES_PATH ??
+  fileURLToPath(new URL("../../../fixtures/replies/v1.json", import.meta.url));
 
 describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
   let site: FixtureSite;
@@ -160,15 +160,22 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
   }, 60_000);
 
   it("serves delayed evidence and rerenders without duplicating an action", async () => {
-    const { context, page } = await fresh("/slow?delay=150");
+    const timeoutCase = await fresh("/slow?delay=1000");
     try {
-      await vi.waitFor(
-        async () => {
-          expect(await page.text()).toContain("Ready");
-        },
-        { timeout: 3_000 },
-      );
-      const ready = await verify(page, adapter, "The page says Ready");
+      await expect(
+        verify(timeoutCase.page, adapter, "The page says Ready", {
+          observationTimeoutMs: 20,
+        }),
+      ).rejects.toMatchObject({ code: "observation_timeout" });
+      expect(replies.missing).toHaveLength(0);
+    } finally {
+      await timeoutCase.context.close();
+    }
+    const { context, page } = await fresh("/slow?delay=50");
+    try {
+      const ready = await verify(page, adapter, "The page says Ready", {
+        observationTimeoutMs: 3_000,
+      });
       expect(ready.verdict).toBe("passed");
       await clickNamed(page, "Submit once");
       await vi.waitFor(
@@ -178,18 +185,25 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
         { timeout: 3_000 },
       );
       expect(await page.evaluate<number>("window.actionCount")).toBe(1);
-      await page.goto(site.baseUrl + "/rerender?delay=100");
-      await vi.waitFor(
-        async () => {
-          expect(
-            await page.evaluate<string>(
-              "document.querySelector('#list').dataset.ready",
-            ),
-          ).toBe("true");
-        },
-        { timeout: 3_000 },
-      );
-      await clickNamed(page, "Open record");
+      await page.goto(site.baseUrl + "/rerender?delay=2000");
+      const before = await resolveTarget(page, adapter, {
+        operation: "click",
+        sentence: "Open record",
+      });
+      expect(before.kind).toBe("resolved");
+      if (before.kind !== "resolved") return;
+      await page.evaluate("window.rerenderNow()");
+      await expect(
+        executeStep(page, { op: "click", target: before.target }),
+      ).rejects.toMatchObject({ code: "stale", phase: "pre_dispatch" });
+      expect(await page.evaluate<number>("window.actionCount")).toBe(0);
+      const after = await resolveTarget(page, adapter, {
+        operation: "click",
+        sentence: "Open record",
+      });
+      expect(after.kind).toBe("resolved");
+      if (after.kind !== "resolved") return;
+      await executeStep(page, { op: "click", target: after.target });
       expect(await page.text()).toContain("Record opened");
       expect(await page.evaluate<number>("window.actionCount")).toBe(1);
       successful++;

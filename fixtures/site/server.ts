@@ -48,7 +48,7 @@ function timedPage(route: string, delay: number): string {
   return page(
     "Fixture rerender",
     `<h1>Rerendering list</h1><ul id="list"><li><button>Open record</button></li></ul><p id="result"></p>`,
-    `window.actionCount=0;setTimeout(()=>{document.querySelector('#list').innerHTML='<li><button>Open record</button></li>';document.querySelector('#list').dataset.ready='true';document.querySelector('#list button').addEventListener('click',()=>{window.actionCount++;document.querySelector('#result').textContent='Record opened'})},${delay})`,
+    `window.actionCount=0;window.rerenderNow=()=>{document.querySelector('#list').innerHTML='<li><button>Open record</button></li>';document.querySelector('#list').dataset.ready='true';document.querySelector('#list button').addEventListener('click',()=>{window.actionCount++;document.querySelector('#result').textContent='Record opened'})};setTimeout(window.rerenderNow,${delay})`,
   );
 }
 
