@@ -5,6 +5,7 @@ import {
   type SystemOneRequest,
 } from "@typesafe-ai/sdk";
 import { codePoints, isSafeRole, ProviderError } from "@sedum-dev/core";
+import type { ModelChoice } from "@sedum-dev/core";
 import type {
   JudgePageDigest,
   ResolverCandidates,
@@ -18,6 +19,93 @@ const CANDIDATE_LIMIT = 128;
 const NAME_LIMIT = 120;
 const PEER_LIMIT = 80;
 const BODY_LIMIT_BYTES = 64 * 1024;
+const CLASSIFICATION_BATCH_LIMIT = 64;
+
+const CLASSIFICATION_CRITERIA: Record<ModelChoice, string> = {
+  click:
+    "Activate one page element such as a button, link, tab, menu item, or checkbox.",
+  type: "Enter one value into one editable field.",
+  press: "Press one keyboard key, such as Enter or Tab.",
+  goto: "Navigate directly to an explicit web address. Following a page link is click.",
+  verify: "Assert a claim about the page; a false claim fails the test.",
+  measure: "Observe and report a claim without deciding the test verdict.",
+  scroll: "Scroll the page to reveal content.",
+  wait: "Wait for a duration or condition.",
+  remember:
+    "Read a value from the page and bind it with a final 'as {{name}}'; do not judge the value.",
+  unsupported_or_unclear:
+    "The sentence requests an unsupported action or cannot safely be understood as one offered operation. Prefer this over guessing.",
+  multiple_actions:
+    "The sentence asks for more than one interaction. Prefer this over classifying only the first action.",
+};
+
+export interface ClassificationRequestChunk {
+  readonly request: SystemOneRequest;
+  readonly indexes: readonly number[];
+  readonly keys: readonly string[];
+}
+
+function classificationRequest(
+  items: readonly { index: number; sentence: string }[],
+): SystemOneRequest {
+  const questions: Record<string, ReturnType<typeof choice>> = Object.create(
+    null,
+  ) as Record<string, ReturnType<typeof choice>>;
+  for (const item of items) {
+    questions[`line${item.index}`] = choice(
+      `Classify this one test sentence by its wording alone: ${item.sentence}\n` +
+        "One sentence must request one operation. No page is available. A quoted word can describe a target; a final as {{name}} binds a remembered value. " +
+        "Do not infer goto from a page link. Use unsupported_or_unclear or multiple_actions rather than guessing.",
+      CLASSIFICATION_CRITERIA,
+    );
+  }
+  return { state: {}, questions, model: MODEL };
+}
+
+/** Ordinary files use one request; long files split at the complete wire-body limit. */
+export function buildClassificationRequests(
+  sentences: readonly string[],
+): readonly ClassificationRequestChunk[] {
+  const chunks: ClassificationRequestChunk[] = [];
+  let current: { index: number; sentence: string }[] = [];
+  const push = () => {
+    if (!current.length) return;
+    const request = classificationRequest(current);
+    preflight(request);
+    chunks.push({
+      request,
+      indexes: current.map((item) => item.index),
+      keys: current.map((item) => `line${item.index}`),
+    });
+    current = [];
+  };
+  sentences.forEach((sentence, index) => {
+    checkText(sentence, SENTENCE_LIMIT, "Classification sentence");
+    if (!sentence.trim()) invalid("Classification sentence is empty.");
+    const candidate = [...current, { index, sentence }];
+    const bytes = Buffer.byteLength(
+      JSON.stringify(classificationRequest(candidate)),
+      "utf8",
+    );
+    if (
+      current.length &&
+      (candidate.length > CLASSIFICATION_BATCH_LIMIT ||
+        bytes > BODY_LIMIT_BYTES)
+    ) {
+      push();
+      current.push({ index, sentence });
+    } else current = candidate;
+    if (
+      Buffer.byteLength(
+        JSON.stringify(classificationRequest(current)),
+        "utf8",
+      ) > BODY_LIMIT_BYTES
+    )
+      invalid("One classification question exceeds 64 KiB.");
+  });
+  push();
+  return chunks;
+}
 
 function invalid(message: string): never {
   throw new ProviderError("invalid-input", message);

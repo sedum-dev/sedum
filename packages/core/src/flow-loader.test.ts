@@ -333,7 +333,7 @@ steps:
     expect(result.coverage.modules).toBe("not_checked");
   });
 
-  it("rejects unimplemented run and remember steps and retains unresolved modules", () => {
+  it("rejects run, accepts remembered bindings, and retains unresolved modules", () => {
     const run = parseFlow(
       "steps:\n  - run: ./setup.ts\n",
       "/project/run.test.yaml",
@@ -343,12 +343,19 @@ steps:
       "unsupported_run",
     );
     const remember = parseFlow(
-      "steps:\n  - remember the price as {{price}}\n",
+      "steps:\n  - remember the price as {{price}}\n  - verify the total includes {{price}}\n",
       "/project/remember.test.yaml",
       options,
     );
-    expect(remember.diagnostics.map((item) => item.code)).toContain(
-      "unsupported_remember",
+    expect(remember.diagnostics).toEqual([]);
+    expect(remember.value?.steps).toHaveLength(2);
+    const duplicate = parseFlow(
+      "data: {price: 10}\nsteps:\n  - remember the price as {{price}}\n",
+      "/project/duplicate-remember.test.yaml",
+      options,
+    );
+    expect(duplicate.diagnostics.map((item) => item.code)).toContain(
+      "duplicate_remember_binding",
     );
     const module = parseFlow(
       "steps:\n  - use: ./missing.module.yaml\n",
