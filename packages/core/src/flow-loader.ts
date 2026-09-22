@@ -307,6 +307,7 @@ function checkPlaceholders(
   source: FlowSource,
   knownData: ReadonlySet<string>,
   diagnostics: FlowDiagnostic[],
+  outputPlaceholderStart?: number,
 ): void {
   for (const problem of lexical.problems)
     add(
@@ -318,7 +319,11 @@ function checkPlaceholders(
       problem.fix,
     );
   for (const token of lexical.tokens) {
-    if (token.kind === "placeholder" && !knownData.has(token.key!))
+    if (
+      token.kind === "placeholder" &&
+      token.start !== outputPlaceholderStart &&
+      !knownData.has(token.key!)
+    )
       add(
         diagnostics,
         "error",
@@ -336,7 +341,7 @@ function parseSteps(
   file: string,
   counter: LineCounter,
   nodes: Map<string, Node>,
-  knownData: ReadonlySet<string>,
+  knownData: Set<string>,
   diagnostics: FlowDiagnostic[],
 ): FlowStep[] {
   if (!Array.isArray(raw)) return [];
@@ -345,18 +350,31 @@ function parseSteps(
     const source = at(file, counter, nodes, [phase, index]);
     if (typeof item === "string") {
       if (!item.trim()) continue;
-      if (/^remember\b/i.test(item.trim())) {
-        add(
-          diagnostics,
-          "error",
-          "unsupported_remember",
-          source,
-          "The remember operation is not part of the agreed v1 format yet.",
-          "Use declared data until SED-10 item 14 is decided.",
-        );
-      }
       const lexical = tokenizeStep(item);
-      checkPlaceholders(lexical, source, knownData, diagnostics);
+      const binding =
+        /^(?:remember|capture)\b[\s\S]*\bas\s+\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}\s*\.?$/iu.exec(
+          item.trim(),
+        );
+      checkPlaceholders(
+        lexical,
+        source,
+        knownData,
+        diagnostics,
+        binding ? item.lastIndexOf("{{") : undefined,
+      );
+      if (binding) {
+        const key = binding[1]!;
+        if (knownData.has(key))
+          add(
+            diagnostics,
+            "error",
+            "duplicate_remember_binding",
+            source,
+            `{{${key}}} is already declared by data or an earlier remember step.`,
+            "Choose a new binding name; remembered values cannot replace existing data.",
+          );
+        else knownData.add(key);
+      }
       steps.push({
         kind: "sentence",
         phase,

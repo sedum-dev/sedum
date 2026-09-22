@@ -29,7 +29,7 @@ export interface StepSource {
   readonly col: number;
   readonly moduleStack?: readonly string[];
 }
-export interface SentenceStep {
+export interface ClassificationInput {
   readonly sentence: string;
   readonly source: StepSource;
 }
@@ -63,7 +63,7 @@ export interface ClassificationCache {
   put(sentence: string, answer: CachedClassification): void;
   save(): Promise<void>;
 }
-export interface ClassifiedStep extends SentenceStep {
+export interface ClassifiedStep extends ClassificationInput {
   readonly op: StepOperationKind;
   readonly classificationSource: "pattern" | "cache" | "model";
   /** Null for deterministic rules; model probabilities are not empirical calibration. */
@@ -78,7 +78,7 @@ export type ClassificationDiagnosticCode =
   | "ambiguous"
   | "provider_error"
   | "cache_error";
-export interface ClassificationDiagnostic extends SentenceStep {
+export interface ClassificationDiagnostic extends ClassificationInput {
   readonly code: ClassificationDiagnosticCode;
   readonly message: string;
   readonly fix: string;
@@ -242,7 +242,7 @@ export function evaluateModelAnswer(
 }
 
 function diagnostic(
-  step: SentenceStep,
+  step: ClassificationInput,
   code: ClassificationDiagnosticCode,
   detail?: string,
 ): ClassificationDiagnostic {
@@ -277,7 +277,7 @@ function diagnostic(
 }
 
 export async function classifySteps(
-  input: readonly SentenceStep[],
+  input: readonly ClassificationInput[],
   options: {
     readonly mode: "offline" | "allow-model";
     readonly cache: ClassificationCache;

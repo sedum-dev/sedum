@@ -20,3 +20,4 @@ export * from "./flow-values.js";
 export * from "./flow-loader.js";
 export * from "./classification.js";
 export * from "./classification-cache.js";
+export * from "./flow-classification.js";

@@ -2,7 +2,7 @@
 
 Each YAML string step becomes one operation before the browser runs it. The classifier accepts `click`, `type`, `press`, `goto`, `verify`, `measure`, `scroll`, `wait`, and the SED-10 v1 `remember ... as {{name}}` form. A structural `use:` module entry is handled by the flow loader. Classification chooses the operation only; the locator, executor, and assertion engine do their own work.
 
-The core API takes `{ sentence, source: { file, line, col, moduleStack? } }` items and returns one classified result or diagnostic per item. It keeps the original sentence and source location. The loader in SED-27 supplies those positions from the YAML document; SED-19 and SED-37 consume the result. Any diagnostic blocks execution of that step. A line requesting multiple actions must be split. An unsupported action is an error rather than a guessed click.
+The core API takes `{ sentence, source: { file, line, col, moduleStack? } }` items and returns one classified result or diagnostic per item. It keeps the original sentence and source location. `classifyParsedFlow(parseFlow(...), options)` connects the SED-27 YAML loader to classification, preserves phase and parser positions, collects diagnostics, and updates step coverage. SED-19 and SED-37 consume that result. Any diagnostic blocks execution of that step. A line requesting multiple actions must be split. An unsupported action is an error rather than a guessed click.
 
 ## Decision order
 
@@ -23,7 +23,7 @@ The `offline` classification mode uses patterns and the committed cache. It make
 
 Incompatible, invalid, or newly ambiguous entries are misses. A changed threshold requires an acceptance-policy version bump, and the current gate is reapplied on cache reads. To clear classifications, remove `.sedum/classifications.json` and run the explicit online classification path again. Sentence hashes are not secret protection; short sentences can be guessed. Test data placeholders are never substituted before classification, but a quoted literal written directly into a test sentence is sent to the provider as written under SED-12's text boundary. Do not put secrets directly in test sentences.
 
-`remember` classification only identifies a read/bind step. SED-10 requires the later runtime to select from the read candidate set, reject empty or overlong reads, store the raw page value, and substitute remembered values literally into later claims while keeping declared data values out of model payloads. Its namespacing and optional typing questions remain open.
+`remember` classification only identifies a read/bind step. The loader recognizes `remember ... as {{name}}` and `capture ... as {{name}}` as binding forms, allows later references, and rejects names already used by data or an earlier binding. A `capture` form still needs an accepted model classification before validation succeeds. SED-10 requires the later runtime to select from the read candidate set, reject empty or overlong reads, store the raw page value, and substitute remembered values literally into later claims while keeping declared data values out of model payloads. Its namespacing and optional typing questions remain open.
 
 ## Cost probe
 

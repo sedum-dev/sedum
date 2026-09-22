@@ -11,7 +11,7 @@ import {
   validateOperand,
   type ClassificationProvider,
   type ModelChoice,
-  type SentenceStep,
+  type ClassificationInput,
 } from "./classification.js";
 import {
   FileClassificationCache,
@@ -34,7 +34,7 @@ async function cacheFile() {
   return join(folder, ".sedum", "classifications.json");
 }
 const source = { file: "tests/login.test.yaml", line: 7, col: 5 };
-function step(sentence: string, line = 7): SentenceStep {
+function step(sentence: string, line = 7): ClassificationInput {
   return { sentence, source: { ...source, line } };
 }
 function distribution(op: ModelChoice, probability = 0.9) {
