@@ -1,0 +1,17 @@
+[
+  { "sentence": "go to the cart", "code": "unavailable" },
+  {
+    "sentence": "click Save, then type {{name}} in Name",
+    "code": "multiple_actions"
+  },
+  { "sentence": "verify the price and click Buy", "code": "multiple_actions" },
+  { "sentence": "click Save; upload a file", "code": "multiple_actions" },
+  {
+    "sentence": "click Save and also type {{name}} in Name",
+    "code": "multiple_actions"
+  },
+  { "sentence": "drag the item into the cart", "code": "unsupported" },
+  { "sentence": "upload the receipt", "code": "unsupported" },
+  { "sentence": "type {{first}} then {{last}}", "code": "invalid_operand" },
+  { "sentence": "remember the price", "code": "invalid_operand" }
+]

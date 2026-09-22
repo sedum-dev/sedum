@@ -1,0 +1,44 @@
+[
+  { "sentence": "type {{user}} in the username field", "op": "type" },
+  { "sentence": "type {{password}} in the password field", "op": "type" },
+  { "sentence": "click the login button", "op": "click" },
+  {
+    "sentence": "verify a list of products with prices is shown",
+    "op": "verify"
+  },
+  {
+    "sentence": "remember the name of the first product in the list as {{first_item}}",
+    "op": "remember"
+  },
+  {
+    "sentence": "click the Add to cart button for Sauce Labs Backpack",
+    "op": "click"
+  },
+  {
+    "sentence": "click the Add to cart button for Sauce Labs Onesie",
+    "op": "click"
+  },
+  { "sentence": "click the Cart, 2 items button", "op": "click" },
+  { "sentence": "click the Checkout button", "op": "click" },
+  { "sentence": "type {{first_name}} in the First Name field", "op": "type" },
+  { "sentence": "type {{last_name}} in the Last Name field", "op": "type" },
+  {
+    "sentence": "type {{postcode}} in the Zip/Postal Code field",
+    "op": "type"
+  },
+  { "sentence": "click the Continue button", "op": "click" },
+  {
+    "sentence": "verify the order summary lists {{first_item}}",
+    "op": "verify"
+  },
+  { "sentence": "click the Finish button", "op": "click" },
+  {
+    "sentence": "verify the order was placed and a confirmation message is shown",
+    "op": "verify"
+  },
+  {
+    "sentence": "note at least one result is rated 5 out of 5 stars",
+    "op": "measure"
+  },
+  { "sentence": "press Enter", "op": "press" }
+]

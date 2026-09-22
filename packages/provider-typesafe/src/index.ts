@@ -9,6 +9,8 @@ import {
 } from "@typesafe-ai/sdk";
 import { ProviderError } from "@sedum-dev/core";
 import type {
+  ClassificationProvider,
+  ModelClassification,
   Judge,
   JudgeDecision,
   JudgePageDigest,
@@ -17,7 +19,13 @@ import type {
   ResolverCandidates,
   ResolverDecision,
 } from "@sedum-dev/core";
-import { buildJudgeRequest, buildResolverRequest, MODEL } from "./request.js";
+import { MODEL_CHOICES } from "@sedum-dev/core";
+import {
+  buildClassificationRequests,
+  buildJudgeRequest,
+  buildResolverRequest,
+  MODEL,
+} from "./request.js";
 import {
   answersOf,
   validateCall,
@@ -113,7 +121,9 @@ function safeError(error: unknown, attempts: number): ProviderError {
 }
 
 /** One reusable, Node-side adapter supplies both task-specific core interfaces. */
-export class TypeSafeAdapter implements Resolver, Judge {
+export class TypeSafeAdapter
+  implements Resolver, Judge, ClassificationProvider
+{
   private readonly client: TypeSafeClient;
   private readonly deadlineMs: number;
   private readonly attemptTimeoutMs: number;
@@ -247,6 +257,46 @@ export class TypeSafeAdapter implements Resolver, Judge {
     const contradicted = validateNoul(answers.contradicted);
     const call = validateCall(response, attempts);
     return { holds, contradicted, call };
+  }
+
+  async classifyBatch(
+    sentences: readonly string[],
+    options?: ProviderCallOptions,
+  ): Promise<{
+    readonly answers: readonly ModelClassification[];
+    readonly calls: readonly ReturnType<typeof validateCall>[];
+  }> {
+    const chunks = buildClassificationRequests(sentences);
+    const answers: ModelClassification[] = Array(sentences.length);
+    const calls: ReturnType<typeof validateCall>[] = [];
+    for (const chunk of chunks) {
+      const { response, attempts } = await this.ask(chunk.request, options);
+      const replyAnswers = answersOf(response);
+      const keys = Object.keys(replyAnswers);
+      if (
+        keys.length !== chunk.keys.length ||
+        keys.some((key) => !chunk.keys.includes(key))
+      )
+        throw new ProviderError(
+          "invalid-response",
+          "Classification answer keys do not match the questions.",
+        );
+      const call = validateCall(response, attempts);
+      const validated = chunk.keys.map((key) =>
+        validateChoice(replyAnswers[key], MODEL_CHOICES),
+      );
+      validated.forEach((answer, offset) => {
+        answers[chunk.indexes[offset]!] = {
+          op: answer.choice as ModelClassification["op"],
+          probabilities:
+            answer.probabilities as ModelClassification["probabilities"],
+          model: call.model,
+          requestedModel: call.requestedModel,
+        };
+      });
+      calls.push(call);
+    }
+    return { answers, calls };
   }
 }
 
