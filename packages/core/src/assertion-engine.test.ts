@@ -359,6 +359,7 @@ describe("assertion engine", () => {
     });
     await expect(verify(page.page, judge, "Claim")).rejects.toMatchObject({
       code: "stale_observation",
+      failedCall: call,
     });
     expect(holds).toHaveBeenCalledOnce();
   });
@@ -372,6 +373,7 @@ describe("assertion engine", () => {
     });
     await expect(verify(page.page, judge, "Claim")).rejects.toMatchObject({
       code: "browser_failure",
+      failedCall: call,
     });
   });
 
@@ -397,7 +399,21 @@ describe("assertion engine", () => {
       verify(page.page, invalid.judge, "Claim"),
     ).rejects.toMatchObject({
       code: "provider_failure",
+      failedCall: call,
     });
+  });
+
+  it("keeps a Judge receipt when cancellation lands after its response", async () => {
+    const controller = new AbortController();
+    const page = fakePage();
+    const { judge, holds } = fakeJudge();
+    holds.mockImplementation(async () => {
+      controller.abort();
+      return { holds: 0.9, contradicted: 0.1, call };
+    });
+    await expect(
+      verify(page.page, judge, "Claim", { signal: controller.signal }),
+    ).rejects.toMatchObject({ code: "canceled", failedCall: call });
   });
 
   it("cancels a pending read without calling Judge", async () => {

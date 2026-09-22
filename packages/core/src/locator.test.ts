@@ -8,6 +8,7 @@ import type {
   ResolverCandidates,
   ResolverDecision,
 } from "./provider.js";
+import { ProviderError } from "./provider.js";
 
 const call: ProviderCall = {
   requestedModel: "recorded",
@@ -138,6 +139,63 @@ function resolver(
 }
 
 describe("locator", () => {
+  it("keeps unknown-cost failed resolver attempts in its receipt", async () => {
+    const { page } = recordedPage([candidate(1)]);
+    const result = await resolveTarget(
+      page,
+      {
+        choose: vi.fn(async () => {
+          throw new ProviderError("retry-exhausted", "Unavailable", 3);
+        }),
+      },
+      { operation: "click", sentence: "Item 1" },
+    );
+    expect(result).toMatchObject({
+      kind: "unresolved",
+      reason: "provider_error",
+      calls: [{ attempts: 3, totalCostUsd: null }],
+    });
+  });
+
+  it("keeps the actual receipt when a resolver response is invalid", async () => {
+    const { page } = recordedPage([candidate(0)]);
+    const result = await resolveTarget(
+      page,
+      resolver((options) => ({
+        ...answer(options, "r0"),
+        probabilities: { r0: 1 },
+      })),
+      { operation: "click", sentence: "Item 0" },
+    );
+    expect(result).toMatchObject({
+      kind: "unresolved",
+      reason: "provider_error",
+      calls: [call],
+    });
+  });
+
+  it("keeps a Resolver receipt when cancellation lands after its response", async () => {
+    const controller = new AbortController();
+    const { page } = recordedPage([candidate(0)]);
+    const result = await resolveTarget(
+      page,
+      resolver((options) => {
+        controller.abort();
+        return answer(options, "r0");
+      }),
+      {
+        operation: "click",
+        sentence: "Item 0",
+        signal: controller.signal,
+      },
+    );
+    expect(result).toMatchObject({
+      kind: "unresolved",
+      reason: "timeout",
+      calls: [call],
+    });
+  });
+
   it.each([0, 1, 128, 129, 255, 256, 1780])(
     "collects %i candidates and compares finalists",
     async (count) => {
@@ -168,6 +226,11 @@ describe("locator", () => {
         expect(result.calls).toHaveLength(
           count <= 128 ? 1 : Math.ceil(count / 128) + 1,
         );
+        expect(
+          result.diagnostic.topOptions.some(
+            (option) => option.name === "(no match)",
+          ),
+        ).toBe(true);
       }
     },
   );

@@ -81,6 +81,12 @@ export interface Aim {
   readonly tag: string;
   readonly name: string;
   readonly point: { readonly x: number; readonly y: number };
+  readonly box?: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  };
 }
 /** A fill target is tied to the exact element in a collected fill snapshot. */
 export interface FillTarget {

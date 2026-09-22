@@ -131,6 +131,19 @@ describe("step executor", () => {
     ]);
   });
 
+  it("unwinds a hanging browser operation promptly on cancellation", async () => {
+    const fixture = fakePage();
+    fixture.goto.mockImplementationOnce(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = executeStep(
+      fixture.page,
+      { op: "goto", url: new RuntimeUrl(["https://example.test/slow"]) },
+      { signal: controller.signal },
+    );
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: "canceled" });
+  });
+
   it("lets only argument-free Playwright call-log lines through", () => {
     const lines = safeCallLog(
       new Error(
@@ -162,6 +175,65 @@ describe("step executor", () => {
       executeStep(page, { op: "click", target: clickTargetRef }),
     ).rejects.toMatchObject({ code: "stale", retryable: true });
     expect(clickRef).not.toHaveBeenCalled();
+  });
+
+  it("delivers the final aimed box before dispatch for opt-in replay", async () => {
+    const fixture = fakePage();
+    const box = { x: 0.2, y: 0.3, width: 0.1, height: 0.2 };
+    fixture.setAim({ actionable: true, aim: { ...aim, box } });
+    const events: string[] = [];
+    fixture.clickRef.mockImplementationOnce(async () => {
+      events.push("click");
+      fixture.setVersion({
+        ...version,
+        route: "https://example.test/next",
+        revision: 2,
+      });
+      return { actionable: true as const, aim: { ...aim, box } };
+    });
+    await executeStep(
+      fixture.page,
+      { op: "click", target: clickTargetRef },
+      {
+        beforeAction: async (received) => {
+          expect(received).toEqual(box);
+          events.push("frame");
+        },
+      },
+    );
+    expect(events).toEqual(["frame", "click"]);
+  });
+
+  it("captures a type target box after aim and before fill", async () => {
+    const fixture = fakePage();
+    const box = { x: 0.1, y: 0.2, width: 0.4, height: 0.05 };
+    fixture.setAim({
+      actionable: true,
+      aim: { ...aim, tag: "input", name: "Search", box },
+    });
+    const target = new ResolvedStepTarget({
+      ref: aim.ref,
+      version,
+      tag: "input",
+      name: "Search",
+    });
+    const events: string[] = [];
+    fixture.fillRef.mockImplementationOnce(async () => {
+      events.push("fill");
+      return { acted: true as const };
+    });
+    await executeStep(
+      fixture.page,
+      { op: "type", target, value: new RuntimeValue("query") },
+      {
+        beforeAction: async (received, receivedVersion) => {
+          expect(received).toEqual(box);
+          expect(receivedVersion).toEqual(version);
+          events.push("frame");
+        },
+      },
+    );
+    expect(events).toEqual(["frame", "fill"]);
   });
 
   it("rejects an unclickable aim and a target changed between aim and action", async () => {

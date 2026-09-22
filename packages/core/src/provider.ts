@@ -94,16 +94,38 @@ export type ProviderErrorCode =
   | "retry-exhausted";
 
 export class ProviderError extends Error {
+  readonly failedCall?: ProviderCall;
   constructor(
     readonly code: ProviderErrorCode,
     message: string,
     readonly attempts = 0,
+    failedCall?: ProviderCall,
   ) {
     super(message);
     this.name = "ProviderError";
+    if (failedCall)
+      Object.defineProperty(this, "failedCall", {
+        value: failedCall,
+        enumerable: false,
+      });
   }
 
   toJSON(): { code: ProviderErrorCode; message: string; attempts: number } {
     return { code: this.code, message: this.message, attempts: this.attempts };
   }
+}
+
+/** A failed request may have been billed even when usage was not returned. */
+export function unknownCostCall(error: unknown): ProviderCall {
+  if (error instanceof ProviderError && error.failedCall)
+    return error.failedCall;
+  return {
+    requestedModel: "unknown",
+    model: "unknown",
+    attempts: error instanceof ProviderError ? Math.max(1, error.attempts) : 1,
+    usage: { inputTokens: 0, outputTokens: 0 },
+    rate: null,
+    successfulResponseCostUsd: null,
+    totalCostUsd: null,
+  };
 }

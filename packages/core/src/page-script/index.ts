@@ -728,6 +728,12 @@ if (!window.__sedum) {
             tag: element.tagName.toLowerCase(),
             name: candidate.name,
             point: { x: rect.width * fx!, y: rect.height * fy! },
+            box: {
+              x: Math.max(0, rect.left / innerWidth),
+              y: Math.max(0, rect.top / innerHeight),
+              width: Math.min(1, rect.width / innerWidth),
+              height: Math.min(1, rect.height / innerHeight),
+            },
           },
         };
       }

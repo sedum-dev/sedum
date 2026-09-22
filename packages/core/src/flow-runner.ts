@@ -1,5 +1,9 @@
 import path from "node:path";
-import { AssertionEngineError, verify } from "./assertion-engine.js";
+import {
+  AssertionEngineError,
+  verify,
+  type VerifyResult,
+} from "./assertion-engine.js";
 import type { BrowserDriver, BrowserPage } from "./browser-driver.js";
 import type {
   ClassificationCache,
@@ -16,10 +20,30 @@ import {
   validateTypeOperand,
 } from "./flow-values.js";
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
-import { resolveTarget } from "./locator.js";
-import { quietPage } from "./page-bridge.js";
-import type { Judge, Resolver } from "./provider.js";
-import { RuntimeUrl, type StepCommand, executeStep } from "./step-executor.js";
+import { resolveTarget, type LocatorResult } from "./locator.js";
+import { pageVersion, quietPage } from "./page-bridge.js";
+import type { PageVersion } from "./page-protocol.js";
+import type { Judge, ProviderCall, Resolver } from "./provider.js";
+import {
+  safeSource,
+  safeText,
+  safeUrl,
+  reportPage,
+  type ReportPrivacy,
+} from "./report-privacy.js";
+import type {
+  ResultCall,
+  ResultFrame,
+  ResultPage,
+  ResultStep,
+} from "./run-result.js";
+import type { RunRecorder } from "./run-recorder.js";
+import {
+  RuntimeUrl,
+  StepExecutionError,
+  type StepCommand,
+  executeStep,
+} from "./step-executor.js";
 
 export type FlowRunResult =
   | { readonly status: "passed"; readonly file: string }
@@ -45,6 +69,37 @@ export interface FlowRunnerDependencies {
   /** Temporary debug switch; the final CLI/config surface owns launch policy. */
   readonly headless?: boolean;
   readonly signal?: AbortSignal;
+  readonly report?: {
+    readonly recorder: RunRecorder;
+    readonly privacy: ReportPrivacy;
+    readonly evidenceEnabled: boolean;
+    readonly replay: boolean;
+    readonly saveFrame: (
+      stepId: string,
+      bytes: Uint8Array,
+    ) => Promise<ResultFrame>;
+  };
+}
+
+function resultCall(
+  call: ProviderCall,
+  purpose: ResultCall["purpose"],
+  apiMs: number | null = null,
+): ResultCall {
+  return {
+    purpose,
+    requestedModel: call.requestedModel,
+    model: call.model,
+    attempts: call.attempts,
+    inputTokens: call.usage.inputTokens,
+    outputTokens: call.usage.outputTokens,
+    apiMs,
+    inputUsdPerMillion: call.rate?.inputUsdPerMillion ?? null,
+    outputUsdPerMillion: call.rate?.outputUsdPerMillion ?? null,
+    rateSource: call.rate?.source ?? null,
+    rateCheckedAt: call.rate?.checkedAt ?? null,
+    costUsd: call.totalCostUsd,
+  };
 }
 
 function firstDiagnostic(
@@ -86,6 +141,188 @@ async function executeSentence(
   dependencies: FlowRunnerDependencies,
   data: ReturnType<typeof resolveData>,
 ): Promise<"continue" | "failed" | FlowRunResult> {
+  const started = performance.now();
+  const report = dependencies.report;
+  const stepIndex = report
+    ? (report.recorder.snapshot.tests.at(-1)?.attempts.at(-1)?.steps.length ??
+        0) + 1
+    : 0;
+  const attemptId =
+    report?.recorder.snapshot.tests.at(-1)?.attempts.at(-1)?.id ?? "";
+  const stepId = `${attemptId}:step:${stepIndex}`;
+  const sameVersion = (a: PageVersion, b: PageVersion) =>
+    a.document === b.document &&
+    a.route === b.route &&
+    a.revision === b.revision;
+  const capture = async (
+    suffix: string,
+    expectedVersion?: PageVersion,
+  ): Promise<ResultFrame> => {
+    if (!report || !page.captureFrame)
+      return { status: "unavailable", reason: "capture_unavailable" };
+    try {
+      const before = await pageVersion(page);
+      if (expectedVersion && !sameVersion(before, expectedVersion))
+        return { status: "unavailable", reason: "stale_frame" };
+      const bytes = await page.captureFrame();
+      const after = await pageVersion(page);
+      if (!sameVersion(before, after))
+        return { status: "unavailable", reason: "stale_frame" };
+      return await report.saveFrame(`${stepId}:${suffix}`, bytes);
+    } catch {
+      return { status: "unavailable", reason: "capture_failed" };
+    }
+  };
+  type StepFacts = {
+    verify?: VerifyResult;
+    locator?: LocatorResult;
+    error?: {
+      code: string;
+      message: string;
+      callLog?: readonly string[] | undefined;
+    };
+    replayFrame?: ResultFrame | undefined;
+    targetBox?: ResultStep["targetBox"];
+    detail?: string;
+    page?: ResultPage | undefined;
+    failedCalls?: readonly ResultCall[];
+  };
+  const record = async <T extends "continue" | "failed" | FlowRunResult>(
+    outcome: T,
+    facts: StepFacts = {},
+  ): Promise<T> => {
+    if (!report) return outcome;
+    const privacy = report.privacy;
+    const locator = facts.locator;
+    const acceptedVersion =
+      facts.verify?.observationVersion ??
+      (locator?.kind === "resolved"
+        ? locator.target.driverTarget().version
+        : locator?.diagnostic.observationVersion);
+    const sensitive =
+      (facts.page?.status === "omitted" &&
+        facts.page.reason === "sensitive_page") ||
+      (acceptedVersion !== undefined &&
+        safeUrl(acceptedVersion.route, privacy).sensitive) ||
+      safeUrl(page.url, privacy).sensitive;
+    const isError =
+      typeof outcome === "object" && outcome.status === "could_not_run";
+    const failed =
+      outcome === "failed" ||
+      (typeof outcome === "object" && outcome.status === "failed");
+    const flags = facts.verify?.flags ?? [];
+    const needsEvidence = failed || isError || flags.length > 0;
+    const evidence: ResultFrame = !needsEvidence
+      ? { status: "omitted", reason: "clean_step" }
+      : sensitive
+        ? { status: "omitted", reason: "sensitive_page" }
+        : !report.evidenceEnabled
+          ? { status: "omitted", reason: "disabled" }
+          : await capture("evidence", acceptedVersion);
+    const replayFrame = !report.replay
+      ? null
+      : sensitive
+        ? { status: "omitted" as const, reason: "sensitive_page" }
+        : (facts.replayFrame ?? (await capture("replay", acceptedVersion)));
+    const kind =
+      step.op === "verify"
+        ? "verify"
+        : step.op === "measure"
+          ? "measure"
+          : "action";
+    const pageInfo =
+      facts.page ??
+      (await reportPage(
+        page,
+        `${stepId}:observation:1`,
+        privacy,
+        acceptedVersion,
+      ));
+    const calls = [
+      ...(locator?.calls.map((call) => resultCall(call, "locator")) ?? []),
+      ...(facts.failedCalls ?? []),
+      ...(facts.verify
+        ? [resultCall(facts.verify.call, "judge", facts.verify.elapsedMs)]
+        : []),
+    ];
+    const judgement = facts.verify
+      ? {
+          holds: facts.verify.holds,
+          contradicted: facts.verify.contradicted,
+          threshold: facts.verify.minP,
+          band: facts.verify.band,
+          contradictionCutoff: facts.verify.contradictionCutoff,
+          judgedExcerpt:
+            !sensitive && facts.verify.judgedExcerpt
+              ? safeText(facts.verify.judgedExcerpt, privacy, 1500)
+              : null,
+        }
+      : null;
+    const result: ResultStep = {
+      id: stepId,
+      index: stepIndex,
+      kind,
+      operation: step.op,
+      phase: step.phase,
+      sentence: safeText(step.text, privacy, 512),
+      detail: safeText(facts.detail ?? "", privacy, 512),
+      sourceStack: (step.sourceStack ?? [step.source]).map((source) =>
+        safeSource(source, dependencies.repoRoot, privacy),
+      ),
+      state: isError ? "error" : "completed",
+      verdict:
+        isError || kind === "measure" ? null : failed ? "failed" : "passed",
+      flags: [...flags],
+      elapsedMs: performance.now() - started,
+      page: pageInfo,
+      locator: locator
+        ? {
+            confidence: locator.diagnostic.confidence ?? null,
+            source: locator.calls.length ? "model" : "none",
+            options: (sensitive
+              ? []
+              : locator.diagnostic.topOptions.slice(0, 5)
+            ).map((option) => ({
+              label: safeText(option.name, privacy, 120),
+              role: safeText(option.role, privacy, 80),
+              probability: option.probability,
+            })),
+            cache: null,
+          }
+        : null,
+      judgement,
+      observations: [
+        {
+          id: `${stepId}:observation:1`,
+          ordinal: 1,
+          elapsedMs: performance.now() - started,
+          outcome: isError || failed ? "failed" : "accepted",
+          reason: facts.error?.code ?? null,
+          timeoutReason: null,
+        },
+      ],
+      calls,
+      error: facts.error
+        ? {
+            code: facts.error.code,
+            message: safeText(facts.error.message, privacy, 512),
+            ...(facts.error.callLog
+              ? {
+                  callLog: facts.error.callLog
+                    .slice(0, 20)
+                    .map((line) => safeText(line, privacy, 512)),
+                }
+              : {}),
+          }
+        : null,
+      evidence,
+      replayFrame,
+      targetBox:
+        replayFrame?.status === "captured" ? (facts.targetBox ?? null) : null,
+    };
+    await report.recorder.addStep(result);
+    return outcome;
+  };
   // Observe one settled DOM before locating/judging the next step. This avoids
   // treating the mutation from the previous action as a fresh locator target;
   // it does not retry or replay an action.
@@ -93,10 +330,19 @@ async function executeSentence(
     quiet: false,
   }));
   if (!quiet.quiet)
-    return unsupported(
-      step.source.file,
-      step.source,
-      "The page did not settle before this step could be resolved.",
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        "The page did not settle before this step could be resolved.",
+      ),
+      {
+        error: {
+          code: "observation_timeout",
+          message:
+            "The page did not settle before this step could be resolved.",
+        },
+      },
     );
   if (step.op === "verify") {
     const judge = () =>
@@ -111,8 +357,14 @@ async function executeSentence(
       // The Judge is read-only. If its evidence went stale during the provider
       // request, take exactly one fresh settled observation rather than
       // reporting a verdict about an old page.
-      return result.verdict === "failed" ? "failed" : "continue";
+      return record(result.verdict === "failed" ? "failed" : "continue", {
+        verify: result,
+      });
     } catch (error) {
+      const priorCalls =
+        error instanceof AssertionEngineError && error.failedCall
+          ? [resultCall(error.failedCall, "judge")]
+          : [];
       if (
         error instanceof AssertionEngineError &&
         error.code === "stale_observation"
@@ -123,32 +375,74 @@ async function executeSentence(
         if (settled.quiet) {
           try {
             const result = await judge();
-            return result.verdict === "failed" ? "failed" : "continue";
+            return record(result.verdict === "failed" ? "failed" : "continue", {
+              verify: result,
+              failedCalls: priorCalls,
+            });
           } catch (retryError) {
-            return unsupported(
-              step.source.file,
-              step.source,
-              retryError instanceof Error
-                ? retryError.message
-                : "The assertion could not be judged.",
+            return record(
+              unsupported(
+                step.source.file,
+                step.source,
+                retryError instanceof Error
+                  ? retryError.message
+                  : "The assertion could not be judged.",
+              ),
+              {
+                failedCalls:
+                  retryError instanceof AssertionEngineError &&
+                  retryError.failedCall
+                    ? [
+                        ...priorCalls,
+                        resultCall(retryError.failedCall, "judge"),
+                      ]
+                    : priorCalls,
+                error: {
+                  code:
+                    retryError instanceof AssertionEngineError
+                      ? retryError.code
+                      : "assertion_error",
+                  message: "The assertion could not be judged.",
+                },
+              },
             );
           }
         }
       }
-      return unsupported(
-        step.source.file,
-        step.source,
-        error instanceof Error
-          ? error.message
-          : "The assertion could not be judged.",
+      return record(
+        unsupported(
+          step.source.file,
+          step.source,
+          error instanceof Error
+            ? error.message
+            : "The assertion could not be judged.",
+        ),
+        {
+          failedCalls: priorCalls,
+          error: {
+            code:
+              error instanceof AssertionEngineError
+                ? error.code
+                : "assertion_error",
+            message: "The assertion could not be judged.",
+          },
+        },
       );
     }
   }
   if (step.op !== "click" && step.op !== "type")
-    return unsupported(
-      step.source.file,
-      step.source,
-      `The ${step.op} operation is not part of this walking skeleton.`,
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        `The ${step.op} operation is not part of this walking skeleton.`,
+      ),
+      {
+        error: {
+          code: "unsupported_operation",
+          message: `The ${step.op} operation is not supported.`,
+        },
+      },
     );
   const locate = () =>
     resolveTarget(page, dependencies.provider, {
@@ -156,34 +450,151 @@ async function executeSentence(
       sentence: step.text,
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     });
-  let resolved = await locate();
+  let resolved: LocatorResult;
+  try {
+    resolved = await locate();
+  } catch {
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        "The target could not be resolved.",
+      ),
+      {
+        error: {
+          code: "locator_error",
+          message: "The target could not be resolved.",
+        },
+      },
+    );
+  }
   // A resolver response can arrive during an unrelated DOM revision. One fresh
   // read is safe: it does not reuse a target or replay the preceding action.
   if (resolved.kind === "unresolved" && resolved.reason === "stale") {
+    const priorCalls = resolved.calls;
     const settled = await quietPage(page, 80, 4_000).catch(() => ({
       quiet: false,
     }));
-    if (settled.quiet) resolved = await locate();
+    if (settled.quiet) {
+      const retried = await locate();
+      resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+    }
   }
-  if (resolved.kind !== "resolved")
-    return unsupported(
-      step.source.file,
-      step.source,
-      `Could not resolve this ${step.op} step (${resolved.reason}).`,
+  if (resolved.kind !== "resolved") {
+    if (
+      resolved.reason === "none" ||
+      resolved.reason === "ambiguous" ||
+      resolved.reason === "no_candidates"
+    )
+      return record("failed", {
+        locator: resolved,
+        error: {
+          code: resolved.reason,
+          message: `Could not resolve this ${step.op} step.`,
+        },
+      });
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        `Could not resolve this ${step.op} step (${resolved.reason}).`,
+      ),
+      {
+        locator: resolved,
+        error: {
+          code: resolved.reason,
+          message: `Could not resolve this ${step.op} step.`,
+        },
+      },
     );
+  }
   let command: StepCommand;
   if (step.op === "click") command = { op: "click", target: resolved.target };
   else {
     const operand = validateTypeOperand(step);
-    if ("diagnostic" in operand) return firstDiagnostic([operand.diagnostic]);
+    if ("diagnostic" in operand)
+      return record(firstDiagnostic([operand.diagnostic]), {
+        locator: resolved,
+        error: {
+          code: operand.diagnostic.code,
+          message: operand.diagnostic.message,
+        },
+      });
     command = {
       op: "type",
       target: resolved.target,
       value: resolveTypeOperand(operand.operand, data),
     };
   }
-  await executeStep(page, command);
-  return "continue";
+  // An action may navigate or rerender. Preserve metadata from the accepted
+  // locator observation before dispatch, rather than borrowing the new page.
+  const locatedPage = report
+    ? await reportPage(
+        page,
+        `${stepId}:observation:1`,
+        report.privacy,
+        resolved.target.driverTarget().version,
+      )
+    : undefined;
+  let replayFrame: ResultFrame | undefined;
+  let targetBox: ResultStep["targetBox"] = null;
+  try {
+    await executeStep(page, command, {
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      ...(report?.replay
+        ? {
+            beforeAction: async (
+              box: ResultStep["targetBox"] | undefined,
+              aimVersion: PageVersion,
+            ) => {
+              if (
+                safeUrl(aimVersion.route, report.privacy).sensitive ||
+                safeUrl(page.url, report.privacy).sensitive
+              ) {
+                replayFrame = { status: "omitted", reason: "sensitive_page" };
+                return;
+              }
+              const frame = await capture("replay", aimVersion);
+              replayFrame = frame;
+              targetBox = frame.status === "captured" ? (box ?? null) : null;
+            },
+          }
+        : {}),
+    });
+    return record("continue", {
+      locator: resolved,
+      replayFrame,
+      targetBox,
+      page: locatedPage,
+    });
+  } catch (error) {
+    const actionError = error instanceof StepExecutionError ? error : null;
+    const failed =
+      actionError &&
+      (actionError.code === "not_actionable" ||
+        actionError.code === "invalid_input");
+    const facts = {
+      locator: resolved,
+      replayFrame,
+      targetBox,
+      page: locatedPage,
+      error: {
+        code: actionError?.code ?? "action_error",
+        message: actionError?.message ?? "The action could not complete.",
+        callLog: actionError?.callLog,
+      },
+    };
+    return failed
+      ? record("failed", facts)
+      : record(
+          unsupported(
+            step.source.file,
+            step.source,
+            "The action could not complete.",
+          ),
+          facts,
+        );
+  }
 }
 
 /** Run one plain `steps` flow. Hooks and modules remain owned by SED-29. */
@@ -216,6 +627,10 @@ export async function runFlow(
     provider: dependencies.provider,
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),
   });
+  if (dependencies.report && classified.calls.length)
+    await dependencies.report.recorder.addSetupCalls(
+      classified.calls.map((call) => resultCall(call, "classification")),
+    );
   if (!classified.value) return firstDiagnostic(classified.diagnostics);
   let data: ReturnType<typeof resolveData>;
   try {
@@ -227,6 +642,32 @@ export async function runFlow(
       message:
         error instanceof Error ? error.message : "Could not resolve test data.",
     };
+  }
+  if (dependencies.report)
+    dependencies.report.privacy.secretValues.push(
+      ...Object.values(data)
+        .filter((entry) => entry.sensitive)
+        .map((entry) => entry.value.reveal()),
+    );
+  if (dependencies.report) {
+    const privacy = dependencies.report.privacy;
+    const file = safeSource(
+      { file: absolute, line: 1, col: 1 },
+      dependencies.repoRoot,
+      privacy,
+    ).file;
+    const existing = dependencies.report.recorder.snapshot.tests.at(-1);
+    const retrying =
+      existing?.file === file &&
+      existing.state === "running" &&
+      existing.attempts.at(-1)?.state === "running";
+    if (!retrying)
+      await dependencies.report.recorder.startTest({
+        id: `${dependencies.report.recorder.runId}:test:${dependencies.report.recorder.snapshot.tests.length + 1}`,
+        file,
+        description: safeText(classified.value.description ?? "", privacy, 512),
+        tags: classified.value.tags.map((tag) => safeText(tag, privacy, 120)),
+      });
   }
   let session: Awaited<ReturnType<BrowserDriver["launch"]>> | undefined;
   let context:
@@ -244,10 +685,11 @@ export async function runFlow(
     context = await session.newContext();
     page = await context.newPage();
     if (classified.value.url)
-      await executeStep(page, {
-        op: "goto",
-        url: new RuntimeUrl([classified.value.url]),
-      });
+      await executeStep(
+        page,
+        { op: "goto", url: new RuntimeUrl([classified.value.url]) },
+        dependencies.signal ? { signal: dependencies.signal } : {},
+      );
     for (const item of classified.value.steps) {
       if (item.kind !== "sentence")
         return unsupported(
@@ -256,10 +698,13 @@ export async function runFlow(
           "Modules are not supported by this walking skeleton.",
         );
       const outcome = await executeSentence(page, item, dependencies, data);
-      if (outcome === "failed")
+      if (outcome === "failed") {
+        await dependencies.report?.recorder.finishTest("failed");
         return { status: "failed", file: absolute, source: item.source };
+      }
       if (outcome !== "continue") return outcome;
     }
+    await dependencies.report?.recorder.finishTest("passed");
     return { status: "passed", file: absolute };
   } catch (error) {
     return {

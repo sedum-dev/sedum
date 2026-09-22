@@ -120,6 +120,21 @@ function safeError(error: unknown, attempts: number): ProviderError {
   );
 }
 
+function responseError(
+  error: unknown,
+  attempts: number,
+  call: ReturnType<typeof validateCall>,
+): ProviderError {
+  return error instanceof ProviderError
+    ? new ProviderError(error.code, error.message, attempts, call)
+    : new ProviderError(
+        "invalid-response",
+        "The provider returned an invalid response.",
+        attempts,
+        call,
+      );
+}
+
 /** One reusable, Node-side adapter supplies both task-specific core interfaces. */
 export class TypeSafeAdapter
   implements Resolver, Judge, ClassificationProvider
@@ -186,12 +201,6 @@ export class TypeSafeAdapter
             timeout: Math.min(this.attemptTimeoutMs, remaining),
             retry: { maxRetries: 0 },
           });
-          if (controller.signal.aborted)
-            throw new ProviderError(
-              "timeout",
-              "Provider call exceeded its deadline or was canceled.",
-              attempts,
-            );
           return { response: response as unknown, attempts };
         } catch (error) {
           if (controller.signal.aborted)
@@ -232,8 +241,13 @@ export class TypeSafeAdapter
   ): Promise<ResolverDecision> {
     const built = buildResolverRequest(sentence, candidates);
     const { response, attempts } = await this.ask(built.request, options);
-    const answer = validateChoice(answersOf(response).target, built.optionIds);
     const call = validateCall(response, attempts);
+    let answer: ReturnType<typeof validateChoice>;
+    try {
+      answer = validateChoice(answersOf(response).target, built.optionIds);
+    } catch (error) {
+      throw responseError(error, attempts, call);
+    }
     return {
       selection:
         answer.choice === "none"
@@ -252,10 +266,16 @@ export class TypeSafeAdapter
   ): Promise<JudgeDecision> {
     const request = buildJudgeRequest(claim, pageDigest);
     const { response, attempts } = await this.ask(request, options);
-    const answers = answersOf(response);
-    const holds = validateNoul(answers.holds);
-    const contradicted = validateNoul(answers.contradicted);
     const call = validateCall(response, attempts);
+    let holds: number;
+    let contradicted: number;
+    try {
+      const answers = answersOf(response);
+      holds = validateNoul(answers.holds);
+      contradicted = validateNoul(answers.contradicted);
+    } catch (error) {
+      throw responseError(error, attempts, call);
+    }
     return { holds, contradicted, call };
   }
 
