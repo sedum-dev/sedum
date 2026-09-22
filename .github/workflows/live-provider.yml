@@ -1,0 +1,28 @@
+name: Live provider checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Live TypeSafe tests
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          SEDUM_TYPESAFE_LIVE: "1"
+          SEDUM_LOCATOR_LIVE: "1"
+        run: pnpm exec vitest run packages/provider-typesafe/src/index.live.test.ts packages/provider-typesafe/src/locator.live.test.ts

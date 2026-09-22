@@ -42,14 +42,20 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Install Chromium for Windows smoke test
-        if: runner.os == 'Windows'
+      - name: Install Chromium and Linux dependencies
+        if: matrix.node == 24 && runner.os == 'Linux'
+        run: node packages/cli/dist/cli.js browsers install chromium --with-deps
+      - name: Install Chromium for engine tests
+        if: matrix.node == 24 && runner.os != 'Linux'
         run: node packages/cli/dist/cli.js browsers install chromium
-      - name: Windows browser smoke test
-        if: runner.os == 'Windows'
+      - name: Keyless browser and provider engine tests
+        if: matrix.node == 24
+        run: pnpm fixtures:verify
+      - name: Browser integration tests
+        if: matrix.node == 24
         env:
           SEDUM_BROWSER_INTEGRATION: "1"
-        run: pnpm exec vitest run packages/core/src/browser-driver.integration.test.ts
+        run: pnpm exec vitest run packages/core/src/browser-driver.integration.test.ts packages/core/src/page-script.integration.test.ts packages/core/src/step-executor.integration.test.ts packages/core/src/assertion-engine.integration.test.ts
 
   required:
     name: CI

@@ -14,6 +14,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "fixtures:verify": "node scripts/verify-replies.mjs",
+    "fixtures:record": "node scripts/record-replies.mjs",
     "changeset": "changeset"
   },
   "devDependencies": {
