@@ -75,6 +75,8 @@ export interface FormatCoverage {
 
 export interface ParsedFlowResult {
   readonly value?: FlowDefinition;
+  /** Parsed steps retained only for collecting later errors; never executable. */
+  readonly candidate?: FlowDefinition;
   readonly diagnostics: readonly FlowDiagnostic[];
   readonly coverage: FormatCoverage;
 }

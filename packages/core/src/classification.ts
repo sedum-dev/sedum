@@ -1,4 +1,8 @@
-import type { ProviderCall, ProviderCallOptions } from "./provider.js";
+import type {
+  ProviderCall,
+  ProviderCallOptions,
+  ProviderErrorCode,
+} from "./provider.js";
 
 export const OPERATIONS = [
   "click",
@@ -47,6 +51,17 @@ export interface ClassificationProvider {
     readonly answers: readonly ModelClassification[];
     readonly calls: readonly ProviderCall[];
   }>;
+}
+/** A failed file batch retains receipts for earlier billed chunks. */
+export class ClassificationBatchError extends Error {
+  constructor(
+    readonly calls: readonly ProviderCall[],
+    readonly failedAttempts: number,
+    readonly code: ProviderErrorCode | null = null,
+  ) {
+    super("Classification provider could not complete this file.");
+    this.name = "ClassificationBatchError";
+  }
 }
 export interface CachedClassification {
   readonly op: StepOperationKind;
@@ -107,6 +122,10 @@ const VALUE = new RegExp(
   `^(?:type|enter|fill)\\s+(?:"[^"]*"|${PLACEHOLDER})\\s+(?:in|into)\\s+\\S`,
   "iu",
 );
+const VALUE_OPERAND = new RegExp(
+  `("[^"]*"|${PLACEHOLDER})\\s+(?:in|into)\\s+\\S`,
+  "giu",
+);
 const BINDING = new RegExp(`\\bas\\s+${PLACEHOLDER}\\s*\\.?$`, "iu");
 const HTTP_URL = /https?:\/\/\S+/giu;
 const WAIT_DURATION =
@@ -142,6 +161,8 @@ export function preflightSentence(
     ).test(exposed)
   )
     return "multiple_actions";
+  if (/\b(?:after|before|while)\s+(?:you\s+\w+|\w+ing)\b/iu.test(exposed))
+    return "multiple_actions";
   return null;
 }
 
@@ -169,16 +190,37 @@ export function validateOperand(
 ): string | null {
   const text = canonicalSentence(sentence);
   if (op === "click") {
-    if (!/^(?:click|select|tap|activate)\s+\S/iu.test(text))
-      return "Name one page element to click.";
+    if (!/^\S+\s+\S/iu.test(text)) return "Name one page element to click.";
   } else if (op === "type") {
-    if (!VALUE.test(text))
+    const quotedSpans = [...text.matchAll(/"[^"]*"/gu)].map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }));
+    const operand = [...text.matchAll(VALUE_OPERAND)].find(
+      (match) =>
+        !quotedSpans.some(
+          (span) => match.index > span.start && match.index < span.end,
+        ),
+    );
+    const beforeField = operand
+      ? text.slice(0, operand.index + operand[1]!.length)
+      : "";
+    const quotes = beforeField.match(/"[^"]*"/gu) ?? [];
+    const placeholders =
+      beforeField
+        .replace(/"[^"]*"/gu, "")
+        .match(new RegExp(PLACEHOLDER, "gu")) ?? [];
+    if (!operand || quotes.length + placeholders.length !== 1)
       return 'Name one value, such as {{key}} or "{{user}}@example.com", and a field.';
   } else if (op === "goto") {
     const urls = text.match(HTTP_URL) ?? [];
     if (urls.length !== 1) return "Name exactly one http(s) address.";
   } else if (op === "press") {
-    if (!/^press\s+(?:the\s+)?(?:"[^"]+"|[\w-]+)\s*\.?$/iu.test(text))
+    if (
+      !/^(?:press|hit|strike)\s+(?:the\s+)?(?:"[^"]+"|[\w-]+)(?:\s+key)?\s*\.?$/iu.test(
+        text,
+      )
+    )
       return "Name exactly one key to press.";
   } else if (op === "remember") {
     if (!BINDING.test(text)) return "End the read with as {{a_name}}.";
@@ -378,6 +420,7 @@ export async function classifySteps(
   });
   const calls: ProviderCall[] = [];
   let providerFailed = false;
+  let failedAttempts = 0;
   if (pending.size > 0) {
     if (options.mode === "offline" || !options.provider) {
       for (const group of pending.values())
@@ -447,8 +490,12 @@ export async function classifySteps(
           for (const group of groups)
             for (const index of group.indexes) fail(index, "cache_error");
         }
-      } catch {
+      } catch (error) {
         providerFailed = true;
+        if (error instanceof ClassificationBatchError) {
+          calls.push(...error.calls);
+          failedAttempts = error.failedAttempts;
+        }
         for (const group of groups)
           for (const index of group.indexes) fail(index, "provider_error");
       }
@@ -469,8 +516,8 @@ export async function classifySteps(
       cache,
       model,
       cacheMisses: misses,
-      requests: calls.length,
-      attempts: calls.reduce((sum, c) => sum + c.attempts, 0),
+      requests: calls.length + (failedAttempts > 0 ? 1 : 0),
+      attempts: calls.reduce((sum, c) => sum + c.attempts, 0) + failedAttempts,
       inputTokens: calls.reduce((sum, c) => sum + c.usage.inputTokens, 0),
       outputTokens: calls.reduce((sum, c) => sum + c.usage.outputTokens, 0),
       costUsd,

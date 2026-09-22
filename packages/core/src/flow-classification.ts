@@ -56,8 +56,8 @@ export async function classifyParsedFlow(
     readonly signal?: AbortSignal;
   },
 ): Promise<FlowClassificationResult> {
-  const flow = parsed.value;
-  if (!flow || parsed.coverage.format === "failed")
+  const flow = parsed.value ?? parsed.candidate;
+  if (!flow)
     return {
       diagnostics: parsed.diagnostics,
       coverage: parsed.coverage,

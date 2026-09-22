@@ -10,6 +10,18 @@
     "sentence": "click Save and also type {{name}} in Name",
     "code": "multiple_actions"
   },
+  {
+    "sentence": "click Continue after typing {{password}} into the password field",
+    "code": "multiple_actions"
+  },
+  {
+    "sentence": "click Continue before pressing Enter",
+    "code": "multiple_actions"
+  },
+  {
+    "sentence": "click Continue while scrolling down",
+    "code": "multiple_actions"
+  },
   { "sentence": "drag the item into the cart", "code": "unsupported" },
   { "sentence": "upload the receipt", "code": "unsupported" },
   { "sentence": "type {{first}} then {{last}}", "code": "invalid_operand" },

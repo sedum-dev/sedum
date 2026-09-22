@@ -7,7 +7,7 @@ import {
   type Fetch,
   type SystemOneRequest,
 } from "@typesafe-ai/sdk";
-import { ProviderError } from "@sedum-dev/core";
+import { ClassificationBatchError, ProviderError } from "@sedum-dev/core";
 import type {
   ClassificationProvider,
   ModelClassification,
@@ -270,31 +270,45 @@ export class TypeSafeAdapter
     const answers: ModelClassification[] = Array(sentences.length);
     const calls: ReturnType<typeof validateCall>[] = [];
     for (const chunk of chunks) {
-      const { response, attempts } = await this.ask(chunk.request, options);
-      const replyAnswers = answersOf(response);
-      const keys = Object.keys(replyAnswers);
-      if (
-        keys.length !== chunk.keys.length ||
-        keys.some((key) => !chunk.keys.includes(key))
-      )
-        throw new ProviderError(
-          "invalid-response",
-          "Classification answer keys do not match the questions.",
+      let attempts = 0;
+      let receiptRecorded = false;
+      try {
+        const asked = await this.ask(chunk.request, options);
+        attempts = asked.attempts;
+        const call = validateCall(asked.response, attempts);
+        calls.push(call);
+        receiptRecorded = true;
+        const replyAnswers = answersOf(asked.response);
+        const keys = Object.keys(replyAnswers);
+        if (
+          keys.length !== chunk.keys.length ||
+          keys.some((key) => !chunk.keys.includes(key))
+        )
+          throw new ProviderError(
+            "invalid-response",
+            "Classification answer keys do not match the questions.",
+          );
+        const validated = chunk.keys.map((key) =>
+          validateChoice(replyAnswers[key], MODEL_CHOICES),
         );
-      const call = validateCall(response, attempts);
-      const validated = chunk.keys.map((key) =>
-        validateChoice(replyAnswers[key], MODEL_CHOICES),
-      );
-      validated.forEach((answer, offset) => {
-        answers[chunk.indexes[offset]!] = {
-          op: answer.choice as ModelClassification["op"],
-          probabilities:
-            answer.probabilities as ModelClassification["probabilities"],
-          model: call.model,
-          requestedModel: call.requestedModel,
-        };
-      });
-      calls.push(call);
+        validated.forEach((answer, offset) => {
+          answers[chunk.indexes[offset]!] = {
+            op: answer.choice as ModelClassification["op"],
+            probabilities:
+              answer.probabilities as ModelClassification["probabilities"],
+            model: call.model,
+            requestedModel: call.requestedModel,
+          };
+        });
+      } catch (error) {
+        throw new ClassificationBatchError(
+          calls,
+          receiptRecorded
+            ? 0
+            : attempts || (error instanceof ProviderError ? error.attempts : 0),
+          error instanceof ProviderError ? error.code : null,
+        );
+      }
     }
     return { answers, calls };
   }

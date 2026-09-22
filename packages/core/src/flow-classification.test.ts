@@ -60,6 +60,31 @@ describe("YAML to operation integration", () => {
     expect(called).toBe(false);
   });
 
+  it("continues classification after a recoverable loader error", async () => {
+    const parsed = parseFlow(
+      "steps:\n  - type {{missing}} in the username field\n  - drag the card into the cart\n",
+      file,
+      options,
+    );
+    expect(parsed.value).toBeUndefined();
+    expect(parsed.candidate).toBeDefined();
+    const result = await classifyParsedFlow(parsed, {
+      mode: "offline",
+      cache: new NoopClassificationCache(),
+    });
+    expect(
+      result.diagnostics.map((item) => [item.code, item.source.line]),
+    ).toEqual([
+      ["unknown_placeholder", 2],
+      ["unsupported", 3],
+    ]);
+    expect(result.value).toBeUndefined();
+    expect(result.coverage).toMatchObject({
+      format: "failed",
+      steps: "incomplete",
+    });
+  });
+
   it("classifies a real YAML file online and replays it offline from the project cache", async () => {
     const folder = await mkdtemp(join(tmpdir(), "sedum-yaml-classification-"));
     try {

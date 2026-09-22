@@ -246,6 +246,38 @@ describe("sentence classification", () => {
     expect(warm.metrics).toMatchObject({ requests: 0, cache: 2, costUsd: 0 });
   });
 
+  it("accepts model-only paraphrases with explicit operands", async () => {
+    const clicked = await classifySteps([step("open the settings menu")], {
+      mode: "allow-model",
+      cache: new NoopClassificationCache(),
+      provider: fakeProvider("click").provider,
+    });
+    expect(clicked.steps[0]).toMatchObject({
+      op: "click",
+      classificationSource: "model",
+    });
+    expect(clicked.diagnostics).toEqual([]);
+    const typed = await classifySteps(
+      [step("put {{user}} in the username field")],
+      {
+        mode: "allow-model",
+        cache: new NoopClassificationCache(),
+        provider: fakeProvider("type").provider,
+      },
+    );
+    expect(typed.steps[0]).toMatchObject({
+      op: "type",
+      classificationSource: "model",
+    });
+    expect(typed.diagnostics).toEqual([]);
+    expect(
+      validateOperand('type "in stock" in the status field', "type"),
+    ).toBeNull();
+    expect(
+      validateOperand('click the "{{x}} in field" button', "type"),
+    ).toBeTruthy();
+  });
+
   it("rejects non-executable model choices and low-margin answers without caching", async () => {
     const path = await cacheFile();
     const cache = await FileClassificationCache.load(path, "jev-latest");

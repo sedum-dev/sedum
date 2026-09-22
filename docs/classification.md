@@ -2,7 +2,7 @@
 
 Each YAML string step becomes one operation before the browser runs it. The classifier accepts `click`, `type`, `press`, `goto`, `verify`, `measure`, `scroll`, `wait`, and the SED-10 v1 `remember ... as {{name}}` form. A structural `use:` module entry is handled by the flow loader. Classification chooses the operation only; the locator, executor, and assertion engine do their own work.
 
-The core API takes `{ sentence, source: { file, line, col, moduleStack? } }` items and returns one classified result or diagnostic per item. It keeps the original sentence and source location. `classifyParsedFlow(parseFlow(...), options)` connects the SED-27 YAML loader to classification, preserves phase and parser positions, collects diagnostics, and updates step coverage. SED-19 and SED-37 consume that result. Any diagnostic blocks execution of that step. A line requesting multiple actions must be split. An unsupported action is an error rather than a guessed click.
+The core API takes `{ sentence, source: { file, line, col, moduleStack? } }` items and returns one classified result or diagnostic per item. It keeps the original sentence and source location. `classifyParsedFlow(parseFlow(...), options)` connects the SED-27 YAML loader to classification, preserves phase and parser positions, collects recoverable loader and classification errors from the same file, and updates step coverage. SED-19 and SED-37 consume that result. Any diagnostic blocks execution of that step. A line requesting multiple actions must be split. An unsupported action is an error rather than a guessed click.
 
 ## Decision order
 
@@ -11,7 +11,7 @@ The core API takes `{ sentence, source: { file, line, col, moduleStack? } }` ite
 3. Read a model answer from `.sedum/classifications.json`, if present and compatible.
 4. In online mode, send unresolved unique sentences as independent TypeSafe Choices in one request for an ordinary file. Long files split at the 64 KiB serialized request bound. Choices include `unsupported_or_unclear` and `multiple_actions` so the model can refuse an unsafe operation.
 
-A model operation is accepted only with a coherent complete probability distribution, selected probability at least 0.80, and a top-two margin at least 0.15. These are provisional decision thresholds, not a calibration claim. Pattern results carry `probability: null`; model and cache results carry the selected probability. The response records TypeSafe model/version, calls, attempts, tokens, cost, and duration separately from locator and judge work. Unknown cost stays `null`.
+A model operation is accepted only with a coherent complete probability distribution, selected probability at least 0.80, and a top-two margin at least 0.15. These are provisional decision thresholds, not a calibration claim. Pattern results carry `probability: null`; model and cache results carry the selected probability. The response records TypeSafe model/version, calls, attempts, tokens, cost, and duration separately from locator and judge work. A later chunk failure retains earlier receipts and failed-attempt counts; unknown total cost stays `null`.
 
 ## Offline validation and CI
 

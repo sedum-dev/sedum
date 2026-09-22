@@ -651,7 +651,7 @@ export function parseFlow(
   )
     ? "failed"
     : "passed";
-  if (!input || format === "failed")
+  if (!input)
     return {
       diagnostics: diagnostics.sort(compareDiagnostics),
       coverage: {
@@ -700,6 +700,27 @@ export function parseFlow(
     steps,
     after,
   };
+  if (format === "failed") {
+    const recoverable = new Set([
+      "unknown_placeholder",
+      "invalid_placeholder",
+      "unclosed_quote",
+      "duplicate_remember_binding",
+    ]);
+    return {
+      ...(diagnostics
+        .filter((item) => item.severity === "error")
+        .every((item) => recoverable.has(item.code))
+        ? { candidate: result }
+        : {}),
+      diagnostics: diagnostics.sort(compareDiagnostics),
+      coverage: {
+        format,
+        steps: "not_checked",
+        modules: hasModule ? "not_checked" : "not_needed",
+      },
+    };
+  }
   return {
     value: result,
     diagnostics: diagnostics.sort(compareDiagnostics),

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   FileClassificationCache,
   MODEL_CHOICES,
+  NoopClassificationCache,
   ProviderError,
   classifySteps,
 } from "@sedum-dev/core";
@@ -130,6 +131,52 @@ describe("classification TypeSafe boundary", () => {
         fetch: wrong.fetch,
       }).classifyBatch(["capture item as {{item}}"]),
     ).rejects.toMatchObject({ code: "invalid-response" });
+  });
+
+  it("retains billed receipts and failed attempts when a later chunk fails", async () => {
+    const sentences = Array.from(
+      { length: 65 },
+      (_, index) => `capture item ${index} as {{item}}`,
+    );
+    const first = buildClassificationRequests(sentences)[0]!;
+    let requests = 0;
+    const fetch: Fetch = async () => {
+      requests++;
+      if (requests > 1)
+        return new Response(JSON.stringify({ error: "upstream unavailable" }), {
+          status: 429,
+          headers: { "content-type": "application/json" },
+        });
+      return new Response(JSON.stringify(reply(first.keys)), {
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const result = await classifySteps(
+      sentences.map((sentence, index) => ({
+        sentence,
+        source: { file: "tests/long.test.yaml", line: index + 1, col: 5 },
+      })),
+      {
+        mode: "allow-model",
+        cache: new NoopClassificationCache(),
+        provider: new TypeSafeAdapter({
+          apiKey: "test-key",
+          fetch,
+          backoffInitialMs: 1,
+        }),
+      },
+    );
+    expect(result.steps.every((step) => step === null)).toBe(true);
+    expect(result.diagnostics).toHaveLength(65);
+    expect(result.metrics).toMatchObject({
+      requests: 2,
+      attempts: 4,
+      inputTokens: 120,
+      outputTokens: 5,
+      costUsd: null,
+    });
+    expect(result.calls).toHaveLength(1);
+    expect(requests).toBe(4);
   });
 
   it("rejects invalid distributions and overlong input before an action", async () => {
