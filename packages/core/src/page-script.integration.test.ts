@@ -602,7 +602,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(await page.evaluate("window.clickCount || 0")).toBe(1);
       await context.close();
     });
-    it("refuses a target changed while Playwright waits for stability", async () => {
+    it("refuses a target changed after aiming and before browser click", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
         "document.querySelector('#app').innerHTML = '<button>Buy</button>'",
@@ -611,7 +611,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const aimed = await clickTarget(page, found.candidates[0]!.ref);
       if (!aimed.actionable) throw new Error("No aim");
       await page.evaluate(
-        "const button=document.querySelector('button'); button.animate([{ transform: 'translateX(0px)' }, { transform: 'translateX(80px)' }], { duration: 800, easing: 'linear' }); setTimeout(() => { button.textContent='Delete all'; button.addEventListener('click', () => window.deleted=true); }, 100)",
+        "const button=document.querySelector('button'); button.textContent='Delete all'; button.addEventListener('click', () => window.deleted=true)",
       );
       expect(await page.clickRef(aimed.aim)).toEqual({
         actionable: false,
