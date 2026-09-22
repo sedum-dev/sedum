@@ -131,6 +131,25 @@ describe("classification TypeSafe boundary", () => {
         fetch: wrong.fetch,
       }).classifyBatch(["capture item as {{item}}"]),
     ).rejects.toMatchObject({ code: "invalid-response" });
+    const malformed = transport([reply(["line0", "unexpected"])]);
+    const classified = await classifySteps(
+      [
+        {
+          sentence: "capture item as {{item}}",
+          source: { file: "test.yaml", line: 1, col: 1 },
+        },
+      ],
+      {
+        mode: "allow-model",
+        cache: new NoopClassificationCache(),
+        provider: new TypeSafeAdapter({
+          apiKey: "test-key",
+          fetch: malformed.fetch,
+        }),
+      },
+    );
+    expect(classified.calls).toHaveLength(1);
+    expect(classified.metrics).toMatchObject({ requests: 1, attempts: 1 });
   });
 
   it("retains billed receipts and failed attempts when a later chunk fails", async () => {
@@ -175,7 +194,8 @@ describe("classification TypeSafe boundary", () => {
       outputTokens: 5,
       costUsd: null,
     });
-    expect(result.calls).toHaveLength(1);
+    expect(result.calls).toHaveLength(2);
+    expect(result.calls[1]).toMatchObject({ attempts: 3, totalCostUsd: null });
     expect(requests).toBe(4);
   });
 

@@ -15,7 +15,12 @@ import {
   type Operation,
   type PageVersion,
 } from "./page-protocol.js";
-import type { ProviderCall, Resolver, ResolverDecision } from "./provider.js";
+import {
+  unknownCostCall,
+  type ProviderCall,
+  type Resolver,
+  type ResolverDecision,
+} from "./provider.js";
 import { ResolvedStepTarget } from "./step-executor.js";
 
 const MAX_CANDIDATES = 4096;
@@ -94,6 +99,9 @@ export interface LocatorOptionDiagnostic {
 export interface LocatorDiagnostic {
   readonly candidateCount: number;
   readonly rounds: number;
+  readonly confidence?: number | null;
+  /** Internal accepted candidate-set provenance; never projected into JSON. */
+  readonly observationVersion?: PageVersion;
   /** Probabilities come only from the final comparable Choice. */
   readonly topOptions: readonly LocatorOptionDiagnostic[];
   readonly gate?: string;
@@ -277,14 +285,23 @@ function topOptions(
   const byId = new Map(
     candidates.map((candidate) => [candidate.ref, candidate]),
   );
-  return Object.entries(decision.probabilities)
+  const ranked = Object.entries(decision.probabilities)
+    .filter(([id]) => id !== "none")
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
     .map(([id, probability]) => ({
-      name: id === "none" ? "none" : excerpt(byId.get(id)?.name ?? "", 120),
-      role: id === "none" ? "" : (byId.get(id)?.role ?? ""),
+      name: excerpt(byId.get(id)?.name ?? "", 120),
+      role: byId.get(id)?.role ?? "",
       probability,
     }));
+  return [
+    ...ranked,
+    {
+      name: "(no match)",
+      role: "",
+      probability: decision.probabilities.none ?? 0,
+    },
+  ].sort((a, b) => b.probability - a.probability);
 }
 
 function comparableLead(decision: ResolverDecision, id: string): number {
@@ -408,6 +425,8 @@ export async function resolveTarget(
   let candidateCount = 0;
   let rounds = 0;
   let top: LocatorOptionDiagnostic[] = [];
+  let confidence: number | null = null;
+  let observationVersion: PageVersion | undefined;
   let gate: string | undefined;
   const unresolved = (reason: LocatorFailure): LocatorResult => ({
     kind: "unresolved",
@@ -415,6 +434,8 @@ export async function resolveTarget(
     diagnostic: {
       candidateCount,
       rounds,
+      confidence,
+      ...(observationVersion ? { observationVersion } : {}),
       topOptions: top,
       ...(gate ? { gate } : {}),
     },
@@ -441,9 +462,11 @@ export async function resolveTarget(
   try {
     ensureActive();
     let source = await fullSet(page, options.operation);
+    observationVersion = source.version;
     ensureActive();
     if (options.operation === "fill" && source.candidates.length === 0)
       source = await fullSet(page, "click");
+    observationVersion = source.version;
     ensureActive();
     const candidates = source.candidates;
     candidateCount = candidates.length;
@@ -455,23 +478,28 @@ export async function resolveTarget(
       pool: readonly Candidate[],
     ): Promise<ResolverDecision> => {
       ensureActive();
-      const decision = await resolver.choose(
-        options.sentence,
-        {
-          complete: true,
-          options: [
-            ...projectCandidates(requestOptions(pool)).map((candidate) => ({
-              kind: "candidate" as const,
-              candidate,
-            })),
-            { kind: "none" as const, id: "none" as const },
-          ],
-        },
-        { signal: controller.signal },
-      );
+      const decision = await resolver
+        .choose(
+          options.sentence,
+          {
+            complete: true,
+            options: [
+              ...projectCandidates(requestOptions(pool)).map((candidate) => ({
+                kind: "candidate" as const,
+                candidate,
+              })),
+              { kind: "none" as const, id: "none" as const },
+            ],
+          },
+          { signal: controller.signal },
+        )
+        .catch((error: unknown) => {
+          calls.push(unknownCostCall(error));
+          throw error;
+        });
+      calls.push(decision.call);
       ensureActive();
       validateDecision(decision, pool);
-      calls.push(decision.call);
       rounds++;
       return decision;
     };
@@ -519,6 +547,7 @@ export async function resolveTarget(
     if (!sameVersion(await pageVersion(page), source.version))
       return unresolved("stale");
     top = topOptions(decision, finalists);
+    confidence = decision.confidence;
     if (decision.selection.kind === "none") return unresolved("none");
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
@@ -549,6 +578,7 @@ export async function resolveTarget(
       if (!sameVersion(await pageVersion(page), source.version))
         return unresolved("stale");
       top = topOptions(narrower, group);
+      confidence = narrower.confidence;
       if (narrower.selection.kind === "none") return unresolved("none");
       const member = byId.get(narrower.selection.id);
       if (
@@ -622,6 +652,8 @@ export async function resolveTarget(
         diagnostic: {
           candidateCount,
           rounds,
+          confidence,
+          observationVersion: source.version,
           topOptions: top,
           ...(gate ? { gate } : {}),
         },

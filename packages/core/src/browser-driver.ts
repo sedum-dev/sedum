@@ -77,6 +77,9 @@ export class BrowserDriverError extends Error {
 export interface BrowserPage {
   readonly url: string;
   readonly closed: boolean;
+  /** Optional diagnostic effects; fake pages may leave them unavailable. */
+  title?(): Promise<string>;
+  captureFrame?(): Promise<Uint8Array>;
   goto(url: string, options?: NavigationOptions): Promise<NavigationResult>;
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
@@ -243,6 +246,14 @@ class PlaywrightPage implements BrowserPage {
 
   get url(): string {
     return this.page.url();
+  }
+
+  async title(): Promise<string> {
+    return this.page.title();
+  }
+
+  async captureFrame(): Promise<Uint8Array> {
+    return this.page.screenshot({ type: "jpeg", quality: 60, scale: "css" });
   }
 
   get closed(): boolean {

@@ -11,13 +11,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./page-script.js": "./dist/page-script/index.global.js"
+    "./page-script.js": "./dist/page-script/index.global.js",
+    "./run-result.schema.json": "./dist/run-result.schema.json"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist && tsup src/page-script/index.ts --format iife --platform browser --global-name SedumPageScript --out-dir dist/page-script",
+    "build": "tsup src/index.ts --format esm --dts --clean --out-dir dist && node scripts/write-run-result-schema.mjs && tsup src/page-script/index.ts --format iife --platform browser --global-name SedumPageScript --out-dir dist/page-script",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

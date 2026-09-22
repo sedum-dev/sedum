@@ -236,7 +236,13 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
         "Buy",
         offered,
       ),
-    ).rejects.toMatchObject({ code: "invalid-response" });
+    ).rejects.toMatchObject({
+      code: "invalid-response",
+      failedCall: {
+        model: "jev-1.13.0",
+        usage: { inputTokens: 100, outputTokens: 0 },
+      },
+    });
     expect(bad.calls).toHaveLength(1);
     const missingJudge = fake([
       json({ ...judgeReply, answers: { holds: { type: "noul", noul: 0.5 } } }),
@@ -246,7 +252,13 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
         apiKey: "test-key",
         fetch: missingJudge.fetch,
       }).holds("Bought", { complete: true, text: "Bought" }),
-    ).rejects.toMatchObject({ code: "invalid-response" });
+    ).rejects.toMatchObject({
+      code: "invalid-response",
+      failedCall: {
+        model: "jev-1.13.0",
+        usage: { inputTokens: 200, outputTokens: 0 },
+      },
+    });
     expect(missingJudge.calls).toHaveLength(1);
   });
 

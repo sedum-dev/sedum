@@ -1,3 +1,4 @@
+import { unknownCostCall } from "./provider.js";
 import type {
   ProviderCall,
   ProviderCallOptions,
@@ -545,6 +546,13 @@ export async function classifySteps(
         if (error instanceof ClassificationBatchError) {
           calls.push(...error.calls);
           failedAttempts = error.failedAttempts;
+          if (failedAttempts > 0)
+            calls.push({
+              ...unknownCostCall(error),
+              attempts: failedAttempts,
+            });
+        } else {
+          calls.push(unknownCostCall(error));
         }
         for (const group of groups)
           for (const index of group.indexes) fail(index, "provider_error");
@@ -566,8 +574,8 @@ export async function classifySteps(
       cache,
       model,
       cacheMisses: misses,
-      requests: calls.length + (failedAttempts > 0 ? 1 : 0),
-      attempts: calls.reduce((sum, c) => sum + c.attempts, 0) + failedAttempts,
+      requests: calls.length,
+      attempts: calls.reduce((sum, c) => sum + c.attempts, 0),
       inputTokens: calls.reduce((sum, c) => sum + c.usage.inputTokens, 0),
       outputTokens: calls.reduce((sum, c) => sum + c.usage.outputTokens, 0),
       costUsd,

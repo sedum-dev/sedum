@@ -11,7 +11,7 @@ import {
   type DigestResult,
   type PageVersion,
 } from "./page-protocol.js";
-import type { Judge, ProviderCall } from "./provider.js";
+import { unknownCostCall, type Judge, type ProviderCall } from "./provider.js";
 
 const DEFAULT_OBSERVATION_TIMEOUT_MS = 4_000;
 const POST_JUDGE_VERSION_TIMEOUT_MS = 1_000;
@@ -37,9 +37,18 @@ export type AssertionEngineErrorCode =
 
 /** Public diagnostics contain only a stable code and a bounded message. */
 export class AssertionEngineError extends Error {
-  constructor(readonly code: AssertionEngineErrorCode) {
+  readonly failedCall?: ProviderCall;
+  constructor(
+    readonly code: AssertionEngineErrorCode,
+    failedCall?: ProviderCall,
+  ) {
     super(`Assertion could not be judged: ${code}.`);
     this.name = "AssertionEngineError";
+    if (failedCall)
+      Object.defineProperty(this, "failedCall", {
+        value: failedCall,
+        enumerable: false,
+      });
   }
 
   toJSON(): { code: AssertionEngineErrorCode; message: string } {
@@ -62,6 +71,8 @@ interface AssertionScores {
   readonly contradicted: number;
   readonly call: ProviderCall;
   readonly elapsedMs: number;
+  /** Internal provenance for report metadata; never serialize the raw route. */
+  readonly observationVersion: PageVersion;
 }
 
 export type VerifyResult = AssertionScores & {
@@ -297,21 +308,29 @@ async function judgePage(
 ) {
   const digest = await settledDigest(page, timeoutMs, signal);
   canceled(signal);
-  let decision;
+  let decision: Awaited<ReturnType<Judge["holds"]>> | undefined;
   try {
     decision = await judge.holds(
       claim,
       { complete: true, text: digest.text },
       signal ? { signal } : {},
     );
-    canceled(signal);
+    if (signal?.aborted)
+      throw new AssertionEngineError("canceled", decision.call);
     probability(decision.holds, "holds");
     probability(decision.contradicted, "contradicted");
   } catch (error) {
     if (error instanceof AssertionEngineError) throw error;
-    if (signal?.aborted) throw new AssertionEngineError("canceled");
-    throw new AssertionEngineError("provider_failure");
+    if (decision)
+      throw new AssertionEngineError(
+        signal?.aborted ? "canceled" : "provider_failure",
+        decision.call,
+      );
+    if (signal?.aborted)
+      throw new AssertionEngineError("canceled", unknownCostCall(error));
+    throw new AssertionEngineError("provider_failure", unknownCostCall(error));
   }
+  if (!decision) throw new AssertionEngineError("provider_failure");
   let current: PageVersion;
   try {
     current = await withinObservation(
@@ -320,10 +339,11 @@ async function judgePage(
       signal,
     );
   } catch (error) {
-    throw observationError(error, signal);
+    const observed = observationError(error, signal);
+    throw new AssertionEngineError(observed.code, decision.call);
   }
   if (!sameVersion(current, digest.version))
-    throw new AssertionEngineError("stale_observation");
+    throw new AssertionEngineError("stale_observation", decision.call);
   return { decision, digest };
 }
 
@@ -350,15 +370,19 @@ export async function verify(
     options.minP === undefined ? {} : { minP: options.minP },
   );
   const needsExcerpt = policy.verdict === "failed" || policy.flags.length > 0;
-  return {
-    kind: "verify",
-    ...policy,
-    holds: decision.holds,
-    contradicted: decision.contradicted,
-    call: decision.call,
-    elapsedMs: performance.now() - started,
-    ...(needsExcerpt ? { judgedExcerpt: excerpt(digest.text) } : {}),
-  };
+  return Object.defineProperty(
+    {
+      kind: "verify",
+      ...policy,
+      holds: decision.holds,
+      contradicted: decision.contradicted,
+      call: decision.call,
+      elapsedMs: performance.now() - started,
+      ...(needsExcerpt ? { judgedExcerpt: excerpt(digest.text) } : {}),
+    },
+    "observationVersion",
+    { value: digest.version, enumerable: false },
+  ) as VerifyResult;
 }
 
 export async function measure(
@@ -377,12 +401,16 @@ export async function measure(
     timeoutMs,
     options.signal,
   );
-  return {
-    kind: "measure",
-    holds: decision.holds,
-    contradicted: decision.contradicted,
-    call: decision.call,
-    elapsedMs: performance.now() - started,
-    judgedExcerpt: excerpt(digest.text),
-  };
+  return Object.defineProperty(
+    {
+      kind: "measure",
+      holds: decision.holds,
+      contradicted: decision.contradicted,
+      call: decision.call,
+      elapsedMs: performance.now() - started,
+      judgedExcerpt: excerpt(digest.text),
+    },
+    "observationVersion",
+    { value: digest.version, enumerable: false },
+  ) as MeasureResult;
 }

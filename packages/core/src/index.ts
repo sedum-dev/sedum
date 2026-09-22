@@ -3,11 +3,9 @@ export interface ActionRequest {
   readonly description: string;
 }
 
-/** The stable result contract consumed by reporters. */
-export interface RunResult {
-  readonly status: "passed" | "failed";
-  readonly message: string;
-}
+export * from "./run-result.js";
+export * from "./run-recorder.js";
+export * from "./report-privacy.js";
 
 export * from "./browser-driver.js";
 export * from "./page-protocol.js";

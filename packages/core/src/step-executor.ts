@@ -1,7 +1,7 @@
 import { inspect } from "node:util";
 import type { BrowserPage } from "./browser-driver.js";
 import { clickTarget, pageVersion, quietPage } from "./page-bridge.js";
-import type { FillTarget, PageVersion } from "./page-protocol.js";
+import type { Aim, FillTarget, PageVersion } from "./page-protocol.js";
 import { safeCallLog } from "./safe-diagnostics.js";
 
 /** A runtime substitution is never printed or serialized by the executor. */
@@ -127,6 +127,7 @@ export interface StepExecutionResult {
 
 export type StepFailureCode =
   | "invalid_input"
+  | "canceled"
   | "timeout"
   | "stale"
   | "not_actionable"
@@ -172,6 +173,12 @@ export class StepExecutionError extends Error {
 export interface StepExecutionOptions {
   /** A caller-supplied whole-step budget, including post-action observation. */
   readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+  /** Diagnostic capture after final aim/scroll and before event dispatch. */
+  readonly beforeAction?: (
+    box: Aim["box"] | null,
+    version: PageVersion,
+  ) => Promise<void>;
 }
 
 function finiteNonnegative(value: number): boolean {
@@ -253,14 +260,33 @@ export async function executeStep(
   let phase: StepFailurePhase = "pre_dispatch";
   let outcome: StepOutcome = "acted";
   let displayUrl: string | undefined;
+  const active = async <T>(operation: Promise<T>): Promise<T> => {
+    const signal = options.signal;
+    if (!signal) return operation;
+    if (signal.aborted) throw new StepExecutionError(op, "canceled", phase);
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () =>
+        finish(new StepExecutionError(op, "canceled", phase));
+      const finish = (error?: unknown, value?: T) => {
+        signal.removeEventListener("abort", onAbort);
+        if (error !== undefined) reject(error);
+        else resolve(value as T);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      operation.then(
+        (value) => finish(undefined, value),
+        (error) => finish(error),
+      );
+    });
+  };
   try {
     switch (command.op) {
       case "click": {
         const target = command.target.driverTarget();
-        const before = await pageVersion(page);
+        const before = await active(pageVersion(page));
         if (!sameVersion(before, target.version))
           throw new StepExecutionError(op, "stale", phase);
-        const aimed = await clickTarget(page, target.ref);
+        const aimed = await active(clickTarget(page, target.ref));
         if (!aimed.actionable)
           throw new StepExecutionError(
             op,
@@ -274,8 +300,17 @@ export async function executeStep(
         )
           throw new StepExecutionError(op, "stale", phase);
         const timeoutMs = remaining(8_000, phase);
+        if (options.beforeAction) {
+          await active(
+            options.beforeAction(aimed.aim.box ?? null, target.version),
+          ).catch((error: unknown) => {
+            if (options.signal?.aborted) throw error;
+          });
+        }
+        if (options.signal?.aborted)
+          throw new StepExecutionError(op, "canceled", phase);
         phase = "post_dispatch";
-        const result = await page.clickRef(aimed.aim, { timeoutMs });
+        const result = await active(page.clickRef(aimed.aim, { timeoutMs }));
         if (!result.actionable)
           throw new StepExecutionError(
             op,
@@ -293,16 +328,41 @@ export async function executeStep(
                 )
               : [],
           );
-        outcome = await observeRoute(page, "click", before, remaining);
+        outcome = await active(observeRoute(page, "click", before, remaining));
         break;
       }
       case "type": {
         const target = command.target.driverTarget();
         const timeoutMs = remaining(8_000, phase);
+        if (options.beforeAction) {
+          const before = await active(pageVersion(page));
+          if (!sameVersion(before, target.version))
+            throw new StepExecutionError(op, "stale", phase);
+          const aimed = await active(clickTarget(page, target.ref)).catch(
+            (error: unknown) => {
+              if (options.signal?.aborted) throw error;
+              return null;
+            },
+          );
+          const box =
+            aimed?.actionable &&
+            aimed.aim.document === before.document &&
+            aimed.aim.route === before.route &&
+            aimed.aim.revision === before.revision
+              ? (aimed.aim.box ?? null)
+              : null;
+          await active(options.beforeAction(box, target.version)).catch(
+            (error: unknown) => {
+              if (options.signal?.aborted) throw error;
+            },
+          );
+          if (options.signal?.aborted)
+            throw new StepExecutionError(op, "canceled", phase);
+        }
         phase = "post_dispatch";
-        const result = await page.fillRef(target, command.value.reveal(), {
-          timeoutMs,
-        });
+        const result = await active(
+          page.fillRef(target, command.value.reveal(), { timeoutMs }),
+        );
         if (!result.acted)
           throw new StepExecutionError(
             op,
@@ -323,21 +383,23 @@ export async function executeStep(
       case "press": {
         if (!command.key.trim())
           throw new StepExecutionError(op, "invalid_input", phase);
-        const before = await pageVersion(page);
+        const before = await active(pageVersion(page));
         const timeoutMs = remaining(8_000, phase);
         phase = "post_dispatch";
-        await page.press(command.key, { timeoutMs });
-        outcome = await observeRoute(page, "press", before, remaining);
+        await active(page.press(command.key, { timeoutMs }));
+        outcome = await active(observeRoute(page, "press", before, remaining));
         break;
       }
       case "goto": {
         displayUrl = command.url.toString();
         const timeoutMs = remaining(30_000, phase);
         phase = "post_dispatch";
-        await page.goto(command.url.reveal(), {
-          timeoutMs,
-          safeDiagnostics: true,
-        });
+        await active(
+          page.goto(command.url.reveal(), {
+            timeoutMs,
+            safeDiagnostics: true,
+          }),
+        );
         break;
       }
       case "scroll": {
@@ -345,7 +407,7 @@ export async function executeStep(
           throw new StepExecutionError(op, "invalid_input", phase);
         const timeoutMs = remaining(8_000, phase);
         phase = "post_dispatch";
-        await page.scroll(command.deltaY, { timeoutMs });
+        await active(page.scroll(command.deltaY, { timeoutMs }));
         break;
       }
       case "wait": {
@@ -356,8 +418,10 @@ export async function executeStep(
           throw new StepExecutionError(op, "invalid_input", phase);
         if (command.durationMs > deadline - performance.now())
           throw new StepExecutionError(op, "timeout", phase);
-        await new Promise<void>((resolve) =>
-          setTimeout(resolve, command.durationMs),
+        await active(
+          new Promise<void>((resolve) =>
+            setTimeout(resolve, command.durationMs),
+          ),
         );
         break;
       }
