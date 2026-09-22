@@ -10,7 +10,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./page-script.js": "./dist/page-script/index.global.js"
   },
   "files": [
     "dist"

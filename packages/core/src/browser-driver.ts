@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
   chromium,
@@ -8,6 +9,7 @@ import {
   type BrowserContext,
   type Page,
 } from "playwright-core";
+import type { Aim, AimResult } from "./page-protocol.js";
 
 export type BrowserKind = "chrome" | "chromium";
 
@@ -48,7 +50,8 @@ export type BrowserDriverErrorCode =
   | "context-closed"
   | "page-closed"
   | "page-crashed"
-  | "operation-failed";
+  | "operation-failed"
+  | "script-missing";
 
 export class BrowserDriverError extends Error {
   readonly code: BrowserDriverErrorCode;
@@ -67,6 +70,7 @@ export interface BrowserPage {
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
   evaluate<T>(expression: string, argument?: unknown): Promise<T>;
+  clickRef(aim: Aim): Promise<AimResult>;
   close(): Promise<void>;
 }
 
@@ -260,6 +264,75 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
+  async clickRef(aim: Aim): Promise<AimResult> {
+    const state = this.state();
+    if (state.closed || state.crashed || state.disconnected)
+      throw operationError(new Error("page is not available"), state, "page");
+    const checked = await this.page.evaluate(
+      (expected) =>
+        window.__sedum?.checkAim(expected) ?? {
+          actionable: false,
+          reason: "stale",
+        },
+      aim,
+    );
+    if (!checked.actionable) return checked as AimResult;
+    const handle = await this.page.evaluateHandle((ref) => {
+      const matches = Array.from(
+        document.querySelectorAll("[data-sedum-ref]"),
+      ).filter((element) => element.getAttribute("data-sedum-ref") === ref);
+      return matches.length === 1 ? matches[0] : null;
+    }, aim.ref);
+    try {
+      const element = handle.asElement();
+      if (!element) return { actionable: false, reason: "target_missing" };
+      const validateElement = () =>
+        this.page.evaluate(
+          ({ expected, element }) => {
+            if (
+              !element.isConnected ||
+              element.getAttribute("data-sedum-ref") !== expected.ref
+            )
+              return { actionable: false, reason: "target_missing" };
+            return (
+              window.__sedum?.checkAim(expected) ?? {
+                actionable: false,
+                reason: "stale",
+              }
+            );
+          },
+          { expected: aim, element },
+        );
+      const still = await validateElement();
+      if (!still.actionable) return still as AimResult;
+      try {
+        // Wait for the exact element to settle without moving the pointer or
+        // dispatching pointer/input events. The page can change during this wait,
+        // so this is not the final snapshot validation.
+        await element.waitForElementState("stable", { timeout: 1000 });
+      } catch {
+        return { actionable: false, reason: "not_actionable" };
+      }
+      const ready = await validateElement();
+      if (!ready.actionable) return ready as AimResult;
+      try {
+        // Playwright and the browser own final actionability, event dispatch,
+        // cancellation, and navigation. Once this starts, a failure cannot
+        // prove that page handlers saw no side effect, so it is non-retryable.
+        await element.click({ position: aim.point, timeout: 1000 });
+        return { actionable: true, aim };
+      } catch {
+        return {
+          actionable: false,
+          reason: "action_started",
+          retryable: false,
+        };
+      }
+    } finally {
+      await handle.dispose().catch(() => undefined);
+    }
+  }
+
   async close(): Promise<void> {
     if (this.closed) return;
     await this.page.close();
@@ -348,8 +421,28 @@ class PlaywrightSession implements BrowserSession {
           : { viewport: options.viewport }),
         ...(options.locale === undefined ? {} : { locale: options.locale }),
       });
+      const installed = fileURLToPath(
+        new URL("./page-script/index.global.js", import.meta.url),
+      );
+      const sourceTestAsset = fileURLToPath(
+        new URL("../dist/page-script/index.global.js", import.meta.url),
+      );
+      const asset = existsSync(installed) ? installed : sourceTestAsset;
+      if (!existsSync(asset)) {
+        await context.close();
+        throw new BrowserDriverError(
+          "script-missing",
+          "The built Sedum page script is missing. Build @sedum-dev/core before launching a context.",
+        );
+      }
+      await context.addInitScript({ path: asset });
       return new PlaywrightContext(context, () => this.state());
     } catch (error) {
+      if (
+        error instanceof BrowserDriverError &&
+        error.code === "script-missing"
+      )
+        throw error;
       throw operationError(error, this.state(), "context");
     }
   }
