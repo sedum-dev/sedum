@@ -6,6 +6,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   NoopClassificationCache,
   PlaywrightBrowserDriver,
+  ResolvedStepTarget,
+  collectCandidates,
   executeStep,
   resolveTarget,
   runFlow,
@@ -63,6 +65,24 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
     const page = await context.newPage();
     await page.goto(site.baseUrl + url);
     return { context, page };
+  }
+
+  async function clickNamed(page: BrowserPage, name: string): Promise<void> {
+    const snapshot = await collectCandidates(page, "click");
+    const matches = snapshot.candidates.filter(
+      (candidate) => candidate.name === name,
+    );
+    expect(matches).toHaveLength(1);
+    const candidate = matches[0]!;
+    await executeStep(page, {
+      op: "click",
+      target: new ResolvedStepTarget({
+        ref: candidate.ref,
+        version: snapshot.version,
+        tag: candidate.tag,
+        name: candidate.name,
+      }),
+    });
   }
 
   it("runs login, repeated products, and checkout through the real provider adapter", async () => {
@@ -150,7 +170,7 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
       );
       const ready = await verify(page, adapter, "The page says Ready");
       expect(ready.verdict).toBe("passed");
-      await page.evaluate("document.querySelector('#once').click()");
+      await clickNamed(page, "Submit once");
       await vi.waitFor(
         async () => {
           expect(await page.text()).toContain("Saved");
@@ -169,7 +189,7 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
         },
         { timeout: 3_000 },
       );
-      await page.evaluate("document.querySelector('#list button').click()");
+      await clickNamed(page, "Open record");
       expect(await page.text()).toContain("Record opened");
       expect(await page.evaluate<number>("window.actionCount")).toBe(1);
       successful++;
