@@ -10,6 +10,7 @@ import {
   type Candidate,
   type CandidatePage,
   type DigestResult,
+  type FillTarget,
   type Operation,
   type PageBridge,
   type PageVersion,
@@ -585,6 +586,43 @@ if (!window.__sedum) {
       return null;
     return element;
   }
+  function fillElement(target: FillTarget): Element | null {
+    const current = version();
+    if (
+      !snapshot ||
+      snapshot.operation !== "fill" ||
+      !same(snapshot.version, current) ||
+      !same(target.version, current)
+    )
+      return null;
+    const element = refElement(target.ref);
+    if (!element || element.tagName.toLowerCase() !== target.tag) return null;
+    const matches = Array.from(
+      document.querySelectorAll("[data-sedum-ref]"),
+    ).filter((node) => node.getAttribute("data-sedum-ref") === target.ref);
+    if (matches.length !== 1 || matches[0] !== element) return null;
+    const candidate = snapshot.candidates.find(
+      (item) => item.ref === target.ref,
+    );
+    if (
+      !candidate ||
+      !candidate.editable ||
+      !(
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        (element instanceof HTMLElement && element.isContentEditable)
+      ) ||
+      candidate.name !== target.name ||
+      label(element) !== candidate.name ||
+      JSON.stringify(peers(element, candidate.name).texts) !==
+        JSON.stringify(candidate.peers) ||
+      !editable(element) ||
+      !visible(element) ||
+      disabled(element)
+    )
+      return null;
+    return element;
+  }
   function aim(ref: string, expected?: Aim): AimResult {
     const current = version();
     if (!snapshot || !same(snapshot.version, current))
@@ -674,6 +712,7 @@ if (!window.__sedum) {
     },
     clickTarget: (ref) => aim(ref),
     checkAim: (expected) => aim(expected.ref, expected),
+    fillElement,
     clearRefs,
     quiet: async ({ ms, timeoutMs }) => {
       const started = performance.now();

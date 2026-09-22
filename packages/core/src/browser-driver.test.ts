@@ -35,6 +35,8 @@ class FakePage extends EventEmitter {
   });
   readonly waitForLoadState = vi.fn(async () => undefined);
   readonly innerText = vi.fn(async () => "fixture page");
+  readonly keyboard = { press: vi.fn(async () => undefined) };
+  readonly mouse = { wheel: vi.fn(async () => undefined) };
 
   url(): string {
     return this.currentUrl;
@@ -236,6 +238,110 @@ describe("PlaywrightBrowserDriver", () => {
     });
     await session.close();
   });
+
+  it("keeps sensitive action arguments and raw causes out of safe driver errors", async () => {
+    const browser = new FakeBrowser();
+    launch.mockResolvedValue(browser);
+    const session = await new PlaywrightBrowserDriver().launch({
+      browser: "chromium",
+    });
+    const context = await session.newContext();
+    const page = await context.newPage();
+    const secret = "TOP_SECRET";
+    browser.context.page.goto.mockRejectedValueOnce(
+      new Error(
+        `goto ${secret}\nCall log:\n  - waiting for scheduled navigations to finish\n  - goto ${secret}`,
+      ),
+    );
+    let failure: unknown;
+    try {
+      await page.goto(`http://example.test/${secret}`, {
+        safeDiagnostics: true,
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      code: "operation-failed",
+    });
+    expect((failure as Error).cause).toBeUndefined();
+    expect(String(failure)).not.toContain(secret);
+    expect((failure as Error).stack).not.toContain(secret);
+    expect(String(failure)).toContain(
+      "waiting for scheduled navigations to finish",
+    );
+    expect(String(failure)).toContain("[action argument redacted]");
+
+    browser.context.page.keyboard.press.mockRejectedValueOnce(
+      new Error(`press ${secret}`),
+    );
+    await expect(page.press(secret)).rejects.toMatchObject({
+      code: "operation-failed",
+      message: "Key press failed.",
+    });
+    browser.context.page.mouse.wheel.mockRejectedValueOnce(
+      new Error(`wheel ${secret}`),
+    );
+    await expect(page.scroll(100)).rejects.toMatchObject({
+      code: "operation-failed",
+      message: "Scroll failed.",
+    });
+    await expect(page.press("A", { timeoutMs: 0 })).rejects.toMatchObject({
+      code: "operation-failed",
+    });
+    expect(browser.context.page.keyboard.press).toHaveBeenCalledTimes(1);
+    await session.close();
+  });
+
+  it.each(["press", "scroll"] as const)(
+    "closes and drains a timed-out %s before handing back control",
+    async (action) => {
+      const browser = new FakeBrowser();
+      launch.mockResolvedValue(browser);
+      const session = await new PlaywrightBrowserDriver().launch({
+        browser: "chromium",
+      });
+      const context = await session.newContext();
+      const page = await context.newPage();
+      const underlyingPage = browser.context.page;
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let lateEffects = 0;
+      const input = vi.fn(async () => {
+        await pending;
+        if (!underlyingPage.isClosed()) lateEffects++;
+      });
+      if (action === "press") underlyingPage.keyboard.press = input;
+      else underlyingPage.mouse.wheel = input;
+
+      const result =
+        action === "press"
+          ? page.press("A", { timeoutMs: 5 })
+          : page.scroll(100, { timeoutMs: 5 });
+      let returned = false;
+      void result.then(
+        () => {
+          returned = true;
+        },
+        () => {
+          returned = true;
+        },
+      );
+      await vi.waitFor(() => expect(page.closed).toBe(true));
+      expect(returned).toBe(false);
+      release();
+      await expect(result).rejects.toMatchObject({ code: "page-closed" });
+      expect(returned).toBe(true);
+      expect(lateEffects).toBe(0);
+      await expect(page.press("B")).rejects.toMatchObject({
+        code: "page-closed",
+      });
+      expect(input).toHaveBeenCalledTimes(1);
+      await session.close();
+    },
+  );
 
   it("returns an unsettled result for a bounded load-state timeout", async () => {
     const browser = new FakeBrowser();

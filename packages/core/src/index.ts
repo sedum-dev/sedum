@@ -13,6 +13,7 @@ export * from "./browser-driver.js";
 export * from "./page-protocol.js";
 export * from "./page-bridge.js";
 export * from "./page-cache.js";
+export * from "./step-executor.js";
 
 /** Future model adapters supply these separate decisions. */
 export interface Resolver {

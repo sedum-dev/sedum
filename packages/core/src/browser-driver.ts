@@ -9,7 +9,8 @@ import {
   type BrowserContext,
   type Page,
 } from "playwright-core";
-import type { Aim, AimResult } from "./page-protocol.js";
+import type { Aim, AimResult, FillTarget } from "./page-protocol.js";
+import { safeCallLog } from "./safe-diagnostics.js";
 
 export type BrowserKind = "chrome" | "chromium";
 
@@ -27,6 +28,8 @@ export interface BrowserContextOptions {
 export interface NavigationOptions {
   readonly timeoutMs?: number;
   readonly waitUntil?: "commit" | "domcontentloaded" | "load";
+  /** Exclude the requested URL and raw Playwright cause from public errors. */
+  readonly safeDiagnostics?: boolean;
 }
 
 export interface SettleOptions {
@@ -42,6 +45,14 @@ export interface SettleResult {
   readonly settled: boolean;
   readonly elapsedMs: number;
 }
+export type FillResult =
+  | { readonly acted: true }
+  | {
+      readonly acted: false;
+      readonly reason: "stale" | "not_actionable" | "action_started";
+      readonly retryable: boolean;
+      readonly callLog?: readonly string[];
+    };
 
 export type BrowserDriverErrorCode =
   | "browser-missing"
@@ -70,7 +81,20 @@ export interface BrowserPage {
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
   evaluate<T>(expression: string, argument?: unknown): Promise<T>;
-  clickRef(aim: Aim): Promise<AimResult>;
+  clickRef(
+    aim: Aim,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<AimResult>;
+  fillRef(
+    target: FillTarget,
+    value: string,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<FillResult>;
+  press(key: string, options?: { readonly timeoutMs?: number }): Promise<void>;
+  scroll(
+    deltaY: number,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -96,6 +120,39 @@ export interface BrowserInstallResult {
 
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
 const DEFAULT_SETTLE_TIMEOUT_MS = 4_000;
+const DEFAULT_ACTION_TIMEOUT_MS = 8_000;
+function actionTimeout(value?: number): number {
+  if (value === undefined) return DEFAULT_ACTION_TIMEOUT_MS;
+  if (!Number.isFinite(value) || value <= 0 || value > 2_147_483_647)
+    throw new RangeError("Invalid action timeout");
+  return value;
+}
+async function boundedInput(
+  operation: Promise<void>,
+  timeoutMs: number,
+  onTimeout: () => Promise<void>,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Error("Action timed out");
+  try {
+    await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(timeout), timeoutMs);
+      }),
+    ]);
+  } catch (error) {
+    if (error === timeout) {
+      // Keyboard.press and mouse.wheel have no Playwright timeout option.
+      // Never hand this page back while a timed-out input may still arrive.
+      await onTimeout();
+      await operation.catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 const require = createRequire(import.meta.url);
 
 function errorText(error: unknown): string {
@@ -148,9 +205,29 @@ function operationError(
   return new BrowserDriverError("operation-failed", errorText(error), error);
 }
 
+function safeOperationError(
+  error: unknown,
+  state: BrowserDriverState,
+  operation: string,
+): BrowserDriverError {
+  const code: BrowserDriverErrorCode = state.crashed
+    ? "page-crashed"
+    : state.disconnected
+      ? "browser-disconnected"
+      : state.closed
+        ? "page-closed"
+        : "operation-failed";
+  const lines = safeCallLog(error);
+  return new BrowserDriverError(
+    code,
+    `${operation} failed.${lines.length ? `\nCall log:\n${lines.join("\n")}` : ""}`,
+  );
+}
+
 class PlaywrightPage implements BrowserPage {
   private crashed = false;
   private closedByDriver = false;
+  private terminalAfterInputTimeout = false;
 
   constructor(
     private readonly page: Page,
@@ -169,7 +246,16 @@ class PlaywrightPage implements BrowserPage {
   }
 
   get closed(): boolean {
-    return this.closedByDriver || this.page.isClosed();
+    return (
+      this.terminalAfterInputTimeout ||
+      this.closedByDriver ||
+      this.page.isClosed()
+    );
+  }
+
+  private async terminateTimedOutInput(): Promise<void> {
+    this.terminalAfterInputTimeout = true;
+    if (!this.page.isClosed()) await this.page.close().catch(() => undefined);
   }
 
   private state(): BrowserDriverState {
@@ -203,6 +289,8 @@ class PlaywrightPage implements BrowserPage {
       });
       return { url: this.page.url() };
     } catch (error) {
+      if (options.safeDiagnostics)
+        throw safeOperationError(error, this.state(), "Navigation");
       throw operationError(error, this.state(), "page");
     }
   }
@@ -264,25 +352,35 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
-  async clickRef(aim: Aim): Promise<AimResult> {
+  async clickRef(
+    aim: Aim,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<AimResult> {
     const state = this.state();
     if (state.closed || state.crashed || state.disconnected)
       throw operationError(new Error("page is not available"), state, "page");
-    const checked = await this.page.evaluate(
-      (expected) =>
-        window.__sedum?.checkAim(expected) ?? {
-          actionable: false,
-          reason: "stale",
-        },
-      aim,
-    );
+    const deadline = performance.now() + actionTimeout(options.timeoutMs);
+    const remaining = () => Math.max(1, deadline - performance.now());
+    const checked = await this.page
+      .evaluate(
+        (expected) =>
+          window.__sedum?.checkAim(expected) ?? {
+            actionable: false,
+            reason: "stale",
+          },
+        aim,
+      )
+      .catch(() => ({ actionable: false as const, reason: "stale" as const }));
     if (!checked.actionable) return checked as AimResult;
-    const handle = await this.page.evaluateHandle((ref) => {
-      const matches = Array.from(
-        document.querySelectorAll("[data-sedum-ref]"),
-      ).filter((element) => element.getAttribute("data-sedum-ref") === ref);
-      return matches.length === 1 ? matches[0] : null;
-    }, aim.ref);
+    const handle = await this.page
+      .evaluateHandle((ref) => {
+        const matches = Array.from(
+          document.querySelectorAll("[data-sedum-ref]"),
+        ).filter((element) => element.getAttribute("data-sedum-ref") === ref);
+        return matches.length === 1 ? matches[0] : null;
+      }, aim.ref)
+      .catch(() => null);
+    if (!handle) return { actionable: false, reason: "stale" };
     try {
       const element = handle.asElement();
       if (!element) return { actionable: false, reason: "target_missing" };
@@ -303,29 +401,36 @@ class PlaywrightPage implements BrowserPage {
           },
           { expected: aim, element },
         );
-      const still = await validateElement();
+      const still = await validateElement().catch(() => ({
+        actionable: false as const,
+        reason: "stale" as const,
+      }));
       if (!still.actionable) return still as AimResult;
       try {
         // Wait for the exact element to settle without moving the pointer or
         // dispatching pointer/input events. The page can change during this wait,
         // so this is not the final snapshot validation.
-        await element.waitForElementState("stable", { timeout: 1000 });
+        await element.waitForElementState("stable", { timeout: remaining() });
       } catch {
         return { actionable: false, reason: "not_actionable" };
       }
-      const ready = await validateElement();
+      const ready = await validateElement().catch(() => ({
+        actionable: false as const,
+        reason: "stale" as const,
+      }));
       if (!ready.actionable) return ready as AimResult;
       try {
         // Playwright and the browser own final actionability, event dispatch,
         // cancellation, and navigation. Once this starts, a failure cannot
         // prove that page handlers saw no side effect, so it is non-retryable.
-        await element.click({ position: aim.point, timeout: 1000 });
+        await element.click({ position: aim.point, timeout: remaining() });
         return { actionable: true, aim };
-      } catch {
+      } catch (error) {
         return {
           actionable: false,
           reason: "action_started",
           retryable: false,
+          callLog: safeCallLog(error),
         };
       }
     } finally {
@@ -333,8 +438,92 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
+  async fillRef(
+    target: FillTarget,
+    value: string,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<FillResult> {
+    const state = this.state();
+    if (state.closed || state.crashed || state.disconnected)
+      throw operationError(new Error("page is not available"), state, "page");
+    const deadline = performance.now() + actionTimeout(options.timeoutMs);
+    const remaining = () => Math.max(1, deadline - performance.now());
+    const handle = await this.page
+      .evaluateHandle(
+        (expected) => window.__sedum?.fillElement(expected) ?? null,
+        target,
+      )
+      .catch(() => null);
+    if (!handle) return { acted: false, reason: "stale", retryable: true };
+    try {
+      const element = handle.asElement();
+      if (!element) return { acted: false, reason: "stale", retryable: true };
+      try {
+        await element.waitForElementState("editable", { timeout: remaining() });
+      } catch {
+        return { acted: false, reason: "not_actionable", retryable: true };
+      }
+      const sameElement = await this.page
+        .evaluate(
+          ({ expected, element }) =>
+            window.__sedum?.fillElement(expected) === element,
+          { expected: target, element },
+        )
+        .catch(() => false);
+      if (!sameElement)
+        return { acted: false, reason: "stale", retryable: true };
+      try {
+        await element.fill(value, { timeout: remaining() });
+        return { acted: true };
+      } catch (error) {
+        return {
+          acted: false,
+          reason: "action_started",
+          retryable: false,
+          callLog: safeCallLog(error),
+        };
+      }
+    } finally {
+      await handle.dispose().catch(() => undefined);
+    }
+  }
+
+  async press(
+    key: string,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<void> {
+    const state = this.state();
+    if (state.closed || state.crashed || state.disconnected)
+      throw operationError(new Error("page is not available"), state, "page");
+    try {
+      const timeoutMs = actionTimeout(options.timeoutMs);
+      await boundedInput(this.page.keyboard.press(key), timeoutMs, () =>
+        this.terminateTimedOutInput(),
+      );
+    } catch (error) {
+      throw safeOperationError(error, this.state(), "Key press");
+    }
+  }
+
+  async scroll(
+    deltaY: number,
+    options: { readonly timeoutMs?: number } = {},
+  ): Promise<void> {
+    const state = this.state();
+    if (state.closed || state.crashed || state.disconnected)
+      throw operationError(new Error("page is not available"), state, "page");
+    try {
+      const timeoutMs = actionTimeout(options.timeoutMs);
+      await boundedInput(this.page.mouse.wheel(0, deltaY), timeoutMs, () =>
+        this.terminateTimedOutInput(),
+      );
+    } catch (error) {
+      throw safeOperationError(error, this.state(), "Scroll");
+    }
+  }
+
   async close(): Promise<void> {
-    if (this.closed) return;
+    if (this.page.isClosed()) return;
     await this.page.close();
   }
 }
