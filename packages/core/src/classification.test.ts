@@ -126,6 +126,28 @@ describe("sentence classification", () => {
     expect(result.metrics.requests).toBe(0);
   });
 
+  it("rejects temporal second actions before provider dispatch", async () => {
+    const { provider, calls } = fakeProvider("click");
+    const sentences = [
+      "click Continue once you type {{password}} into the password field",
+      "click Continue after the password field is filled with {{password}}",
+    ];
+    const result = await classifySteps(
+      sentences.map((sentence) => step(sentence)),
+      {
+        mode: "allow-model",
+        cache: new NoopClassificationCache(),
+        provider,
+      },
+    );
+    expect(result.steps).toEqual([null, null]);
+    expect(result.diagnostics.map(({ code }) => code)).toEqual([
+      "multiple_actions",
+      "multiple_actions",
+    ]);
+    expect(calls).toEqual([]);
+  });
+
   it("classifies the supported PoC verbs including accepted remember, without a model", async () => {
     const examples: Array<[string, string]> = [
       ["type {{user}} in the username field", "type"],
@@ -270,6 +292,32 @@ describe("sentence classification", () => {
       classificationSource: "model",
     });
     expect(typed.diagnostics).toEqual([]);
+    for (const [sentence, op] of [
+      ["pause for 2 seconds", "wait"],
+      ["send the Enter key", "press"],
+      ["move down the page", "scroll"],
+      ["visit https://example.com/cart", "goto"],
+      ["make sure the cart shows the item", "verify"],
+      ["count the products on the page", "measure"],
+      ["capture the price as {{price}}", "remember"],
+    ] as const) {
+      expect(patternOperation(sentence)).toBeNull();
+      const result = await classifySteps([step(sentence)], {
+        mode: "allow-model",
+        cache: new NoopClassificationCache(),
+        provider: fakeProvider(op).provider,
+      });
+      expect(result.steps[0]).toMatchObject({
+        op,
+        classificationSource: "model",
+      });
+      expect(result.diagnostics).toEqual([]);
+    }
+    expect(
+      validateOperand("pause for 2 seconds and 3 seconds", "wait"),
+    ).toBeTruthy();
+    expect(validateOperand("send Enter and Tab", "press")).toBeTruthy();
+    expect(validateOperand("move up and down the page", "scroll")).toBeTruthy();
     expect(
       validateOperand('type "in stock" in the status field', "type"),
     ).toBeNull();

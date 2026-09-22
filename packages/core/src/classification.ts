@@ -130,6 +130,10 @@ const BINDING = new RegExp(`\\bas\\s+${PLACEHOLDER}\\s*\\.?$`, "iu");
 const HTTP_URL = /https?:\/\/\S+/giu;
 const WAIT_DURATION =
   /^wait\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\s*\.?$/iu;
+const DURATION_OPERAND =
+  /\b(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\b/giu;
+const KNOWN_KEY =
+  /\b(?:Enter|Tab|Escape|Esc|Space|Backspace|Delete|Arrow(?:Up|Down|Left|Right)|F(?:[1-9]|1[0-2]))\b/giu;
 const ACTION_VERBS =
   "click|type|enter|fill|press|goto|go\\s+to|navigate|verify|assert|measure|note|observe|scroll|wait|remember|capture|record|select|tap|activate|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
 
@@ -161,7 +165,8 @@ export function preflightSentence(
     ).test(exposed)
   )
     return "multiple_actions";
-  if (/\b(?:after|before|while)\s+(?:you\s+\w+|\w+ing)\b/iu.test(exposed))
+  // A temporal clause may hide another action, including passive wording.
+  if (/\b(?:after|before|while|once|when|until)\s+\S/iu.test(exposed))
     return "multiple_actions";
   return null;
 }
@@ -216,19 +221,25 @@ export function validateOperand(
     const urls = text.match(HTTP_URL) ?? [];
     if (urls.length !== 1) return "Name exactly one http(s) address.";
   } else if (op === "press") {
-    if (
-      !/^(?:press|hit|strike)\s+(?:the\s+)?(?:"[^"]+"|[\w-]+)(?:\s+key)?\s*\.?$/iu.test(
+    const explicit =
+      /^(?:press|hit|strike)\s+(?:the\s+)?(?:"[^"]+"|[\w-]+)(?:\s+key)?\s*\.?$/iu.test(
         text,
-      )
-    )
+      );
+    const namedKeys = [...text.matchAll(KNOWN_KEY)];
+    const keyMentions = [...text.matchAll(/(?:"[^"]+"|[\w-]+)\s+key\b/giu)];
+    if (!explicit && namedKeys.length !== 1 && keyMentions.length !== 1)
+      return "Name exactly one key to press.";
+    if (namedKeys.length > 1 || keyMentions.length > 1)
       return "Name exactly one key to press.";
   } else if (op === "remember") {
     if (!BINDING.test(text)) return "End the read with as {{a_name}}.";
     const bindings = text.match(/\bas\s+\{\{/giu) ?? [];
     if (bindings.length !== 1) return "Bind exactly one remembered value.";
   } else if (op === "wait") {
-    const duration = text.match(WAIT_DURATION);
-    if (!duration) return "Name one duration, such as wait for 2 seconds.";
+    const durations = [...text.matchAll(DURATION_OPERAND)];
+    if (durations.length !== 1)
+      return "Name one duration, such as wait for 2 seconds.";
+    const duration = durations[0]!;
     const amount = Number(duration[1]);
     const durationMs = duration[2]!.toLowerCase().startsWith("m")
       ? amount
@@ -236,7 +247,7 @@ export function validateOperand(
     if (durationMs <= 0 || durationMs > 30_000)
       return "Use a positive wait duration of at most 30 seconds.";
   } else if (op === "scroll") {
-    if (!/^scroll\s+(?:up|down)\b/iu.test(text))
+    if ([...text.matchAll(/\b(?:up|down)\b/giu)].length !== 1)
       return "Say scroll up or scroll down.";
   } else if (op === "verify" || op === "measure") {
     if (!/^\S+\s+\S/iu.test(text))
