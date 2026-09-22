@@ -1,0 +1,9 @@
+url: https://www.saucedemo.com/
+data:
+  user: standard_user
+  password: $SAUCE_PASSWORD
+steps:
+  - type {{user}} in the username field
+  - type {{password}} in the password field
+  - click the login button
+  - verify a list of products with prices is shown

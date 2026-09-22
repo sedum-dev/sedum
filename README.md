@@ -1,6 +1,6 @@
 # Sedum
 
-Sedum is an open source CLI for browser driven test flows. This repository is the initial TypeScript scaffold. The engine, browser interaction, and model adapters are being built in the M1 milestone; the only working CLI commands today are `--version` and `--help`.
+Sedum is an open source CLI for browser driven test flows. This repository is the initial TypeScript scaffold. The M1 walking skeleton runs one hand-written YAML test through a real browser and the TypeSafe provider.
 
 ## Requirements
 
@@ -19,6 +19,26 @@ corepack pnpm lint
 corepack pnpm test:coverage
 node packages/cli/dist/cli.js --version
 ```
+
+## Walking skeleton
+
+Install Chromium with `node packages/cli/dist/cli.js browsers install chromium`,
+set `TYPESAFE_API_KEY` and `SAUCE_PASSWORD`, then run the included live fixture:
+
+```sh
+node packages/cli/dist/cli.js run fixtures/saucedemo-login.test.yaml
+node packages/cli/dist/cli.js run fixtures/saucedemo-wrong-claim.test.yaml
+node packages/cli/dist/cli.js run fixtures/saucedemo-checkout.test.yaml
+```
+
+For temporary visual debugging only, prefix either command with
+`SEDUM_HEADED=1`. This escape hatch will be removed once the final CLI launch
+configuration lands.
+
+The first command should exit `0`; the deliberately false claim exits `1`.
+An unavailable browser, provider, flow, or runtime value exits `3`. This is a
+single-file M1 slice: hooks, modules, retries, final reporters, and the broader
+CLI grammar are not implemented here.
 
 `packages/core` owns engine contracts and the browser script boundary. `packages/provider-typesafe` will own model SDK effects. `packages/reporters` will consume the core result contract. `packages/cli` handles process arguments and composition. The browser bundle is emitted at `packages/core/dist/page-script/index.global.js`.
 

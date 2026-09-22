@@ -22,4 +22,5 @@ export * from "./flow-loader.js";
 export * from "./classification.js";
 export * from "./classification-cache.js";
 export * from "./flow-classification.js";
+export * from "./flow-runner.js";
 export * from "./assertion-engine.js";

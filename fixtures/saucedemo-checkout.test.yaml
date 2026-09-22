@@ -1,0 +1,24 @@
+# A longer, steps-only walking-skeleton flow adapted from the PoC checkout.
+# It intentionally avoids PoC `remember` because that operation is not in SED-19.
+url: https://www.saucedemo.com/
+data:
+  user: standard_user
+  password: $SAUCE_PASSWORD
+  first_name: Ada
+  last_name: Lovelace
+  postcode: "94016"
+steps:
+  - type {{user}} in the username field
+  - type {{password}} in the password field
+  - click the login button
+  - click the Add to cart button for Sauce Labs Backpack
+  - click the Add to cart button for Sauce Labs Onesie
+  - click the Cart, 2 items button
+  - click the Checkout button
+  - type {{first_name}} in the First Name field
+  - type {{last_name}} in the Last Name field
+  - type {{postcode}} in the Zip/Postal Code field
+  - click the Continue button
+  - verify the order summary lists Sauce Labs Backpack and Sauce Labs Onesie
+  - click the Finish button
+  - verify the order was placed and a confirmation message is shown
