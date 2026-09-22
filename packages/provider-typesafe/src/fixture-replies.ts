@@ -18,6 +18,70 @@ interface CanonicalRequest {
   readonly originals: ReadonlyMap<string, string>;
 }
 
+// Reviewed local page and test text. Updating fixtures requires an explicit
+// allowlist diff before recording can send new page content to the provider.
+const fixtureStateText = new Set([
+  "click Place order",
+  "click the Cart link",
+  "Read more about Returns",
+  "type {{postal}} into the Postal code field",
+  "The page says Ready",
+  "Slow page Ready Submit once",
+  "type {{first}} into the First name field",
+  "Order placed is shown",
+  "Checkout First name Last name Postal code Place order Order placed",
+  "A unicorn appears on the page",
+  "Returns details",
+  "click the Checkout link",
+  "Canvas Backpack is in the cart",
+  "Cart Canvas Backpack Checkout",
+  "type {{last}} into the Last name field",
+  "type {{password}} into the Password field",
+  "click Add to cart for the Canvas Backpack",
+  "click the Login button",
+  "type {{username}} into the Username field",
+  "Add to cart for the Canvas Backpack",
+  "Open record",
+  "a Products heading is shown",
+  "Products Canvas Backpack Price $29 Add to cart Trail Light Price $9 Add to cart Cart",
+  "Click Save",
+]);
+const fixtureCandidateNames = new Set([
+  "Place order",
+  "Add to cart",
+  "Cart",
+  "Read more",
+  "First name",
+  "Last name",
+  "Postal code",
+  "Checkout",
+  "Username",
+  "Password",
+  "Login",
+  "Open record",
+  "Save",
+]);
+const fixtureCandidatePeers = new Set([
+  "Checkout First name Last name Postal code",
+  "Checkout",
+  "Canvas Backpack Price $29",
+  "Canvas Backpack",
+  "Trail Light Price $9",
+  "Trail Light",
+  "Products",
+  "Shipping",
+  "Returns",
+  "Cart Canvas Backpack",
+  "Cart",
+  "Sign in Username Password",
+  "Sign in",
+  "Products Canvas Backpack Price $29 Trail Light Price $9",
+]);
+const fixtureClassificationSentences = new Set([
+  "press Enter in the search field",
+  "observe the current product count",
+]);
+
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Invalid fixture reply shape");
@@ -32,7 +96,7 @@ function assertFields(value: Record<string, unknown>, fields: string[]): void {
 function assertFixtureText(value: unknown): void {
   if (typeof value === "string") {
     if (
-      /(?:https?:\/\/|www\.|bearer\s+|sk-[a-z0-9]{12,}|api[_-]?key\s*[:=])/iu.test(
+      /(?:https?:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\.(?:com|net|org|io|dev|app|ai)\b|bearer\s+|sk-[a-z0-9]{12,}|api[_-]?key\s*[:=])/iu.test(
         value,
       ) ||
       (process.env.TYPESAFE_API_KEY &&
@@ -49,7 +113,10 @@ function assertFixtureText(value: unknown): void {
   }
 }
 
-function canonicalize(body: string): CanonicalRequest {
+function canonicalize(
+  body: string,
+  requireFixtureProvenance = false,
+): CanonicalRequest {
   const request = object(JSON.parse(body) as unknown);
   if (
     Object.keys(request).sort().join(",") !== "model,questions,state" ||
@@ -59,6 +126,13 @@ function canonicalize(body: string): CanonicalRequest {
   const state = object(request.state);
   const questions = object(request.questions);
   assertFixtureText(request);
+  if (
+    requireFixtureProvenance &&
+    !Object.values(state).every(
+      (value) => typeof value === "string" && fixtureStateText.has(value),
+    )
+  )
+    throw new Error("Nonfixture state text in provider request");
   const questionKeys = Object.keys(questions);
   if (questionKeys.length === 0)
     throw new Error("Empty fixture provider questions");
@@ -95,6 +169,15 @@ function canonicalize(body: string): CanonicalRequest {
       assertFields(item, ["type", "instructions", "criteria"]);
       if (item.type !== "choice" || typeof item.instructions !== "string")
         throw new Error("Unexpected fixture classification question");
+      if (requireFixtureProvenance) {
+        const prefix = "Classify this one test sentence by its wording alone: ";
+        const firstLine = item.instructions.split("\n", 1)[0] ?? "";
+        if (
+          !firstLine.startsWith(prefix) ||
+          !fixtureClassificationSentences.has(firstLine.slice(prefix.length))
+        )
+          throw new Error("Nonfixture classification text in provider request");
+      }
       const criteria = object(item.criteria);
       if (!Object.values(criteria).every((v) => typeof v === "string"))
         throw new Error("Unexpected fixture classification criteria");
@@ -134,6 +217,14 @@ function canonicalize(body: string): CanonicalRequest {
           typeof candidate.disabled !== "boolean"
         )
           throw new Error("Unexpected fixture candidate shape");
+        if (
+          requireFixtureProvenance &&
+          (!fixtureCandidateNames.has(candidate.name as string) ||
+            !(candidate.peers as string[]).every((peer) =>
+              fixtureCandidatePeers.has(peer),
+            ))
+        )
+          throw new Error("Nonfixture candidate text in provider request");
       }
       const alias = id === "none" ? "none" : `candidate_${index++}`;
       if (aliases.has(id) || originals.has(alias))
@@ -190,7 +281,10 @@ function validateResponse(value: unknown): Record<string, unknown> {
   const response = object(value);
   assertFields(response, ["answers", "model", "usage"]);
   assertFixtureText(response);
-  if (typeof response.model !== "string")
+  if (
+    typeof response.model !== "string" ||
+    !/^jev-[0-9]+(?:\.[0-9]+)*$/u.test(response.model)
+  )
     throw new Error("Unexpected fixture response model");
   const usage = object(response.usage);
   assertFields(usage, ["input_tokens", "output_tokens"]);
@@ -243,7 +337,7 @@ function validateFile(value: unknown): CassetteFile {
         "Fixture replies contain duplicate, unsorted, or invalid entries",
       );
     previous = entry.key;
-    const actual = canonicalize(JSON.stringify(entry.request));
+    const actual = canonicalize(JSON.stringify(entry.request), true);
     if (actual.key !== entry.key)
       throw new Error(`Fixture reply key is stale: ${entry.key}`);
     validateResponse(entry.response);
@@ -267,7 +361,7 @@ export class FixtureReplies {
     this.entries = new Map(file.entries.map((entry) => [entry.key, entry]));
     this.fetch = async (input, init) => {
       const body = String(init?.body ?? "");
-      const canonical = canonicalize(body);
+      const canonical = canonicalize(body, this.recording);
       this.used.add(canonical.key);
       if (this.recording) {
         const response = await (globalThis.fetch as Fetch)(input, init);

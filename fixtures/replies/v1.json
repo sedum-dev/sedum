@@ -34,17 +34,17 @@
           "target": {
             "type": "choice",
             "choice": "candidate_0",
-            "confidence": 0.88,
+            "confidence": 0.83,
             "probabilities": {
-              "candidate_0": 0.94,
-              "none": 0.06
+              "none": 0.08,
+              "candidate_0": 0.92
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 429,
-          "output_tokens": 91
+          "input_tokens": 431,
+          "output_tokens": 95
         }
       }
     },
@@ -96,17 +96,17 @@
             "choice": "candidate_2",
             "confidence": 0.99,
             "probabilities": {
-              "none": 0,
               "candidate_0": 0,
+              "none": 0.01,
               "candidate_1": 0,
-              "candidate_2": 1
+              "candidate_2": 0.99
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 630,
-          "output_tokens": 177
+          "input_tokens": 621,
+          "output_tokens": 165
         }
       }
     },
@@ -150,16 +150,16 @@
             "choice": "candidate_1",
             "confidence": 0.96,
             "probabilities": {
-              "candidate_0": 0,
-              "none": 0.02,
-              "candidate_1": 0.98
+              "candidate_1": 0.97,
+              "candidate_0": 0.01,
+              "none": 0.02
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 510,
-          "output_tokens": 131
+          "input_tokens": 512,
+          "output_tokens": 134
         }
       }
     },
@@ -218,19 +218,19 @@
           "target": {
             "type": "choice",
             "choice": "candidate_2",
-            "confidence": 0.98,
+            "confidence": 0.99,
             "probabilities": {
-              "none": 0.02,
               "candidate_1": 0,
-              "candidate_2": 0.98,
+              "candidate_2": 0.99,
+              "none": 0.01,
               "candidate_0": 0
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 631,
-          "output_tokens": 165
+          "input_tokens": 637,
+          "output_tokens": 173
         }
       }
     },
@@ -265,11 +265,11 @@
         "answers": {
           "holds": {
             "type": "noul",
-            "noul": 0.87
+            "noul": 0.86
           },
           "contradicted": {
             "type": "noul",
-            "noul": 0.12
+            "noul": 0.14
           }
         },
         "model": "jev-1.13.0",
@@ -336,17 +336,17 @@
             "choice": "candidate_0",
             "confidence": 0.99,
             "probabilities": {
-              "candidate_0": 0.99,
-              "candidate_1": 0,
               "candidate_2": 0,
+              "candidate_1": 0,
+              "candidate_0": 0.99,
               "none": 0.01
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 628,
-          "output_tokens": 161
+          "input_tokens": 634,
+          "output_tokens": 169
         }
       }
     },
@@ -381,11 +381,11 @@
         "answers": {
           "holds": {
             "type": "noul",
-            "noul": 0.7
+            "noul": 0.61
           },
           "contradicted": {
             "type": "noul",
-            "noul": 0.08
+            "noul": 0.1
           }
         },
         "model": "jev-1.13.0",
@@ -430,7 +430,7 @@
           },
           "contradicted": {
             "type": "noul",
-            "noul": 0.11
+            "noul": 0.13
           }
         },
         "model": "jev-1.13.0",
@@ -470,17 +470,17 @@
           "target": {
             "type": "choice",
             "choice": "candidate_0",
-            "confidence": 0.91,
+            "confidence": 0.92,
             "probabilities": {
-              "candidate_0": 0.95,
-              "none": 0.05
+              "candidate_0": 0.96,
+              "none": 0.04
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 427,
-          "output_tokens": 95
+          "input_tokens": 425,
+          "output_tokens": 91
         }
       }
     },
@@ -515,11 +515,11 @@
         "answers": {
           "holds": {
             "type": "noul",
-            "noul": 0.75
+            "noul": 0.68
           },
           "contradicted": {
             "type": "noul",
-            "noul": 0.07
+            "noul": 0.08
           }
         },
         "model": "jev-1.13.0",
@@ -584,19 +584,19 @@
           "target": {
             "type": "choice",
             "choice": "candidate_1",
-            "confidence": 0.98,
+            "confidence": 0.99,
             "probabilities": {
-              "candidate_2": 0,
               "none": 0.01,
-              "candidate_1": 0.99,
-              "candidate_0": 0
+              "candidate_2": 0,
+              "candidate_0": 0,
+              "candidate_1": 0.99
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 628,
-          "output_tokens": 161
+          "input_tokens": 634,
+          "output_tokens": 169
         }
       }
     },
@@ -638,18 +638,18 @@
           "target": {
             "type": "choice",
             "choice": "candidate_1",
-            "confidence": 0.97,
+            "confidence": 0.98,
             "probabilities": {
-              "candidate_1": 0.98,
               "candidate_0": 0,
-              "none": 0.02
+              "none": 0.01,
+              "candidate_1": 0.99
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 528,
-          "output_tokens": 131
+          "input_tokens": 524,
+          "output_tokens": 125
         }
       }
     },
@@ -702,34 +702,34 @@
             "choice": "press",
             "confidence": 0.94,
             "probabilities": {
-              "unsupported_or_unclear": 0.02,
-              "press": 0.96,
-              "type": 0,
               "verify": 0,
-              "wait": 0,
+              "unsupported_or_unclear": 0.02,
               "measure": 0,
-              "multiple_actions": 0.02,
-              "click": 0,
-              "remember": 0,
               "goto": 0,
-              "scroll": 0
+              "press": 0.95,
+              "type": 0,
+              "click": 0,
+              "wait": 0,
+              "scroll": 0,
+              "remember": 0,
+              "multiple_actions": 0.03
             }
           },
           "line1": {
             "type": "choice",
             "choice": "measure",
-            "confidence": 0.8,
+            "confidence": 0.82,
             "probabilities": {
+              "verify": 0,
               "unsupported_or_unclear": 0.04,
               "press": 0,
-              "type": 0,
-              "verify": 0,
-              "wait": 0,
-              "measure": 0.83,
-              "scroll": 0,
-              "click": 0,
-              "remember": 0.13,
               "goto": 0,
+              "measure": 0.84,
+              "type": 0,
+              "click": 0,
+              "wait": 0,
+              "scroll": 0,
+              "remember": 0.12,
               "multiple_actions": 0
             }
           }
@@ -793,16 +793,16 @@
             "confidence": 0.99,
             "probabilities": {
               "candidate_0": 0.99,
-              "none": 0.01,
+              "candidate_1": 0,
               "candidate_2": 0,
-              "candidate_1": 0
+              "none": 0.01
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 644,
-          "output_tokens": 177
+          "input_tokens": 635,
+          "output_tokens": 165
         }
       }
     },
@@ -845,8 +845,8 @@
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 428,
-          "output_tokens": 93
+          "input_tokens": 426,
+          "output_tokens": 89
         }
       }
     },
@@ -888,18 +888,18 @@
           "target": {
             "type": "choice",
             "choice": "candidate_0",
-            "confidence": 0.94,
+            "confidence": 0.98,
             "probabilities": {
-              "candidate_0": 0.96,
-              "none": 0.04,
+              "candidate_0": 0.98,
+              "none": 0.02,
               "candidate_1": 0
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 528,
-          "output_tokens": 131
+          "input_tokens": 524,
+          "output_tokens": 125
         }
       }
     },
@@ -954,17 +954,17 @@
             "choice": "candidate_0",
             "confidence": 0.99,
             "probabilities": {
-              "candidate_2": 0,
-              "candidate_0": 0.99,
               "candidate_1": 0,
-              "none": 0.01
+              "candidate_0": 1,
+              "none": 0,
+              "candidate_2": 0
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 634,
-          "output_tokens": 165
+          "input_tokens": 640,
+          "output_tokens": 173
         }
       }
     },
@@ -998,17 +998,17 @@
           "target": {
             "type": "choice",
             "choice": "candidate_0",
-            "confidence": 0.5,
+            "confidence": 0.69,
             "probabilities": {
-              "candidate_0": 0.75,
-              "none": 0.25
+              "candidate_0": 0.84,
+              "none": 0.16
             }
           }
         },
         "model": "jev-1.13.0",
         "usage": {
-          "input_tokens": 418,
-          "output_tokens": 97
+          "input_tokens": 416,
+          "output_tokens": 93
         }
       }
     },
@@ -1047,7 +1047,7 @@
           },
           "contradicted": {
             "type": "noul",
-            "noul": 0.07
+            "noul": 0.08
           }
         },
         "model": "jev-1.13.0",

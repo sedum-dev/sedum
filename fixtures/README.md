@@ -22,6 +22,9 @@ randomized by the page script, so only those run-local IDs are mapped to stable
 positional aliases in the recording. Prompt text, candidate descriptions,
 model, page digest, and answer probabilities are preserved. A missing request
 fails with its SHA-256 key; changed prompts require a new recording.
+The recorder accepts only reviewed fixture state and candidate text. When a
+fixture page or test sentence changes, update that allowlist in
+`packages/provider-typesafe/src/fixture-replies.ts` as part of the same review.
 
 After building and installing Chromium with `node packages/cli/dist/cli.js
 browsers install chromium`, run `pnpm fixtures:verify`. It removes

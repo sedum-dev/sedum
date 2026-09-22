@@ -141,35 +141,42 @@ describe("fixture reply transport", () => {
     );
   });
 
-  it("rejects external question text before a live request", async () => {
-    const { path } = await cassette();
-    const live = vi.fn();
-    vi.stubGlobal("fetch", live);
-    const record = await FixtureReplies.load(path, true);
-    const adapter = new TypeSafeAdapter({
-      apiKey: "fixture-key",
-      fetch: record.fetch,
-    });
-    const offered = options("random-a");
-    const candidate = offered.options[0];
-    if (candidate?.kind !== "candidate") throw new Error("Missing candidate");
-    await expect(
-      adapter.choose("Click Save", {
-        ...offered,
-        options: [
-          {
-            ...candidate,
-            candidate: {
-              ...candidate.candidate,
-              name: "https://external.example/secret",
+  it.each([
+    "https://external.example/secret",
+    "portal.example.com",
+    "internal-customer-token-123",
+  ])(
+    "rejects nonfixture candidate text %s before a live request",
+    async (name) => {
+      const { path } = await cassette();
+      const live = vi.fn();
+      vi.stubGlobal("fetch", live);
+      const record = await FixtureReplies.load(path, true);
+      const adapter = new TypeSafeAdapter({
+        apiKey: "fixture-key",
+        fetch: record.fetch,
+      });
+      const offered = options("random-a");
+      const candidate = offered.options[0];
+      if (candidate?.kind !== "candidate") throw new Error("Missing candidate");
+      await expect(
+        adapter.choose("Click Save", {
+          ...offered,
+          options: [
+            {
+              ...candidate,
+              candidate: {
+                ...candidate.candidate,
+                name,
+              },
             },
-          },
-          offered.options[1]!,
-        ],
-      }),
-    ).rejects.toBeDefined();
-    expect(live).not.toHaveBeenCalled();
-  });
+            offered.options[1]!,
+          ],
+        }),
+      ).rejects.toBeDefined();
+      expect(live).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects unexpected nested live reply data before recording", async () => {
     const { path } = await cassette();
