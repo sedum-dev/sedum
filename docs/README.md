@@ -1,5 +1,7 @@
 # Docs
 
+See [TypeSafe provider](provider-typesafe.md) for provider configuration, data sent, and the opt-in live check.
+
 Public design and usage documentation will live here as engine behavior lands. The current package boundaries are described in the root README.
 
 ## Browser setup
