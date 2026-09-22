@@ -131,6 +131,9 @@ describe("sentence classification", () => {
     const sentences = [
       "click Continue once you type {{password}} into the password field",
       "click Continue after the password field is filled with {{password}}",
+      "click Save and afterwards press Enter",
+      "click Save and later press Enter",
+      "click Continue as soon as you type {{password}} into the password field",
     ];
     const result = await classifySteps(
       sentences.map((sentence) => step(sentence)),
@@ -140,12 +143,30 @@ describe("sentence classification", () => {
         provider,
       },
     );
-    expect(result.steps).toEqual([null, null]);
-    expect(result.diagnostics.map(({ code }) => code)).toEqual([
-      "multiple_actions",
-      "multiple_actions",
-    ]);
+    expect(result.steps).toEqual(sentences.map(() => null));
+    expect(result.diagnostics.map(({ code }) => code)).toEqual(
+      sentences.map(() => "multiple_actions"),
+    );
     expect(calls).toEqual([]);
+  });
+
+  it("keeps temporal page-state claims as single verify steps", async () => {
+    const sentences = [
+      "verify the order confirmation is shown after checkout",
+      "verify the cart is empty when no items have been added",
+      "verify the button is disabled when the form is filled",
+    ];
+    const result = await classifySteps(
+      sentences.map((sentence) => step(sentence)),
+      {
+        mode: "offline",
+        cache: new NoopClassificationCache(),
+      },
+    );
+    expect(result.steps.map((item) => item?.op)).toEqual(
+      sentences.map(() => "verify"),
+    );
+    expect(result.diagnostics).toEqual([]);
   });
 
   it("classifies the supported PoC verbs including accepted remember, without a model", async () => {

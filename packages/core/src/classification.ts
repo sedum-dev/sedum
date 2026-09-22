@@ -134,6 +134,12 @@ const DURATION_OPERAND =
   /\b(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\b/giu;
 const KNOWN_KEY =
   /\b(?:Enter|Tab|Escape|Esc|Space|Backspace|Delete|Arrow(?:Up|Down|Left|Right)|F(?:[1-9]|1[0-2]))\b/giu;
+const SECOND_ACTION_TAIL =
+  /\b(?:and|or|but|then|after|before|while|once|when|until|afterwards|subsequently|next|later|finally|followed\s+by|as\s+soon\s+as)\b\s+(.+)/iu;
+const SECOND_INTERACTION =
+  /\b(?:click(?:s|ed|ing)?|typ(?:e|es|ed|ing)|enter(?:s|ed|ing)?|fill(?:s|ed|ing)?|press(?:es|ed|ing)?|scroll(?:s|ed|ing)?|select(?:s|ed|ing)?|submit(?:s|ted|ting)?|tap(?:s|ped|ping)?|navigat(?:e|es|ed|ing)|go(?:es|ing)?|open(?:s|ed|ing)?|upload(?:s|ed|ing)?|download(?:s|ed|ing)?|drag(?:s|ged|ging)?|drop(?:s|ped|ping)?|log(?:s|ged|ging)?\s+in|sign(?:s|ed|ing)?\s+in)\b/iu;
+const PASSIVE_INTERACTION =
+  /\b(?:is|are|was|were|has|have|had)(?:\s+been)?\s+(?:clicked|typed|entered|filled|pressed|scrolled|selected|submitted|opened|uploaded|downloaded)\b/giu;
 const ACTION_VERBS =
   "click|type|enter|fill|press|goto|go\\s+to|navigate|verify|assert|measure|note|observe|scroll|wait|remember|capture|record|select|tap|activate|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
 
@@ -165,9 +171,16 @@ export function preflightSentence(
     ).test(exposed)
   )
     return "multiple_actions";
-  // A temporal clause may hide another action, including passive wording.
-  if (/\b(?:after|before|while|once|when|until)\s+\S/iu.test(exposed))
-    return "multiple_actions";
+  // Clauses can be one assertion; only a second interaction is unsafe.
+  const tail = exposed.match(SECOND_ACTION_TAIL)?.[1];
+  if (tail) {
+    const assertion =
+      /^(?:verify|assert|check|confirm|ensure|expect|measure|note|observe)\b/iu.test(
+        exposed,
+      );
+    const activeTail = assertion ? tail.replace(PASSIVE_INTERACTION, "") : tail;
+    if (SECOND_INTERACTION.test(activeTail)) return "multiple_actions";
+  }
   return null;
 }
 

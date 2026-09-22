@@ -30,6 +30,18 @@
     "sentence": "click Continue after the password field is filled with {{password}}",
     "code": "multiple_actions"
   },
+  {
+    "sentence": "click Save and afterwards press Enter",
+    "code": "multiple_actions"
+  },
+  {
+    "sentence": "click Save and later press Enter",
+    "code": "multiple_actions"
+  },
+  {
+    "sentence": "click Continue as soon as you type {{password}} into the password field",
+    "code": "multiple_actions"
+  },
   { "sentence": "drag the item into the cart", "code": "unsupported" },
   { "sentence": "upload the receipt", "code": "unsupported" },
   { "sentence": "type {{first}} then {{last}}", "code": "invalid_operand" },
