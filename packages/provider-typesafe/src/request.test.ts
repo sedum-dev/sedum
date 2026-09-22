@@ -78,6 +78,9 @@ describe("allowlisted TypeSafe requests", () => {
     expect(() =>
       buildJudgeRequest("claim", { complete: true, text: "😀".repeat(4097) }),
     ).toThrow();
+    expect(() =>
+      buildJudgeRequest("claim", { complete: true, text: "😀".repeat(4096) }),
+    ).not.toThrow();
   });
 
   it("rejects duplicate or excessive Choice options without dropping any", () => {
