@@ -14,28 +14,26 @@ import { describe, expect, it } from "vitest";
 import { runCli } from "./run-cli.js";
 
 describe("CLI arguments", () => {
-  it("prints the supplied package version", () => {
-    expect(runCli(["--version"], "1.2.3")).toEqual({
+  it("prints the supplied package version", async () => {
+    expect(await runCli(["--version"], "1.2.3")).toEqual({
       stdout: "1.2.3\n",
       stderr: "",
       exitCode: 0,
     });
-    expect(runCli(["-v"], "1.2.3").exitCode).toBe(0);
+    expect((await runCli(["-v"], "1.2.3")).exitCode).toBe(0);
   });
 
-  it("explains the available surface", () => {
-    expect(runCli(["--help"], "1.2.3").stdout).toContain(
-      "run command is not implemented",
-    );
-    expect(runCli(["--help"], "1.2.3").stdout).toContain(
+  it("explains the available surface", async () => {
+    expect((await runCli(["--help"], "1.2.3")).stdout).toContain("sedum run");
+    expect((await runCli(["--help"], "1.2.3")).stdout).toContain(
       "browsers install chromium",
     );
-    expect(runCli(["-h"], "1.2.3").exitCode).toBe(0);
+    expect((await runCli(["-h"], "1.2.3")).exitCode).toBe(0);
   });
 
-  it("delegates explicit Chromium installation to core", () => {
+  it("delegates explicit Chromium installation to core", async () => {
     expect(
-      runCli(["browsers", "install", "chromium", "--with-deps"], "1.2.3"),
+      await runCli(["browsers", "install", "chromium", "--with-deps"], "1.2.3"),
     ).toEqual({
       stdout: "installed\n",
       stderr: "",
@@ -44,9 +42,9 @@ describe("CLI arguments", () => {
     expect(installChromium).toHaveBeenCalledWith(true);
   });
 
-  it("fails clearly for unavailable or malformed commands", () => {
+  it("fails clearly for unavailable or malformed commands", async () => {
     for (const args of [[], ["run"], ["--version", "extra"], ["--unknown"]]) {
-      expect(runCli(args, "1.2.3")).toEqual({
+      expect(await runCli(args, "1.2.3")).toEqual({
         stdout: "",
         stderr: "Unknown or unavailable command. Use sedum --help.\n",
         exitCode: 2,

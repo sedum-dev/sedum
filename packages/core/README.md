@@ -6,6 +6,18 @@
 
 The typed definition retains original sentence text, declared `data`, and AST positions. `resolveData(declared, env)` is a separate runtime operation. It supports `$VAR`, `${VAR}`, and `$$` and returns `RuntimeValue` instances with secret provenance. Env-sourced data stays opaque in logs and JSON; only the executor should call `reveal()`. `tokenizeStep` preserves placeholder and quoted-literal spans. After SED-28 classifies a sentence as `type`, it must call `validateTypeOperand` before the step can be considered checked or executed; `resolveTypeOperand` gives the executor an opaque value. The model receives the source sentence with placeholder names, never substituted data values.
 
+## Walking-skeleton runner (SED-19)
+
+`runFlow(file, dependencies)` is the narrow composition boundary behind `sedum
+run <file.test.yaml>`. It accepts injected browser, provider, classification
+cache, environment, and repository-root dependencies; it does not read process
+state or expose SDK/Playwright types. The initial slice supports a flow URL and
+ordinary `steps` classified as `type`, `click`, and `verify`. A failed verify
+is a test failure; invalid data, browser/provider/locator/action failures, and
+unsupported operations are `could_not_run`. `before`, `after`, and modules are
+rejected before browser launch pending their owning work. Runtime values remain
+opaque outside the executor.
+
 The loader reports `format` coverage and leaves `steps: not_checked`. `classifyParsedFlow` composes the parsed definition with SED-28 classification, static type-operand checking, and source-located diagnostics, marking steps checked only when every sentence succeeds. It marks `modules: not_checked` for any `use:` call, since SED-29 must resolve and validate referenced modules; otherwise modules are `not_needed`. SED-37's `sedum validate` must combine this result with SED-29 module validation before claiming full success. An unresolved sentence, invalid type operand, or unresolved module needs a source-located nonzero diagnostic. `isFullyValidated` encodes this gate for the composed result. SED-19 consumes the typed definition for running tests, with URL/config resolution and runtime environment lookup at that later boundary.
 
 Build `@sedum-dev/core` before launching the Playwright driver. The package ships `./page-script.js` as a browser-only IIFE; `PlaywrightBrowserDriver` installs it as a context init script before pages are created. A missing asset produces `script-missing`; a missing or incompatible bridge produces `PageScriptError`.

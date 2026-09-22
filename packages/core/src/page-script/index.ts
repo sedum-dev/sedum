@@ -416,7 +416,11 @@ if (!window.__sedum) {
         !visible(child)
       )
         continue;
-      const text = publicText(child);
+      // Match the PoC's bounded-label behavior: a verbose product description
+      // is useful context only up to the provider field limit. Truncating this
+      // page-derived display text keeps a single long description from making
+      // every otherwise-actionable candidate set unresolvable.
+      const text = Array.from(publicText(child)).slice(0, PEER_LIMIT).join("");
       if (text && text !== name && !result.includes(text)) result.push(text);
     }
     return {
