@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@sedum-dev/core": "workspace:*"
+    "@sedum-dev/core": "workspace:*",
+    "@typesafe-ai/sdk": "0.6.0"
   }
 }
