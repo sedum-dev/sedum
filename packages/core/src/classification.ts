@@ -137,7 +137,11 @@ const KNOWN_KEY =
 const SECOND_ACTION_TAIL =
   /\b(?:and|or|but|then|after|before|while|once|when|until|afterwards|subsequently|next|later|finally|followed\s+by|as\s+soon\s+as)\b\s+(.+)/iu;
 const SECOND_INTERACTION =
-  /\b(?:click(?:s|ed|ing)?|typ(?:e|es|ed|ing)|enter(?:s|ed|ing)?|fill(?:s|ed|ing)?|press(?:es|ed|ing)?|scroll(?:s|ed|ing)?|select(?:s|ed|ing)?|submit(?:s|ted|ting)?|tap(?:s|ped|ping)?|navigat(?:e|es|ed|ing)|go(?:es|ing)?|open(?:s|ed|ing)?|upload(?:s|ed|ing)?|download(?:s|ed|ing)?|drag(?:s|ged|ging)?|drop(?:s|ped|ping)?|log(?:s|ged|ging)?\s+in|sign(?:s|ed|ing)?\s+in)\b/iu;
+  /\b(?:click(?:s|ed|ing)?|typ(?:e|es|ed|ing)|enter(?:s|ed|ing)?|fill(?:s|ed|ing)?|press(?:es|ed|ing)?|scroll(?:s|ed|ing)?|select(?:s|ed|ing)?|submit(?:s|ted|ting)?|tap(?:s|ped|ping)?|navigat(?:e|es|ed|ing)|go(?:es|ing)?|open(?:s|ed|ing)?|upload(?:s|ed|ing)?|download(?:s|ed|ing)?|drag(?:s|ged|ging)?|drop(?:s|ped|ping)?|log(?:s|ged|ging)?\s+in|sign(?:s|ed|ing)?\s+in|verify|assert|check|confirm|ensure|expect|measure|note|observe|wait|remember|capture|record)\b/iu;
+const REQUESTED_SECOND_ACTION = new RegExp(
+  `^(?:(?:also|then|afterwards|later|next|finally|immediately)\\s+)*(?:(?:you|we|I)\\s+)?${SECOND_INTERACTION.source}`,
+  "iu",
+);
 const PASSIVE_INTERACTION =
   /\b(?:is|are|was|were|has|have|had)(?:\s+been)?\s+(?:clicked|typed|entered|filled|pressed|scrolled|selected|submitted|opened|uploaded|downloaded)\b/giu;
 const ACTION_VERBS =
@@ -179,7 +183,12 @@ export function preflightSentence(
         exposed,
       );
     const activeTail = assertion ? tail.replace(PASSIVE_INTERACTION, "") : tail;
-    if (SECOND_INTERACTION.test(activeTail)) return "multiple_actions";
+    if (
+      assertion
+        ? REQUESTED_SECOND_ACTION.test(activeTail)
+        : SECOND_INTERACTION.test(activeTail)
+    )
+      return "multiple_actions";
   }
   return null;
 }
@@ -187,6 +196,14 @@ export function preflightSentence(
 export function patternOperation(sentence: string): StepOperationKind | null {
   const text = canonicalSentence(sentence);
   if (preflightSentence(text)) return null;
+  // Side-effecting fast paths require an unambiguous single clause.
+  if (
+    /^(?:click|type|enter|fill|press|goto|go\s+to|navigate\s+to|scroll|wait|remember)\b/iu.test(
+      text,
+    ) &&
+    SECOND_ACTION_TAIL.test(withoutQuotes(text))
+  )
+    return null;
   if (/^remember\b/iu.test(text) && BINDING.test(text)) return "remember";
   if (/^click\s+\S/iu.test(text)) return "click";
   if (VALUE.test(text)) return "type";

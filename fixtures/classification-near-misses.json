@@ -39,6 +39,10 @@
     "code": "multiple_actions"
   },
   {
+    "sentence": "click Save and afterwards verify the confirmation page appears",
+    "code": "multiple_actions"
+  },
+  {
     "sentence": "click Continue as soon as you type {{password}} into the password field",
     "code": "multiple_actions"
   },
