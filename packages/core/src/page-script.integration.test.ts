@@ -15,6 +15,13 @@ import {
 } from "./page-bridge.js";
 import { stageEntry } from "./page-cache.js";
 import { projectCandidates } from "./page-protocol.js";
+import { resolveTarget } from "./locator.js";
+import { executeStep, RuntimeValue } from "./step-executor.js";
+import type {
+  Resolver,
+  ResolverCandidates,
+  ResolverDecision,
+} from "./provider.js";
 
 describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
   "built page script",
@@ -55,6 +62,186 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await page.goto(base);
       return { page, context };
     }
+    function recordedResolver(
+      pick: (options: ResolverCandidates) => string,
+    ): Resolver {
+      return {
+        choose: async (_sentence, options): Promise<ResolverDecision> => {
+          const ids = options.options.map((option) =>
+            option.kind === "none" ? "none" : option.candidate.id,
+          );
+          const selected = pick(options);
+          return {
+            selection:
+              selected === "none"
+                ? { kind: "none" }
+                : { kind: "candidate", id: selected },
+            probabilities: Object.fromEntries(
+              ids.map((id) => [
+                id,
+                id === selected ? 0.8 : 0.2 / (ids.length - 1),
+              ]),
+            ),
+            confidence: null,
+            call: {
+              requestedModel: "recorded",
+              model: "recorded",
+              attempts: 1,
+              usage: { inputTokens: 1, outputTokens: 1 },
+              rate: null,
+              successfulResponseCostUsd: null,
+              totalCostUsd: null,
+            },
+          };
+        },
+      };
+    }
+    it("resolves and fills only actual text controls", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<label>Email <input type="email" id="email"></label><select aria-label="Choice"><option>One</option></select><div role="combobox" aria-label="Fake"></div><div contenteditable aria-label="Notes"></div><input type="checkbox" aria-label="Check">'`);
+      const fill = await collectCandidates(page, "fill");
+      expect(fill.candidates.map((candidate) => candidate.name)).toEqual([
+        "Email",
+        "Notes",
+      ]);
+      const model = recordedResolver((options) =>
+        options.options.find(
+          (option) =>
+            option.kind === "candidate" && option.candidate.name === "Email",
+        )?.kind === "candidate"
+          ? (
+              options.options.find(
+                (option) =>
+                  option.kind === "candidate" &&
+                  option.candidate.name === "Email",
+              ) as { candidate: { id: string } }
+            ).candidate.id
+          : "none",
+      );
+      const result = await resolveTarget(page, model, {
+        operation: "fill",
+        sentence: "Email input",
+      });
+      expect(result.kind).toBe("resolved");
+      if (result.kind === "resolved")
+        await executeStep(page, {
+          op: "type",
+          target: result.target,
+          value: new RuntimeValue("fixture-value"),
+        });
+      expect(
+        await page.evaluate("document.querySelector('#email').value"),
+      ).toBe("fixture-value");
+      await context.close();
+    });
+    it("resolves a repeated product button on a dense local page without a wrong click", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        Array.from({length: 260}, (_, i) => '<article><h2>Product '+i+'</h2><button onclick="window.clicked='+i+'">Add to cart</button></article>').join('')`);
+      const model = recordedResolver((options) => {
+        const target = options.options.find(
+          (option) =>
+            option.kind === "candidate" &&
+            option.candidate.peers.some((peer) => peer.includes("Product 259")),
+        );
+        if (target?.kind === "candidate") return target.candidate.id;
+        const first = options.options.find(
+          (option) => option.kind === "candidate",
+        );
+        return first?.kind === "candidate" ? first.candidate.id : "none";
+      });
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence: "Add to cart for Product 259",
+      });
+      expect(result.kind).toBe("resolved");
+      expect(result.calls).toHaveLength(4);
+      if (result.kind === "resolved")
+        await executeStep(page, { op: "click", target: result.target });
+      expect(await page.evaluate("window.clicked")).toBe(259);
+      await context.close();
+    });
+    it("does not select one of three same-destination article links without a distinguishing clue", async () => {
+      const { page, context } = await fresh();
+      const html = [
+        '<p>First mention <a href="/babbage" onclick="window.clicked=1">Charles Babbage</a></p>',
+        '<p>Second mention <a href="/babbage" onclick="window.clicked=2">Charles Babbage</a></p>',
+        '<p>Third mention <a href="/babbage" onclick="window.clicked=3">Charles Babbage</a></p>',
+      ].join("");
+      await page.evaluate(
+        `document.querySelector('#app').innerHTML = ${JSON.stringify(html)}`,
+      );
+      const found = await collectCandidates(page, "click");
+      expect(found.candidates).toHaveLength(3);
+      expect(
+        new Set(found.candidates.map((candidate) => candidate.signals.href))
+          .size,
+      ).toBe(1);
+      const model = recordedResolver((options) => {
+        const first = options.options.find(
+          (option) => option.kind === "candidate",
+        );
+        return first?.kind === "candidate" ? first.candidate.id : "none";
+      });
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence: "the link to the Charles Babbage article in the article body",
+      });
+      expect(result).toMatchObject({
+        kind: "unresolved",
+        reason: "ambiguous",
+        diagnostic: { gate: "repeated_member_no_evidence" },
+      });
+      expect(await page.evaluate("window.clicked")).toBeUndefined();
+      await context.close();
+    });
+    it("requires the specific product clue before clicking a repeated cart button", async () => {
+      const { page, context } = await fresh();
+      const html = [
+        '<article><h2>Product Camera</h2><button onclick="window.clicked=1">Add to cart</button></article>',
+        '<article><h2>Phone</h2><button onclick="window.clicked=2">Add to cart</button></article>',
+      ].join("");
+      await page.evaluate(
+        `document.querySelector('#app').innerHTML = ${JSON.stringify(html)}`,
+      );
+      const model = recordedResolver((options) => {
+        const first = options.options.find(
+          (option) => option.kind === "candidate",
+        );
+        return first?.kind === "candidate" ? first.candidate.id : "none";
+      });
+      const vague = await resolveTarget(page, model, {
+        operation: "click",
+        sentence: "Add to cart for the product",
+      });
+      expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+      expect(await page.evaluate("window.clicked")).toBeUndefined();
+      const specific = await resolveTarget(page, model, {
+        operation: "click",
+        sentence: "Add to cart for Product Camera",
+      });
+      expect(specific.kind).toBe("resolved");
+      if (specific.kind === "resolved")
+        await executeStep(page, { op: "click", target: specific.target });
+      expect(await page.evaluate("window.clicked")).toBe(1);
+      await context.close();
+    });
+    it("includes the visible rank and title for comments in a ranked table", async () => {
+      const { page, context } = await fresh();
+      const html = `<table><tr><td><span class="rank">1.</span></td><td><span class="titleline"><a href="/one">Story One</a></span></td></tr><tr><td></td><td class="subtext"><a href="/one/comments">20 comments</a></td></tr><tr><td><span class="rank">2.</span></td><td><span class="titleline"><a href="/two">Story Two</a></span></td></tr><tr><td></td><td class="subtext"><a href="/two/comments">30 comments</a></td></tr></table>`;
+      await page.evaluate(
+        `document.querySelector('#app').innerHTML = ${JSON.stringify(html)}`,
+      );
+      const found = await collectCandidates(page, "click");
+      const first = found.candidates.find(
+        (candidate) => candidate.name === "20 comments",
+      );
+      expect(first?.peers[0]).toBe("1. Story One");
+      expect(first?.peers.length).toBeLessThanOrEqual(2);
+      expect(first?.signals.contextComplete).toBe(false);
+      await context.close();
+    });
     it("injects on navigation, pages all controls, and rejects a stale cursor", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
