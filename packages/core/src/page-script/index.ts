@@ -35,13 +35,6 @@ if (!window.__sedum) {
   const owned = new Map<Element, { old: string | null; ref: string }>();
   const MAX_ELEMENTS = 20_000;
   const MAX_TEXT_NODES = 20_000;
-  const EDITABLE_ROLES = new Set([
-    "textbox",
-    "searchbox",
-    "combobox",
-    "spinbutton",
-    "slider",
-  ]);
   const FILLABLE_INPUT_TYPES = new Set([
     "text",
     "email",
@@ -187,7 +180,9 @@ if (!window.__sedum) {
         node.matches(
           "input,textarea,select,[contenteditable],script,style,noscript",
         ) ||
-        EDITABLE_ROLES.has(role(node)) ||
+        ["textbox", "searchbox", "combobox", "spinbutton"].includes(
+          role(node),
+        ) ||
         (includeActions &&
           (node.matches("button,a[href]") ||
             role(node) === "button" ||
@@ -259,7 +254,7 @@ if (!window.__sedum) {
     if (element.parentElement?.closest("a[href]")) return false;
     return (
       element.matches(
-        "button,a[href],input,textarea,select,[contenteditable='true']",
+        "button,a[href],input,textarea,select,[contenteditable]",
       ) ||
       [
         "button",
@@ -293,10 +288,12 @@ if (!window.__sedum) {
   }
   function editable(element: Element): boolean {
     if (element instanceof HTMLInputElement)
-      return FILLABLE_INPUT_TYPES.has(element.type);
+      return FILLABLE_INPUT_TYPES.has(element.type) && !disabled(element);
+    if (element instanceof HTMLTextAreaElement) return !disabled(element);
     return (
-      element.matches("textarea,select,[contenteditable='true']") ||
-      EDITABLE_ROLES.has(role(element))
+      element instanceof HTMLElement &&
+      element.isContentEditable &&
+      !disabled(element)
     );
   }
   function disabled(element: Element): boolean {
@@ -322,6 +319,12 @@ if (!window.__sedum) {
     }
     return steps.join("/");
   }
+  function inArticleBody(element: Element): boolean {
+    return (
+      !!element.closest("main,article,[role='main']") &&
+      !element.closest("aside,nav,table,[role='navigation'],.infobox,.navbox")
+    );
+  }
   function itemContext(region: Element): { text: string; complete: boolean } {
     const walker = document.createTreeWalker(region, NodeFilter.SHOW_TEXT);
     const pieces: string[] = [];
@@ -344,14 +347,35 @@ if (!window.__sedum) {
     element: Element,
     name: string,
   ): { texts: string[]; contextComplete: boolean } {
+    // Some ranked tables place story metadata in the row immediately after
+    // the ranked title row. Include the visible rank and title so "first
+    // story comments" can be distinguished from the site navigation link.
+    const row = element.closest("tr");
+    const preceding = row?.previousElementSibling;
+    const rank = preceding?.querySelector(".rank");
+    const title = preceding?.querySelector(".titleline > a");
+    const rankedPeer =
+      rank && title
+        ? Array.from(`${publicText(rank)} ${publicText(title)}`.trim())
+            .slice(0, PEER_LIMIT)
+            .join("")
+        : "";
     let region: Element | null = element.parentElement;
     let lastUnique: Element | null = null;
     while (region && region !== document.body) {
-      const sameLabel = Array.from(
-        region.querySelectorAll(
-          "button,a[href],[role='button'],input[type='button'],input[type='submit']",
-        ),
-      ).filter((item) => visible(item) && label(item) === name);
+      const possible = region.querySelectorAll(
+        "button,a[href],[role='button'],input[type='button'],input[type='submit']",
+      );
+      // Large ancestors cannot supply a useful 80-character item context. In
+      // particular, comparing every link in an article for every article link
+      // turns a dense Wikipedia page into a quadratic scan.
+      if (possible.length > 32) {
+        region = lastUnique;
+        break;
+      }
+      const sameLabel = Array.from(possible).filter(
+        (item) => visible(item) && label(item) === name,
+      );
       if (sameLabel.length > 1) {
         region = lastUnique;
         break;
@@ -361,10 +385,12 @@ if (!window.__sedum) {
       region = region.parentElement;
     }
     region = region === document.body ? lastUnique : region;
-    if (!region) return { texts: [], contextComplete: false };
+    if (!region)
+      return { texts: rankedPeer ? [rankedPeer] : [], contextComplete: false };
     const result: string[] = [];
+    if (rankedPeer) result.push(rankedPeer);
     const context = itemContext(region);
-    if (context.text) result.push(context.text);
+    if (context.text && result.length < 2) result.push(context.text);
     const named = Array.from(
       region.querySelectorAll(
         "[data-product-name],h1,h2,h3,h4,h5,h6,[role='heading']",
@@ -382,6 +408,7 @@ if (!window.__sedum) {
       );
     const nearby = Array.from(region.querySelectorAll("strong,span,p"));
     for (const child of [...named, ...meaningfulLeaves, ...nearby]) {
+      if (result.length === 2) break;
       if (
         child === element ||
         child.contains(element) ||
@@ -391,11 +418,10 @@ if (!window.__sedum) {
         continue;
       const text = publicText(child);
       if (text && text !== name && !result.includes(text)) result.push(text);
-      if (result.length === 2) break;
     }
     return {
       texts: result,
-      contextComplete: context.complete && !!context.text,
+      contextComplete: !rankedPeer && context.complete && !!context.text,
     };
   }
   function scan(operation: Operation): {
@@ -454,6 +480,9 @@ if (!window.__sedum) {
               : {}),
             ...(element.getAttribute("href")
               ? { href: element.getAttribute("href")! }
+              : {}),
+            ...(inArticleBody(element)
+              ? { region: "article-body" as const }
               : {}),
             path: path(element),
             contextComplete: peerData.contextComplete,

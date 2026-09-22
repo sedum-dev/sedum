@@ -50,6 +50,8 @@ export interface Candidate {
     readonly id?: string;
     readonly name?: string;
     readonly href?: string;
+    /** Local disambiguation hint. Never part of the provider projection. */
+    readonly region?: "article-body";
     readonly path: string;
     /** True only when the first peer contains the entire non-interactive item context. */
     readonly contextComplete?: boolean;

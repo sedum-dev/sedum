@@ -192,13 +192,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         `document.querySelector('#app').innerHTML = '<select aria-label="Choice"><option>First</option></select>'`,
       );
       const select = await collectCandidates(page, "fill");
-      await expect(
-        executeStep(page, {
-          op: "type",
-          target: target(select),
-          value: new RuntimeValue("Second"),
-        }),
-      ).rejects.toMatchObject({ code: "stale", retryable: true });
+      expect(select.candidates).toHaveLength(0);
       await context.close();
     });
 
