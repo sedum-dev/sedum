@@ -34,6 +34,35 @@ The actual `checks` array always contains `node`, `config`, `browser`, `api_netw
 
 The exit code is `0` if every check passes and `3` if any check fails.
 
+## `sedum run` reporters
+
+`sedum run` uses the `list` terminal reporter by default. Select `steps` to see
+each completed step as it runs, or repeat `--reporter` to use both:
+
+```sh
+sedum run tests/checkout.test.yaml --reporter steps
+sedum run --reporter list --reporter steps
+```
+
+The terminal reporters read the same validated `RunResult` as `progress.json`
+and `result.json`. The run prints the progress path after it is created. Each
+reporter prints live lines as tests or steps complete, followed by the run
+summary. TTY output may use color; redirected output is plain and does not
+shorten step text. Token and cost lines appear by default in a TTY, or with
+`--costs` when output is redirected.
+
+Every failed, errored, or flagged step in the selected attempt gets a **needs
+attention** block with its full recorded sentence, source location, reason,
+available judgement numbers or locator choices, page context, and evidence
+status. Module binding problems appear there too. The final `next` block names
+the result files and evidence to read, then gives a quoted `sedum run` command
+for each affected test. When the output directory fails, the CLI identifies
+the intended result path as unavailable instead of telling you to read it.
+
+`--reporter` accepts `list` and `steps`; repeated names are shown once. It
+changes presentation only. Verdicts, flags, `--strict` exit codes, and the
+canonical result stay the same.
+
 ## `sedum validate`
 
 `sedum validate [paths...]` checks tests and modules without opening a browser, without a model key, and without spending tokens. That makes it cheap enough for a pre-commit hook and for every CI run.

@@ -126,8 +126,8 @@ describe("local locator cache", () => {
         0o600,
       );
       expect(
-        (await stat(path.join(a.directory, "entries", `${digest}.json`)))
-          .mode & 0o777,
+        (await stat(path.join(a.directory, "entries", `${digest}.json`))).mode &
+          0o777,
       ).toBe(0o600);
     }
     expect(await clearLocatorCache(root)).toBe(true);

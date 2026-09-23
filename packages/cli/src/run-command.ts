@@ -34,7 +34,10 @@ export interface RunCommandOptions {
   readonly locatorCacheDisabled?: boolean;
   readonly locatorCacheCi?: boolean;
   readonly signal?: AbortSignal;
-  readonly onSnapshot?: (snapshot: RunResult) => void;
+  readonly onSnapshot?: (
+    snapshot: RunResult,
+    artifacts: RunArtifactPaths,
+  ) => void;
   readonly onCommitted?: () => void;
 }
 
@@ -42,7 +45,11 @@ export interface RunCommandExecution {
   readonly result: RunResult;
   readonly artifacts: RunArtifactPaths;
   readonly diagnostic: CliDiagnostic | null;
+  readonly reporterFailed?: boolean;
+  readonly onReporterFailure?: () => Promise<RunCommandExecution>;
 }
+
+class ReporterOutputError extends Error {}
 
 function terminalOutputFailure(
   source: RunResult,
@@ -238,10 +245,43 @@ export async function executeRunCommand(
     resultPath: writer.resultPath,
     authoritative: true,
   } as const;
+  let reporterFailed = false;
   const recorder = new RunRecorder(async (snapshot) => {
     await writer.write(snapshot);
-    options.onSnapshot?.(snapshot);
+    if (!reporterFailed) {
+      try {
+        options.onSnapshot?.(snapshot, artifacts);
+      } catch {
+        reporterFailed = true;
+        throw new ReporterOutputError(
+          "The selected reporter could not write output.",
+        );
+      }
+    }
   }, runId);
+  const onReporterFailure = async (): Promise<RunCommandExecution> => {
+    const diagnostic: CliDiagnostic = {
+      code: "reporter_output_error",
+      message: "The selected reporter could not write output.",
+      fix: "Check terminal output access and rerun the command.",
+    };
+    const result = terminalOutputFailure(recorder.snapshot, diagnostic);
+    try {
+      await writer.finish(result);
+      return { result, artifacts, diagnostic, reporterFailed: true };
+    } catch (error) {
+      await writer.invalidate();
+      const output = outputDiagnostic(
+        error instanceof ProgressWriterError ? error.path : writer.resultPath,
+      );
+      return {
+        result: terminalOutputFailure(result, output),
+        artifacts: { ...artifacts, authoritative: false },
+        diagnostic: output,
+        reporterFailed: true,
+      };
+    }
+  };
 
   try {
     await recorder.start();
@@ -284,6 +324,10 @@ export async function executeRunCommand(
           saveFrame: (stepId, bytes) => writer.saveFrame(stepId, bytes),
         },
       });
+      if (reporterFailed)
+        throw new ReporterOutputError(
+          "The selected reporter could not write output.",
+        );
       if (options.signal?.aborted) break;
       if (result.status === "could_not_run") {
         operational = flowDiagnostic(result);
@@ -302,19 +346,34 @@ export async function executeRunCommand(
         "interrupted",
       );
       await writer.finish(recorder.snapshot);
-      return { result: recorder.snapshot, artifacts, diagnostic };
+      return {
+        result: recorder.snapshot,
+        artifacts,
+        diagnostic,
+        onReporterFailure,
+      };
     }
     if (operational) {
       const diagnostic = operational;
       commit();
       await recorder.finish(canonicalDiagnosticError(diagnostic));
       await writer.finish(recorder.snapshot);
-      return { result: recorder.snapshot, artifacts, diagnostic };
+      return {
+        result: recorder.snapshot,
+        artifacts,
+        diagnostic,
+        onReporterFailure,
+      };
     }
     commit();
     await recorder.finish();
     await writer.finish(recorder.snapshot);
-    return { result: recorder.snapshot, artifacts, diagnostic: null };
+    return {
+      result: recorder.snapshot,
+      artifacts,
+      diagnostic: null,
+      onReporterFailure,
+    };
   } catch (error) {
     if (error instanceof ProgressWriterError) {
       commit();
@@ -327,22 +386,44 @@ export async function executeRunCommand(
         diagnostic,
       };
     }
-    const diagnostic: CliDiagnostic = options.signal?.aborted
-      ? {
-          code: "canceled",
-          message: "The run was interrupted.",
-          fix: "Rerun the command when you are ready to continue.",
-        }
-      : setupDiagnostic(error);
+    const diagnostic: CliDiagnostic =
+      error instanceof ReporterOutputError
+        ? {
+            code: "reporter_output_error",
+            message: "The selected reporter could not write output.",
+            fix: "Check terminal output access and rerun the command.",
+          }
+        : options.signal?.aborted
+          ? {
+              code: "canceled",
+              message: "The run was interrupted.",
+              fix: "Rerun the command when you are ready to continue.",
+            }
+          : setupDiagnostic(error);
     commit();
     try {
+      if (
+        error instanceof ReporterOutputError &&
+        recorder.snapshot.state !== "running"
+      ) {
+        const result = terminalOutputFailure(recorder.snapshot, diagnostic);
+        await writer.write(result);
+        await writer.finish(result);
+        return { result, artifacts, diagnostic, reporterFailed };
+      }
       if (recorder.snapshot.state === "running")
         await recorder.finish(
           canonicalDiagnosticError(diagnostic),
           options.signal?.aborted ? "interrupted" : "error",
         );
       await writer.finish(recorder.snapshot);
-      return { result: recorder.snapshot, artifacts, diagnostic };
+      return {
+        result: recorder.snapshot,
+        artifacts,
+        diagnostic,
+        reporterFailed,
+        onReporterFailure,
+      };
     } catch (writeError) {
       const output = outputDiagnostic(
         writeError instanceof ProgressWriterError
