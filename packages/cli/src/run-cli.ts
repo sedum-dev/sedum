@@ -1,13 +1,18 @@
+import { Command, CommanderError, InvalidArgumentError } from "commander";
+import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
+import { renderDiagnostic } from "./diagnostics.js";
+import { runExitCode } from "./exit-policy.js";
 import {
-  FileClassificationCache,
-  PlaywrightBrowserDriver,
-  RunRecorder,
-  runFlow,
-} from "@sedum-dev/core";
-import { TypeSafeAdapter } from "@sedum-dev/provider-typesafe";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
-import { ProgressWriter } from "./progress-writer.js";
+  clearProgress,
+  renderProgress,
+  renderRunSummary,
+  type OutputCapabilities,
+} from "./output.js";
+import {
+  executeRunCommand,
+  type RunCommandExecution,
+  type RunCommandOptions,
+} from "./run-command.js";
 
 export interface CliOutput {
   readonly stdout: string;
@@ -15,154 +20,208 @@ export interface CliOutput {
   readonly exitCode: number;
 }
 
-/** Pure argument handling; the executable owns process I/O. */
+export interface CliRuntime {
+  readonly capabilities?: OutputCapabilities;
+  readonly stdout?: (value: string) => void;
+  readonly stderr?: (value: string) => void;
+  readonly signal?: AbortSignal;
+  readonly onRunCommitted?: () => void;
+  readonly executeRun?: (
+    options: RunCommandOptions,
+  ) => Promise<RunCommandExecution>;
+  readonly installChromium?: (
+    withDependencies: boolean,
+  ) => BrowserInstallResult;
+}
+
+const plainOutput: OutputCapabilities = {
+  stdoutIsTTY: false,
+  stderrIsTTY: false,
+  color: false,
+};
+
+function collectOrigin(value: string, previous: readonly string[]): string[] {
+  try {
+    return [...previous, new URL(value).origin];
+  } catch {
+    throw new InvalidArgumentError(
+      `Invalid origin ${JSON.stringify(value)}. Use an absolute URL such as https://example.com.`,
+    );
+  }
+}
+
+function commandHelp(command: Command, writeErr: (value: string) => void) {
+  command.outputHelp({ error: true });
+  const commandPath: string[] = [];
+  for (
+    let current: Command | null = command;
+    current;
+    current = current.parent
+  ) {
+    commandPath.unshift(current.name());
+  }
+  writeErr(
+    `Fix: run \`${commandPath.join(" ")} --help\` and provide a command.\n`,
+  );
+}
+
+/** Parse and execute explicit argv without reading or exiting the process. */
 export async function runCli(
   args: readonly string[],
   version: string,
-  onProgressPath?: (path: string) => void,
-  signal?: AbortSignal,
+  runtime: CliRuntime = {},
 ): Promise<CliOutput> {
-  if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
-    return { stdout: `${version}\n`, stderr: "", exitCode: 0 };
-  }
-  if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) {
-    return {
-      stdout:
-        "Usage: sedum run <file.test.yaml> [--replay] [--no-evidence] [--sensitive-origin=URL] | sedum --version | sedum --help | sedum browsers install chromium [--with-deps]\nRun needs Chromium and TYPESAFE_API_KEY.\n",
-      stderr: "",
-      exitCode: 0,
-    };
-  }
-  if (
-    (args.length === 3 || args.length === 4) &&
-    args[0] === "browsers" &&
-    args[1] === "install" &&
-    args[2] === "chromium" &&
-    (args.length === 3 || args[3] === "--with-deps")
-  ) {
-    const { installChromium } = await import("@sedum-dev/core");
-    const result = installChromium(args[3] === "--with-deps");
-    return {
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-    };
-  }
-  if (
-    args.length >= 2 &&
-    args[0] === "run" &&
-    args
-      .slice(2)
-      .every(
-        (arg) =>
-          arg === "--replay" ||
-          arg === "--no-evidence" ||
-          arg.startsWith("--sensitive-origin="),
-      )
-  ) {
-    const root = process.cwd();
-    let writer: ProgressWriter | undefined;
-    let recorder: RunRecorder | undefined;
-    const options = args.slice(2);
-    try {
-      const runId = randomUUID();
-      writer = await ProgressWriter.create(root, runId);
-      recorder = new RunRecorder((snapshot) => writer!.write(snapshot), runId);
-      await recorder.start();
-      onProgressPath?.(writer.progressPath);
-      if (signal?.aborted) throw new Error("Run interrupted");
-      const sensitiveOrigins = options
-        .filter((arg) => arg.startsWith("--sensitive-origin="))
-        .map((arg) => new URL(arg.slice("--sensitive-origin=".length)).origin);
-      const privacy = { secretValues: [] as string[], sensitiveOrigins };
-      const provider = new TypeSafeAdapter();
-      const cache = await FileClassificationCache.load(
-        path.join(root, ".sedum", "classifications.json"),
-        "jev-latest",
-      );
-      const result = await runFlow(args[1]!, {
-        repoRoot: root,
-        browser: new PlaywrightBrowserDriver(),
-        provider,
-        classificationCache: cache,
-        env: process.env,
-        headless: process.env.SEDUM_HEADED === "1" ? false : true,
-        ...(signal ? { signal } : {}),
-        report: {
-          recorder,
-          privacy,
-          evidenceEnabled: !options.includes("--no-evidence"),
-          replay: options.includes("--replay"),
-          saveFrame: (stepId, bytes) => writer!.saveFrame(stepId, bytes),
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const writeOut = runtime.stdout ?? ((value: string) => stdout.push(value));
+  const writeErr = runtime.stderr ?? ((value: string) => stderr.push(value));
+  const capabilities = runtime.capabilities ?? plainOutput;
+  const executeRun = runtime.executeRun ?? executeRunCommand;
+  let exitCode = 3;
+
+  const program = new Command()
+    .name("sedum")
+    .description(
+      "Run plain-English browser tests with deterministic automation.",
+    )
+    .version(version, "-v, --version", "print the installed Sedum version")
+    .helpOption("-h, --help", "show command help")
+    .showSuggestionAfterError()
+    .showHelpAfterError("Run `sedum --help` to see available commands.")
+    .exitOverride()
+    .configureOutput({
+      writeOut,
+      writeErr,
+      outputError: (value, write) => write(value),
+    })
+    .addHelpText(
+      "after",
+      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test\n  2 flagged pass with --strict\n  3 command or operational error\n",
+    );
+
+  program.action(() => commandHelp(program, writeErr));
+
+  program
+    .command("run")
+    .description("run one explicit *.test.yaml file")
+    .argument("<file.test.yaml>", "test file to execute")
+    .option("--replay", "capture replay frames for executed steps", false)
+    .option("--no-evidence", "disable non-passing evidence frames")
+    .option(
+      "--sensitive-origin <url>",
+      "omit sensitive page details and frames (repeatable)",
+      collectOrigin,
+      [],
+    )
+    .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
+    .option(
+      "--costs",
+      "show model tokens and cost even when stdout is redirected",
+      false,
+    )
+    .addHelpText(
+      "after",
+      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and set TYPESAFE_API_KEY.\n\nExamples:\n  sedum run tests/login.test.yaml\n  sedum run tests/login.test.yaml --strict --costs\n",
+    )
+    .action(
+      async (
+        file: string,
+        options: {
+          replay: boolean;
+          evidence: boolean;
+          sensitiveOrigin: string[];
+          strict: boolean;
+          costs: boolean;
         },
-      });
-      if (signal?.aborted) {
-        await recorder.finish(
-          { code: "canceled", message: "The run was interrupted." },
-          "interrupted",
-        );
-        await writer.finish(recorder.snapshot);
-        return {
-          stdout: onProgressPath ? "" : `progress ${writer.progressPath}\n`,
-          stderr: "The run was interrupted.\n",
-          exitCode: 3,
-        };
-      }
-      if (result.status === "could_not_run") {
-        await recorder.finish({
-          code: "execution_error",
-          message: "The run could not complete.",
+      ) => {
+        let transient = false;
+        const execution = await executeRun({
+          file,
+          replay: options.replay,
+          evidence: options.evidence,
+          sensitiveOrigins: options.sensitiveOrigin,
+          ...(runtime.signal ? { signal: runtime.signal } : {}),
+          ...(runtime.onRunCommitted
+            ? { onCommitted: runtime.onRunCommitted }
+            : {}),
+          onSnapshot: (snapshot: RunResult) => {
+            const progress = renderProgress(snapshot, capabilities);
+            if (progress) {
+              transient = true;
+              writeOut(progress);
+            }
+          },
         });
-        await writer.finish(recorder.snapshot);
-        return {
-          stdout: onProgressPath ? "" : `progress ${writer.progressPath}\n`,
-          stderr: `${result.source ? `${result.source.file}:${result.source.line}:${result.source.col}: ` : ""}${result.message}\n`,
-          exitCode: 3,
-        };
+        if (transient) writeOut(clearProgress(capabilities));
+        writeOut(
+          renderRunSummary(
+            execution.result,
+            capabilities,
+            execution.artifacts,
+            options.costs,
+          ),
+        );
+        if (execution.diagnostic)
+          writeErr(renderDiagnostic(execution.diagnostic));
+        exitCode = runExitCode(execution.result, options.strict);
+      },
+    );
+
+  const browsers = program
+    .command("browsers")
+    .description("manage browser binaries required by Sedum");
+  browsers.action(() => commandHelp(browsers, writeErr));
+  browsers
+    .command("install")
+    .description("install a browser binary")
+    .argument("<browser>", "browser to install (currently: chromium)")
+    .option(
+      "--with-deps",
+      "also install supported Linux system dependencies",
+      false,
+    )
+    .addHelpText(
+      "after",
+      "\nExample:\n  sedum browsers install chromium --with-deps\n",
+    )
+    .action(async (browser: string, options: { withDeps: boolean }) => {
+      if (browser !== "chromium") {
+        writeErr(
+          `Unsupported browser ${JSON.stringify(browser)}.\nFix: use \`sedum browsers install chromium\`.\n`,
+        );
+        exitCode = 3;
+        return;
       }
-      await recorder.finish();
-      await writer.finish(recorder.snapshot);
-      const prefix = onProgressPath ? "" : `progress ${writer.progressPath}\n`;
-      if (result.status === "passed")
-        return {
-          stdout: `${prefix}passed ${result.file}\n`,
-          stderr: "",
-          exitCode: 0,
-        };
-      if (result.status === "failed")
-        return {
-          stdout: `${prefix}failed ${result.file}:${result.source.line}:${result.source.col}\n`,
-          stderr: "",
-          exitCode: 1,
-        };
-    } catch (error) {
-      if (recorder && writer && recorder.snapshot.state === "running") {
-        try {
-          await recorder.finish(
-            {
-              code: signal?.aborted ? "canceled" : "setup_or_output_error",
-              message: signal?.aborted
-                ? "The run was interrupted."
-                : "The run could not complete.",
-            },
-            signal?.aborted ? "interrupted" : "error",
-          );
-          await writer.finish(recorder.snapshot);
-        } catch {
-          /* The output path itself may be unwritable. */
-        }
+      const install =
+        runtime.installChromium ??
+        (await import("@sedum-dev/core")).installChromium;
+      const result = install(options.withDeps);
+      if (result.stdout) writeOut(result.stdout);
+      if (result.stderr) writeErr(result.stderr);
+      if (result.exitCode === 0) exitCode = 0;
+      else {
+        writeErr(
+          "Fix: resolve the installer error above, then rerun `sedum browsers install chromium`.\n",
+        );
+        exitCode = 3;
       }
-      return {
-        stdout:
-          writer && !onProgressPath ? `progress ${writer.progressPath}\n` : "",
-        stderr: `${signal?.aborted ? "The run was interrupted." : writer ? "The run could not complete." : error instanceof Error ? error.message : "Could not create run output."}\n`,
-        exitCode: 3,
-      };
+    });
+
+  try {
+    await program.parseAsync(["node", "sedum", ...args]);
+  } catch (error) {
+    if (error instanceof CommanderError) {
+      exitCode = error.exitCode === 0 ? 0 : 3;
+      if (error.exitCode !== 0)
+        writeErr(
+          "Fix: correct the command shown above and rerun it, or use `sedum --help`.\n",
+        );
+    } else {
+      writeErr(
+        "The command could not be parsed safely.\nFix: run `sedum --help` and correct the command.\n",
+      );
+      exitCode = 3;
     }
   }
-  return {
-    stdout: "",
-    stderr: "Unknown or unavailable command. Use sedum --help.\n",
-    exitCode: 2,
-  };
+  return { stdout: stdout.join(""), stderr: stderr.join(""), exitCode };
 }

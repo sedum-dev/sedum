@@ -21,12 +21,10 @@ describe("CLI early progress", () => {
     try {
       process.chdir(root);
       const paths: string[] = [];
-      const output = await runCli(
-        ["run", "missing.test.yaml"],
-        "0.0.0",
-        (value) => paths.push(value),
-      );
+      const output = await runCli(["run", "missing.test.yaml"], "0.0.0");
       expect(output.exitCode).toBe(3);
+      const match = output.stdout.match(/^progress (.+)$/mu);
+      if (match?.[1]) paths.push(match[1]);
       expect(paths).toHaveLength(1);
       const progress = validateRunResult(
         JSON.parse(await readFile(paths[0]!, "utf8")),
@@ -61,13 +59,12 @@ describe("CLI early progress", () => {
       const controller = new AbortController();
       controller.abort();
       const paths: string[] = [];
-      const output = await runCli(
-        ["run", "missing.test.yaml"],
-        "0.0.0",
-        (value) => paths.push(value),
-        controller.signal,
-      );
+      const output = await runCli(["run", "missing.test.yaml"], "0.0.0", {
+        signal: controller.signal,
+      });
       expect(output.exitCode).toBe(3);
+      const match = output.stdout.match(/^progress (.+)$/mu);
+      if (match?.[1]) paths.push(match[1]);
       const progress = validateRunResult(
         JSON.parse(await readFile(paths[0]!, "utf8")),
       );

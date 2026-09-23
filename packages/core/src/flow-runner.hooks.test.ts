@@ -286,7 +286,10 @@ describe("hook and module attempt lifecycle", () => {
       "before:\n  - use: ./shared.module.yaml\n    with: {password: $ABSENT}\nsteps: [verify body]\nafter: [verify cleanup]\n",
       { module: "parameters: [password]\nsteps: [verify inside module]\n" },
     );
-    expect(run.result.status).toBe("could_not_run");
+    expect(run.result).toMatchObject({
+      status: "could_not_run",
+      code: "missing_environment_variable",
+    });
     expect(run.report.state).toBe("error");
     expect(run.report.verdict).toBeNull();
     expect(run.report.tests[0]?.attempts[0]?.problems[0]).toMatchObject({

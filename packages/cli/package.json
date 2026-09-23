@@ -25,6 +25,7 @@
   "dependencies": {
     "@sedum-dev/core": "workspace:*",
     "@sedum-dev/provider-typesafe": "workspace:*",
-    "@sedum-dev/reporters": "workspace:*"
+    "@sedum-dev/reporters": "workspace:*",
+    "commander": "14.0.2"
   }
 }

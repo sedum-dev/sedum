@@ -4,7 +4,11 @@ import {
   verify,
   type VerifyResult,
 } from "./assertion-engine.js";
-import type { BrowserDriver, BrowserPage } from "./browser-driver.js";
+import {
+  BrowserDriverError,
+  type BrowserDriver,
+  type BrowserPage,
+} from "./browser-driver.js";
 import type {
   ClassificationCache,
   ClassificationProvider,
@@ -30,7 +34,12 @@ import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
-import type { Judge, ProviderCall, Resolver } from "./provider.js";
+import {
+  ProviderError,
+  type Judge,
+  type ProviderCall,
+  type Resolver,
+} from "./provider.js";
 import {
   safeSource,
   safeText,
@@ -63,8 +72,10 @@ export type FlowRunResult =
   | {
       readonly status: "could_not_run";
       readonly file: string;
+      readonly code: string;
       readonly message: string;
       readonly source?: FlowSource;
+      readonly fix?: string;
     };
 
 /** Dependencies are injected so the engine never owns process state or SDK types. */
@@ -117,7 +128,9 @@ function firstDiagnostic(
   return {
     status: "could_not_run",
     file: diagnostic?.source.file ?? "",
+    code: "invalid_test",
     message: diagnostic?.message ?? "The test file could not be validated.",
+    ...(diagnostic?.fix ? { fix: diagnostic.fix } : {}),
     ...(diagnostic ? { source: diagnostic.source } : {}),
   };
 }
@@ -127,7 +140,80 @@ function unsupported(
   source: FlowSource,
   message: string,
 ): FlowRunResult {
-  return { status: "could_not_run", file, source, message };
+  return {
+    status: "could_not_run",
+    file,
+    code: "unsupported_test",
+    source,
+    message,
+  };
+}
+
+function runtimeFailure(file: string, error: unknown): FlowRunResult {
+  if (error instanceof BrowserDriverError) {
+    const details: Record<
+      typeof error.code,
+      { readonly message: string; readonly fix: string }
+    > = {
+      "browser-missing": {
+        message: "No supported browser binary was found.",
+        fix: "Run `sedum browsers install chromium`, then rerun the test.",
+      },
+      "browser-launch-failed": {
+        message: "The browser could not be started safely.",
+        fix: "Check the browser installation and permissions, then rerun the test.",
+      },
+      "browser-disconnected": {
+        message: "The browser disconnected during the run.",
+        fix: "Restart the browser run and check browser stability if it repeats.",
+      },
+      "context-closed": {
+        message: "The browser context closed during the run.",
+        fix: "Rerun the test and check browser stability if it repeats.",
+      },
+      "page-closed": {
+        message: "The browser page closed during the run.",
+        fix: "Rerun the test and check whether the tested page closes itself.",
+      },
+      "page-crashed": {
+        message: "The browser page crashed during the run.",
+        fix: "Rerun the test and check browser resource usage if it repeats.",
+      },
+      "operation-failed": {
+        message: "A browser operation could not be completed safely.",
+        fix: "Check the named test step and rerun the test.",
+      },
+      "script-missing": {
+        message: "The Sedum browser script was unavailable.",
+        fix: "Rebuild or reinstall Sedum, then rerun the test.",
+      },
+    };
+    return {
+      status: "could_not_run",
+      file,
+      code: error.code,
+      ...details[error.code],
+    };
+  }
+  if (error instanceof ProviderError) {
+    return {
+      status: "could_not_run",
+      file,
+      code: `provider_${error.code}`,
+      message: "The model provider could not complete the run safely.",
+      fix:
+        error.code === "configuration" || error.code === "authentication"
+          ? "Check TYPESAFE_API_KEY and provider access, then rerun the test."
+          : "Check provider availability and the test input, then rerun the test.",
+    };
+  }
+  return {
+    status: "could_not_run",
+    file,
+    code: "execution_error",
+    message: "The browser run could not be completed safely.",
+    fix: "Check the browser, provider, and test input, then rerun the test.",
+  };
 }
 
 function claim(
@@ -764,6 +850,7 @@ export async function runFlow(
     return {
       status: "could_not_run",
       file: absolute,
+      code: "invalid_data",
       message:
         error instanceof Error ? error.message : "Could not resolve test data.",
     };
@@ -885,6 +972,7 @@ export async function runFlow(
                   : {
                       status: "could_not_run",
                       file: absolute,
+                      code: bindingError?.code ?? "module_binding_error",
                       source: item.source,
                       message,
                     };
@@ -928,12 +1016,7 @@ export async function runFlow(
       await dependencies.report?.recorder.finishTest("failed");
     return primary;
   } catch (error) {
-    return {
-      status: "could_not_run",
-      file: absolute,
-      message:
-        error instanceof Error ? error.message : "The browser run failed.",
-    };
+    return runtimeFailure(absolute, error);
   } finally {
     await closeQuietly(page);
     await closeQuietly(context);
