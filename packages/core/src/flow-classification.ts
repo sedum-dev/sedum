@@ -52,15 +52,50 @@ export interface FlowClassificationResult {
   readonly calls: readonly ProviderCall[];
 }
 
+export interface ClassifyFlowOptions {
+  readonly mode: "offline" | "allow-model";
+  readonly cache: ClassificationCache;
+  readonly provider?: ClassificationProvider;
+  readonly signal?: AbortSignal;
+}
+
+export interface SentenceClassification {
+  readonly classification: ClassificationResult;
+  /** Classification and `type` operand errors, in input order. */
+  readonly diagnostics: readonly FlowClassificationDiagnostic[];
+}
+
+/** Classify sentence steps and apply the post-classification `type` operand check. */
+export async function classifySentenceSteps(
+  sentences: readonly SentenceStep[],
+  options: ClassifyFlowOptions,
+): Promise<SentenceClassification> {
+  const classification = await classifySteps(
+    sentences.map((step) => ({ sentence: step.text, source: step.source })),
+    options,
+  );
+  const diagnostics: FlowClassificationDiagnostic[] =
+    classification.diagnostics.map((item) => ({
+      severity: "error" as const,
+      code: item.code,
+      source: item.source,
+      sentence: item.sentence,
+      message: `${item.message} Sentence: ${JSON.stringify(item.sentence)}.`,
+      fix: item.fix,
+    }));
+  sentences.forEach((step, index) => {
+    if (classification.steps[index]?.op !== "type") return;
+    const validated = validateTypeOperand(step);
+    if ("diagnostic" in validated)
+      diagnostics.push({ ...validated.diagnostic, sentence: step.text });
+  });
+  return { classification, diagnostics };
+}
+
 /** Compose SED-27 format parsing and SED-28 classification without executing a step. */
 export async function classifyParsedFlow(
   parsed: ParsedFlowResult,
-  options: {
-    readonly mode: "offline" | "allow-model";
-    readonly cache: ClassificationCache;
-    readonly provider?: ClassificationProvider;
-    readonly signal?: AbortSignal;
-  },
+  options: ClassifyFlowOptions,
 ): Promise<FlowClassificationResult> {
   const flow = parsed.value ?? parsed.candidate;
   if (!flow)
@@ -78,26 +113,12 @@ export async function classifyParsedFlow(
           : [],
     );
   const sentences = collect([...flow.before, ...flow.steps, ...flow.after]);
-  const classification = await classifySteps(
-    sentences.map((step) => ({ sentence: step.text, source: step.source })),
-    options,
-  );
+  const checked = await classifySentenceSteps(sentences, options);
+  const classification = checked.classification;
   const diagnostics: (FlowDiagnostic | FlowClassificationDiagnostic)[] = [
     ...parsed.diagnostics,
-    ...classification.diagnostics.map((item) => ({
-      severity: "error" as const,
-      code: item.code,
-      source: item.source,
-      sentence: item.sentence,
-      message: `${item.message} Sentence: ${JSON.stringify(item.sentence)}.`,
-      fix: item.fix,
-    })),
+    ...checked.diagnostics,
   ];
-  sentences.forEach((step, index) => {
-    if (classification.steps[index]?.op !== "type") return;
-    const validated = validateTypeOperand(step);
-    if ("diagnostic" in validated) diagnostics.push(validated.diagnostic);
-  });
   diagnostics.sort(
     (a, b) =>
       a.source.file.localeCompare(b.source.file) ||

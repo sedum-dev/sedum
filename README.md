@@ -35,6 +35,14 @@ For project defaults and a no-argument `sedum run`, add a
 [`sedum.config.yaml`](docs/configuration.md). Sedum loads secrets only from the
 invoking process or the `.env` beside that project config.
 
+Check tests without a browser or key, and list what a suite contains (see
+[CLI commands](docs/cli.md)):
+
+```sh
+node packages/cli/dist/cli.js validate fixtures
+node packages/cli/dist/cli.js list fixtures --json
+```
+
 Install Chromium with `node packages/cli/dist/cli.js browsers install chromium`,
 set `TYPESAFE_API_KEY` and `SAUCE_PASSWORD`, then run the included live fixture:
 

@@ -14,6 +14,16 @@ import type {
 export interface ResolveFlowModulesOptions {
   readonly repoRoot: string;
   readonly maxDepth?: number;
+  /**
+   * Validation only: also resolve a format-failed candidate, and keep a
+   * never-executable candidate graph when module resolution fails.
+   */
+  readonly partial?: boolean;
+}
+
+export interface ResolvedFlowResult extends ParsedFlowResult {
+  /** Real path of every module file the resolver read, including failed ones. */
+  readonly moduleFiles: readonly string[];
 }
 
 function compareDiagnostics(a: FlowDiagnostic, b: FlowDiagnostic): number {
@@ -55,9 +65,10 @@ function inside(root: string, candidate: string): boolean {
 export async function resolveFlowModules(
   parsed: ParsedFlowResult,
   options: ResolveFlowModulesOptions,
-): Promise<ParsedFlowResult> {
-  const flow = parsed.value;
-  if (!flow || parsed.coverage.modules === "not_needed") return parsed;
+): Promise<ResolvedFlowResult> {
+  const flow = parsed.value ?? (options.partial ? parsed.candidate : undefined);
+  if (!flow || parsed.coverage.modules === "not_needed")
+    return { ...parsed, moduleFiles: [] };
   const diagnostics = [...parsed.diagnostics];
   const maxDepth = options.maxDepth ?? 32;
   const root = await realpath(path.resolve(options.repoRoot)).catch(() =>
@@ -65,11 +76,13 @@ export async function resolveFlowModules(
   );
   const displayRoot = path.resolve(options.repoRoot);
   const cache = new Map<string, ParsedModuleResult>();
+  const visited = new Set<string>();
   let occurrence = 0;
 
   const load = async (file: string): Promise<ParsedModuleResult> => {
     const cached = cache.get(file);
     if (cached) return cached;
+    visited.add(file);
     let result: ParsedModuleResult;
     try {
       const displayFile = path.join(displayRoot, path.relative(root, file));
@@ -238,9 +251,16 @@ export async function resolveFlowModules(
   const after = await expand(flow.after, flow.file, "after", [], [], 1);
   diagnostics.sort(compareDiagnostics);
   const failed = diagnostics.some((item) => item.severity === "error");
+  const expanded = { ...flow, before, steps, after };
   return {
-    ...(failed ? {} : { value: { ...flow, before, steps, after } }),
+    // A candidate-only input already carries errors, so it never gains a value.
+    ...(failed
+      ? options.partial
+        ? { candidate: expanded }
+        : {}
+      : { value: expanded }),
     diagnostics,
+    moduleFiles: [...visited].sort(),
     coverage: {
       format: failed ? "failed" : parsed.coverage.format,
       steps: "not_checked",

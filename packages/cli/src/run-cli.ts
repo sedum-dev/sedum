@@ -1,18 +1,27 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
 import { renderDiagnostic } from "./diagnostics.js";
-import { runExitCode } from "./exit-policy.js";
+import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
+import { executeListCommand } from "./list-command.js";
 import {
   clearProgress,
   renderProgress,
   renderRunSummary,
   type OutputCapabilities,
 } from "./output.js";
+import type { RunCommandExecution, RunCommandOptions } from "./run-command.js";
 import {
-  executeRunCommand,
-  type RunCommandExecution,
-  type RunCommandOptions,
-} from "./run-command.js";
+  createTypeSafeClassifier,
+  executeValidateCommand,
+  type ClassificationProviderFactory,
+} from "./validate-command.js";
+import {
+  renderListInvalid,
+  renderListJson,
+  renderListTable,
+  renderProblems,
+  renderValidation,
+} from "./validate-output.js";
 
 export interface CliOutput {
   readonly stdout: string;
@@ -32,6 +41,10 @@ export interface CliRuntime {
   readonly installChromium?: (
     withDependencies: boolean,
   ) => BrowserInstallResult;
+  /** Project root for `validate` and `list`; defaults to the process cwd. */
+  readonly cwd?: string;
+  /** Used only by `validate --online`. */
+  readonly createClassificationProvider?: ClassificationProviderFactory;
 }
 
 const plainOutput: OutputCapabilities = {
@@ -76,7 +89,12 @@ export async function runCli(
   const writeOut = runtime.stdout ?? ((value: string) => stdout.push(value));
   const writeErr = runtime.stderr ?? ((value: string) => stderr.push(value));
   const capabilities = runtime.capabilities ?? plainOutput;
-  const executeRun = runtime.executeRun ?? executeRunCommand;
+  // Loaded lazily so `validate` and `list` never load the provider or browser code.
+  const executeRun =
+    runtime.executeRun ??
+    (async (options: RunCommandOptions) =>
+      (await import("./run-command.js")).executeRunCommand(options));
+  const cwd = runtime.cwd ?? process.cwd();
   let exitCode = 3;
 
   const program = new Command()
@@ -96,7 +114,7 @@ export async function runCli(
     })
     .addHelpText(
       "after",
-      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test\n  2 flagged pass with --strict\n  3 command or operational error\n",
+      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
     );
 
   program.action(() => commandHelp(program, writeErr));
@@ -166,6 +184,76 @@ export async function runCli(
         exitCode = runExitCode(execution.result, options.strict);
       },
     );
+
+  program
+    .command("validate")
+    .description(
+      "check tests and modules without a browser or model key (offline by default)",
+    )
+    .argument(
+      "[paths...]",
+      "test files, module files, or directories (default: .)",
+    )
+    .option(
+      "--online",
+      "classify sentences the offline cache cannot, using TYPESAFE_API_KEY, and update .sedum/classifications.json",
+      false,
+    )
+    .addHelpText(
+      "after",
+      "\nOffline validation reads only your files and the committed .sedum/classifications.json.\nA sentence it cannot classify is reported as `not checked offline`, never as valid.\n\nExamples:\n  sedum validate\n  sedum validate tests/login.test.yaml\n  sedum validate --online\n\nExit codes:\n  0 every test and module is valid\n  1 invalid content or sentences not checked offline\n  3 bad paths, no files found, or the check could not run\n",
+    )
+    .action(async (paths: string[], options: { online: boolean }) => {
+      const execution = await executeValidateCommand({
+        paths,
+        online: options.online,
+        cwd,
+        createProvider:
+          runtime.createClassificationProvider ?? createTypeSafeClassifier,
+        ...(runtime.signal ? { signal: runtime.signal } : {}),
+      });
+      if (execution.discovery.problems.length)
+        writeErr(renderProblems(execution.discovery.problems));
+      if (execution.setup) writeErr(renderDiagnostic(execution.setup));
+      if (execution.result)
+        writeOut(
+          renderValidation(
+            execution.result,
+            execution.discovery.root,
+            capabilities,
+          ),
+        );
+      exitCode = validateExitCode(
+        execution.result,
+        execution.discovery.problems.length > 0 || execution.setup !== null,
+      );
+    });
+
+  program
+    .command("list")
+    .description("list discovered tests with their ids, tags, and paths")
+    .argument("[paths...]", "test files or directories (default: .)")
+    .option("--json", "print a versioned JSON listing on stdout", false)
+    .addHelpText(
+      "after",
+      "\nExamples:\n  sedum list\n  sedum list tests --json\n\nExit codes:\n  0 listed (including when no tests are found)\n  1 some files could not be listed; run `sedum validate` for details\n  3 bad paths\n",
+    )
+    .action(async (paths: string[], options: { json: boolean }) => {
+      const execution = await executeListCommand({ paths, cwd });
+      if (execution.discovery.problems.length)
+        writeErr(renderProblems(execution.discovery.problems));
+      if (execution.listing) {
+        if (options.json) writeOut(renderListJson(execution.listing));
+        else {
+          writeOut(renderListTable(execution.listing));
+          writeErr(renderListInvalid(execution.listing));
+        }
+      }
+      exitCode = listExitCode(
+        execution.listing,
+        execution.discovery.problems.length > 0,
+      );
+    });
 
   const browsers = program
     .command("browsers")

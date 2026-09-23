@@ -21,5 +21,8 @@ export * from "./flow-modules.js";
 export * from "./classification.js";
 export * from "./classification-cache.js";
 export * from "./flow-classification.js";
+export * from "./project-discovery.js";
+export * from "./project-validation.js";
+export * from "./project-listing.js";
 export * from "./flow-runner.js";
 export * from "./assertion-engine.js";
