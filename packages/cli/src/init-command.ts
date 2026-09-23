@@ -54,7 +54,7 @@ function initBanner(columns?: number): string {
     return `${brightGreen}✿${reset} \u001b[1msedum${reset}\n\n`;
 
   const labels = ["", `\u001b[1msedum${reset}`, "project setup"];
-  return `${PLANT.map((line, index) => `${index < 3 ? brightGreen : green}${line}${reset}${labels[index] ? `  ${labels[index]}` : ""}`).join("\n")}\n\n`;
+  return `${PLANT.map((line, index) => `${index < 3 ? brightGreen : green}${line.padEnd(15)}${reset}${labels[index] ? `  ${labels[index]}` : ""}`).join("\n")}\n\n`;
 }
 
 export interface InitOptions {
