@@ -4,6 +4,16 @@ import path from "node:path";
 import type { ResultFrame, RunResult } from "@sedum-dev/core";
 import { validateRunResult } from "@sedum-dev/core";
 
+export class ProgressWriterError extends Error {
+  constructor(
+    readonly path: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`Could not write run output at ${path}.`, options);
+    this.name = "ProgressWriterError";
+  }
+}
+
 /** Owns only a newly created run directory, never an existing output tree. */
 export class ProgressWriter {
   private revision = 0;
@@ -68,12 +78,30 @@ export class ProgressWriter {
     this.pending = this.pending.then(() =>
       this.atomicWrite("progress.json", snapshot),
     );
-    return this.pending;
+    return this.pending.catch((cause: unknown) => {
+      throw cause instanceof ProgressWriterError
+        ? cause
+        : new ProgressWriterError(this.progressPath, { cause });
+    });
   }
 
   async finish(result: RunResult): Promise<void> {
-    await this.write(result);
-    await this.atomicWrite("result.json", validateRunResult(result));
+    try {
+      await this.write(result);
+      await this.atomicWrite("result.json", validateRunResult(result));
+    } catch (cause) {
+      throw cause instanceof ProgressWriterError
+        ? cause
+        : new ProgressWriterError(this.resultPath, { cause });
+    }
+  }
+
+  /** Remove only this writer's non-authoritative result files after sink failure. */
+  async invalidate(): Promise<void> {
+    await Promise.all([
+      unlink(this.progressPath).catch(() => undefined),
+      unlink(this.resultPath).catch(() => undefined),
+    ]);
   }
 
   async saveFrame(stepId: string, bytes: Uint8Array): Promise<ResultFrame> {
