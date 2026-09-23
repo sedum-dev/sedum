@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 import { RunRecorder, type ResultStep, type RunResult } from "@sedum-dev/core";
 import { ReporterLifecycle } from "./lifecycle.js";
 import { createTerminalReporter, type ReporterContext } from "./terminal.js";
@@ -133,7 +134,9 @@ describe("terminal reporters", () => {
       "holds 0.64, contradicted 0.51, threshold 0.75, band 0.15, contradiction cutoff 0.5",
     );
     expect(end).toContain('https://shop.test/checkout "Checkout"');
-    expect(end).toContain("/tmp/run/evidence/checkout.jpg");
+    expect(end).toContain(
+      path.join(path.dirname(context.resultPath), "evidence/checkout.jpg"),
+    );
     expect(end).toContain("missing_binding: Expected a subtotal binding.");
     expect(end).toContain("read /tmp/run/result.json");
     expect(end).toContain("rerun sedum run 'tests/checkout.test.yaml'");
