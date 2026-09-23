@@ -36,10 +36,32 @@ SAUCE_PASSWORD=secret_sauce
 
 const IGNORE = [".env", ".sedum/runs/", ".sedum/reports/"] as const;
 
+const PLANT = [
+  "      ▄   ▄",
+  "   ▄  █▄ ▄█  ▄",
+  "    █▄█████▄█",
+  "     ▀█████▀",
+  "   ▄▄███████▄▄",
+  "    ▀▀▐███▌▀▀",
+  "       ▀█▀",
+] as const;
+
+function initBanner(columns?: number): string {
+  const green = "\u001b[32m";
+  const brightGreen = "\u001b[92m";
+  const reset = "\u001b[0m";
+  if (columns !== undefined && columns < 36)
+    return `${brightGreen}✿${reset} \u001b[1msedum${reset}\n\n`;
+
+  const labels = ["", `\u001b[1msedum${reset}`, "project setup"];
+  return `${PLANT.map((line, index) => `${index < 3 ? brightGreen : green}${line}${reset}${labels[index] ? `  ${labels[index]}` : ""}`).join("\n")}\n\n`;
+}
+
 export interface InitOptions {
   readonly cwd: string;
   readonly interactive: boolean;
   readonly color: boolean;
+  readonly columns?: number;
   readonly confirm?: (question: string) => Promise<boolean>;
   readonly nodeVersion?: string;
   readonly browser?: (kind: "chrome" | "chromium") => boolean;
@@ -155,10 +177,7 @@ export async function executeInitCommand(
   };
   try {
     let keptEnvExample = false;
-    if (options.interactive && options.color) {
-      const plant = "  \\|/\n   |   sedum\n  / \\\n";
-      say(`\u001b[32m${plant}\u001b[0m`);
-    }
+    if (options.interactive && options.color) say(initBanner(options.columns));
     await regularDirectory(path.join(root, "tests"));
     for (const [name, contents] of [
       ["sedum.config.yaml", CONFIG],

@@ -222,6 +222,7 @@ export async function runCli(
         cwd,
         interactive,
         color: capabilities.color,
+        ...(capabilities.columns ? { columns: capabilities.columns } : {}),
         ...(confirm ? { confirm } : {}),
         onOutput: writeOut,
       });
