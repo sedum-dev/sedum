@@ -92,9 +92,8 @@ describe("sedum init", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(confirm).toHaveBeenCalledOnce();
-    expect(result.stdout).toContain("\u001b[92m");
-    expect(result.stdout).toContain("▄███████▄");
-    expect(result.stdout).toContain("project setup");
+    expect(result.stdout).toContain("\u001b[32m████ █████ ████");
+    expect(result.stdout).toContain("\u001b[90m░");
     expect(await readFile(path.join(cwd, ".gitignore"), "utf8")).toBe(
       "node_modules/\n.env\n.sedum/runs/\n.sedum/reports/\n",
     );
@@ -116,8 +115,8 @@ describe("sedum init", () => {
       color: true,
       columns: 30,
     });
-    expect(result.stdout).toContain("✿\u001b[0m \u001b[1msedum");
-    expect(result.stdout).not.toContain("▄███████▄");
+    expect(result.stdout).toContain("\u001b[32m\u001b[1msedum");
+    expect(result.stdout).not.toContain("████ █████ ████");
   });
 
   it("rejects a symlinked tests directory without following it", async () => {
