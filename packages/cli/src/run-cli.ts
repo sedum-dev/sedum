@@ -55,6 +55,7 @@ export interface CliRuntime {
   /** Used only by `validate --online`. */
   readonly createClassificationProvider?: ClassificationProviderFactory;
   readonly doctorProbes?: DoctorProbes;
+  readonly confirmInit?: (question: string) => Promise<boolean>;
 }
 
 const plainOutput: OutputCapabilities = {
@@ -182,10 +183,51 @@ export async function runCli(
     })
     .addHelpText(
       "after",
-      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum doctor --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
+      "\nExamples:\n  sedum init\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum doctor --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
     );
 
   program.action(() => commandHelp(program, writeErr));
+
+  program
+    .command("init")
+    .description("scaffold a runnable Sedum project in the current directory")
+    .addHelpText(
+      "after",
+      "\nCreates a config, a SauceDemo example, .env.example, and ignore rules.\nExisting files are never replaced.\n",
+    )
+    .action(async () => {
+      const { executeInitCommand } = await import("./init-command.js");
+      const interactive =
+        capabilities.stdoutIsTTY &&
+        (process.stdin.isTTY === true || runtime.confirmInit !== undefined);
+      const confirm =
+        runtime.confirmInit ??
+        (interactive
+          ? async (question: string) => {
+              const { createInterface } =
+                await import("node:readline/promises");
+              const prompt = createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+              try {
+                const answer = await prompt.question(`${question} [y/N] `);
+                return /^(?:y|yes)$/iu.test(answer.trim());
+              } finally {
+                prompt.close();
+              }
+            }
+          : undefined);
+      const result = await executeInitCommand({
+        cwd,
+        interactive,
+        color: capabilities.color,
+        ...(confirm ? { confirm } : {}),
+        onOutput: writeOut,
+      });
+      writeErr(result.stderr);
+      exitCode = result.exitCode;
+    });
 
   program
     .command("run")

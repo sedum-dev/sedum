@@ -54,7 +54,7 @@ const fail = (
   fix,
 });
 
-function supportedNode(version: string): boolean {
+export function supportedNode(version: string): boolean {
   const parts = version.split(".").map(Number);
   return (
     parts.length >= 3 &&
@@ -63,6 +63,14 @@ function supportedNode(version: string): boolean {
       (parts[0] === 20 &&
         (parts[1]! > 19 || (parts[1] === 19 && parts[2]! >= 0))))
   );
+}
+
+export function browserAvailable(kind: BrowserKind): boolean {
+  return findBrowserExecutable(kind) !== null;
+}
+
+export function keyPresent(config: ResolvedProjectConfig): boolean {
+  return Boolean(config.apiKey?.trim());
 }
 
 async function networkReachable(): Promise<boolean> {
@@ -149,9 +157,7 @@ export async function executeDoctorCommand(
 
   if (config) {
     try {
-      const available = (
-        probes.browser ?? ((kind) => findBrowserExecutable(kind) !== null)
-      )(config.browser);
+      const available = (probes.browser ?? browserAvailable)(config.browser);
       checks.push(
         available
           ? pass("browser", `${config.browser} is available.`)
@@ -196,7 +202,7 @@ export async function executeDoctorCommand(
         ),
   );
 
-  const key = config?.apiKey?.trim();
+  const key = config && keyPresent(config) ? config.apiKey?.trim() : undefined;
   checks.push(
     !config
       ? fail(

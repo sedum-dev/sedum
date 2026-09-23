@@ -46,26 +46,40 @@ corepack pnpm build
 alias sedum="node $PWD/packages/cli/dist/cli.js"
 ```
 
-### 2. Install a browser
+### 2. Scaffold a project
 
-Sedum uses your installed Google Chrome when it can find it. Otherwise, install
-the Chromium build it expects:
+In another directory, run `sedum init` to create a runnable SauceDemo example:
+
+```sh
+mkdir my-sedum-tests && cd my-sedum-tests
+sedum init
+```
+
+The command keeps existing files and prints the next steps. In an interactive
+terminal, it shows a small plant mark; redirected output stays plain.
+
+### 3. Install a browser
+
+The generated project selects Chromium. Install the matching browser if `init`
+says it is missing:
 
 ```sh
 sedum browsers install chromium
 sedum browsers install chromium --with-deps   # Linux: also installs system dependencies
 ```
 
-### 3. Add your model key
+### 4. Add your model key
 
 Sedum uses [TypeSafe](https://typesafe.ai) to find elements and judge claims.
-Put your key in the environment, or in a `.env` file at your project root:
+Copy `.env.example` to `.env` if `.env` does not already exist, then put your
+key there or in the environment. The example file also contains the public
+SauceDemo password `secret_sauce`:
 
 ```sh
 TYPESAFE_API_KEY=...
 ```
 
-### 4. Check your setup
+### 5. Check your setup
 
 ```sh
 sedum doctor
@@ -74,14 +88,13 @@ sedum doctor
 `doctor` checks Node, your config, the browser, network access, the API key,
 and the output directory. Every failed check says how to fix it.
 
-### 5. Write and run a test
+### 6. Run the generated test
 
-Save the example above as `tests/login.test.yaml`, set `SAUCE_PASSWORD` to
-`secret_sauce`, then run:
+After setting `TYPESAFE_API_KEY`, run:
 
 ```sh
 sedum validate   # check the test offline: no browser, no key, no cost
-sedum run        # run every test under tests/
+sedum run tests/example.test.yaml
 ```
 
 Try changing the last step to a false claim, such as `verify the cart is
