@@ -37,20 +37,20 @@ SAUCE_PASSWORD=secret_sauce
 const IGNORE = [".env", ".sedum/runs/", ".sedum/reports/"] as const;
 
 const WORDMARK = [
-  "████ █████ ████  █   █ █   █",
-  "█ ░░░░█░░░░░█░░░█ █░  █░██ ██░",
-  " ███░░████░░█░░░█░█░░ █░█░█ █░░",
-  "  ░░█ █░░░░ █░░ █░█░░ █░█░░░█░░",
-  "████░░█████░████ ░░███ ░█░░ █░░",
-  " ░░░░ ░░░░░░ ░░░░ ░ ░░░ ░░░  ░░",
-  "  ░░░░  ░░░░░ ░░░░   ░░░  ░   ░",
+  " ████ █████ ████  █   █ █   █     ████  █████ █   █",
+  "█ ░░░░█░░░░░█░░░█ █░  █░██ ██░    █░░░█ █░░░░░█░  █░",
+  " ███░░████░░█░░░█░█░░ █░█░█ █░░   █░░░█░████░░█░░ █░░",
+  "  ░░█ █░░░░ █░░ █░█░░ █░█░░░█░░█  █░░ █░█░░░░  █░█ ░░",
+  "████░░█████░████ ░░███ ░█░░ █░░█░ ████ ░█████░  █ ░ ░",
+  " ░░░░ ░░░░░░ ░░░░ ░ ░░░ ░░░  ░░ ░░ ░░░░ ░░░░░░   ░ ░",
+  "  ░░░░  ░░░░░ ░░░░   ░░░  ░   ░  ░  ░░░░  ░░░░░   ░",
 ] as const;
 
 function initBanner(columns?: number): string {
   const green = "\u001b[32m";
   const shadow = "\u001b[90m";
   const reset = "\u001b[0m";
-  if (columns !== undefined && columns < 36)
+  if (columns !== undefined && columns < 54)
     return `${green}\u001b[1msedum${reset}\n\n`;
 
   return `${WORDMARK.map((line) => `${green}${line.replaceAll("░", `${shadow}░${green}`)}${reset}`).join("\n")}\n\n`;

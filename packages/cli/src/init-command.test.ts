@@ -92,8 +92,17 @@ describe("sedum init", () => {
     });
     expect(result.exitCode).toBe(0);
     expect(confirm).toHaveBeenCalledOnce();
-    expect(result.stdout).toContain("\u001b[32m████ █████ ████");
+    expect(result.stdout).toContain("\u001b[32m ████ █████ ████");
     expect(result.stdout).toContain("\u001b[90m░");
+    const ansiColor = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "gu");
+    const artwork = result.stdout
+      .replace(ansiColor, "")
+      .split("\n")
+      .slice(0, 7);
+    expect(artwork.map((line) => line.length)).toEqual([
+      51, 52, 53, 53, 53, 52, 51,
+    ]);
+    expect(artwork[0]?.endsWith("████  █████ █   █")).toBe(true);
     expect(await readFile(path.join(cwd, ".gitignore"), "utf8")).toBe(
       "node_modules/\n.env\n.sedum/runs/\n.sedum/reports/\n",
     );
@@ -113,7 +122,7 @@ describe("sedum init", () => {
       cwd: await project(),
       interactive: true,
       color: true,
-      columns: 30,
+      columns: 53,
     });
     expect(result.stdout).toContain("\u001b[32m\u001b[1msedum");
     expect(result.stdout).not.toContain("████ █████ ████");
