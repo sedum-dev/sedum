@@ -714,7 +714,9 @@ export function parseFlow(
     ...(input.description === undefined
       ? {}
       : { description: input.description }),
-    ...(input.url === undefined ? {} : { url: input.url }),
+    ...(input.url === undefined
+      ? {}
+      : { url: input.url, urlSource: at(file, counter, nodes, ["url"]) }),
     tags: input.tags ?? [],
     meta: input.meta ?? {},
     data,

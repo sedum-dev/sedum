@@ -408,6 +408,36 @@ describe("project validation", () => {
     expect(result.fullyValidated).toBe(true);
   });
 
+  it("checks entry URLs exactly as run does when a baseUrl setting is given", async () => {
+    const root = await project({
+      "absolute.test.yaml": "url: https://example.test\nsteps: [click x]\n",
+      "none.test.yaml": "steps: [click x]\n",
+      "relative.test.yaml": "url: /cart\nsteps: [click x]\n",
+    });
+    const discovery = await discoverProjectFiles([], { repoRoot: root });
+    const check = (baseUrl?: string | null) =>
+      validateProject(discovery, {
+        repoRoot: discovery.root,
+        mode: "offline",
+        cache: readOnlyCache,
+        ...(baseUrl === undefined ? {} : { baseUrl }),
+      });
+    const withoutBase = await check(null);
+    expect(located(withoutBase, discovery.root)).toEqual([
+      "none.test.yaml:1:1 invalid_entry_url",
+      "relative.test.yaml:1:6 invalid_entry_url",
+    ]);
+    expect(withoutBase.fullyValidated).toBe(false);
+    const withBase = await check("https://example.test/app/");
+    expect(withBase.fullyValidated).toBe(true);
+    // A leading-slash URL drops the base path: SED-27's warning, not an error.
+    expect(
+      withBase.diagnostics.map((item) => [item.severity, item.source.line]),
+    ).toEqual([["warning", 1]]);
+    // Library callers that pass no baseUrl setting opt out of the check.
+    expect((await check()).fullyValidated).toBe(true);
+  });
+
   it("reports cross-file identity collisions", async () => {
     const root = await project({
       "a.test.yaml": "id: same\nsteps: [click x]\n",

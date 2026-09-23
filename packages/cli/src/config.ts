@@ -429,10 +429,19 @@ function freeze(config: ResolvedProjectConfig): ResolvedProjectConfig {
   return Object.freeze(config);
 }
 
+export interface ProjectConfigLoadOptions {
+  /**
+   * False for commands that must not touch secrets (`validate`, `list`): the
+   * project `.env` is not read, so `apiKey` comes only from `hostEnvironment`.
+   */
+  readonly readEnvironmentFile?: boolean;
+}
+
 export async function loadProjectConfig(
   start = process.cwd(),
   hostEnvironment: Readonly<Record<string, string | undefined>> = process.env,
   overrides: ProjectConfigOverrides = {},
+  loadOptions: ProjectConfigLoadOptions = {},
 ): Promise<ResolvedProjectConfig> {
   const found = await findConfig(start);
   const file = found.file ?? path.join(found.root, CONFIG_FILE);
@@ -728,7 +737,8 @@ export async function loadProjectConfig(
   let fileEnvironment: Record<string, string | undefined> = {};
   const environmentFile = path.join(found.root, ".env");
   try {
-    fileEnvironment = parseEnv(await readFile(environmentFile, "utf8"));
+    if (loadOptions.readEnvironmentFile !== false)
+      fileEnvironment = parseEnv(await readFile(environmentFile, "utf8"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT")
       diagnostic(

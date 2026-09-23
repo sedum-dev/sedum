@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { MODEL_CHOICES, ProviderError } from "@sedum-dev/core";
@@ -11,10 +11,14 @@ afterEach(async () => {
     await rm(root, { recursive: true, force: true });
 });
 
+/** A project whose config discovers tests anywhere under its root. */
 async function project(files: Record<string, string>): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "sedum-cli-project-"));
   roots.push(root);
-  for (const [name, body] of Object.entries(files)) {
+  for (const [name, body] of Object.entries({
+    "sedum.config.yaml": "tests:\n  directory: .\n",
+    ...files,
+  })) {
     await mkdir(path.dirname(path.join(root, name)), { recursive: true });
     await writeFile(path.join(root, name), body);
   }
@@ -41,6 +45,30 @@ const BROKEN = {
 };
 
 const plain = { stdoutIsTTY: false, stderrIsTTY: false, color: false };
+const probabilities = Object.fromEntries(
+  MODEL_CHOICES.map((choice) => [choice, choice === "click" ? 0.95 : 0.005]),
+) as Record<(typeof MODEL_CHOICES)[number], number>;
+const clickReply = {
+  answers: [
+    {
+      op: "click" as const,
+      probabilities,
+      model: "jev-fixture",
+      requestedModel: "jev-latest",
+    },
+  ],
+  calls: [
+    {
+      requestedModel: "jev-latest",
+      model: "jev-fixture",
+      attempts: 1,
+      usage: { inputTokens: 100, outputTokens: 5 },
+      rate: null,
+      successfulResponseCostUsd: null,
+      totalCostUsd: null,
+    },
+  ],
+};
 const noProvider = () => {
   throw new Error("offline commands must not create a provider");
 };
@@ -170,7 +198,7 @@ describe("sedum validate", () => {
     expect(output.exitCode).toBe(3);
     expect(output.stdout).toBe("");
     expect(output.stderr).toBe(
-      "`sedum validate --online` needs a configured TypeSafe provider.\nFix: Set TYPESAFE_API_KEY and rerun, or omit --online to validate offline.\n",
+      "`sedum validate --online` needs a configured TypeSafe provider.\nFix: Set TYPESAFE_API_KEY in the environment or the project-root .env and rerun, or omit --online to validate offline.\n",
     );
     const broken = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
@@ -239,33 +267,7 @@ describe("sedum validate", () => {
       createClassificationProvider: noProvider,
     });
     expect(offline.exitCode).toBe(1);
-    const probabilities = Object.fromEntries(
-      MODEL_CHOICES.map((choice) => [
-        choice,
-        choice === "click" ? 0.95 : 0.005,
-      ]),
-    ) as Record<(typeof MODEL_CHOICES)[number], number>;
-    const classifyBatch = vi.fn(async () => ({
-      answers: [
-        {
-          op: "click" as const,
-          probabilities,
-          model: "jev-fixture",
-          requestedModel: "jev-latest",
-        },
-      ],
-      calls: [
-        {
-          requestedModel: "jev-latest",
-          model: "jev-fixture",
-          attempts: 1,
-          usage: { inputTokens: 100, outputTokens: 5 },
-          rate: null,
-          successfulResponseCostUsd: null,
-          totalCostUsd: null,
-        },
-      ],
-    }));
+    const classifyBatch = vi.fn(async () => clickReply);
     const online = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
       capabilities: plain,
@@ -279,6 +281,190 @@ describe("sedum validate", () => {
       createClassificationProvider: noProvider,
     });
     expect(again.exitCode).toBe(0);
+  });
+});
+
+describe("project configuration", () => {
+  it("discovers tests from tests.directory and its globs, with run's ids from any subdirectory", async () => {
+    const cwd = await project({
+      "sedum.config.yaml":
+        "tests:\n  directory: suite\n  exclude: ['drafts/**']\n",
+      "suite/login.test.yaml":
+        "url: https://example.test\nsteps:\n  - click the login button\n",
+      "suite/drafts/wip.test.yaml": "steps: [\n",
+      "suite/shared/tidy.module.yaml":
+        "parameters: []\nsteps:\n  - click the tidy button\n",
+      "elsewhere/ignored.test.yaml": "steps: [\n",
+    });
+    const fromRoot = await runCli(["list", "--json"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+    });
+    const fromSubdirectory = await runCli(["list", "--json"], "0.0.0", {
+      cwd: path.join(cwd, "suite", "shared"),
+      capabilities: plain,
+    });
+    expect(fromRoot.exitCode).toBe(0);
+    expect(fromSubdirectory.stdout).toBe(fromRoot.stdout);
+    expect(JSON.parse(fromRoot.stdout).tests).toEqual([
+      {
+        id: "suite/login.test.yaml",
+        idSource: "path",
+        file: "suite/login.test.yaml",
+        description: null,
+        tags: [],
+      },
+    ]);
+    const validate = await runCli(["validate"], "0.0.0", {
+      cwd: path.join(cwd, "suite"),
+      capabilities: plain,
+      createClassificationProvider: noProvider,
+    });
+    expect(validate.stdout).toBe(
+      "Checked 1 test and 1 module: all valid.\n1 module not used by any test was checked for format and its own sentences only; module calls are checked through tests.\n",
+    );
+    expect(validate.exitCode).toBe(0);
+    const explicit = await runCli(
+      ["validate", "suite/login.test.yaml"],
+      "0.0.0",
+      {
+        cwd: path.join(cwd, "suite", "shared"),
+        capabilities: plain,
+        createClassificationProvider: noProvider,
+      },
+    );
+    expect(explicit.exitCode).toBe(0);
+  });
+
+  it("uses tests/ by default and exits 3 when it has no files", async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), "sedum-cli-default-"));
+    roots.push(cwd);
+    await writeFile(path.join(cwd, "loose.test.yaml"), "steps: [click x]\n");
+    const validate = await runCli(["validate"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+      createClassificationProvider: noProvider,
+    });
+    expect(validate.exitCode).toBe(3);
+    expect(validate.stderr).toContain(
+      "No *.test.yaml or *.module.yaml files were found under tests.",
+    );
+    expect(
+      await runCli(["list"], "0.0.0", { cwd, capabilities: plain }),
+    ).toEqual({ stdout: "No tests found.\n", stderr: "", exitCode: 0 });
+  });
+
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "exits 3 when the configured test directory cannot be read",
+    async () => {
+      const cwd = await project({
+        "sedum.config.yaml": "tests:\n  directory: suite\n",
+        "suite/a.test.yaml": "url: https://example.test\nsteps: [click x]\n",
+      });
+      await chmod(path.join(cwd, "suite"), 0o000);
+      try {
+        for (const command of [["validate"], ["list"]]) {
+          const output = await runCli(command, "0.0.0", {
+            cwd,
+            capabilities: plain,
+            createClassificationProvider: noProvider,
+          });
+          expect(output.exitCode).toBe(3);
+          expect(output.stderr).toContain(
+            "Could not read the configured test directory suite.",
+          );
+        }
+      } finally {
+        await chmod(path.join(cwd, "suite"), 0o755);
+      }
+    },
+  );
+
+  it("exits 3 with a positioned error for an invalid config", async () => {
+    const cwd = await project({
+      "sedum.config.yaml": "tests:\n  directory: .\nbrowzer: chrome\n",
+      ...VALID,
+    });
+    for (const command of [["validate"], ["list"]]) {
+      const output = await runCli(command, "0.0.0", {
+        cwd,
+        capabilities: plain,
+        createClassificationProvider: noProvider,
+      });
+      expect(output.exitCode).toBe(3);
+      expect(output.stdout).toBe("");
+      expect(output.stderr).toMatch(/^sedum\.config\.yaml:3:1: error /);
+      expect(output.stderr).toContain("Fix: ");
+    }
+  });
+
+  it("reports the entry URL run would reject, and accepts a configured baseUrl", async () => {
+    const files = {
+      "t.test.yaml": "steps:\n  - click the cart link\n",
+      "relative.test.yaml": "url: /cart\nsteps:\n  - click the cart link\n",
+    };
+    const without = await project(files);
+    const output = await runCli(["validate"], "0.0.0", {
+      cwd: without,
+      capabilities: plain,
+      createClassificationProvider: noProvider,
+    });
+    expect(output.exitCode).toBe(1);
+    expect(output.stdout).toContain(
+      "relative.test.yaml:1:6: error invalid_entry_url: The test URL is relative but no baseUrl is configured.",
+    );
+    expect(output.stdout).toContain(
+      "t.test.yaml:1:1: error invalid_entry_url: The test has no URL and no baseUrl is configured.\n  Fix: Give the test an absolute `url`, or set `baseUrl` in sedum.config.yaml.",
+    );
+    const configured = await project({
+      ...files,
+      "sedum.config.yaml":
+        "tests:\n  directory: .\nbaseUrl: https://example.test\n",
+    });
+    expect(
+      (
+        await runCli(["validate"], "0.0.0", {
+          cwd: configured,
+          capabilities: plain,
+          createClassificationProvider: noProvider,
+        })
+      ).exitCode,
+    ).toBe(0);
+  });
+
+  it("never reads the project .env offline, but --online takes its key from it", async () => {
+    const unreadable = await project({ ...VALID });
+    await mkdir(path.join(unreadable, ".env"));
+    const offline = await runCli(["validate"], "0.0.0", {
+      cwd: unreadable,
+      capabilities: plain,
+      createClassificationProvider: noProvider,
+    });
+    expect(offline.exitCode).toBe(0);
+    const list = await runCli(["list"], "0.0.0", {
+      cwd: unreadable,
+      capabilities: plain,
+    });
+    expect(list.exitCode).toBe(0);
+
+    const keyed = await project({
+      "t.test.yaml":
+        "url: https://example.test\nsteps:\n  - tidy up the shopping list\n",
+      ".env": "TYPESAFE_API_KEY=from-dotenv\n",
+    });
+    vi.stubEnv("TYPESAFE_API_KEY", "");
+    try {
+      const factory = vi.fn(() => ({ classifyBatch: async () => clickReply }));
+      const online = await runCli(["validate", "--online"], "0.0.0", {
+        cwd: keyed,
+        capabilities: plain,
+        createClassificationProvider: factory,
+      });
+      expect(online.exitCode).toBe(0);
+      expect(factory).toHaveBeenCalledWith({ apiKey: "from-dotenv" });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

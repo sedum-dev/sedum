@@ -3,6 +3,7 @@ import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
 import { renderDiagnostic } from "./diagnostics.js";
 import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
 import { executeListCommand } from "./list-command.js";
+import { renderConfigErrors } from "./project-context.js";
 import {
   clearProgress,
   renderProgress,
@@ -192,7 +193,7 @@ export async function runCli(
     )
     .argument(
       "[paths...]",
-      "test files, module files, or directories (default: .)",
+      "test files, module files, or directories relative to the project root (default: configured tests)",
     )
     .option(
       "--online",
@@ -201,7 +202,7 @@ export async function runCli(
     )
     .addHelpText(
       "after",
-      "\nOffline validation reads only your files and the committed .sedum/classifications.json.\nA sentence it cannot classify is reported as `not checked offline`, never as valid.\n\nExamples:\n  sedum validate\n  sedum validate tests/login.test.yaml\n  sedum validate --online\n\nExit codes:\n  0 every test and module is valid\n  1 invalid content or sentences not checked offline\n  3 bad paths, no files found, or the check could not run\n",
+      "\nOffline validation reads only your files and the committed .sedum/classifications.json.\nA sentence it cannot classify is reported as `not checked offline`, never as valid.\n\nExamples:\n  sedum validate\n  sedum validate tests/login.test.yaml\n  sedum validate --online\n\nExit codes:\n  0 every test and module is valid\n  1 invalid content or sentences not checked offline\n  3 invalid config, bad paths, no files found, or the check could not run\n",
     )
     .action(async (paths: string[], options: { online: boolean }) => {
       const execution = await executeValidateCommand({
@@ -212,10 +213,11 @@ export async function runCli(
           runtime.createClassificationProvider ?? createTypeSafeClassifier,
         ...(runtime.signal ? { signal: runtime.signal } : {}),
       });
-      if (execution.discovery.problems.length)
-        writeErr(renderProblems(execution.discovery.problems));
+      const problems = execution.discovery?.problems ?? [];
+      writeErr(renderConfigErrors(execution.configErrors, cwd));
+      writeErr(renderProblems(problems));
       if (execution.setup) writeErr(renderDiagnostic(execution.setup));
-      if (execution.result)
+      if (execution.result && execution.discovery)
         writeOut(
           renderValidation(
             execution.result,
@@ -225,23 +227,29 @@ export async function runCli(
         );
       exitCode = validateExitCode(
         execution.result,
-        execution.discovery.problems.length > 0 || execution.setup !== null,
+        execution.configErrors.length > 0 ||
+          problems.length > 0 ||
+          execution.setup !== null,
       );
     });
 
   program
     .command("list")
     .description("list discovered tests with their ids, tags, and paths")
-    .argument("[paths...]", "test files or directories (default: .)")
+    .argument(
+      "[paths...]",
+      "test files or directories relative to the project root (default: configured tests)",
+    )
     .option("--json", "print a versioned JSON listing on stdout", false)
     .addHelpText(
       "after",
-      "\nExamples:\n  sedum list\n  sedum list tests --json\n\nExit codes:\n  0 listed (including when no tests are found)\n  1 some files could not be listed; run `sedum validate` for details\n  3 bad paths\n",
+      "\nExamples:\n  sedum list\n  sedum list tests --json\n\nExit codes:\n  0 listed (including when no tests are found)\n  1 some files could not be listed; run `sedum validate` for details\n  3 invalid config or bad paths\n",
     )
     .action(async (paths: string[], options: { json: boolean }) => {
       const execution = await executeListCommand({ paths, cwd });
-      if (execution.discovery.problems.length)
-        writeErr(renderProblems(execution.discovery.problems));
+      const problems = execution.discovery?.problems ?? [];
+      writeErr(renderConfigErrors(execution.configErrors, cwd));
+      writeErr(renderProblems(problems));
       if (execution.listing) {
         if (options.json) writeOut(renderListJson(execution.listing));
         else {
@@ -251,7 +259,7 @@ export async function runCli(
       }
       exitCode = listExitCode(
         execution.listing,
-        execution.discovery.problems.length > 0,
+        execution.configErrors.length > 0 || problems.length > 0,
       );
     });
 

@@ -39,7 +39,7 @@ Check tests without a browser or key, and list what a suite contains (see
 [CLI commands](docs/cli.md)):
 
 ```sh
-node packages/cli/dist/cli.js validate fixtures
+node packages/cli/dist/cli.js validate fixtures/saucedemo-login.test.yaml
 node packages/cli/dist/cli.js list fixtures --json
 ```
 

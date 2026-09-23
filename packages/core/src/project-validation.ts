@@ -10,6 +10,7 @@ import {
   parseModule,
 } from "./flow-loader.js";
 import { resolveFlowModules } from "./flow-modules.js";
+import { resolveEntryUrl } from "./flow-runner.js";
 import {
   isFullyValidated,
   type FlowDefinition,
@@ -23,6 +24,11 @@ import type { ProviderCall } from "./provider.js";
 export interface ProjectValidationOptions extends ClassifyFlowOptions {
   /** The real project root returned by `discoverProjectFiles`. */
   readonly repoRoot: string;
+  /**
+   * The configured base URL. When present (including `null` for "none"),
+   * each test's entry URL is resolved exactly as `sedum run` resolves it.
+   */
+  readonly baseUrl?: string | null;
 }
 
 export interface ProjectFileValidation {
@@ -108,6 +114,26 @@ function directSentences(steps: readonly FlowStep[]): SentenceStep[] {
   return steps.filter((step): step is SentenceStep => step.kind === "sentence");
 }
 
+/** The pre-launch entry-URL failure `sedum run` would report, if any. */
+function entryUrlDiagnostic(
+  flow: FlowDefinition,
+  baseUrl: string | null,
+): FlowDiagnostic | null {
+  try {
+    resolveEntryUrl(flow.url, baseUrl ?? undefined);
+    return null;
+  } catch (error) {
+    return {
+      severity: "error",
+      code: "invalid_entry_url",
+      source: flow.urlSource ?? { file: flow.file, line: 1, col: 1 },
+      message:
+        error instanceof Error ? error.message : "The test URL is invalid.",
+      fix: "Give the test an absolute `url`, or set `baseUrl` in sedum.config.yaml.",
+    };
+  }
+}
+
 async function checkUnreferencedModule(
   file: string,
   options: ClassifyFlowOptions,
@@ -171,9 +197,20 @@ export async function validateProject(
   let allTestsValidated = true;
 
   for (const file of input.tests) {
-    const loaded = await loadFlowFile(file, { repoRoot: options.repoRoot });
+    const loaded = await loadFlowFile(file, {
+      repoRoot: options.repoRoot,
+      ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),
+    });
     const flow = loaded.value ?? loaded.candidate;
     if (flow) flows.push(flow);
+    const entry =
+      flow && options.baseUrl !== undefined
+        ? entryUrlDiagnostic(flow, options.baseUrl)
+        : null;
+    if (entry) {
+      diagnostics.push(entry);
+      allTestsValidated = false;
+    }
     const resolved = await resolveFlowModules(loaded, {
       repoRoot: options.repoRoot,
       partial: true,
