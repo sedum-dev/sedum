@@ -1,17 +1,23 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
+import {
+  createTerminalReporter,
+  ReporterLifecycle,
+  type ReporterContext,
+  type TerminalReporterName,
+} from "@sedum-dev/reporters";
 import { renderDiagnostic } from "./diagnostics.js";
 import { clearLocatorCache } from "./locator-cache-store.js";
 import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
 import { executeListCommand } from "./list-command.js";
 import { renderConfigErrors } from "./project-context.js";
 import {
-  clearProgress,
-  renderProgress,
   renderRunSummary,
+  type RunArtifactPaths,
   type OutputCapabilities,
 } from "./output.js";
 import type { RunCommandExecution, RunCommandOptions } from "./run-command.js";
+import type { DoctorProbes } from "./doctor-command.js";
 import {
   createTypeSafeClassifier,
   executeValidateCommand,
@@ -48,6 +54,7 @@ export interface CliRuntime {
   readonly cwd?: string;
   /** Used only by `validate --online`. */
   readonly createClassificationProvider?: ClassificationProviderFactory;
+  readonly doctorProbes?: DoctorProbes;
 }
 
 const plainOutput: OutputCapabilities = {
@@ -167,7 +174,7 @@ export async function runCli(
     })
     .addHelpText(
       "after",
-      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
+      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum doctor --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
     );
 
   program.action(() => commandHelp(program, writeErr));
@@ -246,6 +253,12 @@ export async function runCli(
     )
     .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
     .option(
+      "--reporter <name>",
+      "terminal reporter: list or steps (repeatable; default list)",
+      collectReporter,
+      [],
+    )
+    .option(
       "--costs",
       "show model tokens and cost even when stdout is redirected",
       false,
@@ -279,9 +292,30 @@ export async function runCli(
           costs: boolean;
           locatorCache: boolean;
           locatorCacheCi: boolean;
+          reporter: TerminalReporterName[];
         },
       ) => {
-        let transient = false;
+        const lifecycle = new ReporterLifecycle();
+        const reporters = (
+          options.reporter.length ? options.reporter : ["list" as const]
+        ).map(createTerminalReporter);
+        const context = (artifacts: RunArtifactPaths): ReporterContext => ({
+          stdoutIsTTY: capabilities.stdoutIsTTY,
+          color: capabilities.color,
+          showCosts: options.costs,
+          ...(file ? { rerunFile: file } : {}),
+          ...artifacts,
+          includeSharedSummary: true,
+        });
+        const emit = (snapshot: RunResult, artifacts: RunArtifactPaths) => {
+          const events = lifecycle.feed(snapshot);
+          for (const event of events)
+            for (const [index, reporter] of reporters.entries()) {
+              if (event.type === "runStarted" && index > 0) continue;
+              const output = reporter.onEvent(event, context(artifacts));
+              if (output) writeOut(output);
+            }
+        };
         const execution = await executeRun({
           paths,
           filters: {
@@ -356,6 +390,26 @@ export async function runCli(
           : "No Git checkout locator cache was found.\n",
       );
       exitCode = 0;
+    });
+
+  program
+    .command("doctor")
+    .description("check whether this environment can run Sedum")
+    .option("--json", "print versioned JSON checks on stdout", false)
+    .addHelpText(
+      "after",
+      "\nThe authenticated API check makes one small, potentially billable request.\n\nExit codes:\n  0 all checks passed\n  3 one or more prerequisites failed\n",
+    )
+    .action(async (options: { json: boolean }) => {
+      const { executeDoctorCommand, renderDoctorText } =
+        await import("./doctor-command.js");
+      const result = await executeDoctorCommand(cwd, runtime.doctorProbes);
+      writeOut(
+        options.json ? `${JSON.stringify(result)}\n` : renderDoctorText(result),
+      );
+      exitCode = result.checks.every((check) => check.status === "pass")
+        ? 0
+        : 3;
     });
 
   program

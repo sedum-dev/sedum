@@ -1,6 +1,8 @@
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { existsSync } from "node:fs";
+import { accessSync, constants, existsSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
@@ -13,6 +15,63 @@ import type { Aim, AimResult, FillTarget } from "./page-protocol.js";
 import { safeCallLog } from "./safe-diagnostics.js";
 
 export type BrowserKind = "chrome" | "chromium";
+
+function runnableFile(file: string): boolean {
+  try {
+    if (!statSync(file).isFile()) return false;
+    accessSync(file, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Match the driver's Chrome-first behavior without starting a browser. */
+export function findBrowserExecutable(kind: BrowserKind): string | null {
+  if (kind === "chrome") {
+    const home = homedir();
+    const candidates =
+      process.platform === "darwin"
+        ? [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            join(
+              home,
+              "Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            ),
+          ]
+        : process.platform === "win32"
+          ? [
+              join(
+                process.env.PROGRAMFILES ?? "",
+                "Google/Chrome/Application/chrome.exe",
+              ),
+              join(
+                process.env["PROGRAMFILES(X86)"] ?? "",
+                "Google/Chrome/Application/chrome.exe",
+              ),
+              join(
+                process.env.LOCALAPPDATA ?? "",
+                "Google/Chrome/Application/chrome.exe",
+              ),
+            ]
+          : [
+              "/usr/bin/google-chrome",
+              "/usr/bin/google-chrome-stable",
+              "/opt/google/chrome/chrome",
+              ...(process.env.PATH ?? "")
+                .split(delimiter)
+                .filter(Boolean)
+                .flatMap((folder) => [
+                  join(folder, "google-chrome"),
+                  join(folder, "google-chrome-stable"),
+                ]),
+            ];
+    const chrome = candidates.find(runnableFile);
+    if (chrome) return chrome;
+  }
+  const bundled = chromium.executablePath();
+  return runnableFile(bundled) ? bundled : null;
+}
 
 export interface BrowserLaunchOptions {
   readonly browser?: BrowserKind;

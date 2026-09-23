@@ -96,6 +96,41 @@ function execution(value: RunResult) {
 }
 
 describe("CLI command framework", () => {
+  it("selects repeatable terminal reporters and rejects an unknown name before running", async () => {
+    const canonical = await result([
+      { file: "selected.test.yaml", verdict: "failed" },
+    ]);
+    const executeRun = vi.fn(async () => execution(canonical));
+    const selected = await runCli(
+      [
+        "run",
+        "selected.test.yaml",
+        "--reporter",
+        "steps",
+        "--reporter",
+        "list",
+        "--reporter",
+        "steps",
+      ],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(selected.exitCode).toBe(1);
+    expect(selected.stdout).toContain("step 1: verify the result");
+    expect(selected.stdout).toContain("test FAILED selected.test.yaml");
+    expect(
+      selected.stdout.match(/needs attention: selected.test.yaml/gu),
+    ).toHaveLength(1);
+    const invalid = await runCli(
+      ["run", "selected.test.yaml", "--reporter", "other"],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(invalid.exitCode).toBe(3);
+    expect(invalid.stderr).toContain("Use list or steps");
+    expect(executeRun).toHaveBeenCalledTimes(1);
+  });
+
   it("prints useful root, run, and nested command help", async () => {
     const root = await runCli(["--help"], "1.2.3");
     expect(root.exitCode).toBe(0);
@@ -292,7 +327,7 @@ describe("CLI command framework", () => {
     const tty = await runCli(["run", "fixture.test.yaml"], "1.2.3", {
       capabilities: { stdoutIsTTY: true, stderrIsTTY: true, color: true },
       executeRun: async (options) => {
-        options.onSnapshot?.(canonical);
+        options.onSnapshot?.(canonical, execution(canonical).artifacts);
         return execution(canonical);
       },
     });
@@ -317,7 +352,9 @@ describe("CLI command framework", () => {
     const finalTty = tty.stdout
       .replaceAll("\r\u001b[2K", "")
       .replace(ansiPattern, "");
-    expect(finalTty).toContain(plain.stdout);
+    expect(finalTty.replace(/^model .*\n|^cost .*\n/gmu, "")).toContain(
+      plain.stdout,
+    );
   });
 
   it("shows costs by default only for a TTY", async () => {

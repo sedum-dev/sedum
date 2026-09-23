@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { launch, executablePath } = vi.hoisted(() => ({
@@ -24,8 +27,31 @@ vi.mock("node:fs", async (importOriginal) => {
 import {
   BrowserDriverError,
   PlaywrightBrowserDriver,
+  findBrowserExecutable,
   installChromium,
 } from "./browser-driver.js";
+
+describe("browser executable discovery", () => {
+  it("rejects directories and files without execute permission", () => {
+    launch.mockClear();
+    const root = mkdtempSync(path.join(tmpdir(), "sedum-browser-probe-"));
+    try {
+      executablePath.mockReturnValue(root);
+      expect(findBrowserExecutable("chromium")).toBeNull();
+      const binary = path.join(root, "chromium");
+      writeFileSync(binary, "binary", { mode: 0o600 });
+      executablePath.mockReturnValue(binary);
+      if (process.platform !== "win32")
+        expect(findBrowserExecutable("chromium")).toBeNull();
+      chmodSync(binary, 0o700);
+      expect(findBrowserExecutable("chromium")).toBe(binary);
+      expect(launch).not.toHaveBeenCalled();
+    } finally {
+      executablePath.mockReset();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 class FakePage extends EventEmitter {
   private currentUrl = "about:blank";

@@ -48,7 +48,10 @@ export interface RunCommandOptions {
   readonly locatorCacheDisabled?: boolean;
   readonly locatorCacheCi?: boolean;
   readonly signal?: AbortSignal;
-  readonly onSnapshot?: (snapshot: RunResult) => void;
+  readonly onSnapshot?: (
+    snapshot: RunResult,
+    artifacts: RunArtifactPaths,
+  ) => void;
   readonly onCommitted?: () => void;
   readonly onDeadline?: () => void;
 }
@@ -57,6 +60,8 @@ export interface RunCommandExecution {
   readonly result: RunResult;
   readonly artifacts: RunArtifactPaths;
   readonly diagnostic: CliDiagnostic | null;
+  readonly reporterFailed?: boolean;
+  readonly onReporterFailure?: () => Promise<RunCommandExecution>;
 }
 
 function safeDiscoveryText(
