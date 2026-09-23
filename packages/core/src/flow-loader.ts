@@ -1,6 +1,7 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { walkSuiteFiles } from "./project-discovery.js";
 import {
   isAlias,
   isMap,
@@ -713,7 +714,9 @@ export function parseFlow(
     ...(input.description === undefined
       ? {}
       : { description: input.description }),
-    ...(input.url === undefined ? {} : { url: input.url }),
+    ...(input.url === undefined
+      ? {}
+      : { url: input.url, urlSource: at(file, counter, nodes, ["url"]) }),
     tags: input.tags ?? [],
     meta: input.meta ?? {},
     data,
@@ -761,29 +764,14 @@ export function validateFlows(
     parseFlow(input.source, input.path, options),
   );
   const diagnostics = files.flatMap((file) => [...file.diagnostics]);
-  const identities = new Map<string, FlowSource>();
-  for (const file of files) {
-    const flow = file.value;
-    if (!flow?.explicitId) continue;
-    const previous = identities.get(flow.explicitId);
-    if (previous)
-      add(
-        diagnostics,
-        "error",
-        "duplicate_id",
-        flow.idSource ?? { file: flow.file, line: 1, col: 1 },
-        `Duplicate explicit id \`${flow.explicitId}\`; first used at ${previous.file}:${previous.line}:${previous.col}.`,
-        "Give each test a unique explicit id or remove id to use the file path.",
-      );
-    else
-      identities.set(
-        flow.explicitId,
-        flow.idSource ?? { file: flow.file, line: 1, col: 1 },
-      );
-  }
+  for (const collision of findIdentityCollisions(
+    files.flatMap((file) => (file.value ? [file.value] : [])),
+  ))
+    diagnostics.push(collision);
+  diagnostics.sort(compareDiagnostics);
   return {
     files,
-    diagnostics: diagnostics.sort(compareDiagnostics),
+    diagnostics,
     coverage: {
       format: diagnostics.some((diagnostic) => diagnostic.severity === "error")
         ? "failed"
@@ -794,6 +782,49 @@ export function validateFlows(
         : "not_needed",
     },
   };
+}
+
+/**
+ * Report tests that share an identity: two explicit ids, or an explicit id
+ * equal to another test's path identity. The later file (by path) is reported.
+ */
+export function findIdentityCollisions(
+  flows: readonly FlowDefinition[],
+): readonly FlowDiagnostic[] {
+  const diagnostics: FlowDiagnostic[] = [];
+  const sorted = [...flows].sort((a, b) =>
+    a.file < b.file ? -1 : a.file > b.file ? 1 : 0,
+  );
+  const pathIdentities = new Map<string, FlowDefinition>();
+  for (const flow of sorted)
+    if (flow.explicitId === undefined) pathIdentities.set(flow.identity, flow);
+  const explicit = new Map<string, FlowSource>();
+  for (const flow of sorted) {
+    if (flow.explicitId === undefined) continue;
+    const source = flow.idSource ?? { file: flow.file, line: 1, col: 1 };
+    const previous = explicit.get(flow.explicitId);
+    const pathOwner = pathIdentities.get(flow.explicitId);
+    if (previous)
+      add(
+        diagnostics,
+        "error",
+        "duplicate_id",
+        source,
+        `Duplicate explicit id \`${flow.explicitId}\`; first used at ${previous.file}:${previous.line}:${previous.col}.`,
+        "Give each test a unique explicit id or remove id to use the file path.",
+      );
+    else if (pathOwner)
+      add(
+        diagnostics,
+        "error",
+        "duplicate_id",
+        source,
+        `Explicit id \`${flow.explicitId}\` equals the path identity of ${pathOwner.file}.`,
+        "Choose an id that is not another test's repository-relative path.",
+      );
+    else explicit.set(flow.explicitId, source);
+  }
+  return diagnostics.sort(compareDiagnostics);
 }
 
 /** Parse a strict reusable module without granting it test-level fields. */
@@ -934,20 +965,11 @@ export function parseModule(source: string, file: string): ParsedModuleResult {
   return { value, diagnostics: diagnostics.sort(compareDiagnostics) };
 }
 
+/** Sorted `*.test.yaml` files, skipping `node_modules` and dot-directories. */
 export async function discoverFlowFiles(
   directory: string,
 ): Promise<readonly string[]> {
-  const files: string[] = [];
-  async function visit(folder: string): Promise<void> {
-    for (const entry of await readdir(folder, { withFileTypes: true })) {
-      const entryPath = path.join(folder, entry.name);
-      if (entry.isDirectory()) await visit(entryPath);
-      else if (entry.isFile() && entry.name.endsWith(".test.yaml"))
-        files.push(entryPath);
-    }
-  }
-  await visit(directory);
-  return files.sort();
+  return walkSuiteFiles(directory, [".test.yaml"]);
 }
 
 export async function loadFlowFile(

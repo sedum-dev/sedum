@@ -74,6 +74,8 @@ export interface FlowDefinition {
   readonly idSource?: FlowSource;
   readonly description?: string;
   readonly url?: string;
+  /** Position of the `url` value, for entry-URL diagnostics. */
+  readonly urlSource?: FlowSource;
   readonly tags: readonly string[];
   readonly meta: Readonly<Record<string, unknown>>;
   readonly data: Readonly<Record<string, DeclaredDataValue>>;

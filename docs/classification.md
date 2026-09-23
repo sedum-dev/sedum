@@ -15,7 +15,7 @@ A model operation is accepted only with a coherent complete probability distribu
 
 ## Offline validation and CI
 
-The `offline` classification mode uses patterns and the committed cache. It makes no provider call, needs no API key, and does not write the cache. For each unresolved sentence it reports `file:line:col`, the exact original sentence, the cache miss reason, and a fix. It collects all such errors in a file. SED-37 will choose the CLI spelling and use offline mode by default for `sedum validate`; online classification is an explicit path to populate the cache. CI reads the committed cache without writing it. `sedum validate` itself is not implemented by SED-28.
+The `offline` classification mode uses patterns and the committed cache. It makes no provider call, needs no API key, and does not write the cache. For each unresolved sentence it reports `file:line:col`, the exact original sentence, the cache miss reason, and a fix. It collects all such errors in a file. `sedum validate` uses offline mode by default; `sedum validate --online` is the explicit path to populate the cache (see [CLI commands](cli.md)). CI reads the committed cache without writing it.
 
 ## Classification cache
 
