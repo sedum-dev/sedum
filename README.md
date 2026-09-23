@@ -23,6 +23,14 @@ node packages/cli/dist/cli.js --version
 
 ## Walking skeleton
 
+Inspect the available commands and command-specific options with:
+
+```sh
+node packages/cli/dist/cli.js --help
+node packages/cli/dist/cli.js run --help
+node packages/cli/dist/cli.js browsers install --help
+```
+
 Install Chromium with `node packages/cli/dist/cli.js browsers install chromium`,
 set `TYPESAFE_API_KEY` and `SAUCE_PASSWORD`, then run the included live fixture:
 
@@ -32,14 +40,30 @@ node packages/cli/dist/cli.js run fixtures/saucedemo-wrong-claim.test.yaml
 node packages/cli/dist/cli.js run fixtures/saucedemo-checkout.test.yaml
 ```
 
+Use `--strict` when uncertainty flags must fail the shell gate, and `--costs`
+to retain model token/cost lines when stdout is redirected:
+
+```sh
+node packages/cli/dist/cli.js run fixtures/saucedemo-login.test.yaml --strict --costs
+```
+
 For temporary visual debugging only, prefix either command with
 `SEDUM_HEADED=1`. This escape hatch will be removed once the final CLI launch
 configuration lands.
 
 The first command should exit `0`; the deliberately false claim exits `1`.
-An unavailable browser, provider, flow, or runtime value exits `3`. This is a
+A flagged pass exits `0` normally and `2` with `--strict`. An unavailable
+browser, provider, flow, runtime value, invalid command, or zero-test run exits
+`3`. SIGINT/SIGTERM use conventional process exits `130`/`143` after the
+partial result is finalized. This is a
 single-file M1 slice: hooks, modules, retries, final reporters, and the broader
 CLI grammar are not implemented here.
+
+In a terminal, Sedum shows coloured per-test result labels and transient live
+progress. When stdout is redirected, output is stable, ANSI-free, and
+untruncated. Both forms include ordered per-test results, verdict/flag counts,
+and canonical artifact paths. Token and cost lines are omitted from redirected
+output unless `--costs` is passed.
 
 `packages/core` owns engine contracts and the browser script boundary. `packages/provider-typesafe` will own model SDK effects. `packages/reporters` will consume the core result contract. `packages/cli` handles process arguments and composition. The browser bundle is emitted at `packages/core/dist/page-script/index.global.js`.
 

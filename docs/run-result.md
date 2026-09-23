@@ -4,7 +4,20 @@
 
 For a syntactically valid `sedum run`, the CLI creates `.sedum/runs/<run-id>/progress.json` before provider setup or test loading and prints its path. Each update replaces the file atomically with a complete, validated `RunResult`; pollers can parse it at any point. `result.json` is written from the terminal snapshot. A setup or execution error has `state: "error"`, a typed `error`, and `verdict: null`; already completed tests and steps remain. Zero executed tests are never a pass. A passed step with `low_confidence` or `contradiction` stays passed; a future strict gate may change an exit status or JUnit mapping, not the canonical verdict.
 
-SIGINT and SIGTERM request cancellation. The CLI waits for the current operation to unwind, then writes `state: "interrupted"`, `verdict: null`, and a terminal `result.json` before exiting with the conventional signal exit code. An interrupted provider request may have incurred unreported usage; its call is retained with unknown cost, so a receipt never presents that attempt as free.
+SIGINT and SIGTERM received while a run is active request cancellation. The CLI waits for the current operation to unwind, then writes `state: "interrupted"`, `verdict: null`, and a terminal `result.json` before exiting with the conventional signal exit code. Once the terminal outcome is committed, late signals are ignored while its final files are written so the process exit and persisted state cannot disagree. An interrupted provider request may have incurred unreported usage; its call is retained with unknown cost, so a receipt never presents that attempt as free.
+
+The CLI derives ordinary run exits from this result: completed clean pass `0`,
+completed flagged pass `0` or `2` with `--strict`, failed `1`, and a null or
+untrustworthy verdict `3`. Strict mode changes only that shell gate. Terminal
+and redirected summaries show the same ordered test identities, verdict/state,
+flags, and totals; only ANSI/live updates and the default visibility of
+token/cost lines differ.
+
+If the output sink itself fails, exit `3` is reported from the latest validated
+in-memory snapshot. Sedum names the intended path and does not advertise an
+earlier progress file as an authoritative final result. This is the sole case
+where terminal artifact persistence cannot be promised through the failed
+destination.
 
 The model has ordered tests, whole-test attempts, steps, and observation attempts. Only the selected terminal attempt contributes to final test/step outcome counts; all attempts contribute to model usage and cost. Unknown actual cost is `null`, not zero. Each model call carries its model ID, tokens, rate provenance, and actual cost when known. SED-65 and SED-33 can populate the existing observation and whole-test attempt slots when their retry mechanisms arrive. SED-14 can populate the explicit locator cache event slot; no cache hit is inferred from an absence of model calls.
 

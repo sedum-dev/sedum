@@ -37,17 +37,15 @@ describe("CLI in-flight cancellation", () => {
     try {
       process.chdir(root);
       const controller = new AbortController();
-      const paths: string[] = [];
-      const pending = runCli(
-        ["run", "test.yaml"],
-        "0.0.0",
-        (value) => paths.push(value),
-        controller.signal,
-      );
+      const pending = runCli(["run", "test.yaml"], "0.0.0", {
+        signal: controller.signal,
+      });
       await new Promise((resolve) => setTimeout(resolve, 20));
       controller.abort();
       const output = await pending;
       expect(output.exitCode).toBe(3);
+      const match = output.stdout.match(/^progress (.+)$/mu);
+      const paths = match?.[1] ? [match[1]] : [];
       const progress = validateRunResult(
         JSON.parse(await readFile(paths[0]!, "utf8")),
       );

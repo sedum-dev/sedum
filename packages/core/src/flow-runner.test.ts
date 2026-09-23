@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { NoopClassificationCache } from "./classification-cache.js";
+import { BrowserDriverError } from "./browser-driver.js";
 import { runFlow } from "./flow-runner.js";
 
 describe("walking-skeleton flow runner", () => {
@@ -97,6 +98,40 @@ describe("walking-skeleton flow runner", () => {
       expect(result).toMatchObject({ status: "could_not_run" });
       expect(launch).toHaveBeenCalledWith({ headless: false });
       expect(page.close).toHaveBeenCalledOnce();
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces arbitrary browser failures with typed bounded diagnostics", async () => {
+    const folder = await mkdtemp(path.join(tmpdir(), "sedum-runner-"));
+    try {
+      const file = path.join(folder, "measure.test.yaml");
+      await writeFile(file, "steps:\n  - measure the page title\n");
+      const result = await runFlow(file, {
+        repoRoot: folder,
+        browser: {
+          launch: vi.fn(async () => {
+            throw new BrowserDriverError(
+              "operation-failed",
+              `${"x".repeat(700)} sentinel-secret`,
+            );
+          }),
+        } as never,
+        provider: {
+          classifyBatch: vi.fn(),
+          choose: vi.fn(),
+          holds: vi.fn(),
+        },
+        classificationCache: new NoopClassificationCache(),
+        env: {},
+      });
+      expect(result).toMatchObject({
+        status: "could_not_run",
+        code: "operation-failed",
+        message: "A browser operation could not be completed safely.",
+      });
+      expect(JSON.stringify(result)).not.toContain("sentinel-secret");
     } finally {
       await rm(folder, { recursive: true, force: true });
     }
