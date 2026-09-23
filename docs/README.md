@@ -6,6 +6,8 @@ See [CLI commands](cli.md) for `sedum validate` and `sedum list`, including offl
 
 See [assertion engine](assertion-engine.md) for `verify` / `measure` results, verdict policy, observation errors, and current page limits.
 
+See [local locator cache](locator-cache.md) for development and CI defaults, privacy, and clearing the cache.
+
 Public design and usage documentation will live here as engine behavior lands. The current package boundaries are described in the root README.
 
 See [project configuration](configuration.md) for `sedum.config.yaml`, named

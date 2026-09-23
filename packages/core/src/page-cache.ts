@@ -17,6 +17,7 @@ export type CacheMissReason =
   | "disabled"
   | "ci_default"
   | "outside_git"
+  | "runtime_dependent"
   | "format_mismatch"
   | "matcher_mismatch"
   | "corrupt"
@@ -105,17 +106,15 @@ export function pageKey(
     ]),
   );
 }
-function hasTargetContext(
-  sentence: string,
-  label: string,
-  context: string,
-): boolean {
-  const words = (value: string) =>
+function words(value: string): string[] {
+  return (
     normalizeSignal(value)
       .toLowerCase()
-      .match(/\p{L}[\p{L}\p{N}]*/gu) ?? [];
+      .match(/\p{L}[\p{L}\p{N}]*/gu) ?? []
+  );
+}
+function contextClues(sentence: string, label: string): string[] {
   const labelWords = new Set(words(label));
-  const contextWords = new Set(words(context));
   const commands = new Set([
     "add",
     "buy",
@@ -132,14 +131,28 @@ function hasTargetContext(
     "and",
     "with",
     "for",
+    "type",
+    "fill",
+    "enter",
+    "write",
+    "field",
+    "input",
+    "box",
   ]);
-  return words(sentence).some(
+  return words(sentence.replace(/\{\{[^{}]+\}\}/gu, " ")).filter(
     (word) =>
       Array.from(word).length >= 3 &&
       !labelWords.has(word) &&
-      !commands.has(word) &&
-      contextWords.has(word),
+      !commands.has(word),
   );
+}
+function hasTargetContext(
+  sentence: string,
+  label: string,
+  context: string,
+): boolean {
+  const contextWords = new Set(words(context));
+  return contextClues(sentence, label).some((word) => contextWords.has(word));
 }
 export function stageEntry(
   key: Uint8Array,
@@ -156,11 +169,30 @@ export function stageEntry(
     candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT)
   )
     throw new RangeError("Candidate exceeds cache signal bounds");
+  // An input button's displayed name is its value property. Do not retain even
+  // a digest of it: the property may be changed with customer data at runtime.
+  if (candidate.tag === "input" && !candidate.editable)
+    throw new Error("candidate_not_distinguishable");
+  const repeated = eligible.candidates.some(
+    (other) =>
+      other.ref !== candidate.ref &&
+      (other.name.trim().toLocaleLowerCase() ===
+        candidate.name.trim().toLocaleLowerCase() ||
+        (!!candidate.signals.href &&
+          other.signals.href === candidate.signals.href)),
+  );
+  const contextual =
+    candidate.signals.contextComplete &&
+    !!candidate.peers[0] &&
+    !isWeakPeer(candidate.peers[0]) &&
+    hasTargetContext(sentence, candidate.name, candidate.peers[0]);
   if (
-    !candidate.signals.contextComplete ||
-    !candidate.peers[0] ||
-    isWeakPeer(candidate.peers[0]) ||
-    !hasTargetContext(sentence, candidate.name, candidate.peers[0])
+    (!contextual &&
+      (repeated || contextClues(sentence, candidate.name).length > 0)) ||
+    (!contextual &&
+      !candidate.signals.hook &&
+      !candidate.signals.id &&
+      !(candidate.signals.name && candidate.name))
   )
     throw new Error("candidate_not_distinguishable");
   const signals = candidate.signals;

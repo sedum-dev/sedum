@@ -195,6 +195,8 @@ describe("CLI command framework", () => {
         "x.test.yaml",
         "--replay",
         "--no-evidence",
+        "--no-locator-cache",
+        "--locator-cache-ci",
         "--sensitive-origin=https://example.com/private",
         "--sensitive-origin",
         "https://two.test/path",
@@ -207,6 +209,8 @@ describe("CLI command framework", () => {
         file: "x.test.yaml",
         replay: true,
         evidence: false,
+        locatorCacheDisabled: true,
+        locatorCacheCi: true,
         sensitiveOrigins: ["https://example.com", "https://two.test"],
       }),
     );

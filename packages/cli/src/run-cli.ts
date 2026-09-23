@@ -1,6 +1,7 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
 import { renderDiagnostic } from "./diagnostics.js";
+import { clearLocatorCache } from "./locator-cache-store.js";
 import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
 import { executeListCommand } from "./list-command.js";
 import { renderConfigErrors } from "./project-context.js";
@@ -126,6 +127,8 @@ export async function runCli(
     .argument("[file.test.yaml]", "test file to execute")
     .option("--replay", "capture replay frames for executed steps", false)
     .option("--no-evidence", "disable non-passing evidence frames")
+    .option("--no-locator-cache", "disable the local locator cache")
+    .option("--locator-cache-ci", "enable the local locator cache in CI", false)
     .option(
       "--sensitive-origin <url>",
       "omit sensitive page details and frames (repeatable)",
@@ -151,6 +154,8 @@ export async function runCli(
           sensitiveOrigin: string[];
           strict: boolean;
           costs: boolean;
+          locatorCache: boolean;
+          locatorCacheCi: boolean;
         },
       ) => {
         let transient = false;
@@ -159,6 +164,8 @@ export async function runCli(
           replay: options.replay,
           evidence: options.evidence,
           sensitiveOrigins: options.sensitiveOrigin,
+          locatorCacheDisabled: !options.locatorCache,
+          locatorCacheCi: options.locatorCacheCi,
           ...(runtime.signal ? { signal: runtime.signal } : {}),
           ...(runtime.onRunCommitted
             ? { onCommitted: runtime.onRunCommitted }
@@ -185,6 +192,23 @@ export async function runCli(
         exitCode = runExitCode(execution.result, options.strict);
       },
     );
+
+  const cache = program
+    .command("cache")
+    .description("manage the local locator cache");
+  cache.action(() => commandHelp(cache, writeErr));
+  cache
+    .command("clear")
+    .description("remove the current worktree's locator cache and digest key")
+    .action(async () => {
+      const cleared = await clearLocatorCache(process.cwd());
+      writeOut(
+        cleared
+          ? "Local locator cache cleared.\n"
+          : "No Git checkout locator cache was found.\n",
+      );
+      exitCode = 0;
+    });
 
   program
     .command("validate")

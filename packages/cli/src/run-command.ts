@@ -17,6 +17,7 @@ import {
   type CliDiagnostic,
 } from "./diagnostics.js";
 import { ProgressWriter, ProgressWriterError } from "./progress-writer.js";
+import { openLocatorCache } from "./locator-cache-store.js";
 import type { RunArtifactPaths } from "./output.js";
 import {
   discoverConfiguredTests,
@@ -30,6 +31,8 @@ export interface RunCommandOptions {
   readonly replay: boolean;
   readonly evidence: boolean;
   readonly sensitiveOrigins: readonly string[];
+  readonly locatorCacheDisabled?: boolean;
+  readonly locatorCacheCi?: boolean;
   readonly signal?: AbortSignal;
   readonly onSnapshot?: (snapshot: RunResult) => void;
   readonly onCommitted?: () => void;
@@ -250,6 +253,11 @@ export async function executeRunCommand(
       path.join(config.projectRoot, ".sedum", "classifications.json"),
       "jev-latest",
     );
+    const locatorCache = await openLocatorCache(config.projectRoot, {
+      disabled: options.locatorCacheDisabled ?? false,
+      ciOptIn: options.locatorCacheCi ?? false,
+      env: process.env,
+    });
     let operational: ReturnType<typeof flowDiagnostic> | null = null;
     const browser = new PlaywrightBrowserDriver();
     for (const file of files) {
@@ -258,6 +266,7 @@ export async function executeRunCommand(
         browser,
         provider,
         classificationCache: cache,
+        locatorCache,
         env: config.variables,
         browserKind: config.browser,
         viewport: config.viewport,

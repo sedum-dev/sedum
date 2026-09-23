@@ -1,4 +1,12 @@
 import type { BrowserPage } from "./browser-driver.js";
+import type { CacheStore } from "./cache-store.js";
+import {
+  keyedDigest,
+  matchEntry,
+  pageKey,
+  type CacheEntry,
+  type CacheMissReason,
+} from "./page-cache.js";
 import {
   collectCandidates,
   liveCandidates,
@@ -106,25 +114,44 @@ export interface LocatorDiagnostic {
   readonly topOptions: readonly LocatorOptionDiagnostic[];
   readonly gate?: string;
 }
+export interface LocatorCacheDiagnostic {
+  readonly outcome: "hit" | "miss" | "bypassed";
+  readonly reason: CacheMissReason | null;
+  readonly fallbackCalledModel: boolean;
+  readonly targetChanged: boolean;
+}
+export interface LocatorCacheSeed {
+  readonly candidate: Candidate;
+  readonly eligible: CandidatePage;
+  readonly key: string;
+}
 export type LocatorResult =
   | {
       readonly kind: "resolved";
       readonly target: ResolvedStepTarget;
       readonly diagnostic: LocatorDiagnostic;
       readonly calls: readonly ProviderCall[];
+      readonly cache?: LocatorCacheDiagnostic;
+      /** Internal pre-action snapshot; only the runner may stage it after success. */
+      readonly cacheSeed?: LocatorCacheSeed;
     }
   | {
       readonly kind: "unresolved";
       readonly reason: LocatorFailure;
       readonly diagnostic: LocatorDiagnostic;
       readonly calls: readonly ProviderCall[];
+      readonly cache?: LocatorCacheDiagnostic;
     };
 
 export interface LocatorOptions {
   readonly operation: Operation;
   readonly sentence: string;
+  /** Target-only sentence for cache keys; Resolver still receives sentence. */
+  readonly cacheSentence?: string;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  readonly cache?: CacheStore;
+  readonly runtimeDependent?: boolean;
   /** Redact sensitive page-derived text only at the Resolver boundary. */
   readonly projectText?: (text: string) => string;
 }
@@ -417,6 +444,33 @@ function sameIdentity(a: Candidate, b: Candidate): boolean {
   return true;
 }
 
+function provedTargetChange(
+  old: CacheEntry,
+  selected: Candidate,
+  candidates: readonly Candidate[],
+  key: Uint8Array,
+): boolean {
+  const oldHook = old.digests.hook;
+  const oldId = old.digests.id;
+  if (
+    !oldHook ||
+    !oldId ||
+    !selected.signals.hook ||
+    !selected.signals.id ||
+    oldHook === keyedDigest(key, selected.signals.hook) ||
+    oldId === keyedDigest(key, selected.signals.id)
+  )
+    return false;
+  return candidates.some(
+    (candidate) =>
+      candidate.ref !== selected.ref &&
+      !!candidate.signals.hook &&
+      !!candidate.signals.id &&
+      keyedDigest(key, candidate.signals.hook) === oldHook &&
+      keyedDigest(key, candidate.signals.id) === oldId,
+  );
+}
+
 /** Resolve a sentence to one fresh page target. No browser action occurs here. */
 export async function resolveTarget(
   page: BrowserPage,
@@ -430,6 +484,9 @@ export async function resolveTarget(
   let confidence: number | null = null;
   let observationVersion: PageVersion | undefined;
   let gate: string | undefined;
+  let cacheOutcome: LocatorCacheDiagnostic | undefined;
+  let storedEntry: CacheEntry | undefined;
+  const cacheSentence = options.cacheSentence ?? options.sentence;
   const unresolved = (reason: LocatorFailure): LocatorResult => ({
     kind: "unresolved",
     reason,
@@ -442,6 +499,9 @@ export async function resolveTarget(
       ...(gate ? { gate } : {}),
     },
     calls,
+    ...(cacheOutcome
+      ? { cache: { ...cacheOutcome, fallbackCalledModel: calls.length > 0 } }
+      : {}),
   });
   if (
     !options.sentence.trim() ||
@@ -470,6 +530,101 @@ export async function resolveTarget(
       source = await fullSet(page, "click");
     observationVersion = source.version;
     ensureActive();
+    if (options.cache) {
+      const store = options.cache;
+      if (!store.key) {
+        const bypass = await store
+          .lookup("")
+          .catch(() => ({ reason: "storage_error" as const }));
+        cacheOutcome = {
+          outcome:
+            "reason" in bypass &&
+            (bypass.reason === "storage_error" || bypass.reason === "corrupt")
+              ? "miss"
+              : "bypassed",
+          reason: "reason" in bypass ? bypass.reason : "disabled",
+          fallbackCalledModel: false,
+          targetChanged: false,
+        };
+      } else if (options.runtimeDependent) {
+        cacheOutcome = {
+          outcome: "bypassed",
+          reason: "runtime_dependent",
+          fallbackCalledModel: false,
+          targetChanged: false,
+        };
+      } else {
+        const digest = pageKey(
+          store.key,
+          source.version.route,
+          options.operation,
+          cacheSentence,
+        );
+        const lookup = await store
+          .lookup(digest)
+          .catch(() => ({ reason: "storage_error" as const }));
+        storedEntry = "entry" in lookup ? lookup.entry : undefined;
+        const matched =
+          "reason" in lookup
+            ? { hit: false as const, reason: lookup.reason }
+            : matchEntry(
+                storedEntry,
+                store.key,
+                source.version.route,
+                options.operation,
+                cacheSentence,
+                source.candidates,
+                true,
+                options.runtimeDependent,
+              );
+        if (matched.hit) {
+          if (!sameVersion(await pageVersion(page), source.version)) {
+            cacheOutcome = {
+              outcome: "miss",
+              reason: "candidate_set_incomplete",
+              fallbackCalledModel: false,
+              targetChanged: false,
+            };
+            return unresolved("stale");
+          }
+          return {
+            kind: "resolved",
+            target: new ResolvedStepTarget({
+              ref: matched.candidate.ref,
+              version: source.version,
+              tag: matched.candidate.tag,
+              name: matched.candidate.name,
+            }),
+            diagnostic: {
+              candidateCount: source.candidates.length,
+              rounds: 0,
+              confidence: null,
+              observationVersion: source.version,
+              topOptions: [],
+            },
+            calls,
+            cache: {
+              outcome: "hit",
+              reason: null,
+              fallbackCalledModel: false,
+              targetChanged: false,
+            },
+          };
+        }
+        cacheOutcome = {
+          outcome: "miss",
+          reason: matched.reason,
+          fallbackCalledModel: false,
+          targetChanged: false,
+        };
+        if (
+          matched.reason !== "absent" &&
+          matched.reason !== "storage_error" &&
+          matched.reason !== "candidate_set_incomplete"
+        )
+          await store.invalidate(digest, storedEntry).catch(() => undefined);
+      }
+    }
     const candidates = source.candidates;
     candidateCount = candidates.length;
     if (!candidateCount) return unresolved("no_candidates");
@@ -649,6 +804,18 @@ export async function resolveTarget(
         return unresolved("ambiguous");
       }
       ensureActive();
+      if (
+        cacheOutcome?.outcome === "miss" &&
+        storedEntry &&
+        options.cache?.key &&
+        provedTargetChange(
+          storedEntry,
+          matches[0]!,
+          fresh.candidates,
+          options.cache.key,
+        )
+      )
+        cacheOutcome = { ...cacheOutcome, targetChanged: true };
       return {
         kind: "resolved",
         target: new ResolvedStepTarget({
@@ -666,9 +833,42 @@ export async function resolveTarget(
           ...(gate ? { gate } : {}),
         },
         calls,
+        ...(cacheOutcome
+          ? {
+              cache: { ...cacheOutcome, fallbackCalledModel: calls.length > 0 },
+            }
+          : {}),
+        ...(options.cache?.key &&
+        !options.runtimeDependent &&
+        cacheOutcome?.outcome === "miss"
+          ? {
+              cacheSeed: {
+                candidate: matches[0]!,
+                eligible: fresh,
+                key: pageKey(
+                  options.cache.key,
+                  fresh.version.route,
+                  options.operation,
+                  cacheSentence,
+                ),
+              },
+            }
+          : {}),
       };
     }
   } catch (error) {
+    if (
+      options.cache &&
+      !cacheOutcome &&
+      error instanceof LocatorError &&
+      (error.reason === "incomplete" || error.reason === "resource_limit")
+    )
+      cacheOutcome = {
+        outcome: "miss",
+        reason: "candidate_set_incomplete",
+        fallbackCalledModel: false,
+        targetChanged: false,
+      };
     if (controller.signal.aborted) return unresolved("timeout");
     if (error instanceof LocatorError) return unresolved(error.reason);
     if (error instanceof PageScriptError) return unresolved("incomplete");

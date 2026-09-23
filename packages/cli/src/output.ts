@@ -73,8 +73,18 @@ export function renderRunSummary(
     const selected = test.attempts.find(
       (attempt) => attempt.id === test.selectedAttemptId,
     );
-    for (const step of selected?.steps ?? [])
+    for (const step of selected?.steps ?? []) {
       for (const flag of step.flags) flagCounts[flag] += 1;
+      const cache = step.locator?.cache;
+      if (cache) {
+        const reason = cache.reason ? ` (${cache.reason})` : "";
+        const fallback = cache.fallbackCalledModel ? ", model fallback" : "";
+        const changed = cache.targetChanged ? ", target changed" : "";
+        lines.push(
+          `  step ${step.index}: cache ${cache.outcome}${reason}${fallback}${changed}`,
+        );
+      }
+    }
   }
   const runLabel = stateLabel(value.state, value.verdict);
   lines.push(`run  ${paint(runLabel.text, runLabel.color, color)}`);
