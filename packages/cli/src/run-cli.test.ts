@@ -131,6 +131,48 @@ describe("CLI command framework", () => {
     expect(executeRun).toHaveBeenCalledTimes(1);
   });
 
+  it("prints only the report path when markdown is the only reporter", async () => {
+    const canonical = await result([
+      { file: "selected.test.yaml", verdict: "failed" },
+    ]);
+    const withReport = (value: RunResult) => ({
+      ...execution(value),
+      artifacts: {
+        ...execution(value).artifacts,
+        markdownPath: "/repo/.sedum/runs/fixture/report.md",
+      },
+    });
+    const executeRun = vi.fn(async () => withReport(canonical));
+    const alone = await runCli(
+      ["run", "selected.test.yaml", "--reporter", "markdown"],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(alone.exitCode).toBe(1);
+    expect(alone.stdout).toBe("markdown /repo/.sedum/runs/fixture/report.md\n");
+    expect(executeRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ reporters: ["markdown"] }),
+    );
+    const listed = await runCli(
+      [
+        "run",
+        "selected.test.yaml",
+        "--reporter",
+        "list",
+        "--reporter",
+        "markdown",
+      ],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(listed.stdout).toContain("test FAILED selected.test.yaml");
+    expect(
+      listed.stdout.match(
+        /markdown \/repo\/\.sedum\/runs\/fixture\/report\.md/gu,
+      ),
+    ).toHaveLength(1);
+  });
+
   it("prints useful root, run, and nested command help", async () => {
     const root = await runCli(["--help"], "1.2.3");
     expect(root.exitCode).toBe(0);

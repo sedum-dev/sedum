@@ -20,3 +20,12 @@ export type {
   ReporterContext,
   TerminalReporterName,
 } from "./terminal.js";
+export { renderMarkdown } from "./markdown.js";
+export {
+  needsAttention,
+  score,
+  testOrder,
+  testStatus,
+  testStatusLabel,
+} from "./shared.js";
+export type { TestStatus } from "./shared.js";

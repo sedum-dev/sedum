@@ -105,8 +105,10 @@ export interface FlowRunnerDependencies {
     readonly privacy: ReportPrivacy;
     readonly evidenceEnabled: boolean;
     readonly replay: boolean;
+    /** Stores one frame under its attempt; `frameId` is unique within the run. */
     readonly saveFrame: (
-      stepId: string,
+      attempt: { readonly id: string; readonly ordinal: number },
+      frameId: string,
       bytes: Uint8Array,
     ) => Promise<ResultFrame>;
   };
@@ -296,8 +298,10 @@ async function executeSentence(
     ? (report.recorder.snapshot.tests.at(-1)?.attempts.at(-1)?.steps.length ??
         0) + 1
     : 0;
-  const attemptId =
-    report?.recorder.snapshot.tests.at(-1)?.attempts.at(-1)?.id ?? "";
+  const currentAttempt = report?.recorder.snapshot.tests
+    .at(-1)
+    ?.attempts.at(-1);
+  const attemptId = currentAttempt?.id ?? "";
   const stepId = `${attemptId}:step:${stepIndex}`;
   const sameVersion = (a: PageVersion, b: PageVersion) =>
     a.document === b.document &&
@@ -317,7 +321,11 @@ async function executeSentence(
       const after = await pageVersion(page);
       if (!sameVersion(before, after))
         return { status: "unavailable", reason: "stale_frame" };
-      return await report.saveFrame(`${stepId}:${suffix}`, bytes);
+      return await report.saveFrame(
+        { id: attemptId, ordinal: currentAttempt?.ordinal ?? 1 },
+        `${stepId}:${suffix}`,
+        bytes,
+      );
     } catch {
       return { status: "unavailable", reason: "capture_failed" };
     }

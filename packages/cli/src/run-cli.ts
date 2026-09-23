@@ -79,9 +79,9 @@ function collectValue(value: string, previous: readonly string[]): string[] {
 }
 
 function collectReporter(value: string, previous: readonly string[]): string[] {
-  if (!["list", "steps", "terminal", "json"].includes(value))
+  if (!["list", "steps", "terminal", "json", "markdown"].includes(value))
     throw new InvalidArgumentError(
-      `Unknown reporter ${JSON.stringify(value)}. Use list or steps for terminal output, or terminal or json.`,
+      `Unknown reporter ${JSON.stringify(value)}. Use list or steps for terminal output, or terminal, json, or markdown.`,
     );
   return previous.includes(value) ? [...previous] : [...previous, value];
 }
@@ -256,7 +256,7 @@ export async function runCli(
     .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
     .option(
       "--reporter <name>",
-      "reporter: list, steps, terminal, or json (repeatable; default list)",
+      "reporter: list, steps, terminal, json, or markdown (repeatable; default list)",
       collectReporter,
       [],
     )
@@ -299,7 +299,7 @@ export async function runCli(
         const lifecycle = new ReporterLifecycle();
         const terminalNames = options.reporter.length
           ? options.reporter
-              .filter((name) => name !== "json")
+              .filter((name) => name !== "json" && name !== "markdown")
               .map((name) => (name === "terminal" ? "list" : name))
           : ["list"];
         const reporters = [...new Set(terminalNames)].map((name) =>
@@ -389,6 +389,13 @@ export async function runCli(
             return;
           }
         }
+        // Without a terminal reporter, still say where the agent report is.
+        if (
+          !reporters.length &&
+          execution.artifacts.authoritative &&
+          execution.artifacts.markdownPath
+        )
+          writeOut(`markdown ${execution.artifacts.markdownPath}\n`);
         if (execution.diagnostic)
           writeErr(renderDiagnostic(execution.diagnostic));
         exitCode = runExitCode(execution.result, options.strict);

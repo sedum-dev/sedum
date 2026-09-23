@@ -1,4 +1,5 @@
 import {
+  mkdir,
   mkdtemp,
   readFile,
   rm,
@@ -62,6 +63,7 @@ describe("live progress writer", () => {
     try {
       const writer = await ProgressWriter.create(root, "run-frames");
       const frame = await writer.saveFrame(
+        { id: "attempt-1", ordinal: 1 },
         "step-1",
         new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
       );
@@ -122,6 +124,96 @@ describe("live progress writer", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps every attempt's frames in its own new folder", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "sedum-evidence-"));
+    try {
+      const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+      const first = await ProgressWriter.create(root, "run-a");
+      const second = await ProgressWriter.create(root, "run-b");
+      const saved = await Promise.all([
+        first.saveFrame({ id: "run-a:attempt:1", ordinal: 1 }, "s1:e", jpeg),
+        first.saveFrame({ id: "run-a:attempt:1", ordinal: 1 }, "s1:r", jpeg),
+        first.saveFrame({ id: "run-a:attempt:2", ordinal: 2 }, "s1:e", jpeg),
+        second.saveFrame({ id: "run-b:attempt:1", ordinal: 1 }, "s1:e", jpeg),
+      ]);
+      const paths = saved.map((frame) =>
+        frame.status === "captured" ? frame.path : frame.status,
+      );
+      for (const item of paths)
+        expect(item).toMatch(
+          /^evidence\/a[12]-[0-9a-f]{12}\/[0-9a-f]{24}\.jpg$/u,
+        );
+      expect(paths[0]!.split("/")[1]).toBe(paths[1]!.split("/")[1]);
+      expect(paths[0]!.split("/")[1]).not.toBe(paths[2]!.split("/")[1]);
+      expect(paths[0]).not.toBe(paths[2]);
+      expect(paths[2]!.split("/")[1]).toMatch(/^a2-/u);
+      const files = [
+        path.join(first.directory, paths[0]!),
+        path.join(first.directory, paths[1]!),
+        path.join(first.directory, paths[2]!),
+        path.join(second.directory, paths[3]!),
+      ];
+      expect(new Set(files).size).toBe(4);
+      for (const file of files) expect((await lstat(file)).isFile()).toBe(true);
+      await expect(
+        first.saveFrame({ id: "run-a:attempt:1", ordinal: 1 }, "s1:e", jpeg),
+      ).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("never writes into an attempt folder or evidence link it did not create", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "sedum-evidence-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "sedum-outside-"));
+    try {
+      const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+      const writer = await ProgressWriter.create(root, "run-c");
+      const attempt = { id: "run-c:attempt:1", ordinal: 1 };
+      const probe = await ProgressWriter.create(root, "run-probe");
+      const frame = await probe.saveFrame(attempt, "x", jpeg);
+      if (frame.status !== "captured") throw new Error("Missing frame");
+      const folder = frame.path.split("/")[1]!;
+      await mkdir(path.join(writer.directory, "evidence", folder), {
+        recursive: true,
+      });
+      await expect(writer.saveFrame(attempt, "x", jpeg)).rejects.toThrow();
+      const linked = await ProgressWriter.create(root, "run-d");
+      await symlink(outside, path.join(linked.directory, "evidence"));
+      await expect(
+        linked.saveFrame({ id: "run-d:attempt:1", ordinal: 1 }, "x", jpeg),
+      ).rejects.toThrow();
+      expect(await readdir(outside)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("writes report.md from the final result when markdown is on", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "sedum-markdown-"));
+    try {
+      const writer = await ProgressWriter.create(
+        root,
+        "run-md",
+        undefined,
+        true,
+        true,
+      );
+      const recorder = new RunRecorder(async () => {}, "run-md");
+      await recorder.start();
+      await recorder.finish({ code: "missing_key", message: "No key." });
+      await writer.finish(recorder.snapshot);
+      const markdown = await readFile(writer.markdownPath, "utf8");
+      expect(markdown).toContain("**error**");
+      expect(markdown).toContain("`missing_key` — No key.");
+      await writer.invalidate();
+      await expect(readFile(writer.markdownPath, "utf8")).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 

@@ -1,4 +1,12 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { symlinkSync } from "node:fs";
@@ -214,6 +222,174 @@ describe("run output failure contract", () => {
         JSON.parse(await readFile(initial.artifacts.resultPath, "utf8")),
       ),
     ).toEqual(failure?.result);
+  });
+
+  it("writes report.md beside result.json only when markdown is requested", async () => {
+    await inTemporaryRoot();
+    const plain = await executeRunCommand({ ...options });
+    expect(plain.artifacts.markdownPath).toBeUndefined();
+    const output = await executeRunCommand({
+      ...options,
+      reporters: ["markdown", "json"],
+      reporterDir: "reports",
+    });
+    expect(output.result.state).toBe("completed");
+    expect(output.artifacts.markdownPath).toBe(
+      path.join(path.dirname(output.artifacts.resultPath), "report.md"),
+    );
+    const markdown = await readFile(output.artifacts.markdownPath!, "utf8");
+    expect(markdown).toMatch(/^# Sedum run\n\n\*\*passed\*\*/u);
+    expect(markdown).toContain(`- **run**: \`${output.result.runId}\``);
+    await expect(
+      readFile(
+        path.join(root!, "reports", output.result.runId, "report.md"),
+        "utf8",
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("keeps canonical JSON when the Markdown report cannot be written", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      reporters: ["markdown"],
+      onSnapshot: (snapshot, artifacts) => {
+        if (snapshot.state === "completed" && artifacts.markdownPath)
+          symlinkSync("trap", artifacts.markdownPath);
+      },
+    });
+    expect(output.artifacts.authoritative).toBe(true);
+    expect(output.artifacts.markdownPath).toBeUndefined();
+    expect(output.artifacts.htmlPath).toBeUndefined();
+    expect(output.diagnostic).toMatchObject({
+      code: "reporter_output_error",
+      message: expect.stringContaining("Markdown report"),
+    });
+    expect(output.result).toMatchObject({
+      state: "error",
+      error: { code: "reporter_output_error" },
+    });
+    expect(
+      validateRunResult(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ),
+    ).toEqual(output.result);
+    const directory = path.dirname(output.artifacts.resultPath);
+    await expect(
+      readFile(path.join(directory, "report.html"), "utf8"),
+    ).rejects.toThrow();
+  });
+
+  it("keeps each concurrent run's and attempt's frames when runs share an output root", async () => {
+    await inTemporaryRoot();
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+    const failingAttempt = async (
+      file: string,
+      dependencies: Parameters<typeof runFlow>[1],
+    ) => {
+      const report = dependencies.report!;
+      if (report.recorder.snapshot.tests.length === 0)
+        await report.recorder.startTest({ id: "broken", file });
+      const attempt = report.recorder.snapshot.tests[0]!.attempts.at(-1)!;
+      // Yield so the two runs interleave their frame writes.
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const evidence = await report.saveFrame(
+        attempt,
+        `${attempt.id}:step:1:evidence`,
+        jpeg,
+      );
+      await report.recorder.addStep({
+        id: `${attempt.id}:step:1`,
+        index: 1,
+        kind: "action",
+        operation: "click",
+        phase: "steps",
+        sentence: "click the Checkout button",
+        detail: "No candidate cleared the locator threshold.",
+        sourceStack: [{ file: "fixture.test.yaml", line: 2, col: 1 }],
+        state: "completed",
+        verdict: "failed",
+        flags: [],
+        elapsedMs: 1,
+        page: { status: "unavailable", reason: "fixture" },
+        locator: {
+          confidence: 0.2,
+          source: "model",
+          options: [{ label: "(no match)", role: "", probability: 0.8 }],
+          cache: null,
+        },
+        judgement: null,
+        observations: [],
+        calls: [],
+        error: { code: "target_not_found", message: "No Checkout button." },
+        evidence,
+        replayFrame: null,
+        targetBox: null,
+      });
+      await report.recorder.finishTest("failed");
+      return {
+        status: "failed" as const,
+        file,
+        source: { file, line: 2, col: 1 },
+      };
+    };
+    for (let call = 0; call < 6; call++)
+      vi.mocked(runFlow).mockImplementationOnce(failingAttempt);
+    const run = () =>
+      executeRunCommand({
+        ...options,
+        paths: ["fixture.test.yaml"],
+        retries: 1,
+        reporters: ["markdown"],
+      });
+    const [first, second] = await Promise.all([run(), run()]);
+    const frames = [first, second].flatMap((output) => {
+      const directory = path.dirname(output.artifacts.resultPath);
+      return output.result.tests[0]!.attempts.map((attempt) => {
+        const evidence = attempt.steps[0]!.evidence;
+        if (evidence.status !== "captured") throw new Error("No frame");
+        return { directory, path: evidence.path };
+      });
+    });
+    expect(frames).toHaveLength(4);
+    expect(
+      new Set(frames.map((f) => path.join(f.directory, f.path))).size,
+    ).toBe(4);
+    for (const frame of frames)
+      expect(await readFile(path.join(frame.directory, frame.path))).toEqual(
+        Buffer.from(jpeg),
+      );
+    for (const output of [first, second]) {
+      const markdown = await readFile(output.artifacts.markdownPath!, "utf8");
+      const links = [...markdown.matchAll(/!\[[^\]]*\]\(([^)]+)\)/gu)].map(
+        (match) => match[1]!,
+      );
+      expect(links).toHaveLength(1);
+      const directory = path.dirname(output.artifacts.markdownPath!);
+      expect(await readFile(path.join(directory, links[0]!))).toEqual(
+        Buffer.from(jpeg),
+      );
+      expect(markdown).toContain("- **attempt**: 2 of 2; earlier #1 failed");
+    }
+    const snapshot = async (directory: string) => {
+      const files = await readdir(directory, { recursive: true });
+      return Promise.all(
+        files.sort().map(async (file) => {
+          const full = path.join(directory, file);
+          return [
+            file,
+            (await lstat(full)).isFile() ? await readFile(full, "base64") : "",
+          ];
+        }),
+      );
+    };
+    const directories = [first, second].map((output) =>
+      path.dirname(output.artifacts.resultPath),
+    );
+    const before = await Promise.all(directories.map(snapshot));
+    const third = await run();
+    expect(path.dirname(third.artifacts.resultPath)).not.toBe(directories[0]);
+    expect(await Promise.all(directories.map(snapshot))).toEqual(before);
   });
 
   it("rejects unavailable reporter choices before starting a browser or provider", async () => {

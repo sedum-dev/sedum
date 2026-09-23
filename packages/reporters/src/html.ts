@@ -7,6 +7,17 @@ import {
   type RunResult,
 } from "@sedum-dev/core";
 import { REPORT_CSS } from "./html-styles.js";
+import {
+  decisionLines,
+  duration,
+  score,
+  selectedAttempt,
+  shellArg,
+  sourceStack,
+  testOrder,
+  testStatus,
+  testStatusLabel,
+} from "./shared.js";
 import { REPORT_FONTS } from "./html-fonts.js";
 import { REPORT_JS } from "./html-interactions.js";
 
@@ -45,40 +56,6 @@ function json(value: unknown): string {
 function money(value: number | null): string {
   return value === null ? "unknown" : "$" + value.toFixed(value < 0.01 ? 6 : 4);
 }
-function duration(ms: number): string {
-  return ms >= 1000
-    ? (ms / 1000).toFixed(ms >= 10000 ? 1 : 2) + "s"
-    : Math.round(ms) + "ms";
-}
-function score(value: number | null): string {
-  return value === null ? "unavailable" : value.toFixed(2);
-}
-function source(step: ResultStep): string {
-  return step.sourceStack
-    .map((s) => s.file + ":" + s.line + ":" + s.col)
-    .join(" → ");
-}
-function shellArg(value: string): string {
-  return "'" + value.replace(/'/g, "'\\''") + "'";
-}
-function selected(test: ResultTest): ResultAttempt | undefined {
-  return test.attempts.find((attempt) => attempt.id === test.selectedAttemptId);
-}
-function status(
-  test: ResultTest,
-): "failed" | "flagged" | "passed" | "incomplete" {
-  if (test.verdict === "failed") return "failed";
-  if (test.flags.length) return "flagged";
-  if (test.verdict === "passed") return "passed";
-  return "incomplete";
-}
-function label(test: ResultTest): string {
-  const value = status(test);
-  return value === "flagged" ? "passed, flagged" : value;
-}
-function order(test: ResultTest): number {
-  return { failed: 0, flagged: 1, incomplete: 2, passed: 3 }[status(test)];
-}
 function calls(result: RunResult): ResultCall[] {
   return [
     ...result.setupCalls,
@@ -101,15 +78,15 @@ function bar(step: ResultStep): string {
   if (!judgement) return '<span class="soft">—</span>';
   const value = judgement.holds;
   const width = Math.max(0, Math.min(100, value * 100));
-  const threshold = judgement.threshold;
-  const band = judgement.band;
+  const lines = decisionLines(judgement);
+  const shown = score(value, lines ? [lines.fail, lines.pass] : []);
   const ticks =
-    step.kind === "verify" && threshold !== null && band !== null
+    step.kind === "verify" && lines
       ? '<span class="tick fail" style="left:' +
-        (Math.max(0, threshold - band) * 100).toFixed(1) +
+        (lines.fail * 100).toFixed(1) +
         '%"></span>' +
         '<span class="tick pass" style="left:' +
-        (threshold * 100).toFixed(1) +
+        (lines.pass * 100).toFixed(1) +
         '%"></span>'
       : "";
   const tone =
@@ -123,15 +100,15 @@ function bar(step: ResultStep): string {
   const note =
     step.kind === "measure"
       ? "observation, no decision line"
-      : threshold === null || band === null
+      : !lines
         ? "decision lines unavailable"
         : "fails below " +
-          score(Math.max(0, threshold - band)) +
+          score(lines.fail) +
           "; passes at " +
-          score(threshold);
+          score(lines.pass);
   return (
     '<span class="pwrap" title="' +
-    esc("holds " + score(value) + "; " + note) +
+    esc("holds " + shown + "; " + note) +
     '">' +
     '<span class="ptrack"><span class="pfill ' +
     tone +
@@ -141,7 +118,7 @@ function bar(step: ResultStep): string {
     ticks +
     "</span>" +
     '<span class="pnum">' +
-    score(value) +
+    shown +
     "</span></span>"
   );
 }
@@ -159,17 +136,16 @@ function stepDetails(step: ResultStep): string {
       : "<div><b>page</b> " +
         esc(step.page.status + ": " + step.page.reason) +
         "</div>";
+  const lines = judgement ? decisionLines(judgement) : null;
   const scores = judgement
     ? "<div><b>judgement</b> holds " +
-      score(judgement.holds) +
+      score(judgement.holds, lines ? [lines.fail, lines.pass] : []) +
       " · contradiction " +
-      score(judgement.contradicted) +
+      score(judgement.contradicted, [judgement.contradictionCutoff]) +
       " / cutoff " +
       score(judgement.contradictionCutoff) +
       " · fail below " +
-      (judgement.threshold === null || judgement.band === null
-        ? "unavailable"
-        : score(Math.max(0, judgement.threshold - judgement.band))) +
+      score(lines?.fail ?? null) +
       " · pass at " +
       score(judgement.threshold) +
       "</div>" +
@@ -242,7 +218,7 @@ function stepDetails(step: ResultStep): string {
     "</div>";
   return (
     '<div class="step-detail"><div><b>source</b> ' +
-    esc(source(step)) +
+    esc(sourceStack(step.sourceStack)) +
     " · " +
     esc(step.phase) +
     " · " +
@@ -332,7 +308,7 @@ function stepRow(step: ResultStep, attemptId: string): string {
     '<tr class="step-extra"><td colspan="8"><details' +
     (step.verdict === "failed" || step.flags.length ? " open" : "") +
     "><summary>details · " +
-    esc(source(step)) +
+    esc(sourceStack(step.sourceStack)) +
     "</summary>" +
     stepDetails(step) +
     "</details></td></tr>"
@@ -457,8 +433,8 @@ function testSection(
   index: number,
   frames: ReadonlyMap<string, string> | undefined,
 ): string {
-  const tone = status(test);
-  const attempt = selected(test);
+  const tone = testStatus(test);
+  const attempt = selectedAttempt(test);
   const steps = attempt?.steps ?? [];
   const failed = steps.filter((step) => step.verdict === "failed").length;
   const flagged = steps.filter((step) => step.flags.length).length;
@@ -496,7 +472,7 @@ function testSection(
           ? "ok"
           : "failed") +
     '">' +
-    esc(label(test)) +
+    esc(testStatusLabel(test)) +
     "</span></span></summary>" +
     '<div class="test-content"><p class="test-meta label"><span>' +
     esc(summary) +
@@ -680,9 +656,9 @@ export function renderHtml(
   const value = validateRunResult(result);
   const tests = value.tests
     .map((test, index) => ({ test, index }))
-    .sort((a, b) => order(a.test) - order(b.test));
+    .sort((a, b) => testOrder(a.test) - testOrder(b.test));
   const counts = { failed: 0, flagged: 0, passed: 0, incomplete: 0 };
-  for (const test of value.tests) counts[status(test)]++;
+  for (const test of value.tests) counts[testStatus(test)]++;
   const headline =
     value.state === "error" || value.state === "interrupted"
       ? value.tests.length +
@@ -705,7 +681,7 @@ export function renderHtml(
     '<button type="button" data-filter="all" aria-current="true">all · ' +
       value.tests.length +
       "</button>",
-    ...(["failed", "flagged", "incomplete", "passed"] as const)
+    ...(["failed", "incomplete", "flagged", "passed"] as const)
       .filter((key) => counts[key] > 0)
       .map(
         (key) =>
