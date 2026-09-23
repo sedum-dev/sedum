@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -74,18 +74,14 @@ async function inTemporaryRoot() {
   process.chdir(root);
 }
 
-async function inLongTemporaryRoot() {
-  await inTemporaryRoot();
-  const deep = path.join(
+function longTemporaryRoot() {
+  return path.join(
     root!,
     ...Array.from(
       { length: 28 },
       (_, index) => `long-output-path-${String(index).padStart(2, "0")}`,
     ),
   );
-  await mkdir(deep, { recursive: true });
-  process.chdir(deep);
-  return deep;
 }
 
 const options = {
@@ -124,7 +120,9 @@ describe("run output failure contract", () => {
   });
 
   it("keeps a long intended path in display text but out of the canonical error", async () => {
-    const deep = await inLongTemporaryRoot();
+    await inTemporaryRoot();
+    const deep = longTemporaryRoot();
+    vi.spyOn(process, "cwd").mockReturnValue(deep);
     vi.spyOn(ProgressWriter, "create").mockRejectedValueOnce(
       new Error("permission denied"),
     );
@@ -188,11 +186,16 @@ describe("run output failure contract", () => {
   });
 
   it("survives a final write failure under a long output path", async () => {
-    await inLongTemporaryRoot();
-    vi.spyOn(ProgressWriter.prototype, "finish").mockImplementationOnce(
-      function (this: ProgressWriter) {
-        return Promise.reject(new ProgressWriterError(this.resultPath));
-      },
+    await inTemporaryRoot();
+    const longResultPath = path.join(
+      longTemporaryRoot(),
+      ".sedum",
+      "runs",
+      "run-id",
+      "result.json",
+    );
+    vi.spyOn(ProgressWriter.prototype, "finish").mockImplementationOnce(() =>
+      Promise.reject(new ProgressWriterError(longResultPath)),
     );
     const output = await executeRunCommand(options);
     expect(output.artifacts.authoritative).toBe(false);
