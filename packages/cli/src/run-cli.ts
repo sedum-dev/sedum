@@ -78,6 +78,14 @@ function collectValue(value: string, previous: readonly string[]): string[] {
   return [...previous, value];
 }
 
+function collectReporter(value: string, previous: readonly string[]): string[] {
+  if (!["list", "steps", "terminal", "json"].includes(value))
+    throw new InvalidArgumentError(
+      `Unknown reporter ${JSON.stringify(value)}. Use list or steps for terminal output, or terminal or json.`,
+    );
+  return previous.includes(value) ? [...previous] : [...previous, value];
+}
+
 function collectGlob(value: string, previous: readonly string[]): string[] {
   if (
     !value.trim() ||
@@ -218,12 +226,6 @@ export async function runCli(
     )
     .option("--output-dir <path>", "run output directory")
     .option("--reporter-dir <path>", "reporter artifact directory")
-    .option(
-      "--reporter <kind>",
-      "select an available reporter (terminal or json; repeatable)",
-      collectValue,
-      [],
-    )
     .option("--headed", "show the browser", false)
     .option(
       "--slow <ms>",
@@ -254,7 +256,7 @@ export async function runCli(
     .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
     .option(
       "--reporter <name>",
-      "terminal reporter: list or steps (repeatable; default list)",
+      "reporter: list, steps, terminal, or json (repeatable; default list)",
       collectReporter,
       [],
     )
@@ -292,18 +294,22 @@ export async function runCli(
           costs: boolean;
           locatorCache: boolean;
           locatorCacheCi: boolean;
-          reporter: TerminalReporterName[];
         },
       ) => {
         const lifecycle = new ReporterLifecycle();
-        const reporters = (
-          options.reporter.length ? options.reporter : ["list" as const]
-        ).map(createTerminalReporter);
+        const terminalNames = options.reporter.length
+          ? options.reporter
+              .filter((name) => name !== "json")
+              .map((name) => (name === "terminal" ? "list" : name))
+          : ["list"];
+        const reporters = [...new Set(terminalNames)].map((name) =>
+          createTerminalReporter(name as TerminalReporterName),
+        );
         const context = (artifacts: RunArtifactPaths): ReporterContext => ({
           stdoutIsTTY: capabilities.stdoutIsTTY,
           color: capabilities.color,
           showCosts: options.costs,
-          ...(file ? { rerunFile: file } : {}),
+          ...(paths.length === 1 ? { rerunFile: paths[0] } : {}),
           ...artifacts,
           includeSharedSummary: true,
         });
@@ -348,27 +354,41 @@ export async function runCli(
           ...(runtime.onRunDeadline
             ? { onDeadline: runtime.onRunDeadline }
             : {}),
-          onSnapshot: (snapshot: RunResult) => {
-            const progress = renderProgress(snapshot, capabilities);
-            if (progress) {
-              transient = true;
-              writeOut(progress);
-            }
-          },
+          onSnapshot: emit,
         });
-        if (transient) writeOut(clearProgress(capabilities));
-        if (
-          options.reporter.length === 0 ||
-          options.reporter.includes("terminal")
-        )
-          writeOut(
-            renderRunSummary(
-              execution.result,
-              capabilities,
-              execution.artifacts,
-              options.costs,
-            ),
-          );
+        if (!execution.reporterFailed && reporters.length) {
+          try {
+            emit(execution.result, execution.artifacts);
+            writeOut(
+              renderRunSummary(
+                execution.result,
+                capabilities,
+                execution.artifacts,
+                options.costs,
+              ),
+            );
+            for (const [index, reporter] of reporters.entries()) {
+              const output = reporter.onResult(execution.result, {
+                ...context(execution.artifacts),
+                includeSharedSummary: index === 0,
+              });
+              if (output) writeOut(output);
+            }
+          } catch {
+            const failure = await execution.onReporterFailure?.();
+            writeErr(
+              renderDiagnostic(
+                failure?.diagnostic ?? {
+                  code: "reporter_output_error",
+                  message: "The selected reporter could not write output.",
+                  fix: "Check terminal output access and rerun the command.",
+                },
+              ),
+            );
+            exitCode = 3;
+            return;
+          }
+        }
         if (execution.diagnostic)
           writeErr(renderDiagnostic(execution.diagnostic));
         exitCode = runExitCode(execution.result, options.strict);

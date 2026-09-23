@@ -1,5 +1,11 @@
 # CLI commands
 
+## `sedum doctor`
+
+`sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure: Node 20.19 or newer, valid config and `.env`, an installed browser, network and authenticated access to TypeSafe, and output directory write access. The authentication check sends one small request and may incur a provider charge. Doctor does not launch a browser or run tests.
+
+`sedum doctor --json` writes one versioned JSON object, including when checks fail. Both output forms omit the API key and raw provider errors. The exit code is `0` when every check passes and `3` otherwise.
+
 ## `sedum run`
 
 `sedum run [paths...]` runs the configured test directory, or the named test files and directories. Paths are relative to the project root. Directories are searched recursively; symlinked test files and directories are skipped or rejected. Explicit paths form the candidate set, while a run with no paths uses `tests.directory`, `tests.include`, and `tests.exclude` from configuration.
@@ -8,7 +14,9 @@ Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` f
 
 `--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
-`--env <name>` selects a configured environment. `--url-override <url>` replaces the origin of each test's initial URL while keeping its resolved path, query, and fragment; a later explicit `goto` step is unaffected. `--browser chrome|chromium`, `--slow <ms>`, `--output-dir <path>`, `--strict`, and `--costs` control browser and output behavior. `--headed` shows the browser and marks the element about to be clicked or filled with a browser overlay that does not change page content or intercept input. `--reporter` currently accepts `terminal` and `json`; canonical `progress.json` and `result.json` are always written under `<outputDir>/<run-id>/`. Explicit `--reporter json` also writes `<reporterDir>/<run-id>/result.json`; `--reporter-dir <path>` selects that project-root-relative directory. The default prints terminal output and writes canonical JSON. SED-41–43 add JUnit, markdown, and HTML formats.
+`--env <name>` selects a configured environment. `--url-override <url>` replaces the origin of each test's initial URL while keeping its resolved path, query, and fragment; a later explicit `goto` step is unaffected. `--browser chrome|chromium`, `--slow <ms>`, `--output-dir <path>`, `--strict`, and `--costs` control browser and output behavior. `--headed` shows the browser and marks the element about to be clicked or filled with a browser overlay that does not change page content or intercept input. Canonical `progress.json` and `result.json` are always written under `<outputDir>/<run-id>/`.
+
+The default `list` terminal reporter shows test results. Select `steps` for each completed step, or repeat `--reporter` to use both; `terminal` is an alias for `list`. Failed or flagged steps include a needs-attention block with their recorded sentence, source, reason, page context, and evidence status. Terminal output may use color in a TTY; redirected output is plain. `--reporter json` writes a separate final JSON result under `<reporterDir>/<run-id>/`, and `--reporter-dir <path>` selects that project-root-relative directory. You can combine JSON with terminal reporters. SED-41–43 add JUnit, markdown, and HTML formats.
 
 ## `sedum validate`
 

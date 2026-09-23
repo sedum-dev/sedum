@@ -64,6 +64,8 @@ export interface RunCommandExecution {
   readonly onReporterFailure?: () => Promise<RunCommandExecution>;
 }
 
+class ReporterOutputError extends Error {}
+
 function safeDiscoveryText(
   value: string,
   config: ResolvedProjectConfig,
@@ -252,7 +254,7 @@ export async function executeRunCommand(
   }
 
   const unavailable = (options.reporters ?? []).find(
-    (reporter) => reporter !== "terminal" && reporter !== "json",
+    (reporter) => !["terminal", "json", "list", "steps"].includes(reporter),
   );
   if (unavailable)
     return configuredOperationalFailure(
@@ -261,7 +263,7 @@ export async function executeRunCommand(
       {
         code: "unsupported_reporter",
         message: `Reporter ${JSON.stringify(unavailable)} is not available in this build.`,
-        fix: "Use --reporter terminal or --reporter json.",
+        fix: "Use --reporter list, steps, terminal, or json.",
       },
       commit,
     );
@@ -308,13 +310,50 @@ export async function executeRunCommand(
       resultPath: writer.resultPath,
       authoritative: true,
     } as const;
+    let reporterFailed = false;
+    let reportWriter: ProgressWriter | undefined;
     const recorder = new RunRecorder(async (snapshot) => {
       await writer.write(snapshot);
-      options.onSnapshot?.(snapshot);
+      if (!reporterFailed) {
+        try {
+          options.onSnapshot?.(snapshot, artifacts);
+        } catch {
+          reporterFailed = true;
+          throw new ReporterOutputError(
+            "The selected reporter could not write output.",
+          );
+        }
+      }
     }, runId);
+    const onReporterFailure = async (): Promise<RunCommandExecution> => {
+      const diagnostic: CliDiagnostic = {
+        code: "reporter_output_error",
+        message: "The selected reporter could not write output.",
+        fix: "Check terminal output access and rerun the command.",
+      };
+      const result = terminalOutputFailure(recorder.snapshot, diagnostic);
+      try {
+        await reportWriter?.finish(result);
+        await writer.finish(result);
+        return { result, artifacts, diagnostic, reporterFailed: true };
+      } catch (error) {
+        await writer.invalidate();
+        await reportWriter?.invalidate();
+        const output = outputDiagnostic(
+          error instanceof ProgressWriterError ? error.path : writer.resultPath,
+        );
+        return {
+          result: terminalOutputFailure(result, output),
+          artifacts: { ...artifacts, authoritative: false },
+          diagnostic: output,
+          reporterFailed: true,
+        };
+      }
+    };
     try {
       await recorder.start();
-    } catch {
+    } catch (error) {
+      if (error instanceof ReporterOutputError) return onReporterFailure();
       commit();
       const diagnostic = outputDiagnostic(writer.progressPath);
       await writer.invalidate();
@@ -324,7 +363,6 @@ export async function executeRunCommand(
         diagnostic,
       };
     }
-    let reportWriter: ProgressWriter | undefined;
     const requestedJsonReport =
       Boolean(options.reporterDir) ||
       Boolean(options.reporters?.includes("json"));
@@ -379,6 +417,8 @@ export async function executeRunCommand(
           result: recorder.snapshot,
           artifacts: reportFailure ? artifacts : reportedArtifacts,
           diagnostic: reportFailure ?? diagnostic,
+          reporterFailed,
+          onReporterFailure,
         };
       } catch (error) {
         const output = outputDiagnostic(
@@ -531,6 +571,7 @@ export async function executeRunCommand(
               saveFrame: (stepId, bytes) => writer.saveFrame(stepId, bytes),
             },
           });
+          if (reporterFailed) throw new ReporterOutputError();
           if (signal.aborted) break;
           if (result.status === "could_not_run") {
             operational = flowDiagnostic(result);
@@ -579,6 +620,10 @@ export async function executeRunCommand(
       await recorder.finish();
       return terminalExecution(null);
     } catch (error) {
+      if (error instanceof ReporterOutputError) {
+        commit();
+        return onReporterFailure();
+      }
       if (error instanceof ProgressWriterError) {
         commit();
         const diagnostic = outputDiagnostic(error.path);

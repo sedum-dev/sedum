@@ -103,6 +103,84 @@ const options = {
 };
 
 describe("run output failure contract", () => {
+  it("keeps valid artifacts and returns an operational result when a reporter throws", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      onSnapshot: () => {
+        throw new Error("display is unavailable");
+      },
+    });
+    expect(output.reporterFailed).toBe(true);
+    expect(output.artifacts.authoritative).toBe(true);
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "reporter_output_error" },
+    });
+    expect(
+      validateRunResult(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ),
+    ).toEqual(output.result);
+  });
+
+  it("preserves completed steps when live reporter output fails", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      onSnapshot: (snapshot) => {
+        if (snapshot.tests[0]?.attempts[0]?.steps.length)
+          throw new Error("display is unavailable");
+      },
+    });
+    expect(output.result).toMatchObject({
+      state: "error",
+      error: { code: "reporter_output_error" },
+    });
+    expect(output.result.tests[0]?.attempts[0]?.steps).toHaveLength(1);
+    expect(
+      validateRunResult(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ),
+    ).toEqual(output.result);
+  });
+
+  it("replaces a completed result when final reporter output fails", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      onSnapshot: (snapshot) => {
+        if (snapshot.state === "completed")
+          throw new Error("display is unavailable");
+      },
+    });
+    expect(output.reporterFailed).toBe(true);
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      totals: { passedTests: 1 },
+      error: { code: "reporter_output_error" },
+    });
+  });
+
+  it("can record a reporter failure after result.json was first committed", async () => {
+    await inTemporaryRoot();
+    const initial = await executeRunCommand(options);
+    const failure = await initial.onReporterFailure?.();
+    expect(failure?.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      totals: { passedTests: 1 },
+      error: { code: "reporter_output_error" },
+    });
+    expect(
+      validateRunResult(
+        JSON.parse(await readFile(initial.artifacts.resultPath, "utf8")),
+      ),
+    ).toEqual(failure?.result);
+  });
+
   it("rejects unavailable reporter choices before starting a browser or provider", async () => {
     await inTemporaryRoot();
     const output = await executeRunCommand({
