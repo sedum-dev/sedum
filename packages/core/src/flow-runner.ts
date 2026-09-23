@@ -13,6 +13,7 @@ import type {
   ClassificationCache,
   ClassificationProvider,
 } from "./classification.js";
+import type { CacheStore } from "./cache-store.js";
 import {
   classifyParsedFlow,
   type ClassifiedFlowSentence,
@@ -25,6 +26,7 @@ import {
 } from "./flow-values.js";
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
+import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
 import {
@@ -76,6 +78,7 @@ export interface FlowRunnerDependencies {
   readonly browser: BrowserDriver;
   readonly provider: ClassificationProvider & Resolver & Judge;
   readonly classificationCache: ClassificationCache;
+  readonly locatorCache?: CacheStore;
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Temporary debug switch; the final CLI/config surface owns launch policy. */
   readonly headless?: boolean;
@@ -364,7 +367,12 @@ async function executeSentence(
       locator: locator
         ? {
             confidence: locator.diagnostic.confidence ?? null,
-            source: locator.calls.length ? "model" : "none",
+            source:
+              locator.cache?.outcome === "hit"
+                ? "cache"
+                : locator.kind === "resolved" && locator.calls.length
+                  ? "model"
+                  : "none",
             options: (sensitive
               ? []
               : locator.diagnostic.topOptions.slice(0, 5)
@@ -373,7 +381,7 @@ async function executeSentence(
               role: safeText(option.role, privacy, 80),
               probability: option.probability,
             })),
-            cache: null,
+            cache: locator.cache ?? null,
           }
         : null,
       judgement,
@@ -530,10 +538,31 @@ async function executeSentence(
         },
       },
     );
+  const typeOperand = step.op === "type" ? validateTypeOperand(step) : null;
+  const runtimeDependent = step.tokens.some(
+    (token) =>
+      token.kind === "placeholder" &&
+      (step.op === "click" ||
+        !typeOperand ||
+        "diagnostic" in typeOperand ||
+        token.start < typeOperand.operand.start ||
+        token.end > typeOperand.operand.end),
+  );
+  const cacheSentence =
+    step.op === "type" && typeOperand && "operand" in typeOperand
+      ? `${step.text.slice(0, typeOperand.operand.start)}${step.text.slice(typeOperand.operand.end)}`
+          .replace(/\s+/gu, " ")
+          .trim()
+      : step.text;
   const locate = () =>
     resolveTarget(page, dependencies.provider, {
       operation: step.op === "type" ? "fill" : "click",
       sentence: step.text,
+      cacheSentence,
+      runtimeDependent,
+      ...(dependencies.locatorCache
+        ? { cache: dependencies.locatorCache }
+        : {}),
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     });
   let resolved: LocatorResult;
@@ -647,8 +676,33 @@ async function executeSentence(
           }
         : {}),
     });
+    let recordedLocator = resolved;
+    if (resolved.cacheSeed && dependencies.locatorCache?.key) {
+      const seed = resolved.cacheSeed;
+      try {
+        const entry = stageEntry(
+          dependencies.locatorCache.key,
+          seed.eligible.version.route,
+          step.op === "type" ? "fill" : "click",
+          cacheSentence,
+          seed.candidate,
+          seed.eligible,
+        );
+        await dependencies.locatorCache.put(seed.key, entry);
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message !== "candidate_not_distinguishable" &&
+          resolved.cache
+        )
+          recordedLocator = {
+            ...resolved,
+            cache: { ...resolved.cache, reason: "storage_error" },
+          };
+      }
+    }
     return record("continue", {
-      locator: resolved,
+      locator: recordedLocator,
       replayFrame,
       targetBox,
       page: locatedPage,

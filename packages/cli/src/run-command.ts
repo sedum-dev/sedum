@@ -17,6 +17,7 @@ import {
   type CliDiagnostic,
 } from "./diagnostics.js";
 import { ProgressWriter, ProgressWriterError } from "./progress-writer.js";
+import { openLocatorCache } from "./locator-cache-store.js";
 import type { RunArtifactPaths } from "./output.js";
 
 export interface RunCommandOptions {
@@ -24,6 +25,8 @@ export interface RunCommandOptions {
   readonly replay: boolean;
   readonly evidence: boolean;
   readonly sensitiveOrigins: readonly string[];
+  readonly locatorCacheDisabled?: boolean;
+  readonly locatorCacheCi?: boolean;
   readonly signal?: AbortSignal;
   readonly onSnapshot?: (snapshot: RunResult) => void;
   readonly onCommitted?: () => void;
@@ -107,11 +110,17 @@ export async function executeRunCommand(
       path.join(root, ".sedum", "classifications.json"),
       "jev-latest",
     );
+    const locatorCache = await openLocatorCache(root, {
+      disabled: options.locatorCacheDisabled ?? false,
+      ciOptIn: options.locatorCacheCi ?? false,
+      env: process.env,
+    });
     const result = await runFlow(options.file, {
       repoRoot: root,
       browser: new PlaywrightBrowserDriver(),
       provider,
       classificationCache: cache,
+      locatorCache,
       env: process.env,
       headless: process.env.SEDUM_HEADED === "1" ? false : true,
       ...(options.signal ? { signal: options.signal } : {}),

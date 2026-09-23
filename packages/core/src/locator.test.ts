@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BrowserPage } from "./browser-driver.js";
 import { resolveTarget } from "./locator.js";
+import { NoopCacheStore, type CacheStore } from "./cache-store.js";
+import { pageKey, stageEntry } from "./page-cache.js";
 import type { Candidate, CandidatePage, PageVersion } from "./page-protocol.js";
 import type {
   ProviderCall,
@@ -139,6 +141,230 @@ function resolver(
 }
 
 describe("locator", () => {
+  it("uses a uniquely validated warm recipe without a locator model call", async () => {
+    const key = new Uint8Array(32).fill(9);
+    const selected = candidate(1, {
+      name: "Add to cart",
+      peers: ["Camera"],
+      signals: { path: "article/button", contextComplete: true },
+    });
+    const other = candidate(2, {
+      name: "Add to cart",
+      peers: ["Phone"],
+      signals: { path: "article:2/button", contextComplete: true },
+    });
+    const entry = stageEntry(
+      key,
+      initial.route,
+      "click",
+      "Add Camera to cart",
+      selected,
+      {
+        protocol: 1,
+        version: initial,
+        total: 2,
+        offset: 0,
+        next: null,
+        complete: true,
+        candidates: [selected, other],
+      },
+    );
+    const model = resolver((options) => answer(options, "r1"));
+    const store: CacheStore = {
+      key,
+      lookup: vi.fn(async () => ({ entry })),
+      put: vi.fn(async () => {}),
+      invalidate: vi.fn(async () => {}),
+      clear: vi.fn(async () => {}),
+    };
+    const result = await resolveTarget(
+      recordedPage([selected, other]).page,
+      model,
+      {
+        operation: "click",
+        sentence: "Add Camera to cart",
+        cache: store,
+      },
+    );
+    expect(result).toMatchObject({
+      kind: "resolved",
+      cache: { outcome: "hit", fallbackCalledModel: false },
+      calls: [],
+    });
+    expect(model.choose).not.toHaveBeenCalled();
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe("r1");
+
+    const stale = await resolveTarget(recordedPage([other]).page, model, {
+      operation: "click",
+      sentence: "Add Camera to cart",
+      cache: store,
+    });
+    expect(stale).toMatchObject({
+      cache: { outcome: "miss", fallbackCalledModel: true },
+    });
+    expect(model.choose).toHaveBeenCalledTimes(1);
+    expect(store.invalidate).toHaveBeenCalledWith(
+      pageKey(key, initial.route, "click", "Add Camera to cart"),
+      entry,
+    );
+
+    const dependent = await resolveTarget(
+      recordedPage([selected, other]).page,
+      model,
+      {
+        operation: "click",
+        sentence: "Add Camera to cart",
+        cache: store,
+        runtimeDependent: true,
+      },
+    );
+    expect(dependent).toMatchObject({
+      kind: "resolved",
+      cache: {
+        outcome: "bypassed",
+        reason: "runtime_dependent",
+        fallbackCalledModel: true,
+      },
+    });
+    if (dependent.kind === "resolved")
+      expect(dependent.cacheSeed).toBeUndefined();
+  });
+
+  it("reports CI bypass while normal resolution still calls the model", async () => {
+    const model = resolver((options) => answer(options, "r1"));
+    const result = await resolveTarget(
+      recordedPage([candidate(1)]).page,
+      model,
+      {
+        operation: "click",
+        sentence: "Item 1",
+        cache: new NoopCacheStore("ci_default"),
+      },
+    );
+    expect(result).toMatchObject({
+      kind: "resolved",
+      cache: {
+        outcome: "bypassed",
+        reason: "ci_default",
+        fallbackCalledModel: true,
+      },
+    });
+    expect(model.choose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not claim a changed target from a renamed hook", async () => {
+    const key = new Uint8Array(32).fill(8);
+    const old = candidate(1, {
+      name: "Add to cart",
+      peers: ["Camera"],
+      signals: {
+        hook: "old-camera-action",
+        path: "article/button",
+        contextComplete: true,
+      },
+    });
+    const current = {
+      ...old,
+      signals: { ...old.signals, hook: "new-camera-action" },
+    };
+    const entry = stageEntry(
+      key,
+      initial.route,
+      "click",
+      "Add Camera to cart",
+      old,
+      {
+        protocol: 1,
+        version: initial,
+        total: 1,
+        offset: 0,
+        next: null,
+        complete: true,
+        candidates: [old],
+      },
+    );
+    const store: CacheStore = {
+      key,
+      lookup: vi.fn(async () => ({ entry })),
+      put: vi.fn(async () => {}),
+      invalidate: vi.fn(async () => {}),
+      clear: vi.fn(async () => {}),
+    };
+    const model = resolver((options) => answer(options, "r1"));
+    const result = await resolveTarget(recordedPage([current]).page, model, {
+      operation: "click",
+      sentence: "Add Camera to cart",
+      cache: store,
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      cache: {
+        outcome: "miss",
+        reason: "strong_signal_conflict",
+        fallbackCalledModel: true,
+        targetChanged: false,
+      },
+    });
+  });
+
+  it("checks a competing candidate beyond the first 128 before claiming a hit", async () => {
+    const key = new Uint8Array(32).fill(6);
+    const selected = candidate(0, {
+      name: "Add to cart",
+      peers: ["Camera"],
+      signals: { path: "article/button", contextComplete: true },
+    });
+    const entry = stageEntry(
+      key,
+      initial.route,
+      "click",
+      "Add Camera to cart",
+      selected,
+      {
+        protocol: 1,
+        version: initial,
+        total: 1,
+        offset: 0,
+        next: null,
+        complete: true,
+        candidates: [selected],
+      },
+    );
+    const items = [
+      selected,
+      ...Array.from({ length: 127 }, (_, index) => candidate(index + 1)),
+      { ...selected, ref: "r128" },
+    ];
+    const store: CacheStore = {
+      key,
+      lookup: vi.fn(async () => ({ entry })),
+      put: vi.fn(async () => {}),
+      invalidate: vi.fn(async () => {}),
+      clear: vi.fn(async () => {}),
+    };
+    const model = resolver((offered) => {
+      const first = offered.options.find(
+        (option) => option.kind === "candidate",
+      );
+      return answer(
+        offered,
+        first?.kind === "candidate" ? first.candidate.id : "none",
+      );
+    });
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "Add Camera to cart",
+      cache: store,
+    });
+    expect(result.cache).toMatchObject({
+      outcome: "miss",
+      reason: "near_tie",
+      fallbackCalledModel: true,
+    });
+    expect(model.choose).toHaveBeenCalled();
+  });
+
   it("keeps unknown-cost failed resolver attempts in its receipt", async () => {
     const { page } = recordedPage([candidate(1)]);
     const result = await resolveTarget(

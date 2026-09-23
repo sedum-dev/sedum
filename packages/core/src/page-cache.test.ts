@@ -89,9 +89,26 @@ describe("page cache matching", () => {
         key,
         route,
         "click",
-        "Buy Camera",
+        "Click Add to cart",
         sharedHook,
         eligible([sharedHook]),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      stageEntry(
+        key,
+        route,
+        "click",
+        "Buy Camera",
+        sharedHook,
+        eligible([
+          sharedHook,
+          {
+            ...sharedHook,
+            ref: "other",
+            signals: { ...sharedHook.signals, hook: "other-action" },
+          },
+        ]),
       ),
     ).toThrow("candidate_not_distinguishable");
     expect(() =>
@@ -282,6 +299,22 @@ describe("page cache matching", () => {
         "Buy Camera",
         partialContext,
         eligible([partialContext]),
+      ),
+    ).toThrow("candidate_not_distinguishable");
+    const inputButton = {
+      ...target,
+      tag: "input",
+      inputType: "submit",
+      name: "Customer token",
+    };
+    expect(() =>
+      stageEntry(
+        key,
+        route,
+        "click",
+        "Submit Customer token",
+        inputButton,
+        eligible([inputButton]),
       ),
     ).toThrow("candidate_not_distinguishable");
   });

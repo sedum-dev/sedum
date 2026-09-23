@@ -14,6 +14,8 @@ import {
   quietPage,
 } from "./page-bridge.js";
 import { stageEntry } from "./page-cache.js";
+import { pageKey, type CacheEntry } from "./page-cache.js";
+import type { CacheStore } from "./cache-store.js";
 import { projectCandidates } from "./page-protocol.js";
 import { resolveTarget } from "./locator.js";
 import { executeStep, RuntimeValue } from "./step-executor.js";
@@ -225,6 +227,94 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       if (specific.kind === "resolved")
         await executeStep(page, { op: "click", target: specific.target });
       expect(await page.evaluate("window.clicked")).toBe(1);
+      await context.close();
+    });
+    it("reuses a warm product target and refuses a changed card without a cached action", async () => {
+      const { page, context } = await fresh();
+      const html =
+        '<article><h2>Camera</h2><button onclick="window.clicked=1">Add to cart</button></article>' +
+        '<article><h2>Phone</h2><button onclick="window.clicked=2">Add to cart</button></article>';
+      await page.evaluate(
+        `document.querySelector('#app').innerHTML = ${JSON.stringify(html)}`,
+      );
+      const key = new Uint8Array(32).fill(11);
+      const entries = new Map<string, CacheEntry>();
+      const cache: CacheStore = {
+        key,
+        lookup: async (digest) => {
+          const entry = entries.get(digest);
+          return entry ? { entry } : { reason: "absent" };
+        },
+        put: async (digest, entry) => {
+          entries.set(digest, entry);
+        },
+        invalidate: async (digest) => {
+          entries.delete(digest);
+        },
+        clear: async () => {
+          entries.clear();
+        },
+      };
+      let modelCalls = 0;
+      const delegate = recordedResolver((options) => {
+        const camera = options.options.find(
+          (option) =>
+            option.kind === "candidate" &&
+            option.candidate.peers.some((peer) => peer.includes("Camera")),
+        );
+        return camera?.kind === "candidate" ? camera.candidate.id : "none";
+      });
+      const model: Resolver = {
+        choose: (...args) => {
+          modelCalls++;
+          return delegate.choose(...args);
+        },
+      };
+      const options = {
+        operation: "click" as const,
+        sentence: "Add Camera to cart",
+        cache,
+      };
+      const cold = await resolveTarget(page, model, options);
+      expect(cold).toMatchObject({
+        kind: "resolved",
+        cache: { outcome: "miss", reason: "absent" },
+      });
+      if (cold.kind !== "resolved" || !cold.cacheSeed)
+        throw new Error("Expected a cacheable cold target");
+      await executeStep(page, { op: "click", target: cold.target });
+      const seed = cold.cacheSeed;
+      await cache.put(
+        seed.key,
+        stageEntry(
+          key,
+          seed.eligible.version.route,
+          "click",
+          options.sentence,
+          seed.candidate,
+          seed.eligible,
+        ),
+      );
+      expect(modelCalls).toBe(1);
+      const warm = await resolveTarget(page, model, options);
+      expect(warm).toMatchObject({
+        kind: "resolved",
+        cache: { outcome: "hit" },
+      });
+      expect(modelCalls).toBe(1);
+      if (warm.kind === "resolved")
+        await executeStep(page, { op: "click", target: warm.target });
+      expect(await page.evaluate("window.clicked")).toBe(1);
+      await page.evaluate(
+        `document.querySelector('#app article h2').textContent = 'Unknown'`,
+      );
+      const changed = await resolveTarget(page, model, options);
+      expect(changed.cache?.outcome).toBe("miss");
+      expect(modelCalls).toBe(2);
+      expect(await page.evaluate("window.clicked")).toBe(1);
+      expect(
+        entries.has(pageKey(key, base + "/", "click", options.sentence)),
+      ).toBe(false);
       await context.close();
     });
     it("includes the visible rank and title for comments in a ranked table", async () => {
@@ -815,9 +905,18 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(found.candidates[0]?.role).toBe("button");
       expect(JSON.stringify(projectCandidates(found))).not.toContain("SECRET");
       const key = new Uint8Array(32).fill(8);
-      expect(() =>
-        stageEntry(key, page.url, "click", "Buy", found.candidates[0]!, found),
-      ).toThrow("candidate_not_distinguishable");
+      expect(
+        JSON.stringify(
+          stageEntry(
+            key,
+            page.url,
+            "click",
+            "Buy",
+            found.candidates[0]!,
+            found,
+          ),
+        ),
+      ).not.toContain("SECRET");
       await context.close();
     });
     it("lets Playwright complete a native click after a hover side effect", async () => {
