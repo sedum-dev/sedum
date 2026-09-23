@@ -93,8 +93,7 @@ and the output directory. Every failed check says how to fix it.
 After setting `TYPESAFE_API_KEY`, run:
 
 ```sh
-sedum validate   # check the test offline: no browser, no key, no cost
-sedum run tests/example.test.yaml
+sedum run tests/example.test.yaml --headed
 ```
 
 Try changing the last step to a false claim, such as `verify the cart is

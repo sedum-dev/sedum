@@ -176,6 +176,7 @@ export async function executeInitCommand(
   };
   try {
     let keptEnvExample = false;
+    let createdExample = false;
     if (options.interactive && options.color) say(initBanner(options.columns));
     await regularDirectory(path.join(root, "tests"));
     for (const [name, contents] of [
@@ -185,13 +186,21 @@ export async function executeInitCommand(
     ] as const) {
       const result = await createOrKeep(path.join(root, name), contents);
       if (name === ".env.example" && result === "kept") keptEnvExample = true;
+      if (name === "tests/example.test.yaml" && result === "created")
+        createdExample = true;
       say(`${result} ${name}\n`);
     }
     say(await updateIgnore(root, options));
 
-    say(
-      "\nStarter project created. Sedum runs plain-language tests in a browser.\n\nNext steps:\n",
-    );
+    say("\nSedum runs plain-language tests in a browser.\n");
+    if (createdExample) {
+      const title = "── tests/example.test.yaml ";
+      const divider = "─".repeat(54);
+      say(`\n${title}${divider.slice(title.length)}\n`);
+      say(EXAMPLE);
+      say(`${divider}\n`);
+    }
+    say("\nNext steps:\n");
     let step = 0;
     const next = (title: string, lines: readonly string[]) => {
       say(`\n${++step}. ${title}\n`);
@@ -199,9 +208,6 @@ export async function executeInitCommand(
     };
     if (!supportedNode(options.nodeVersion ?? process.versions.node))
       next("Update Node.js", ["Install Node 20.19.0 or newer."]);
-    next("Check the example without using a key or browser", [
-      "sedum validate",
-    ]);
     const config = await loadProjectConfig(root);
     const hasBrowser = (options.browser ?? browserAvailable)(config.browser);
     const hasEnv = await pathExists(path.join(root, ".env"));
@@ -241,8 +247,7 @@ export async function executeInitCommand(
         ]);
     }
     next("Run the example", [
-      "sedum run tests/example.test.yaml",
-      "It signs in to https://www.saucedemo.com/ with a public sample account.",
+      "sedum run tests/example.test.yaml --headed",
       "This calls the TypeSafe API and may incur a charge.",
     ]);
     return { stdout: output.join(""), stderr: "", exitCode: 0 };

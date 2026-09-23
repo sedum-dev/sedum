@@ -21,6 +21,7 @@ async function project(): Promise<string> {
 
 describe("sedum init", () => {
   it("creates a runnable example and prints a precise missing-prerequisite path", async () => {
+    vi.stubEnv("TYPESAFE_API_KEY", "");
     const cwd = await project();
     const result = await executeInitCommand({
       cwd,
@@ -33,16 +34,17 @@ describe("sedum init", () => {
     expect(result.stdout).toContain("Install Node 20.19.0 or newer");
     expect(result.stdout).toContain("sedum browsers install chromium");
     expect(result.stdout).toContain("TYPESAFE_API_KEY");
-    expect(result.stdout).toContain("sedum run tests/example.test.yaml");
-    expect(result.stdout).toContain("Starter project created.");
-    expect(result.stdout).toContain("1. Update Node.js");
     expect(result.stdout).toContain(
-      "2. Check the example without using a key or browser",
+      "sedum run tests/example.test.yaml --headed",
     );
+    expect(result.stdout).toContain("── tests/example.test.yaml");
+    expect(result.stdout).toContain(
+      await readFile(path.join(cwd, "tests/example.test.yaml"), "utf8"),
+    );
+    expect(result.stdout).toContain("1. Update Node.js");
+    expect(result.stdout).toContain("2. Add your TypeSafe API key");
     expect(result.stdout).toContain("cp .env.example .env");
-    expect(result.stdout.indexOf("sedum validate")).toBeLessThan(
-      result.stdout.indexOf("sedum run tests/example.test.yaml"),
-    );
+    expect(result.stdout).not.toContain("sedum validate");
     expect(result.stdout).toContain("may incur a charge");
     expect(result.stdout).not.toContain("\u001b[");
     expect(await readFile(path.join(cwd, ".gitignore"), "utf8")).toBe(
@@ -74,6 +76,7 @@ describe("sedum init", () => {
     );
     const second = await runCli(["init"], "0.0.0", { cwd });
     expect(second.stdout).toContain("kept tests/example.test.yaml");
+    expect(second.stdout).not.toContain("── tests/example.test.yaml");
     expect(second.stdout).not.toMatch(/^created /mu);
   });
 

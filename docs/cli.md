@@ -14,8 +14,9 @@ their own `TYPESAFE_API_KEY`. Running the test calls the TypeSafe API and may
 incur a charge. The generated config selects Chromium. If no matching browser
 is installed, `init` prints `sedum browsers install chromium`; on Linux,
 `sedum browsers install chromium --with-deps` also installs system libraries.
-The command reports a missing key and prints the exact validation and run
-commands. It does not contact the provider or install a browser itself.
+The command reports a missing key, previews the YAML test it creates, and
+prints a headed run command. It does not contact the provider or install a
+browser itself.
 
 On a fresh project, `init` asks no questions. Existing scaffold files are kept
 as they are, including on repeated runs. An existing `.gitignore` is amended
@@ -32,8 +33,7 @@ mkdir my-sedum-tests && cd my-sedum-tests
 sedum init
 cp .env.example .env  # only when .env does not already exist
 # Edit .env to set TYPESAFE_API_KEY. Install Chromium if init says it is missing.
-sedum validate
-sedum run tests/example.test.yaml
+sedum run tests/example.test.yaml --headed
 ```
 
 ## `sedum doctor`
