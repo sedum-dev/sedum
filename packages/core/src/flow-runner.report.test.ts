@@ -38,6 +38,7 @@ async function reportRun(
     const page = {
       url: route,
       closed: false,
+      goto: vi.fn(async (url: string) => ({ url })),
       title: vi.fn(async () => "Private Cart"),
       captureFrame,
       settle: vi.fn(async () => ({ settled: true, elapsedMs: 1 })),
@@ -112,6 +113,7 @@ async function reportRun(
       },
       classificationCache: new NoopClassificationCache(),
       env: {},
+      baseUrl: route,
       report: {
         recorder,
         privacy: {
@@ -272,6 +274,7 @@ describe("runner report facts", () => {
       const page = {
         url: route,
         closed: false,
+        goto: vi.fn(async (url: string) => ({ url })),
         title: vi.fn(async () => "Cart"),
         captureFrame: vi.fn(async () => new Uint8Array([1])),
         close: vi.fn(async () => {}),
@@ -321,6 +324,7 @@ describe("runner report facts", () => {
         provider: { classifyBatch: vi.fn(), choose, holds: vi.fn() },
         classificationCache: new NoopClassificationCache(),
         env: {},
+        baseUrl: route,
         report: {
           recorder,
           privacy: { secretValues: [] },
@@ -378,6 +382,7 @@ describe("runner report facts", () => {
       const page = {
         url: route,
         closed: false,
+        goto: vi.fn(async (url: string) => ({ url })),
         title: vi.fn(async () => "Cart"),
         captureFrame,
         close: vi.fn(async () => {}),
@@ -457,6 +462,7 @@ describe("runner report facts", () => {
         },
         classificationCache: new NoopClassificationCache(),
         env: {},
+        baseUrl: route,
         report: {
           recorder,
           privacy: { secretValues: [] },

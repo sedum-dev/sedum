@@ -56,6 +56,12 @@ importers:
       commander:
         specifier: 14.0.2
         version: 14.0.2
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   packages/core:
     dependencies:

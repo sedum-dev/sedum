@@ -2,11 +2,13 @@ import path from "node:path";
 import {
   AssertionEngineError,
   verify,
+  type VerifyPolicy,
   type VerifyResult,
 } from "./assertion-engine.js";
 import {
   BrowserDriverError,
   type BrowserDriver,
+  type BrowserKind,
   type BrowserPage,
 } from "./browser-driver.js";
 import type {
@@ -87,6 +89,10 @@ export interface FlowRunnerDependencies {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Temporary debug switch; the final CLI/config surface owns launch policy. */
   readonly headless?: boolean;
+  readonly browserKind?: BrowserKind;
+  readonly viewport?: { readonly width: number; readonly height: number };
+  readonly verifyPolicy?: VerifyPolicy;
+  readonly baseUrl?: string;
   readonly signal?: AbortSignal;
   readonly report?: {
     readonly recorder: RunRecorder;
@@ -231,6 +237,23 @@ function claim(
       (placeholder, key: string) =>
         data[key]?.modelVisible ? data[key].value.reveal() : placeholder,
     );
+}
+
+/** SED-10 entry URL semantics; SED-33 adds origin-preserving --url-override. */
+export function resolveEntryUrl(testUrl?: string, baseUrl?: string): string {
+  if (testUrl) {
+    try {
+      return baseUrl ? new URL(testUrl, baseUrl).href : new URL(testUrl).href;
+    } catch {
+      throw new Error(
+        baseUrl
+          ? "The test URL is invalid relative to the configured baseUrl."
+          : "The test URL is relative but no baseUrl is configured.",
+      );
+    }
+  }
+  if (baseUrl) return new URL(baseUrl).href;
+  throw new Error("The test has no URL and no baseUrl is configured.");
 }
 
 async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
@@ -564,6 +587,7 @@ async function executeSentence(
       verify(page, dependencies.provider, claim(step, data), {
         ...(dependencies.signal ? { signal: dependencies.signal } : {}),
         projectText: (text) => redactOpaqueText(text, opaqueEntries),
+        ...(dependencies.verifyPolicy ?? {}),
       });
     try {
       const result = await judge();
@@ -832,6 +856,22 @@ export async function runFlow(
     repoRoot: dependencies.repoRoot,
   });
   if (!parsed.value) return firstDiagnostic(parsed.diagnostics);
+  let entryUrl: string;
+  try {
+    entryUrl = resolveEntryUrl(parsed.value.url, dependencies.baseUrl);
+  } catch (error) {
+    return {
+      status: "could_not_run",
+      file: absolute,
+      code: "invalid_test",
+      source: { file: absolute, line: 1, col: 1 },
+      message:
+        error instanceof Error
+          ? error.message
+          : "The test entry URL could not be resolved.",
+      fix: "Add an absolute test URL or configure baseUrl in sedum.config.yaml.",
+    };
+  }
   const classified = await classifyParsedFlow(parsed, {
     mode: "allow-model",
     cache: dependencies.classificationCache,
@@ -891,18 +931,24 @@ export async function runFlow(
   let page: BrowserPage | undefined;
   try {
     session = await dependencies.browser.launch({
+      ...(dependencies.browserKind === undefined
+        ? {}
+        : { browser: dependencies.browserKind }),
       ...(dependencies.headless === undefined
         ? {}
         : { headless: dependencies.headless }),
     });
-    context = await session.newContext();
+    context = await session.newContext(
+      dependencies.viewport === undefined
+        ? {}
+        : { viewport: dependencies.viewport },
+    );
     page = await context.newPage();
-    if (classified.value.url)
-      await executeStep(
-        page,
-        { op: "goto", url: new RuntimeUrl([classified.value.url]) },
-        dependencies.signal ? { signal: dependencies.signal } : {},
-      );
+    await executeStep(
+      page,
+      { op: "goto", url: new RuntimeUrl([entryUrl]) },
+      dependencies.signal ? { signal: dependencies.signal } : {},
+    );
     const activePage = page;
     type Problem = Exclude<FlowRunResult, { status: "passed" }>;
     const runItems = async (

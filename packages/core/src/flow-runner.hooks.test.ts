@@ -62,6 +62,7 @@ async function runHooks(
       title: vi.fn(async () => "Example"),
       text: vi.fn(async () => options.pageText ?? "Example page text"),
       settle: vi.fn(async () => ({ settled: true, elapsedMs: 1 })),
+      goto: vi.fn(async () => {}),
       close: vi.fn(async () => {}),
       evaluate: vi.fn(async (expression: string) => {
         const value = expression.includes('bridge["quiet"]')
@@ -145,6 +146,7 @@ async function runHooks(
       },
       classificationCache: new NoopClassificationCache(),
       env: options.env ?? {},
+      baseUrl: version.route,
       report: {
         recorder,
         privacy: { secretValues: [] },

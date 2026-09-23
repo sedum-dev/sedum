@@ -6,6 +6,9 @@ See [assertion engine](assertion-engine.md) for `verify` / `measure` results, ve
 
 Public design and usage documentation will live here as engine behavior lands. The current package boundaries are described in the root README.
 
+See [project configuration](configuration.md) for `sedum.config.yaml`, named
+environments, `.env` loading, test discovery, and precedence.
+
 ## CLI output and exits
 
 `sedum --help` lists only implemented commands; every command has its own

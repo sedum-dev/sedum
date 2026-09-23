@@ -26,6 +26,8 @@
     "@sedum-dev/core": "workspace:*",
     "@sedum-dev/provider-typesafe": "workspace:*",
     "@sedum-dev/reporters": "workspace:*",
-    "commander": "14.0.2"
+    "commander": "14.0.2",
+    "minimatch": "10.2.6",
+    "yaml": "2.9.1"
   }
 }

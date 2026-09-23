@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -44,8 +44,14 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
           report?: { recorder: InstanceType<typeof actual.RunRecorder> };
         },
       ) => {
-        await dependencies.report?.recorder.startTest({ id: "test", file });
-        await dependencies.report?.recorder.addStep(fixtureStep);
+        await dependencies.report?.recorder.startTest({
+          id: `test:${path.basename(file)}`,
+          file,
+        });
+        await dependencies.report?.recorder.addStep({
+          ...fixtureStep,
+          id: `step:${path.basename(file)}`,
+        });
         await dependencies.report?.recorder.finishTest("passed");
         return { status: "passed" as const, file };
       },
@@ -72,6 +78,7 @@ async function inTemporaryRoot() {
   root = await mkdtemp(path.join(tmpdir(), "sedum-output-failure-"));
   previous = process.cwd();
   process.chdir(root);
+  vi.mocked(runFlow).mockClear();
 }
 
 function longTemporaryRoot() {
@@ -92,6 +99,98 @@ const options = {
 };
 
 describe("run output failure contract", () => {
+  it("returns an operational result for invalid config before starting a test", async () => {
+    await inTemporaryRoot();
+    await writeFile(
+      path.join(root!, "sedum.config.yaml"),
+      "browser: firefox\n",
+    );
+    const output = await executeRunCommand({
+      replay: false,
+      evidence: false,
+      sensitiveOrigins: [],
+    });
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "invalid_config_browser" },
+    });
+    expect(output.diagnostic?.message).toContain("sedum.config.yaml");
+    expect(output.diagnostic?.message).toContain("key: browser");
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+
+  it("returns an operational result when configured discovery selects no tests", async () => {
+    await inTemporaryRoot();
+    await writeFile(path.join(root!, "sedum.config.yaml"), "{}\n");
+    const output = await executeRunCommand({
+      replay: false,
+      evidence: false,
+      sensitiveOrigins: [],
+    });
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "no_tests" },
+    });
+    expect(output.artifacts.authoritative).toBe(true);
+    expect(runFlow).not.toHaveBeenCalled();
+  });
+
+  it("runs configured files without a positional argument and threads resolved settings", async () => {
+    await inTemporaryRoot();
+    await mkdir(path.join(root!, "specs"));
+    await writeFile(
+      path.join(root!, "sedum.config.yaml"),
+      `tests:
+  directory: specs
+  exclude: ["skip-*.test.yaml"]
+browser: chromium
+viewport: { width: 900, height: 600 }
+thresholds: { verify: 0.8, lowConfidenceBand: 0.1, contradiction: 0.4 }
+outputDir: artifacts/runs
+baseUrl: https://example.com/app/
+`,
+    );
+    await writeFile(
+      path.join(root!, "specs", "b.test.yaml"),
+      "steps: [verify b]\n",
+    );
+    await writeFile(
+      path.join(root!, "specs", "a.test.yaml"),
+      "steps: [verify a]\n",
+    );
+    await writeFile(
+      path.join(root!, "specs", "skip-x.test.yaml"),
+      "steps: [verify x]\n",
+    );
+    const output = await executeRunCommand({
+      replay: false,
+      evidence: false,
+      sensitiveOrigins: [],
+    });
+    expect(output.result).toMatchObject({
+      state: "completed",
+      verdict: "passed",
+      totals: { selectedTests: 2, executedTests: 2 },
+    });
+    expect(output.artifacts.resultPath).toContain(
+      path.join("artifacts", "runs"),
+    );
+    expect(
+      vi.mocked(runFlow).mock.calls.map(([file]) => path.basename(file)),
+    ).toEqual(["a.test.yaml", "b.test.yaml"]);
+    expect(vi.mocked(runFlow).mock.calls[0]?.[1]).toMatchObject({
+      browserKind: "chromium",
+      viewport: { width: 900, height: 600 },
+      verifyPolicy: { minP: 0.8, band: 0.1, contradictionCutoff: 0.4 },
+      baseUrl: "https://example.com/app/",
+    });
+    expect(vi.mocked(runFlow).mock.calls[0]?.[1].repoRoot).toMatch(
+      new RegExp(`${path.basename(root!)}$`, "u"),
+    );
+  });
+
   it("persists an authoritative successful result", async () => {
     await inTemporaryRoot();
     const output = await executeRunCommand(options);
@@ -158,7 +257,7 @@ describe("run output failure contract", () => {
     const output = await executeRunCommand(options);
     expect(output.result.state).toBe("error");
     expect(output.result.tests[0]).toMatchObject({
-      file: "fixture.test.yaml",
+      file: expect.stringMatching(/fixture\.test\.yaml$/u),
       state: "running",
     });
     expect(output.artifacts.authoritative).toBe(false);

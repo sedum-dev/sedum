@@ -21,11 +21,20 @@ export class ProgressWriter {
 
   private constructor(readonly directory: string) {}
 
-  static async create(root: string, runId: string): Promise<ProgressWriter> {
+  static async create(
+    root: string,
+    runId: string,
+    outputDirectory = path.join(root, ".sedum", "runs"),
+  ): Promise<ProgressWriter> {
     if (!/^[a-zA-Z0-9-]+$/.test(runId)) throw new Error("Invalid run ID");
-    const parent = path.join(root, ".sedum");
-    const base = path.join(parent, "runs");
-    for (const part of [parent, base]) {
+    const resolvedRoot = path.resolve(root);
+    const base = path.resolve(outputDirectory);
+    const relation = path.relative(resolvedRoot, base);
+    if (relation === ".." || relation.startsWith(`..${path.sep}`))
+      throw new Error("Run output path escapes the project root");
+    let part = resolvedRoot;
+    for (const segment of relation.split(path.sep).filter(Boolean)) {
+      part = path.join(part, segment);
       await mkdir(part, { mode: 0o700 }).catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       });
