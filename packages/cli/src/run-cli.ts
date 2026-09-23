@@ -1,14 +1,19 @@
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
+import {
+  createTerminalReporter,
+  ReporterLifecycle,
+  type ReporterContext,
+  type TerminalReporterName,
+} from "@sedum-dev/reporters";
 import { renderDiagnostic } from "./diagnostics.js";
 import { clearLocatorCache } from "./locator-cache-store.js";
 import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
 import { executeListCommand } from "./list-command.js";
 import { renderConfigErrors } from "./project-context.js";
 import {
-  clearProgress,
-  renderProgress,
   renderRunSummary,
+  type RunArtifactPaths,
   type OutputCapabilities,
 } from "./output.js";
 import type { RunCommandExecution, RunCommandOptions } from "./run-command.js";
@@ -63,6 +68,17 @@ function collectOrigin(value: string, previous: readonly string[]): string[] {
       `Invalid origin ${JSON.stringify(value)}. Use an absolute URL such as https://example.com.`,
     );
   }
+}
+
+function collectReporter(
+  value: string,
+  previous: readonly TerminalReporterName[],
+): TerminalReporterName[] {
+  if (value !== "list" && value !== "steps")
+    throw new InvalidArgumentError(
+      `Unknown reporter ${JSON.stringify(value)}. Use list or steps.`,
+    );
+  return previous.includes(value) ? [...previous] : [...previous, value];
 }
 
 function commandHelp(command: Command, writeErr: (value: string) => void) {
@@ -137,6 +153,12 @@ export async function runCli(
     )
     .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
     .option(
+      "--reporter <name>",
+      "terminal reporter: list or steps (repeatable; default list)",
+      collectReporter,
+      [],
+    )
+    .option(
       "--costs",
       "show model tokens and cost even when stdout is redirected",
       false,
@@ -156,9 +178,30 @@ export async function runCli(
           costs: boolean;
           locatorCache: boolean;
           locatorCacheCi: boolean;
+          reporter: TerminalReporterName[];
         },
       ) => {
-        let transient = false;
+        const lifecycle = new ReporterLifecycle();
+        const reporters = (
+          options.reporter.length ? options.reporter : ["list" as const]
+        ).map(createTerminalReporter);
+        const context = (artifacts: RunArtifactPaths): ReporterContext => ({
+          stdoutIsTTY: capabilities.stdoutIsTTY,
+          color: capabilities.color,
+          showCosts: options.costs,
+          ...(file ? { rerunFile: file } : {}),
+          ...artifacts,
+          includeSharedSummary: true,
+        });
+        const emit = (snapshot: RunResult, artifacts: RunArtifactPaths) => {
+          const events = lifecycle.feed(snapshot);
+          for (const event of events)
+            for (const [index, reporter] of reporters.entries()) {
+              if (event.type === "runStarted" && index > 0) continue;
+              const output = reporter.onEvent(event, context(artifacts));
+              if (output) writeOut(output);
+            }
+        };
         const execution = await executeRun({
           ...(file ? { file } : {}),
           replay: options.replay,
@@ -170,23 +213,41 @@ export async function runCli(
           ...(runtime.onRunCommitted
             ? { onCommitted: runtime.onRunCommitted }
             : {}),
-          onSnapshot: (snapshot: RunResult) => {
-            const progress = renderProgress(snapshot, capabilities);
-            if (progress) {
-              transient = true;
-              writeOut(progress);
-            }
-          },
+          onSnapshot: emit,
         });
-        if (transient) writeOut(clearProgress(capabilities));
-        writeOut(
-          renderRunSummary(
-            execution.result,
-            capabilities,
-            execution.artifacts,
-            options.costs,
-          ),
-        );
+        if (!execution.reporterFailed) {
+          try {
+            emit(execution.result, execution.artifacts);
+            writeOut(
+              renderRunSummary(
+                execution.result,
+                capabilities,
+                execution.artifacts,
+                options.costs,
+              ),
+            );
+            for (const [index, reporter] of reporters.entries()) {
+              const output = reporter.onResult(execution.result, {
+                ...context(execution.artifacts),
+                includeSharedSummary: index === 0,
+              });
+              if (output) writeOut(output);
+            }
+          } catch {
+            const failure = await execution.onReporterFailure?.();
+            writeErr(
+              renderDiagnostic(
+                failure?.diagnostic ?? {
+                  code: "reporter_output_error",
+                  message: "The selected reporter could not write output.",
+                  fix: "Check terminal output access and rerun the command.",
+                },
+              ),
+            );
+            exitCode = 3;
+            return;
+          }
+        }
         if (execution.diagnostic)
           writeErr(renderDiagnostic(execution.diagnostic));
         exitCode = runExitCode(execution.result, options.strict);
