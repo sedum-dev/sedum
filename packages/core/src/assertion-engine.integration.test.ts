@@ -70,7 +70,8 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         );
         const judge = { holds } as unknown as Judge;
         const result = await verify(page, judge, "Six products are available", {
-          observationTimeoutMs: 2_000,
+          // Content appears after 120ms; the budget only has to absorb slow CI runners.
+          observationTimeoutMs: 10_000,
         });
         expect(result.verdict).toBe("passed");
         expect(holds).toHaveBeenCalledOnce();
