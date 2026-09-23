@@ -15,6 +15,7 @@ import type {
   FullValidationCoverage,
   ModuleStep,
   ParsedFlowResult,
+  ResolvedModuleCall,
   SentenceStep,
 } from "./flow-types.js";
 
@@ -23,7 +24,12 @@ export interface ClassifiedFlowSentence extends SentenceStep {
   readonly classificationSource: ClassifiedStep["classificationSource"];
   readonly probability: number | null;
 }
-export type ClassifiedFlowStep = ClassifiedFlowSentence | ModuleStep;
+export interface ClassifiedModuleStep extends Omit<ModuleStep, "resolved"> {
+  readonly resolved?: Omit<ResolvedModuleCall, "steps"> & {
+    readonly steps: readonly ClassifiedFlowStep[];
+  };
+}
+export type ClassifiedFlowStep = ClassifiedFlowSentence | ClassifiedModuleStep;
 export interface ClassifiedFlowDefinition extends Omit<
   FlowDefinition,
   "before" | "steps" | "after"
@@ -63,10 +69,15 @@ export async function classifyParsedFlow(
       coverage: parsed.coverage,
       calls: [],
     };
-  const all = [...flow.before, ...flow.steps, ...flow.after];
-  const sentences = all.filter(
-    (step): step is SentenceStep => step.kind === "sentence",
-  );
+  const collect = (steps: readonly FlowStep[]): SentenceStep[] =>
+    steps.flatMap((step) =>
+      step.kind === "sentence"
+        ? [step]
+        : step.resolved
+          ? collect(step.resolved.steps)
+          : [],
+    );
+  const sentences = collect([...flow.before, ...flow.steps, ...flow.after]);
   const classification = await classifySteps(
     sentences.map((step) => ({ sentence: step.text, source: step.source })),
     options,
@@ -112,7 +123,16 @@ export async function classifyParsedFlow(
   let index = 0;
   const attach = (steps: readonly FlowStep[]): readonly ClassifiedFlowStep[] =>
     steps.map((step) => {
-      if (step.kind === "module") return step;
+      if (step.kind === "module")
+        return step.resolved
+          ? {
+              ...step,
+              resolved: {
+                ...step.resolved,
+                steps: attach(step.resolved.steps),
+              },
+            }
+          : (step as ClassifiedModuleStep);
       const found = classification.steps[index++]!;
       return {
         ...step,

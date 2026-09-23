@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -85,22 +85,39 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
     });
   }
 
-  it("runs login, repeated products, and checkout through the real provider adapter", async () => {
+  it("runs two flows through one login module and the real provider adapter", async () => {
     const folder = await mkdtemp(join(tmpdir(), "sedum-fixture-flow-"));
-    const file = join(folder, "checkout.test.yaml");
     try {
-      await writeFile(
-        file,
-        `url: ${site.baseUrl}/login\ndata:\n  username: fixture_user\n  password: fixture_password\n  first: Ada\n  last: Example\n  postal: "94016"\nsteps:\n  - type {{username}} into the Username field\n  - type {{password}} into the Password field\n  - click the Login button\n  - verify a Products heading is shown\n  - click Add to cart for the Canvas Backpack\n  - click the Cart link\n  - verify Canvas Backpack is in the cart\n  - click the Checkout link\n  - type {{first}} into the First name field\n  - type {{last}} into the Last name field\n  - type {{postal}} into the Postal code field\n  - click Place order\n  - verify Order placed is shown\n`,
+      const fixturesRoot = fileURLToPath(
+        new URL("../../../fixtures/", import.meta.url),
       );
-      const result = await runFlow(file, {
-        repoRoot: folder,
-        browser: new PlaywrightBrowserDriver(),
-        provider: adapter,
-        classificationCache: new NoopClassificationCache(),
-        env: {},
-      });
-      expect(result).toEqual({ status: "passed", file });
+      await mkdir(join(folder, "modules"));
+      await writeFile(
+        join(folder, "modules/ui-login.module.yaml"),
+        await readFile(
+          join(fixturesRoot, "modules/ui-login.module.yaml"),
+          "utf8",
+        ),
+      );
+      for (const name of ["ui-login-products", "ui-login-checkout"]) {
+        const file = join(folder, `${name}.test.yaml`);
+        const template = await readFile(
+          join(fixturesRoot, `${name}.test.yaml`),
+          "utf8",
+        );
+        await writeFile(
+          file,
+          template.replaceAll("__BASE_URL__", site.baseUrl),
+        );
+        const result = await runFlow(file, {
+          repoRoot: folder,
+          browser: new PlaywrightBrowserDriver(),
+          provider: adapter,
+          classificationCache: new NoopClassificationCache(),
+          env: { FIXTURE_PASSWORD: "fixture_password" },
+        });
+        expect(result).toEqual({ status: "passed", file });
+      }
       successful++;
     } finally {
       await rm(folder, { recursive: true, force: true });

@@ -24,6 +24,8 @@ import type {
   FlowSource,
   FlowStep,
   FlowValidationResult,
+  ModuleDefinition,
+  ParsedModuleResult,
   ParsedFlowResult,
   ValidationInput,
 } from "./flow-types.js";
@@ -43,6 +45,10 @@ const useSchema = z.strictObject({
   with: z.record(dataKeySchema, scalarSchema).optional(),
 });
 const stepSchema = z.union([nonemptyText, useSchema]);
+const moduleSchema = z.strictObject({
+  parameters: z.array(dataKeySchema),
+  steps: z.array(stepSchema).min(1),
+});
 /** Additional optional fields may be added without changing the v1 marker. */
 const v1Schema = z.strictObject({
   sedum: z.literal(1).optional(),
@@ -408,22 +414,37 @@ function parseSteps(
             "Write `use: path/to/login.module.yaml`.",
           );
         const withValues = (mapping.with ?? {}) as Record<string, FlowScalar>;
+        const withSources: Record<string, FlowSource> = Object.create(
+          null,
+        ) as Record<string, FlowSource>;
         for (const [key, value] of Object.entries(withValues)) {
-          if (typeof value !== "string") continue;
-          const valueSource = at(file, counter, nodes, [
+          withSources[key] = at(file, counter, nodes, [
             phase,
             index,
             "with",
             key,
           ]);
+          if (typeof value !== "string") continue;
+          const valueSource = withSources[key]!;
           const lexical = tokenizeStep(value);
           checkPlaceholders(lexical, valueSource, knownData, diagnostics);
+          const template = parseDataTemplate(value);
+          if ("error" in template)
+            add(
+              diagnostics,
+              "error",
+              "invalid_env_template",
+              valueSource,
+              `Invalid environment template for module argument ${key}.`,
+              template.error,
+            );
         }
         steps.push({
           kind: "module",
           phase,
           use: mapping.use,
           with: withValues,
+          withSources,
           source,
           sourceStack: [source],
         });
@@ -773,6 +794,144 @@ export function validateFlows(
         : "not_needed",
     },
   };
+}
+
+/** Parse a strict reusable module without granting it test-level fields. */
+export function parseModule(source: string, file: string): ParsedModuleResult {
+  const counter = new LineCounter();
+  const diagnostics: FlowDiagnostic[] = [];
+  if (!file.endsWith(".module.yaml"))
+    add(
+      diagnostics,
+      "error",
+      "invalid_module_path",
+      { file, line: 1, col: 1 },
+      "A module file must end in .module.yaml.",
+      "Rename the file with the .module.yaml suffix.",
+    );
+  let document: ReturnType<typeof parseDocument>;
+  try {
+    document = parseDocument(source, {
+      lineCounter: counter,
+      uniqueKeys: true,
+      strict: true,
+    });
+  } catch {
+    add(
+      diagnostics,
+      "error",
+      "yaml_syntax",
+      { file, line: 1, col: 1 },
+      "Could not parse this YAML module.",
+      "Correct the YAML syntax.",
+    );
+    return { diagnostics };
+  }
+  for (const error of document.errors) {
+    const line = counter.linePos(error.pos[0]);
+    add(
+      diagnostics,
+      "error",
+      error.code === "DUPLICATE_KEY" ? "duplicate_key" : "yaml_syntax",
+      { file, line: line.line, col: line.col },
+      error.message.split("\n")[0] ?? "Invalid YAML.",
+      error.code === "DUPLICATE_KEY"
+        ? "Keep only one occurrence of this key."
+        : "Correct the YAML syntax.",
+    );
+  }
+  if (
+    diagnostics.some(
+      (item) => item.code === "yaml_syntax" || item.code === "duplicate_key",
+    )
+  )
+    return { diagnostics: diagnostics.sort(compareDiagnostics) };
+  if (!isMap(document.contents)) {
+    add(
+      diagnostics,
+      "error",
+      "invalid_module_root",
+      { file, line: 1, col: 1 },
+      "A module file must be a mapping.",
+      "Start with `parameters:` and `steps:`.",
+    );
+    return { diagnostics: diagnostics.sort(compareDiagnostics) };
+  }
+  const nodes = new Map<string, Node>();
+  const plain = readNode(
+    document.contents,
+    [],
+    nodes,
+    counter,
+    file,
+    diagnostics,
+  ) as Record<string, unknown>;
+  for (const key of Object.keys(plain)) {
+    if (key === "parameters" || key === "steps") continue;
+    add(
+      diagnostics,
+      "error",
+      "unknown_module_key",
+      at(file, counter, nodes, [key, "$key"]),
+      `Unknown module key \`${key}\`.`,
+      "Modules contain only `parameters` and `steps`.",
+    );
+    delete plain[key];
+  }
+  const parsed = moduleSchema.safeParse(plain);
+  if (!parsed.success)
+    for (const issue of parsed.error.issues) {
+      const parts = issue.path.map(String);
+      add(
+        diagnostics,
+        "error",
+        issue.code === "unrecognized_keys"
+          ? "unknown_module_key"
+          : "invalid_module_field",
+        at(file, counter, nodes, parts),
+        `Invalid \`${parts.join(".") || "module"}\`: ${issue.message}.`,
+        parts[0] === "steps" && plain.steps === undefined
+          ? "Add `steps:` with at least one sentence."
+          : "Correct the module field for the v1 format.",
+      );
+    }
+  const parameters = Array.isArray(plain.parameters)
+    ? plain.parameters.filter(
+        (item): item is string => typeof item === "string",
+      )
+    : [];
+  const seen = new Set<string>();
+  for (const [index, parameter] of parameters.entries()) {
+    if (seen.has(parameter))
+      add(
+        diagnostics,
+        "error",
+        "duplicate_module_parameter",
+        at(file, counter, nodes, ["parameters", index]),
+        `Module parameter \`${parameter}\` is declared more than once.`,
+        "Keep each parameter name once.",
+      );
+    seen.add(parameter);
+  }
+  const known = new Set(parameters);
+  const steps = parseSteps(
+    "steps",
+    plain.steps,
+    file,
+    counter,
+    nodes,
+    known,
+    diagnostics,
+  );
+  if (!parsed.success || diagnostics.some((item) => item.severity === "error"))
+    return { diagnostics: diagnostics.sort(compareDiagnostics) };
+  const value: ModuleDefinition = {
+    file,
+    source: at(file, counter, nodes, []),
+    parameters: parsed.data.parameters,
+    steps,
+  };
+  return { value, diagnostics: diagnostics.sort(compareDiagnostics) };
 }
 
 export async function discoverFlowFiles(

@@ -6,7 +6,7 @@ import { NoopClassificationCache } from "./classification-cache.js";
 import { runFlow } from "./flow-runner.js";
 
 describe("walking-skeleton flow runner", () => {
-  it("rejects hooks before constructing a provider or browser", async () => {
+  it("runs hook flows through the browser lifecycle", async () => {
     const folder = await mkdtemp(path.join(tmpdir(), "sedum-runner-"));
     try {
       const file = path.join(folder, "hooks.test.yaml");
@@ -14,7 +14,16 @@ describe("walking-skeleton flow runner", () => {
         file,
         "before:\n  - click the banner\nsteps:\n  - click the login button\n",
       );
-      const launch = vi.fn();
+      const page = { close: vi.fn(async () => {}) };
+      const context = {
+        newPage: vi.fn(async () => page),
+        close: vi.fn(async () => {}),
+      };
+      const session = {
+        newContext: vi.fn(async () => context),
+        close: vi.fn(async () => {}),
+      };
+      const launch = vi.fn(async () => session);
       const result = await runFlow(file, {
         repoRoot: folder,
         browser: { launch } as never,
@@ -26,12 +35,9 @@ describe("walking-skeleton flow runner", () => {
         classificationCache: new NoopClassificationCache(),
         env: {},
       });
-      expect(result).toMatchObject({
-        status: "could_not_run",
-        message: expect.stringContaining("before/after"),
-        source: { line: 2, col: 5 },
-      });
-      expect(launch).not.toHaveBeenCalled();
+      expect(result.status).toBe("could_not_run");
+      expect(launch).toHaveBeenCalledOnce();
+      expect(page.close).toHaveBeenCalledOnce();
     } finally {
       await rm(folder, { recursive: true, force: true });
     }

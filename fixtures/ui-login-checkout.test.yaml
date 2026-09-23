@@ -1,0 +1,23 @@
+# The fixture test replaces __BASE_URL__ with the local server's ephemeral URL.
+url: __BASE_URL__/login
+data:
+  username: fixture_user
+  first: Ada
+  last: Example
+  postal: "94016"
+before:
+  - use: ./modules/ui-login.module.yaml
+    with:
+      username: "{{username}}"
+      password: $FIXTURE_PASSWORD
+steps:
+  - verify a Products heading is shown
+  - click Add to cart for the Canvas Backpack
+  - click the Cart link
+  - verify Canvas Backpack is in the cart
+  - click the Checkout link
+  - type {{first}} into the First name field
+  - type {{last}} into the Last name field
+  - type {{postal}} into the Postal code field
+  - click Place order
+  - verify Order placed is shown
