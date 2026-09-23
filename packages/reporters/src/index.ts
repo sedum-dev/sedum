@@ -8,3 +8,12 @@ export type ReportInput = RunResult;
 export function renderJson(result: RunResult): string {
   return `${JSON.stringify(validateRunResult(result), null, 2)}\n`;
 }
+
+export { ReporterLifecycle } from "./lifecycle.js";
+export type { ReporterEvent } from "./lifecycle.js";
+export { createTerminalReporter } from "./terminal.js";
+export type {
+  Reporter,
+  ReporterContext,
+  TerminalReporterName,
+} from "./terminal.js";
