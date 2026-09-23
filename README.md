@@ -31,6 +31,10 @@ node packages/cli/dist/cli.js run --help
 node packages/cli/dist/cli.js browsers install --help
 ```
 
+For project defaults and a no-argument `sedum run`, add a
+[`sedum.config.yaml`](docs/configuration.md). Sedum loads secrets only from the
+invoking process or the `.env` beside that project config.
+
 Install Chromium with `node packages/cli/dist/cli.js browsers install chromium`,
 set `TYPESAFE_API_KEY` and `SAUCE_PASSWORD`, then run the included live fixture:
 

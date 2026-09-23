@@ -103,8 +103,8 @@ export async function runCli(
 
   program
     .command("run")
-    .description("run one explicit *.test.yaml file")
-    .argument("<file.test.yaml>", "test file to execute")
+    .description("run configured tests or one explicit *.test.yaml file")
+    .argument("[file.test.yaml]", "test file to execute")
     .option("--replay", "capture replay frames for executed steps", false)
     .option("--no-evidence", "disable non-passing evidence frames")
     .option(
@@ -125,7 +125,7 @@ export async function runCli(
     )
     .action(
       async (
-        file: string,
+        file: string | undefined,
         options: {
           replay: boolean;
           evidence: boolean;
@@ -136,7 +136,7 @@ export async function runCli(
       ) => {
         let transient = false;
         const execution = await executeRun({
-          file,
+          ...(file ? { file } : {}),
           replay: options.replay,
           evidence: options.evidence,
           sensitiveOrigins: options.sensitiveOrigin,

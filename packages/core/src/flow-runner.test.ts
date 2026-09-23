@@ -4,7 +4,26 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { NoopClassificationCache } from "./classification-cache.js";
 import { BrowserDriverError } from "./browser-driver.js";
-import { runFlow } from "./flow-runner.js";
+import { resolveEntryUrl, runFlow } from "./flow-runner.js";
+
+describe("entry URL resolution", () => {
+  it("preserves absolute URLs and resolves relative or omitted URLs against baseUrl", () => {
+    expect(
+      resolveEntryUrl("https://absolute.test/login", "https://base.test/app/"),
+    ).toBe("https://absolute.test/login");
+    expect(resolveEntryUrl("login", "https://base.test/app/")).toBe(
+      "https://base.test/app/login",
+    );
+    expect(resolveEntryUrl("/login", "https://base.test/app/")).toBe(
+      "https://base.test/login",
+    );
+    expect(resolveEntryUrl(undefined, "https://base.test/app/")).toBe(
+      "https://base.test/app/",
+    );
+    expect(() => resolveEntryUrl("login")).toThrow("no baseUrl");
+    expect(() => resolveEntryUrl()).toThrow("no URL and no baseUrl");
+  });
+});
 
 describe("walking-skeleton flow runner", () => {
   it("runs hook flows through the browser lifecycle", async () => {
@@ -35,6 +54,7 @@ describe("walking-skeleton flow runner", () => {
         },
         classificationCache: new NoopClassificationCache(),
         env: {},
+        baseUrl: "https://example.com/",
       });
       expect(result.status).toBe("could_not_run");
       expect(launch).toHaveBeenCalledOnce();
@@ -50,7 +70,7 @@ describe("walking-skeleton flow runner", () => {
       const file = path.join(folder, "missing-data.test.yaml");
       await writeFile(
         file,
-        "data:\n  password: $SECRET\nsteps:\n  - type {{password}} in the password field\n",
+        "url: https://example.com/\ndata:\n  password: $SECRET\nsteps:\n  - type {{password}} in the password field\n",
       );
       const launch = vi.fn();
       const result = await runFlow(file, {
@@ -78,7 +98,10 @@ describe("walking-skeleton flow runner", () => {
     const folder = await mkdtemp(path.join(tmpdir(), "sedum-runner-"));
     try {
       const file = path.join(folder, "measure.test.yaml");
-      await writeFile(file, "steps:\n  - measure the page title\n");
+      await writeFile(
+        file,
+        "url: https://example.com/\nsteps:\n  - measure the page title\n",
+      );
       const page = { close: vi.fn(async () => {}) };
       const context = {
         newPage: vi.fn(async () => page),
@@ -113,7 +136,10 @@ describe("walking-skeleton flow runner", () => {
     const folder = await mkdtemp(path.join(tmpdir(), "sedum-runner-"));
     try {
       const file = path.join(folder, "measure.test.yaml");
-      await writeFile(file, "steps:\n  - measure the page title\n");
+      await writeFile(
+        file,
+        "url: https://example.com/\nsteps:\n  - measure the page title\n",
+      );
       const result = await runFlow(file, {
         repoRoot: folder,
         browser: {

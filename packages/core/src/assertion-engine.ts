@@ -66,6 +66,8 @@ export interface AssertionOptions {
 
 export interface VerifyOptions extends AssertionOptions {
   readonly minP?: number;
+  readonly band?: number;
+  readonly contradictionCutoff?: number;
 }
 
 interface AssertionScores {
@@ -363,6 +365,11 @@ export async function verify(
   const started = performance.now();
   const timeoutMs = validateInput(claim, options);
   probability(options.minP ?? DEFAULT_MIN_P, "minP");
+  probability(options.band ?? DEFAULT_BAND, "band");
+  probability(
+    options.contradictionCutoff ?? DEFAULT_CONTRADICTION_CUTOFF,
+    "contradictionCutoff",
+  );
   canceled(options.signal);
   const { decision, digest } = await judgePage(
     page,
@@ -372,11 +379,13 @@ export async function verify(
     options.signal,
     options.projectText,
   );
-  const policy = evaluateVerifyScores(
-    decision.holds,
-    decision.contradicted,
-    options.minP === undefined ? {} : { minP: options.minP },
-  );
+  const policy = evaluateVerifyScores(decision.holds, decision.contradicted, {
+    ...(options.minP === undefined ? {} : { minP: options.minP }),
+    ...(options.band === undefined ? {} : { band: options.band }),
+    ...(options.contradictionCutoff === undefined
+      ? {}
+      : { contradictionCutoff: options.contradictionCutoff }),
+  });
   const needsExcerpt = policy.verdict === "failed" || policy.flags.length > 0;
   return Object.defineProperty(
     {

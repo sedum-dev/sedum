@@ -4,7 +4,18 @@
 
 Each attempt problem has a unique ID, consecutive attempt-local ordinal, phase, ordered source stack, outcome, typed error, and an origin of `step` or `module_binding`. A step problem links its executed step; a module binding problem has `stepId: null` because no sentence ran. The first encountered problem is primary. A failed setup or body stays primary even if later teardown reports an operational error. A primary operational error leaves the verdict null. Executed steps retain their own phase and source stack; there are no synthetic module-call steps.
 
-For a syntactically valid `sedum run`, the CLI creates `.sedum/runs/<run-id>/progress.json` before provider setup or test loading and prints its path. Each update replaces the file atomically with a complete, validated `RunResult`; pollers can parse it at any point. `result.json` is written from the terminal snapshot. A setup or execution error has `state: "error"`, a typed `error`, and `verdict: null`; already completed tests and steps remain. Zero executed tests are never a pass. A passed step with `low_confidence` or `contradiction` stays passed; a future strict gate may change an exit status or JUnit mapping, not the canonical verdict.
+For a syntactically valid `sedum run`, the CLI resolves project configuration,
+then creates `<outputDir>/<run-id>/progress.json` before provider setup or test
+loading and prints its path. The default `outputDir` is `.sedum/runs`. Config
+must be read first because it chooses this location; an invalid config uses the
+default location for its terminal operational result when that directory is
+writable. Each update replaces the file atomically with a complete, validated
+`RunResult`; pollers can parse it at any point. `result.json` is written from
+the terminal snapshot. A setup or execution error has `state: "error"`, a typed
+`error`, and `verdict: null`; already completed tests and steps remain. Zero
+executed tests are never a pass. A passed step with `low_confidence` or
+`contradiction` stays passed; a future strict gate may change an exit status or
+JUnit mapping, not the canonical verdict.
 
 SIGINT and SIGTERM received while a run is active request cancellation. The CLI waits for the current operation to unwind, then writes `state: "interrupted"`, `verdict: null`, and a terminal `result.json` before exiting with the conventional signal exit code. Once the terminal outcome is committed, late signals are ignored while its final files are written so the process exit and persisted state cannot disagree. An interrupted provider request may have incurred unreported usage; its call is retained with unknown cost, so a receipt never presents that attempt as free.
 

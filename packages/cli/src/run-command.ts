@@ -18,9 +18,15 @@ import {
 } from "./diagnostics.js";
 import { ProgressWriter, ProgressWriterError } from "./progress-writer.js";
 import type { RunArtifactPaths } from "./output.js";
+import {
+  discoverConfiguredTests,
+  loadProjectConfig,
+  ProjectConfigError,
+  type ResolvedProjectConfig,
+} from "./config.js";
 
 export interface RunCommandOptions {
-  readonly file: string;
+  readonly file?: string;
   readonly replay: boolean;
   readonly evidence: boolean;
   readonly sensitiveOrigins: readonly string[];
@@ -60,10 +66,52 @@ async function resultWithoutSink(
   return recorder.snapshot;
 }
 
+async function configuredOperationalFailure(
+  config: ResolvedProjectConfig,
+  runId: string,
+  diagnostic: CliDiagnostic,
+  commit: () => void,
+): Promise<RunCommandExecution> {
+  let writer: ProgressWriter;
+  try {
+    writer = await ProgressWriter.create(
+      config.projectRoot,
+      runId,
+      config.outputDir,
+    );
+  } catch {
+    commit();
+    const intended = path.join(config.outputDir, runId);
+    return {
+      result: await resultWithoutSink(runId, diagnostic),
+      artifacts: {
+        progressPath: path.join(intended, "progress.json"),
+        resultPath: path.join(intended, "result.json"),
+        authoritative: false,
+      },
+      diagnostic,
+    };
+  }
+  const recorder = new RunRecorder((snapshot) => writer.write(snapshot), runId);
+  await recorder.start();
+  commit();
+  await recorder.finish(canonicalDiagnosticError(diagnostic));
+  await writer.finish(recorder.snapshot);
+  return {
+    result: recorder.snapshot,
+    artifacts: {
+      progressPath: writer.progressPath,
+      resultPath: writer.resultPath,
+      authoritative: true,
+    },
+    diagnostic,
+  };
+}
+
 export async function executeRunCommand(
   options: RunCommandOptions,
 ): Promise<RunCommandExecution> {
-  const root = process.cwd();
+  const invocationRoot = process.cwd();
   const runId = randomUUID();
   let committed = false;
   const commit = () => {
@@ -71,12 +119,105 @@ export async function executeRunCommand(
     committed = true;
     options.onCommitted?.();
   };
+  let config: ResolvedProjectConfig;
+  try {
+    config = await loadProjectConfig(invocationRoot);
+  } catch (error) {
+    const diagnostic = setupDiagnostic(error);
+    const fallbackRoot =
+      error instanceof ProjectConfigError && error.diagnostics[0]?.file
+        ? path.dirname(error.diagnostics[0].file)
+        : invocationRoot;
+    const intended = path.join(fallbackRoot, ".sedum", "runs", runId);
+    try {
+      const fallback = await ProgressWriter.create(fallbackRoot, runId);
+      const recorder = new RunRecorder(
+        (snapshot) => fallback.write(snapshot),
+        runId,
+      );
+      await recorder.start();
+      commit();
+      await recorder.finish(canonicalDiagnosticError(diagnostic));
+      await fallback.finish(recorder.snapshot);
+      return {
+        result: recorder.snapshot,
+        artifacts: {
+          progressPath: fallback.progressPath,
+          resultPath: fallback.resultPath,
+          authoritative: true,
+        },
+        diagnostic,
+      };
+    } catch {
+      commit();
+      return {
+        result: await resultWithoutSink(runId, diagnostic),
+        artifacts: {
+          progressPath: path.join(intended, "progress.json"),
+          resultPath: path.join(intended, "result.json"),
+          authoritative: false,
+        },
+        diagnostic,
+      };
+    }
+  }
+
+  let files: readonly string[];
+  try {
+    files = options.file
+      ? [path.resolve(config.projectRoot, options.file)]
+      : await discoverConfiguredTests(config);
+  } catch {
+    const error = new ProjectConfigError([
+      {
+        code: "test_discovery_error",
+        file: config.configPath ?? config.testDirectory,
+        line: 1,
+        col: 1,
+        key: "tests.directory",
+        message: "The configured test directory could not be read.",
+        fix: "Check the test directory path and permissions, then try again.",
+      },
+    ]);
+    return configuredOperationalFailure(
+      config,
+      runId,
+      setupDiagnostic(error),
+      commit,
+    );
+  }
+  if (files.length === 0) {
+    const error = new ProjectConfigError([
+      {
+        code: "no_tests",
+        file:
+          config.configPath ??
+          path.join(config.projectRoot, "sedum.config.yaml"),
+        line: 1,
+        col: 1,
+        key: "tests.include",
+        message: "The configured test patterns matched no test files.",
+        fix: "Add a matching *.test.yaml file or correct tests.directory/include/exclude.",
+      },
+    ]);
+    return configuredOperationalFailure(
+      config,
+      runId,
+      setupDiagnostic(error),
+      commit,
+    );
+  }
+
   let writer: ProgressWriter;
   try {
-    writer = await ProgressWriter.create(root, runId);
+    writer = await ProgressWriter.create(
+      config.projectRoot,
+      runId,
+      config.outputDir,
+    );
   } catch {
     commit();
-    const intended = path.join(root, ".sedum", "runs", runId);
+    const intended = path.join(config.outputDir, runId);
     const diagnostic = outputDiagnostic(path.join(intended, "result.json"));
     return {
       result: await resultWithoutSink(runId, diagnostic),
@@ -102,30 +243,44 @@ export async function executeRunCommand(
   try {
     await recorder.start();
     if (options.signal?.aborted) throw new Error("canceled");
-    const provider = new TypeSafeAdapter();
+    const provider = new TypeSafeAdapter(
+      config.apiKey ? { apiKey: config.apiKey } : {},
+    );
     const cache = await FileClassificationCache.load(
-      path.join(root, ".sedum", "classifications.json"),
+      path.join(config.projectRoot, ".sedum", "classifications.json"),
       "jev-latest",
     );
-    const result = await runFlow(options.file, {
-      repoRoot: root,
-      browser: new PlaywrightBrowserDriver(),
-      provider,
-      classificationCache: cache,
-      env: process.env,
-      headless: process.env.SEDUM_HEADED === "1" ? false : true,
-      ...(options.signal ? { signal: options.signal } : {}),
-      report: {
-        recorder,
-        privacy: {
-          secretValues: [],
-          sensitiveOrigins: options.sensitiveOrigins,
+    let operational: ReturnType<typeof flowDiagnostic> | null = null;
+    const browser = new PlaywrightBrowserDriver();
+    for (const file of files) {
+      const result = await runFlow(file, {
+        repoRoot: config.projectRoot,
+        browser,
+        provider,
+        classificationCache: cache,
+        env: config.variables,
+        browserKind: config.browser,
+        viewport: config.viewport,
+        verifyPolicy: config.thresholds,
+        ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
+        report: {
+          recorder,
+          privacy: {
+            secretValues: [],
+            sensitiveOrigins: options.sensitiveOrigins,
+          },
+          evidenceEnabled: options.evidence,
+          replay: options.replay,
+          saveFrame: (stepId, bytes) => writer.saveFrame(stepId, bytes),
         },
-        evidenceEnabled: options.evidence,
-        replay: options.replay,
-        saveFrame: (stepId, bytes) => writer.saveFrame(stepId, bytes),
-      },
-    });
+      });
+      if (options.signal?.aborted) break;
+      if (result.status === "could_not_run") {
+        operational = flowDiagnostic(result);
+        break;
+      }
+    }
     if (options.signal?.aborted) {
       const diagnostic: CliDiagnostic = {
         code: "canceled",
@@ -140,8 +295,8 @@ export async function executeRunCommand(
       await writer.finish(recorder.snapshot);
       return { result: recorder.snapshot, artifacts, diagnostic };
     }
-    if (result.status === "could_not_run") {
-      const diagnostic = flowDiagnostic(result);
+    if (operational) {
+      const diagnostic = operational;
       commit();
       await recorder.finish(canonicalDiagnosticError(diagnostic));
       await writer.finish(recorder.snapshot);

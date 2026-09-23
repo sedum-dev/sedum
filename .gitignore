@@ -3,5 +3,6 @@ dist/
 coverage/
 .turbo/
 .sedum/
+.env
 *.tsbuildinfo
 .DS_Store
