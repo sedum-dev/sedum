@@ -30,7 +30,7 @@ Checked 6 tests and 2 modules: 1 error, 1 sentence not checked offline.
 
 ### Offline by default
 
-Validation classifies sentences using built-in patterns and the committed `.sedum/classifications.json` only; see [step classification](classification.md). It does not read `TYPESAFE_API_KEY` or the project `.env`, does not resolve `$ENV` values (an unset variable is fine), and does not write any file. A sentence it cannot classify this way is reported as **not checked offline** and fails the check. Sedum cannot confirm what that step will do, so it never reports it as valid.
+Validation classifies sentences using built-in patterns and the committed `.sedum/classifications.json` only; see [step classification](classification.md). It does not read `TYPESAFE_API_KEY` or the project `.env`, does not resolve `$ENV` values (an unset variable is fine), and does not write any file. Because it never opens `.env`, a malformed or unreadable `.env` is reported by `sedum run` and `--online`, not by offline validation. A sentence it cannot classify this way is reported as **not checked offline** and fails the check. Sedum cannot confirm what that step will do, so it never reports it as valid.
 
 To resolve such a sentence, either rephrase it with an obvious supported verb, or classify it once with the model:
 
