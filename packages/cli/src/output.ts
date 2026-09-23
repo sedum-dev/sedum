@@ -10,6 +10,7 @@ export interface OutputCapabilities {
 export interface RunArtifactPaths {
   readonly progressPath: string;
   readonly resultPath: string;
+  readonly htmlPath?: string | undefined;
   readonly reporterPath?: string;
   readonly authoritative: boolean;
 }
@@ -106,6 +107,7 @@ export function renderRunSummary(
   if (artifacts.authoritative) {
     lines.push(`progress ${artifacts.progressPath}`);
     lines.push(`result ${artifacts.resultPath}`);
+    if (artifacts.htmlPath) lines.push(`html ${artifacts.htmlPath}`);
     if (artifacts.reporterPath)
       lines.push(`reporter ${artifacts.reporterPath}`);
   } else {

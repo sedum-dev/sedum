@@ -98,6 +98,37 @@ function terminalOutputFailure(
   });
 }
 
+interface FinalHtmlWrite {
+  readonly result: RunResult;
+  readonly diagnostic: CliDiagnostic | null;
+  readonly htmlAvailable: boolean;
+}
+
+async function finishCanonical(
+  writer: ProgressWriter,
+  result: RunResult,
+): Promise<FinalHtmlWrite> {
+  try {
+    await writer.finish(result);
+    return { result, diagnostic: null, htmlAvailable: true };
+  } catch (error) {
+    if (
+      !(error instanceof ProgressWriterError) ||
+      error.path !== writer.htmlPath
+    )
+      throw error;
+    const diagnostic: CliDiagnostic = {
+      code: "reporter_output_error",
+      message: `The HTML report could not be written to ${writer.htmlPath}.`,
+      fix: "Check the run output directory and rerun the command.",
+    };
+    const failed = terminalOutputFailure(result, diagnostic);
+    await writer.removeHtml();
+    await writer.finish(failed, false);
+    return { result: failed, diagnostic, htmlAvailable: false };
+  }
+}
+
 async function resultWithoutSink(
   runId: string,
   diagnostic: CliDiagnostic,
@@ -141,15 +172,16 @@ async function configuredOperationalFailure(
     await recorder.addDiscoveryProblems(discoveryProblems);
   commit();
   await recorder.finish(canonicalDiagnosticError(diagnostic));
-  await writer.finish(recorder.snapshot);
+  const finished = await finishCanonical(writer, recorder.snapshot);
   return {
-    result: recorder.snapshot,
+    result: finished.result,
     artifacts: {
       progressPath: writer.progressPath,
       resultPath: writer.resultPath,
+      ...(finished.htmlAvailable ? { htmlPath: writer.htmlPath } : {}),
       authoritative: true,
     },
-    diagnostic,
+    diagnostic: finished.diagnostic ?? diagnostic,
   };
 }
 
@@ -229,15 +261,16 @@ export async function executeRunCommand(
       await recorder.start();
       commit();
       await recorder.finish(canonicalDiagnosticError(diagnostic));
-      await fallback.finish(recorder.snapshot);
+      const finished = await finishCanonical(fallback, recorder.snapshot);
       return {
-        result: recorder.snapshot,
+        result: finished.result,
         artifacts: {
           progressPath: fallback.progressPath,
           resultPath: fallback.resultPath,
+          ...(finished.htmlAvailable ? { htmlPath: fallback.htmlPath } : {}),
           authoritative: true,
         },
-        diagnostic,
+        diagnostic: finished.diagnostic ?? diagnostic,
       };
     } catch {
       commit();
@@ -308,6 +341,7 @@ export async function executeRunCommand(
     const artifacts = {
       progressPath: writer.progressPath,
       resultPath: writer.resultPath,
+      htmlPath: writer.htmlPath,
       authoritative: true,
     } as const;
     let reporterFailed = false;
@@ -334,8 +368,16 @@ export async function executeRunCommand(
       const result = terminalOutputFailure(recorder.snapshot, diagnostic);
       try {
         await reportWriter?.finish(result);
-        await writer.finish(result);
-        return { result, artifacts, diagnostic, reporterFailed: true };
+        const finished = await finishCanonical(writer, result);
+        if (finished.diagnostic) await reportWriter?.finish(finished.result);
+        return {
+          result: finished.result,
+          artifacts: finished.htmlAvailable
+            ? artifacts
+            : { ...artifacts, htmlPath: undefined },
+          diagnostic: finished.diagnostic ?? diagnostic,
+          reporterFailed: true,
+        };
       } catch (error) {
         await writer.invalidate();
         await reportWriter?.invalidate();
@@ -375,6 +417,7 @@ export async function executeRunCommand(
           config.projectRoot,
           runId,
           config.reporterDir,
+          false,
         );
       } catch {
         const diagnostic = outputDiagnostic(
@@ -382,8 +425,14 @@ export async function executeRunCommand(
         );
         commit();
         await recorder.finish(canonicalDiagnosticError(diagnostic));
-        await writer.finish(recorder.snapshot);
-        return { result: recorder.snapshot, artifacts, diagnostic };
+        const finished = await finishCanonical(writer, recorder.snapshot);
+        return {
+          result: finished.result,
+          artifacts: finished.htmlAvailable
+            ? artifacts
+            : { ...artifacts, htmlPath: undefined },
+          diagnostic: finished.diagnostic ?? diagnostic,
+        };
       }
     }
     const reportedArtifacts: RunArtifactPaths = requestedJsonReport
@@ -392,31 +441,51 @@ export async function executeRunCommand(
           reporterPath: reportWriter?.resultPath ?? writer.resultPath,
         }
       : artifacts;
-    const finishArtifacts = async (): Promise<CliDiagnostic | null> => {
+    const finishArtifacts = async (): Promise<
+      FinalHtmlWrite & { reporterAvailable: boolean }
+    > => {
+      let reporterAvailable = true;
+      let reporterDiagnostic: CliDiagnostic | null = null;
       if (reportWriter) {
         try {
           await reportWriter.finish(recorder.snapshot);
         } catch {
-          const diagnostic = outputDiagnostic(reportWriter.resultPath);
+          reporterDiagnostic = outputDiagnostic(reportWriter.resultPath);
+          reporterAvailable = false;
           await reportWriter.invalidate();
           if (recorder.snapshot.error === null)
-            await recorder.finish(canonicalDiagnosticError(diagnostic));
-          await writer.finish(recorder.snapshot);
-          return diagnostic;
+            await recorder.finish(canonicalDiagnosticError(reporterDiagnostic));
         }
       }
-      await writer.finish(recorder.snapshot);
-      return null;
+      const finished = await finishCanonical(writer, recorder.snapshot);
+      if (finished.diagnostic && reportWriter && reporterAvailable) {
+        try {
+          await reportWriter.finish(finished.result);
+        } catch {
+          reporterAvailable = false;
+          await reportWriter.invalidate();
+        }
+      }
+      return {
+        ...finished,
+        diagnostic: finished.diagnostic ?? reporterDiagnostic,
+        reporterAvailable,
+      };
     };
     const terminalExecution = async (
       diagnostic: CliDiagnostic | null,
     ): Promise<RunCommandExecution> => {
       try {
-        const reportFailure = await finishArtifacts();
+        const finished = await finishArtifacts();
+        const availableArtifacts = finished.reporterAvailable
+          ? reportedArtifacts
+          : artifacts;
         return {
-          result: recorder.snapshot,
-          artifacts: reportFailure ? artifacts : reportedArtifacts,
-          diagnostic: reportFailure ?? diagnostic,
+          result: finished.result,
+          artifacts: finished.htmlAvailable
+            ? availableArtifacts
+            : { ...availableArtifacts, htmlPath: undefined },
+          diagnostic: finished.diagnostic ?? diagnostic,
           reporterFailed,
           onReporterFailure,
         };

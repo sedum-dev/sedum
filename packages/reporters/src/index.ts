@@ -9,6 +9,9 @@ export function renderJson(result: RunResult): string {
   return `${JSON.stringify(validateRunResult(result), null, 2)}\n`;
 }
 
+export { renderHtml } from "./html.js";
+export type { HtmlReportOptions } from "./html.js";
+
 export { ReporterLifecycle } from "./lifecycle.js";
 export type { ReporterEvent } from "./lifecycle.js";
 export { createTerminalReporter } from "./terminal.js";

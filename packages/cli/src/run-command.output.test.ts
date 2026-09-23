@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { symlinkSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runFlow, validateRunResult, type ResultStep } from "@sedum-dev/core";
 
@@ -103,6 +104,36 @@ const options = {
 };
 
 describe("run output failure contract", () => {
+  it("keeps canonical JSON when the HTML report cannot be written", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      onSnapshot: (snapshot, artifacts) => {
+        if (snapshot.state === "completed" && artifacts.htmlPath)
+          symlinkSync("trap", artifacts.htmlPath);
+      },
+    });
+    expect(output.artifacts.authoritative).toBe(true);
+    expect(output.artifacts.htmlPath).toBeUndefined();
+    expect(output.diagnostic?.code).toBe("reporter_output_error");
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "reporter_output_error" },
+      totals: { passedTests: 1 },
+    });
+    expect(
+      validateRunResult(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ),
+    ).toEqual(output.result);
+    expect(
+      validateRunResult(
+        JSON.parse(await readFile(output.artifacts.progressPath, "utf8")),
+      ),
+    ).toEqual(output.result);
+  });
+
   it("keeps valid artifacts and returns an operational result when a reporter throws", async () => {
     await inTemporaryRoot();
     const output = await executeRunCommand({
@@ -123,6 +154,10 @@ describe("run output failure contract", () => {
         JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
       ),
     ).toEqual(output.result);
+    expect(output.artifacts.htmlPath).toBeDefined();
+    expect(await readFile(output.artifacts.htmlPath!, "utf8")).toContain(
+      "run receipt",
+    );
   });
 
   it("preserves completed steps when live reporter output fails", async () => {
