@@ -1,6 +1,7 @@
 import type { RunResult } from "@sedum-dev/core";
 import path from "node:path";
 import type { ReporterEvent } from "./lifecycle.js";
+import { needsAttention, selectedAttempt, shellArg } from "./shared.js";
 
 export type TerminalReporterName = "list" | "steps";
 
@@ -54,26 +55,14 @@ function source(
   return stack.map((item) => `${item.file}:${item.line}`).join(" <- ");
 }
 
-function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function attention(result: RunResult, context: ReporterContext): string {
   const lines: string[] = [];
   const reruns = new Set<string>();
   const evidence = new Set<string>();
   for (const test of result.tests) {
-    const attempt = test.attempts.find(
-      (item) => item.id === test.selectedAttemptId,
-    );
+    const attempt = selectedAttempt(test);
     if (!attempt) continue;
-    const affectedSteps = attempt.steps.filter(
-      (step) =>
-        step.verdict === "failed" ||
-        step.state === "error" ||
-        step.state === "interrupted" ||
-        step.flags.length > 0,
-    );
+    const affectedSteps = attempt.steps.filter(needsAttention);
     const bindingProblems = attempt.problems.filter(
       (problem) => problem.stepId === null,
     );
@@ -157,11 +146,11 @@ function attention(result: RunResult, context: ReporterContext): string {
       for (const path of evidence) lines.push(`  read ${path}`);
     } else lines.push(`  result unavailable (intended ${context.resultPath})`);
     for (const file of reruns)
-      lines.push(`  rerun sedum run ${quoteShell(file)}`);
+      lines.push(`  rerun sedum run ${shellArg(file)}`);
     if (reruns.size === 0)
       lines.push(
         context.rerunFile
-          ? `  rerun sedum run ${quoteShell(context.rerunFile)}`
+          ? `  rerun sedum run ${shellArg(context.rerunFile)}`
           : "  rerun sedum run",
       );
   }

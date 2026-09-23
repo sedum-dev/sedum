@@ -98,34 +98,50 @@ function terminalOutputFailure(
   });
 }
 
-interface FinalHtmlWrite {
+interface FinalReportWrite {
   readonly result: RunResult;
   readonly diagnostic: CliDiagnostic | null;
-  readonly htmlAvailable: boolean;
+  readonly reportsAvailable: boolean;
+}
+
+/** The rendered report files this writer produces, for the run summary. */
+function reportArtifacts(writer: ProgressWriter): {
+  htmlPath: string;
+  markdownPath?: string;
+} {
+  return {
+    htmlPath: writer.htmlPath,
+    ...(writer.includeMarkdown ? { markdownPath: writer.markdownPath } : {}),
+  };
+}
+
+function withoutReports(artifacts: RunArtifactPaths): RunArtifactPaths {
+  return { ...artifacts, htmlPath: undefined, markdownPath: undefined };
 }
 
 async function finishCanonical(
   writer: ProgressWriter,
   result: RunResult,
-): Promise<FinalHtmlWrite> {
+): Promise<FinalReportWrite> {
   try {
     await writer.finish(result);
-    return { result, diagnostic: null, htmlAvailable: true };
+    return { result, diagnostic: null, reportsAvailable: true };
   } catch (error) {
     if (
       !(error instanceof ProgressWriterError) ||
-      error.path !== writer.htmlPath
+      (error.path !== writer.htmlPath && error.path !== writer.markdownPath)
     )
       throw error;
+    const format = error.path === writer.htmlPath ? "HTML" : "Markdown";
     const diagnostic: CliDiagnostic = {
       code: "reporter_output_error",
-      message: `The HTML report could not be written to ${writer.htmlPath}.`,
+      message: `The ${format} report could not be written to ${error.path}.`,
       fix: "Check the run output directory and rerun the command.",
     };
     const failed = terminalOutputFailure(result, diagnostic);
-    await writer.removeHtml();
-    await writer.finish(failed, false);
-    return { result: failed, diagnostic, htmlAvailable: false };
+    await writer.removeReports();
+    await writer.finish(failed, false, false);
+    return { result: failed, diagnostic, reportsAvailable: false };
   }
 }
 
@@ -144,6 +160,7 @@ async function configuredOperationalFailure(
   runId: string,
   diagnostic: CliDiagnostic,
   commit: () => void,
+  includeMarkdown: boolean,
   discoveryProblems: NonNullable<RunResult["discoveryProblems"]> = [],
 ): Promise<RunCommandExecution> {
   let writer: ProgressWriter;
@@ -152,6 +169,8 @@ async function configuredOperationalFailure(
       config.projectRoot,
       runId,
       config.outputDir,
+      true,
+      includeMarkdown,
     );
   } catch {
     commit();
@@ -178,7 +197,7 @@ async function configuredOperationalFailure(
     artifacts: {
       progressPath: writer.progressPath,
       resultPath: writer.resultPath,
-      ...(finished.htmlAvailable ? { htmlPath: writer.htmlPath } : {}),
+      ...(finished.reportsAvailable ? reportArtifacts(writer) : {}),
       authoritative: true,
     },
     diagnostic: finished.diagnostic ?? diagnostic,
@@ -189,6 +208,7 @@ export async function executeRunCommand(
   options: RunCommandOptions,
 ): Promise<RunCommandExecution> {
   const invocationRoot = process.cwd();
+  const includeMarkdown = Boolean(options.reporters?.includes("markdown"));
   const runId = randomUUID();
   let committed = false;
   const commit = () => {
@@ -253,7 +273,13 @@ export async function executeRunCommand(
         : invocationRoot;
     const intended = path.join(fallbackRoot, ".sedum", "runs", runId);
     try {
-      const fallback = await ProgressWriter.create(fallbackRoot, runId);
+      const fallback = await ProgressWriter.create(
+        fallbackRoot,
+        runId,
+        undefined,
+        true,
+        includeMarkdown,
+      );
       const recorder = new RunRecorder(
         (snapshot) => fallback.write(snapshot),
         runId,
@@ -267,7 +293,7 @@ export async function executeRunCommand(
         artifacts: {
           progressPath: fallback.progressPath,
           resultPath: fallback.resultPath,
-          ...(finished.htmlAvailable ? { htmlPath: fallback.htmlPath } : {}),
+          ...(finished.reportsAvailable ? reportArtifacts(fallback) : {}),
           authoritative: true,
         },
         diagnostic: finished.diagnostic ?? diagnostic,
@@ -287,7 +313,8 @@ export async function executeRunCommand(
   }
 
   const unavailable = (options.reporters ?? []).find(
-    (reporter) => !["terminal", "json", "list", "steps"].includes(reporter),
+    (reporter) =>
+      !["terminal", "json", "list", "steps", "markdown"].includes(reporter),
   );
   if (unavailable)
     return configuredOperationalFailure(
@@ -296,9 +323,10 @@ export async function executeRunCommand(
       {
         code: "unsupported_reporter",
         message: `Reporter ${JSON.stringify(unavailable)} is not available in this build.`,
-        fix: "Use --reporter list, steps, terminal, or json.",
+        fix: "Use --reporter list, steps, terminal, json, or markdown.",
       },
       commit,
+      includeMarkdown,
     );
   const controller = new AbortController();
   let timedOut = false;
@@ -323,6 +351,8 @@ export async function executeRunCommand(
         config.projectRoot,
         runId,
         config.outputDir,
+        true,
+        includeMarkdown,
       );
     } catch {
       commit();
@@ -338,12 +368,12 @@ export async function executeRunCommand(
         diagnostic,
       };
     }
-    const artifacts = {
+    const artifacts: RunArtifactPaths = {
       progressPath: writer.progressPath,
       resultPath: writer.resultPath,
-      htmlPath: writer.htmlPath,
+      ...reportArtifacts(writer),
       authoritative: true,
-    } as const;
+    };
     let reporterFailed = false;
     let reportWriter: ProgressWriter | undefined;
     const recorder = new RunRecorder(async (snapshot) => {
@@ -372,9 +402,9 @@ export async function executeRunCommand(
         if (finished.diagnostic) await reportWriter?.finish(finished.result);
         return {
           result: finished.result,
-          artifacts: finished.htmlAvailable
+          artifacts: finished.reportsAvailable
             ? artifacts
-            : { ...artifacts, htmlPath: undefined },
+            : withoutReports(artifacts),
           diagnostic: finished.diagnostic ?? diagnostic,
           reporterFailed: true,
         };
@@ -428,9 +458,9 @@ export async function executeRunCommand(
         const finished = await finishCanonical(writer, recorder.snapshot);
         return {
           result: finished.result,
-          artifacts: finished.htmlAvailable
+          artifacts: finished.reportsAvailable
             ? artifacts
-            : { ...artifacts, htmlPath: undefined },
+            : withoutReports(artifacts),
           diagnostic: finished.diagnostic ?? diagnostic,
         };
       }
@@ -442,7 +472,7 @@ export async function executeRunCommand(
         }
       : artifacts;
     const finishArtifacts = async (): Promise<
-      FinalHtmlWrite & { reporterAvailable: boolean }
+      FinalReportWrite & { reporterAvailable: boolean }
     > => {
       let reporterAvailable = true;
       let reporterDiagnostic: CliDiagnostic | null = null;
@@ -482,9 +512,9 @@ export async function executeRunCommand(
           : artifacts;
         return {
           result: finished.result,
-          artifacts: finished.htmlAvailable
+          artifacts: finished.reportsAvailable
             ? availableArtifacts
-            : { ...availableArtifacts, htmlPath: undefined },
+            : withoutReports(availableArtifacts),
           diagnostic: finished.diagnostic ?? diagnostic,
           reporterFailed,
           onReporterFailure,
@@ -637,7 +667,8 @@ export async function executeRunCommand(
               },
               evidenceEnabled: options.evidence,
               replay: options.replay,
-              saveFrame: (stepId, bytes) => writer.saveFrame(stepId, bytes),
+              saveFrame: (attempt, frameId, bytes) =>
+                writer.saveFrame(attempt, frameId, bytes),
             },
           });
           if (reporterFailed) throw new ReporterOutputError();

@@ -138,4 +138,31 @@ describe("HTML report", () => {
     expect(html).toContain('"status":"unavailable"');
     expect(html).toContain("data-attempt=");
   });
+
+  it("puts a flow that never reached a verdict before a flagged pass", async () => {
+    const recorder = new RunRecorder(async () => {}, "html-order");
+    await recorder.start();
+    await recorder.startTest({
+      id: "flagged",
+      file: "flagged.test.yaml",
+      description: "A flagged flow",
+    });
+    await recorder.addStep(
+      step("flagged-step", 2, "passed", ["low_confidence"]),
+    );
+    await recorder.finishTest("passed");
+    await recorder.startTest({
+      id: "broken",
+      file: "broken.test.yaml",
+      description: "A broken flow",
+    });
+    await recorder.finish({ code: "provider_unavailable", message: "Down." });
+    const html = renderHtml(recorder.snapshot);
+    expect(html.indexOf("A broken flow")).toBeLessThan(
+      html.indexOf("A flagged flow"),
+    );
+    expect(html.indexOf('data-filter="incomplete"')).toBeLessThan(
+      html.indexOf('data-filter="flagged"'),
+    );
+  });
 });

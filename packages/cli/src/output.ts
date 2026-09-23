@@ -11,6 +11,7 @@ export interface RunArtifactPaths {
   readonly progressPath: string;
   readonly resultPath: string;
   readonly htmlPath?: string | undefined;
+  readonly markdownPath?: string | undefined;
   readonly reporterPath?: string;
   readonly authoritative: boolean;
 }
@@ -108,6 +109,8 @@ export function renderRunSummary(
     lines.push(`progress ${artifacts.progressPath}`);
     lines.push(`result ${artifacts.resultPath}`);
     if (artifacts.htmlPath) lines.push(`html ${artifacts.htmlPath}`);
+    if (artifacts.markdownPath)
+      lines.push(`markdown ${artifacts.markdownPath}`);
     if (artifacts.reporterPath)
       lines.push(`reporter ${artifacts.reporterPath}`);
   } else {

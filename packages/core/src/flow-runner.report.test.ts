@@ -187,6 +187,12 @@ describe("runner report facts", () => {
       evidence: { status: "captured", path: "evidence/frame.jpg" },
     });
     expect(saveFrame).toHaveBeenCalledOnce();
+    const attempt = final.tests[0]!.attempts[0]!;
+    expect(saveFrame).toHaveBeenCalledWith(
+      { id: attempt.id, ordinal: 1 },
+      expect.stringMatching(new RegExp(`^${attempt.id}:step:\\d+:`)),
+      expect.any(Uint8Array),
+    );
     expect(JSON.stringify(final)).not.toContain("hidden");
     expect(JSON.stringify(final)).not.toContain("secret-123");
   });

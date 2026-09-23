@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ResultFrame, RunResult } from "@sedum-dev/core";
 import { validateRunResult } from "@sedum-dev/core";
-import { renderHtml } from "@sedum-dev/reporters";
+import { renderHtml, renderMarkdown } from "@sedum-dev/reporters";
 
 export class ProgressWriterError extends Error {
   constructor(
@@ -19,10 +19,12 @@ export class ProgressWriterError extends Error {
 export class ProgressWriter {
   private revision = 0;
   private pending: Promise<void> = Promise.resolve();
+  private readonly attemptFolders = new Map<string, Promise<string>>();
 
   private constructor(
     readonly directory: string,
     private readonly includeHtml: boolean,
+    readonly includeMarkdown: boolean,
   ) {}
 
   static async create(
@@ -30,6 +32,7 @@ export class ProgressWriter {
     runId: string,
     outputDirectory = path.join(root, ".sedum", "runs"),
     includeHtml = true,
+    includeMarkdown = false,
   ): Promise<ProgressWriter> {
     if (!/^[a-zA-Z0-9-]+$/.test(runId)) throw new Error("Invalid run ID");
     const resolvedRoot = path.resolve(root);
@@ -49,7 +52,7 @@ export class ProgressWriter {
     }
     const directory = path.join(base, runId);
     await mkdir(directory, { mode: 0o700 });
-    return new ProgressWriter(directory, includeHtml);
+    return new ProgressWriter(directory, includeHtml, includeMarkdown);
   }
 
   get progressPath(): string {
@@ -60,6 +63,9 @@ export class ProgressWriter {
   }
   get htmlPath(): string {
     return path.join(this.directory, "report.html");
+  }
+  get markdownPath(): string {
+    return path.join(this.directory, "report.md");
   }
 
   private async atomicWrite(name: string, content: string): Promise<void> {
@@ -108,6 +114,7 @@ export class ProgressWriter {
   async finish(
     result: RunResult,
     includeHtml = this.includeHtml,
+    includeMarkdown = this.includeMarkdown,
   ): Promise<void> {
     try {
       await this.write(result);
@@ -127,6 +134,13 @@ export class ProgressWriter {
           throw new ProgressWriterError(this.htmlPath, { cause });
         }
       }
+      if (includeMarkdown) {
+        try {
+          await this.atomicWrite("report.md", renderMarkdown(snapshot));
+        } catch (cause) {
+          throw new ProgressWriterError(this.markdownPath, { cause });
+        }
+      }
     } catch (cause) {
       throw cause instanceof ProgressWriterError
         ? cause
@@ -134,10 +148,12 @@ export class ProgressWriter {
     }
   }
 
-  async removeHtml(): Promise<void> {
-    await unlink(this.htmlPath).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    });
+  /** Remove this writer's own rendered reports after one of them failed. */
+  async removeReports(): Promise<void> {
+    for (const report of [this.htmlPath, this.markdownPath])
+      await unlink(report).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      });
   }
 
   /** Remove only this writer's non-authoritative result files after sink failure. */
@@ -146,6 +162,7 @@ export class ProgressWriter {
       unlink(this.progressPath).catch(() => undefined),
       unlink(this.resultPath).catch(() => undefined),
       unlink(this.htmlPath).catch(() => undefined),
+      unlink(this.markdownPath).catch(() => undefined),
     ]);
   }
 
@@ -201,18 +218,40 @@ export class ProgressWriter {
     return frames;
   }
 
-  async saveFrame(stepId: string, bytes: Uint8Array): Promise<ResultFrame> {
+  /** Each attempt gets one new folder, so retries and parallel runs never share a frame file. */
+  private attemptFolder(attempt: {
+    readonly id: string;
+    readonly ordinal: number;
+  }): Promise<string> {
+    const existing = this.attemptFolders.get(attempt.id);
+    if (existing) return existing;
+    const created = (async () => {
+      const evidence = path.join(this.directory, "evidence");
+      await mkdir(evidence, { mode: 0o700 }).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      });
+      const evidenceInfo = await lstat(evidence);
+      if (!evidenceInfo.isDirectory() || evidenceInfo.isSymbolicLink())
+        throw new Error("Evidence output path is not a directory");
+      const name = `a${attempt.ordinal}-${createHash("sha256").update(attempt.id).digest("hex").slice(0, 12)}`;
+      await mkdir(path.join(evidence, name), { mode: 0o700 });
+      return `evidence/${name}`;
+    })();
+    this.attemptFolders.set(attempt.id, created);
+    return created;
+  }
+
+  async saveFrame(
+    attempt: { readonly id: string; readonly ordinal: number },
+    frameId: string,
+    bytes: Uint8Array,
+  ): Promise<ResultFrame> {
     if (bytes.byteLength === 0 || bytes.byteLength > 5 * 1024 * 1024)
       return { status: "unavailable", reason: "frame_size" };
-    const folder = path.join(this.directory, "evidence");
-    await mkdir(folder, { mode: 0o700 }).catch((error: unknown) => {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    });
-    const folderInfo = await lstat(folder);
-    if (!folderInfo.isDirectory() || folderInfo.isSymbolicLink())
-      throw new Error("Evidence output path is not a directory");
-    const name = `${createHash("sha256").update(stepId).digest("hex").slice(0, 24)}.jpg`;
-    const target = path.join(folder, name);
+    const folder = await this.attemptFolder(attempt);
+    const name = `${createHash("sha256").update(frameId).digest("hex").slice(0, 24)}.jpg`;
+    const relative = `${folder}/${name}`;
+    const target = path.join(this.directory, relative);
     const handle = await open(target, "wx", 0o600);
     try {
       await handle.writeFile(bytes);
@@ -226,7 +265,7 @@ export class ProgressWriter {
     }
     return {
       status: "captured",
-      path: `evidence/${name}`,
+      path: relative,
       mediaType: "image/jpeg",
     };
   }

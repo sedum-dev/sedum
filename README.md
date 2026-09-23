@@ -135,7 +135,14 @@ command to rerun that test. The full result is saved to
 sedum run --reporter steps      # show each step as it runs
 sedum run --strict --costs      # fail on flags; always show token cost
 sedum run --reporter json       # also write a final JSON copy under .sedum/reports
+sedum run --reporter markdown   # write report.md for a coding agent and print its path
 ```
+
+Every run also writes `report.html` next to `result.json`. To have a coding
+agent fix a failure, run with `--reporter markdown` and hand it the printed
+`report.md`: the most urgent problem comes first, with the evidence and the
+rerun command. See [the CLI reference](docs/cli.md) for what it contains and
+how to clean up old runs.
 
 ## Choosing what to run
 
@@ -225,7 +232,7 @@ Planned for the 0.1 alpha:
 - `sedum init` to scaffold a project
 - parallel runs and sharding
 - starting your app before a run
-- JUnit, Markdown, and HTML reports
+- JUnit reports
 - a GitHub Action and an npm release
 
 ## More
