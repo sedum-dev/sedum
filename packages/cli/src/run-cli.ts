@@ -43,6 +43,7 @@ export interface CliRuntime {
   readonly stderr?: (value: string) => void;
   readonly signal?: AbortSignal;
   readonly onRunCommitted?: () => void;
+  readonly onRunDeadline?: () => void;
   readonly executeRun?: (
     options: RunCommandOptions,
   ) => Promise<RunCommandExecution>;
@@ -72,15 +73,62 @@ function collectOrigin(value: string, previous: readonly string[]): string[] {
   }
 }
 
-function collectReporter(
-  value: string,
-  previous: readonly TerminalReporterName[],
-): TerminalReporterName[] {
-  if (value !== "list" && value !== "steps")
+function collectValue(value: string, previous: readonly string[]): string[] {
+  if (!value.trim()) throw new InvalidArgumentError("Value must not be blank.");
+  return [...previous, value];
+}
+
+function collectReporter(value: string, previous: readonly string[]): string[] {
+  if (!["list", "steps", "terminal", "json"].includes(value))
     throw new InvalidArgumentError(
-      `Unknown reporter ${JSON.stringify(value)}. Use list or steps.`,
+      `Unknown reporter ${JSON.stringify(value)}. Use list or steps for terminal output, or terminal or json.`,
     );
   return previous.includes(value) ? [...previous] : [...previous, value];
+}
+
+function collectGlob(value: string, previous: readonly string[]): string[] {
+  if (
+    !value.trim() ||
+    value.startsWith("/") ||
+    /^[A-Za-z]:[/\\]/u.test(value) ||
+    value.split(/[/\\]/u).includes("..")
+  )
+    throw new InvalidArgumentError(
+      "Glob must be a nonempty project-relative path without '..'.",
+    );
+  return [...previous, value];
+}
+
+function collectLabels(value: string, previous: readonly string[]): string[] {
+  const labels = value.split(",").map((item) => item.trim());
+  if (labels.some((item) => !item))
+    throw new InvalidArgumentError(
+      "Labels must be nonempty comma-separated tags.",
+    );
+  return [...previous, ...labels];
+}
+
+function nonnegativeInteger(value: string): number {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0 || number > 20)
+    throw new InvalidArgumentError("Expected an integer from 0 to 20.");
+  return number;
+}
+
+function nonnegativeSlow(value: string): number {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0 || number > 30000)
+    throw new InvalidArgumentError("Expected milliseconds from 0 to 30000.");
+  return number;
+}
+
+function positiveMinutes(value: string): number {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0 || number > 1440)
+    throw new InvalidArgumentError(
+      "Expected minutes greater than 0 and at most 1440.",
+    );
+  return number;
 }
 
 function commandHelp(command: Command, writeErr: (value: string) => void) {
@@ -141,8 +189,60 @@ export async function runCli(
 
   program
     .command("run")
-    .description("run configured tests or one explicit *.test.yaml file")
-    .argument("[file.test.yaml]", "test file to execute")
+    .description("run configured tests, files, or directories")
+    .argument(
+      "[paths...]",
+      "test files or directories relative to the project root",
+    )
+    .option(
+      "--include <glob>",
+      "include matching project-relative paths (repeatable)",
+      collectGlob,
+      [],
+    )
+    .option(
+      "--exclude <glob>",
+      "exclude matching project-relative paths (repeatable)",
+      collectGlob,
+      [],
+    )
+    .option(
+      "--labels <tags>",
+      "require all comma-separated test tags (repeatable)",
+      collectLabels,
+      [],
+    )
+    .option(
+      "--name <text>",
+      "match id or description substring (repeatable)",
+      collectValue,
+      [],
+    )
+    .option("--env <name>", "select a named environment")
+    .option("--browser <kind>", "chrome or chromium")
+    .option(
+      "--url-override <url>",
+      "replace entry URL origin for preview deployments",
+    )
+    .option("--output-dir <path>", "run output directory")
+    .option("--reporter-dir <path>", "reporter artifact directory")
+    .option("--headed", "show the browser", false)
+    .option(
+      "--slow <ms>",
+      "slow browser actions by milliseconds",
+      nonnegativeSlow,
+    )
+    .option(
+      "--retries <count>",
+      "additional whole-test attempts",
+      nonnegativeInteger,
+      0,
+    )
+    .option(
+      "--timeout-minutes <minutes>",
+      "whole-run deadline",
+      positiveMinutes,
+    )
     .option("--replay", "capture replay frames for executed steps", false)
     .option("--no-evidence", "disable non-passing evidence frames")
     .option("--no-locator-cache", "disable the local locator cache")
@@ -156,7 +256,7 @@ export async function runCli(
     .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
     .option(
       "--reporter <name>",
-      "terminal reporter: list or steps (repeatable; default list)",
+      "reporter: list, steps, terminal, or json (repeatable; default list)",
       collectReporter,
       [],
     )
@@ -171,8 +271,22 @@ export async function runCli(
     )
     .action(
       async (
-        file: string | undefined,
+        paths: string[],
         options: {
+          include: string[];
+          exclude: string[];
+          labels: string[];
+          name: string[];
+          env?: string;
+          browser?: string;
+          urlOverride?: string;
+          outputDir?: string;
+          reporterDir?: string;
+          reporter: string[];
+          headed: boolean;
+          slow?: number;
+          retries: number;
+          timeoutMinutes?: number;
           replay: boolean;
           evidence: boolean;
           sensitiveOrigin: string[];
@@ -180,18 +294,22 @@ export async function runCli(
           costs: boolean;
           locatorCache: boolean;
           locatorCacheCi: boolean;
-          reporter: TerminalReporterName[];
         },
       ) => {
         const lifecycle = new ReporterLifecycle();
-        const reporters = (
-          options.reporter.length ? options.reporter : ["list" as const]
-        ).map(createTerminalReporter);
+        const terminalNames = options.reporter.length
+          ? options.reporter
+              .filter((name) => name !== "json")
+              .map((name) => (name === "terminal" ? "list" : name))
+          : ["list"];
+        const reporters = [...new Set(terminalNames)].map((name) =>
+          createTerminalReporter(name as TerminalReporterName),
+        );
         const context = (artifacts: RunArtifactPaths): ReporterContext => ({
           stdoutIsTTY: capabilities.stdoutIsTTY,
           color: capabilities.color,
           showCosts: options.costs,
-          ...(file ? { rerunFile: file } : {}),
+          ...(paths.length === 1 ? { rerunFile: paths[0] } : {}),
           ...artifacts,
           includeSharedSummary: true,
         });
@@ -205,7 +323,25 @@ export async function runCli(
             }
         };
         const execution = await executeRun({
-          ...(file ? { file } : {}),
+          paths,
+          filters: {
+            include: options.include,
+            exclude: options.exclude,
+            labels: options.labels,
+            names: options.name,
+          },
+          ...(options.env ? { environment: options.env } : {}),
+          ...(options.browser ? { browser: options.browser } : {}),
+          ...(options.urlOverride ? { urlOverride: options.urlOverride } : {}),
+          ...(options.outputDir ? { outputDir: options.outputDir } : {}),
+          ...(options.reporterDir ? { reporterDir: options.reporterDir } : {}),
+          reporters: options.reporter,
+          headed: options.headed,
+          ...(options.slow !== undefined ? { slowMoMs: options.slow } : {}),
+          retries: options.retries,
+          ...(options.timeoutMinutes !== undefined
+            ? { timeoutMinutes: options.timeoutMinutes }
+            : {}),
           replay: options.replay,
           evidence: options.evidence,
           sensitiveOrigins: options.sensitiveOrigin,
@@ -215,9 +351,12 @@ export async function runCli(
           ...(runtime.onRunCommitted
             ? { onCommitted: runtime.onRunCommitted }
             : {}),
+          ...(runtime.onRunDeadline
+            ? { onDeadline: runtime.onRunDeadline }
+            : {}),
           onSnapshot: emit,
         });
-        if (!execution.reporterFailed) {
+        if (!execution.reporterFailed && reporters.length) {
           try {
             emit(execution.result, execution.artifacts);
             writeOut(

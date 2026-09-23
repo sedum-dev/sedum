@@ -23,6 +23,32 @@ describe("entry URL resolution", () => {
     expect(() => resolveEntryUrl("login")).toThrow("no baseUrl");
     expect(() => resolveEntryUrl()).toThrow("no URL and no baseUrl");
   });
+
+  it("overrides only the entry origin and keeps the resolved path and query", () => {
+    expect(
+      resolveEntryUrl(
+        "https://old.test/login?token=abc#done",
+        undefined,
+        "https://preview.test/app",
+      ),
+    ).toBe("https://preview.test/login?token=abc#done");
+    expect(
+      resolveEntryUrl(
+        "/cart",
+        "https://staging.test/app/",
+        "https://preview.test",
+      ),
+    ).toBe("https://preview.test/cart");
+    expect(() =>
+      resolveEntryUrl(undefined, undefined, "https://preview.test/app/"),
+    ).toThrow("no URL and no baseUrl");
+    expect(() =>
+      resolveEntryUrl("login", undefined, "https://preview.test/app/"),
+    ).toThrow("no baseUrl");
+    expect(() =>
+      resolveEntryUrl("/login", "https://staging.test", "file:///tmp/page"),
+    ).toThrow("HTTP or HTTPS");
+  });
 });
 
 describe("walking-skeleton flow runner", () => {

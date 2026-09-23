@@ -32,9 +32,11 @@ export class RunRecorder {
       updatedAt: at,
       finishedAt: null,
       elapsedMs: 0,
+      selectedTestCount: 0,
       totals: resultTotals([]),
       setupCalls: [],
       tests: [],
+      discoveryProblems: [],
       error: null,
     };
   }
@@ -51,7 +53,11 @@ export class RunRecorder {
       ...this.value,
       updatedAt: new Date().toISOString(),
       elapsedMs: performance.now() - this.started,
-      totals: resultTotals(this.value.tests, this.value.setupCalls),
+      totals: resultTotals(
+        this.value.tests,
+        this.value.setupCalls,
+        Math.max(this.value.selectedTestCount ?? 0, this.value.tests.length),
+      ),
       flags: [
         ...new Set(this.value.tests.flatMap((test) => test.flags)),
       ] as RunResult["flags"],
@@ -71,6 +77,42 @@ export class RunRecorder {
     await this.publish();
   }
 
+  async addAttemptCalls(calls: readonly ResultCall[]): Promise<void> {
+    const test = this.value.tests.at(-1);
+    const attempt = test?.attempts.at(-1);
+    if (!test || !attempt || attempt.state !== "running")
+      throw new Error("No running attempt");
+    const updated: ResultAttempt = {
+      ...attempt,
+      calls: [...(attempt.calls ?? []), ...calls],
+    };
+    this.value = {
+      ...this.value,
+      tests: [
+        ...this.value.tests.slice(0, -1),
+        { ...test, attempts: [...test.attempts.slice(0, -1), updated] },
+      ],
+    };
+    await this.publish();
+  }
+
+  async addDiscoveryProblems(
+    problems: NonNullable<RunResult["discoveryProblems"]>,
+  ): Promise<void> {
+    this.value = {
+      ...this.value,
+      discoveryProblems: [...(this.value.discoveryProblems ?? []), ...problems],
+    };
+    await this.publish();
+  }
+
+  async selectTests(count: number): Promise<void> {
+    if (!Number.isSafeInteger(count) || count < this.value.tests.length)
+      throw new Error("Selected test count is invalid");
+    this.value = { ...this.value, selectedTestCount: count };
+    await this.publish();
+  }
+
   async startTest(input: {
     id: string;
     file: string;
@@ -80,7 +122,7 @@ export class RunRecorder {
     if (this.value.state !== "running") throw new Error("Run already finished");
     const at = new Date().toISOString();
     const attempt: ResultAttempt = {
-      id: `${input.id}:attempt:1`,
+      id: `${this.value.runId}:attempt:${randomUUID()}`,
       ordinal: 1,
       state: "running",
       verdict: null,
@@ -91,6 +133,7 @@ export class RunRecorder {
       timeoutReason: null,
       error: null,
       steps: [],
+      calls: [],
       problems: [],
       primaryProblemId: null,
     };
@@ -105,7 +148,14 @@ export class RunRecorder {
       selectedAttemptId: attempt.id,
       attempts: [attempt],
     };
-    this.value = { ...this.value, tests: [...this.value.tests, test] };
+    this.value = {
+      ...this.value,
+      tests: [...this.value.tests, test],
+      selectedTestCount: Math.max(
+        this.value.selectedTestCount ?? 0,
+        this.value.tests.length + 1,
+      ),
+    };
     await this.publish();
   }
 
@@ -189,7 +239,7 @@ export class RunRecorder {
     const ordinal = test.attempts.length + 1;
     const at = new Date().toISOString();
     const attempt: ResultAttempt = {
-      id: `${test.id}:attempt:${ordinal}`,
+      id: `${this.value.runId}:attempt:${randomUUID()}`,
       ordinal,
       state: "running",
       verdict: null,
@@ -200,6 +250,7 @@ export class RunRecorder {
       timeoutReason: null,
       error: null,
       steps: [],
+      calls: [],
       problems: [],
       primaryProblemId: null,
     };
@@ -266,6 +317,10 @@ export class RunRecorder {
           ...attempt,
           state: terminalState,
           error,
+          timeoutReason:
+            error.code === "run_timeout"
+              ? "run_timeout"
+              : attempt.timeoutReason,
           finishedAt: at,
           elapsedMs: Math.max(
             0,

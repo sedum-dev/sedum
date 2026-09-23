@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
 import { walkSuiteFiles } from "./project-discovery.js";
@@ -83,6 +84,8 @@ export interface ParseFlowOptions {
   readonly repoRoot: string;
   /** Validation may warn about URL resolution without opening a network connection. */
   readonly baseUrl?: string;
+  /** Run selection forbids an explicit file symlink at the point of opening. */
+  readonly rejectSymlinks?: boolean;
 }
 
 function nodeKey(parts: KeyPath): string {
@@ -978,7 +981,16 @@ export async function loadFlowFile(
 ): Promise<ParsedFlowResult> {
   let source: string;
   try {
-    source = await readFile(file, "utf8");
+    const handle = await open(
+      file,
+      constants.O_RDONLY |
+        (options.rejectSymlinks ? (constants.O_NOFOLLOW ?? 0) : 0),
+    );
+    try {
+      source = await handle.readFile({ encoding: "utf8" });
+    } finally {
+      await handle.close();
+    }
   } catch {
     const diagnostic: FlowDiagnostic = {
       severity: "error",

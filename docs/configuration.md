@@ -41,6 +41,13 @@ Settings resolve from defaults, then the top-level config, then the selected
 named environment, then explicit command overrides. Named environments may
 override only `baseUrl` and `variables`. Nested settings merge by field, so an
 override of viewport width retains the configured height.
+For `sedum run`, `--env` selects the named environment before `--browser` and
+`--output-dir` override their configured values. `--url-override` then replaces
+the origin of the resolved entry URL, preserving its path, query, and fragment.
+Run-only `--include`, `--exclude`, `--labels`, and `--name` filters narrow the
+discovered candidate files after config selection; explicit file and directory
+arguments supply their own candidate set instead of applying the configured
+test globs.
 
 Sedum reads at most one dotenv file: `<project-root>/.env`. It never searches a
 test directory, child, parent project, or sibling project for secrets. Values
@@ -56,6 +63,6 @@ errors name the file, source position, dotted key, and a concrete fix and exit
 with code 3.
 
 The assertion thresholds are the user-facing SED-13 policy. Resolver and step
-classification safety gates are deliberately not configurable. `reporterDir`
-is reserved for the reporter implementations; canonical progress and result
-artifacts are written under `outputDir/<run-id>/`.
+classification safety gates are deliberately not configurable. An explicit
+JSON reporter writes to `reporterDir/<run-id>/result.json`; canonical progress
+and result artifacts are always written under `outputDir/<run-id>/`.

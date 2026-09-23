@@ -241,7 +241,7 @@ describe("CLI command framework", () => {
     );
     expect(executeRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        file: "x.test.yaml",
+        paths: ["x.test.yaml"],
         replay: true,
         evidence: false,
         locatorCacheDisabled: true,

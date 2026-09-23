@@ -2,10 +2,12 @@
 import { createRequire } from "node:module";
 import { runCli } from "./run-cli.js";
 import { createInterruptState } from "./interrupts.js";
+import { startDeadlineWatchdog } from "./deadline-watchdog.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
 const interrupts = createInterruptState();
+let deadlineWatchdog: ReturnType<typeof setTimeout> | undefined;
 const onSigint = () => interrupts.request("SIGINT");
 const onSigterm = () => interrupts.request("SIGTERM");
 process.on("SIGINT", onSigint);
@@ -13,6 +15,9 @@ process.on("SIGTERM", onSigterm);
 const output = await runCli(process.argv.slice(2), pkg.version, {
   signal: interrupts.signal,
   onRunCommitted: interrupts.commit,
+  onRunDeadline: () => {
+    deadlineWatchdog = startDeadlineWatchdog();
+  },
   capabilities: {
     stdoutIsTTY: process.stdout.isTTY === true,
     stderrIsTTY: process.stderr.isTTY === true,
@@ -22,6 +27,7 @@ const output = await runCli(process.argv.slice(2), pkg.version, {
   stdout: (value) => process.stdout.write(value),
   stderr: (value) => process.stderr.write(value),
 });
+if (deadlineWatchdog) clearTimeout(deadlineWatchdog);
 process.off("SIGINT", onSigint);
 process.off("SIGTERM", onSigterm);
 if (output.stdout) process.stdout.write(output.stdout);
