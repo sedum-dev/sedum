@@ -34,6 +34,16 @@ describe("sedum init", () => {
     expect(result.stdout).toContain("sedum browsers install chromium");
     expect(result.stdout).toContain("TYPESAFE_API_KEY");
     expect(result.stdout).toContain("sedum run tests/example.test.yaml");
+    expect(result.stdout).toContain("Starter project created.");
+    expect(result.stdout).toContain("1. Update Node.js");
+    expect(result.stdout).toContain(
+      "2. Check the example without using a key or browser",
+    );
+    expect(result.stdout).toContain("cp .env.example .env");
+    expect(result.stdout.indexOf("sedum validate")).toBeLessThan(
+      result.stdout.indexOf("sedum run tests/example.test.yaml"),
+    );
+    expect(result.stdout).toContain("may incur a charge");
     expect(result.stdout).not.toContain("\u001b[");
     expect(await readFile(path.join(cwd, ".gitignore"), "utf8")).toBe(
       ".env\n.sedum/runs/\n.sedum/reports/\n",
@@ -64,7 +74,7 @@ describe("sedum init", () => {
     );
     const second = await runCli(["init"], "0.0.0", { cwd });
     expect(second.stdout).toContain("kept tests/example.test.yaml");
-    expect(second.stdout).not.toContain("created");
+    expect(second.stdout).not.toMatch(/^created /mu);
   });
 
   it("keeps an existing env template and explains the generated demo credential", async () => {

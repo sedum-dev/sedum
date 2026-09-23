@@ -189,31 +189,44 @@ export async function executeInitCommand(
     }
     say(await updateIgnore(root, options));
 
-    say("\nNext steps:\n");
+    say(
+      "\nStarter project created. Sedum runs plain-language tests in a browser.\n\nNext steps:\n",
+    );
+    let step = 0;
+    const next = (title: string, lines: readonly string[]) => {
+      say(`\n${++step}. ${title}\n`);
+      for (const line of lines) say(`   ${line}\n`);
+    };
     if (!supportedNode(options.nodeVersion ?? process.versions.node))
-      say("- Install Node 20.19.0 or newer.\n");
+      next("Update Node.js", ["Install Node 20.19.0 or newer."]);
+    next("Check the example without using a key or browser", [
+      "sedum validate",
+    ]);
     const config = await loadProjectConfig(root);
     const hasBrowser = (options.browser ?? browserAvailable)(config.browser);
-    if (!hasBrowser) {
-      if (config.browser === "chromium") {
-        say("- Install Chromium: sedum browsers install chromium\n");
-        if (process.platform === "linux")
-          say(
-            "  Linux system libraries: sedum browsers install chromium --with-deps\n",
-          );
-      } else
-        say(
-          "- Install Chrome or run `sedum browsers install chromium`; check the configured browser.\n",
-        );
-    }
     const hasEnv = await pathExists(path.join(root, ".env"));
-    if (!keyPresent(config)) {
-      say(
-        hasEnv
-          ? "- Set TYPESAFE_API_KEY in the project-root .env or your shell.\n"
-          : "- Run `cp .env.example .env`, then set TYPESAFE_API_KEY in .env (or set it in your shell).\n",
+    if (!keyPresent(config))
+      next("Add your TypeSafe API key", [
+        "Get a key at https://typesafe.ai/.",
+        ...(hasEnv ? [] : ["cp .env.example .env"]),
+        "Open .env and set TYPESAFE_API_KEY to your key (or set it in your shell).",
+      ]);
+    if (!hasBrowser)
+      next(
+        `Install ${config.browser === "chromium" ? "Chromium" : "a browser"}`,
+        [
+          ...(config.browser === "chromium"
+            ? ["sedum browsers install chromium"]
+            : [
+                "Install Chrome, or run sedum browsers install chromium and select it in sedum.config.yaml.",
+              ]),
+          ...(config.browser === "chromium" && process.platform === "linux"
+            ? [
+                "If Linux system libraries are missing: sedum browsers install chromium --with-deps",
+              ]
+            : []),
+        ],
       );
-    }
     if (keptEnvExample && config.variables.SAUCE_PASSWORD !== "secret_sauce") {
       const template = await readFile(path.join(root, ".env.example"), "utf8");
       if (
@@ -222,18 +235,16 @@ export async function executeInitCommand(
           template,
         )
       )
-        say(
-          "- The existing .env.example was kept. For the generated SauceDemo test, set SAUCE_PASSWORD=secret_sauce in .env or your shell.\n",
-        );
+        next("Set the sample password", [
+          "Your existing .env.example was kept.",
+          "For the generated SauceDemo test, set SAUCE_PASSWORD=secret_sauce in .env or your shell.",
+        ]);
     }
-    say("- Validate: sedum validate\n");
-    say("- Run: sedum run tests/example.test.yaml\n");
-    say(
-      "  Example target: https://www.saucedemo.com/ (public standard_user / secret_sauce).\n",
-    );
-    say(
-      "  Running the example uses the TypeSafe API and may incur a charge.\n",
-    );
+    next("Run the example", [
+      "sedum run tests/example.test.yaml",
+      "It signs in to https://www.saucedemo.com/ with a public sample account.",
+      "This calls the TypeSafe API and may incur a charge.",
+    ]);
     return { stdout: output.join(""), stderr: "", exitCode: 0 };
   } catch (error) {
     const message =
