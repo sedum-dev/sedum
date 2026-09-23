@@ -100,6 +100,7 @@ describe("HTML report", () => {
     expect(html).toContain("fails below 0.70");
     expect(html).toContain("passes at 0.85");
     expect(html).toContain("low_confidence");
+    expect(html).not.toContain("Total $42 shown");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("fixture-rate-card");

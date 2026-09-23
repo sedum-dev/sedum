@@ -148,10 +148,7 @@ function stepDetails(step: ResultStep): string {
       score(lines?.fail ?? null) +
       " · pass at " +
       score(judgement.threshold) +
-      "</div>" +
-      (judgement.judgedExcerpt
-        ? "<blockquote>" + esc(judgement.judgedExcerpt) + "</blockquote>"
-        : "")
+      "</div>"
     : "";
   const choices = locator
     ? "<div><b>locator</b> " +
@@ -376,7 +373,7 @@ function replay(
     '</div><script type="application/json" class="frames">' +
     json(entries) +
     "</script></figure>" +
-    '<p class="replay-note">Frames show what was visible. Assertion grades use the recorded judgement and page excerpt.</p>'
+    '<p class="replay-note">Frames show what was visible. Assertion grades use the recorded judgement.</p>'
   );
 }
 
@@ -626,7 +623,6 @@ const extraCss = `
 .step-extra details{font-size:.75rem;color:var(--soft)}.step-extra summary{cursor:pointer;font-family:var(--mono);font-size:.66rem}
 .step-detail{padding:.5rem .9rem;border-left:2px solid var(--rule);display:grid;gap:.35rem;overflow-wrap:anywhere}
 .step-detail b{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink);font-weight:500}
-.step-detail blockquote{margin:.25rem 0;padding:.3rem .7rem;border-left:2px solid var(--gold);font-family:var(--serif);font-style:italic;color:var(--ink)}
 .step-detail pre{white-space:pre-wrap;margin:.3rem 0}.step-flags{font-family:var(--mono);font-size:.65rem;color:var(--gold);grid-column:2}
 .problem{background:color-mix(in srgb,var(--signal) 8%,transparent);padding:.55rem .8rem;margin:.8rem 0;font-size:.8rem;overflow-wrap:anywhere}
 .rerun,.replay-note,.empty{font-size:.78rem;color:var(--soft);margin:.6rem 0}.rerun code{color:var(--ink)}.rerun .label{margin-right:.5rem}
