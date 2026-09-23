@@ -354,7 +354,7 @@ describe("run output failure contract", () => {
     const output = await executeRunCommand({
       ...options,
       paths: ["fixture.test.yaml", "later.test.yaml"],
-      timeoutMinutes: 0.001,
+      timeoutMinutes: 0.02,
       onDeadline,
     });
     expect(onDeadline).toHaveBeenCalledOnce();
@@ -377,6 +377,10 @@ describe("run output failure contract", () => {
     await inTemporaryRoot();
     const interrupt = new AbortController();
     const onDeadline = vi.fn();
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => {
+      started = resolve;
+    });
     vi.mocked(runFlow).mockImplementationOnce(async (file, dependencies) => {
       await dependencies.report!.recorder.startTest({
         id: "interrupted",
@@ -386,6 +390,7 @@ describe("run output failure contract", () => {
         dependencies.signal?.addEventListener("abort", () => resolve(), {
           once: true,
         });
+        started();
       });
       await new Promise((resolve) => setTimeout(resolve, 90));
       return {
@@ -395,13 +400,15 @@ describe("run output failure contract", () => {
         message: "canceled",
       };
     });
-    setTimeout(() => interrupt.abort(new Error("SIGINT")), 10);
-    const output = await executeRunCommand({
+    const execution = executeRunCommand({
       ...options,
       signal: interrupt.signal,
-      timeoutMinutes: 0.001,
+      timeoutMinutes: 0.02,
       onDeadline,
     });
+    await running;
+    interrupt.abort(new Error("SIGINT"));
+    const output = await execution;
     expect(output.result).toMatchObject({
       state: "interrupted",
       error: { code: "canceled" },

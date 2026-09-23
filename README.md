@@ -1,6 +1,6 @@
 # Sedum
 
-Sedum is an open source CLI for browser driven test flows. This repository is the initial TypeScript scaffold. The M1 walking skeleton runs one hand-written YAML test through a real browser and the TypeSafe provider.
+Sedum is an open source CLI for browser driven test flows. It runs YAML tests through a real browser and the TypeSafe provider, from one file or a project suite.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ corepack pnpm fixtures:verify
 node packages/cli/dist/cli.js --version
 ```
 
-## Walking skeleton
+## Run flows
 
 Inspect the available commands and command-specific options with:
 
@@ -59,17 +59,25 @@ to retain model token/cost lines when stdout is redirected:
 node packages/cli/dist/cli.js run fixtures/saucedemo-login.test.yaml --strict --costs
 ```
 
-For temporary visual debugging only, prefix either command with
-`SEDUM_HEADED=1`. This escape hatch will be removed once the final CLI launch
-configuration lands.
+With no path, `run` uses the configured test directory. You can also name a
+directory and filter its tests by path, tags, or name. Retries repeat the whole
+test from fresh setup, and a deadline keeps the run bounded:
+
+```sh
+node packages/cli/dist/cli.js run fixtures --include '**/*login*.test.yaml' --retries 2 --timeout-minutes 5
+```
+
+Use `--url-override` to run the same flows against another site's origin while
+keeping each flow's path, query, and fragment. Use `--headed` to watch the
+browser, or `--reporter json --reporter-dir reports` for a separate JSON copy.
+See [CLI commands](docs/cli.md) for all run options and
+[run results](docs/run-result.md) for attempt history and output files.
 
 The first command should exit `0`; the deliberately false claim exits `1`.
 A flagged pass exits `0` normally and `2` with `--strict`. An unavailable
-browser, provider, flow, runtime value, invalid command, or zero-test run exits
-`3`. SIGINT/SIGTERM use conventional process exits `130`/`143` after the
-partial result is finalized. This is a
-single-file M1 slice: hooks, modules, retries, final reporters, and the broader
-CLI grammar are not implemented here.
+browser, provider, flow, runtime value, invalid command, zero-test run, or
+timeout exits `3`. SIGINT/SIGTERM use conventional process exits `130`/`143`
+after the partial result is finalized.
 
 In a terminal, Sedum shows coloured per-test result labels and transient live
 progress. When stdout is redirected, output is stable, ANSI-free, and

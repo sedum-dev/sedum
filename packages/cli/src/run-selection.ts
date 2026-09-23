@@ -69,7 +69,17 @@ export async function discoverRunTests(
   const files = new Set<string>();
   const root = await realpath(config.projectRoot);
   if (paths.length === 0) {
-    for (const file of await discoverConfiguredTests(config)) files.add(file);
+    for (const file of await discoverConfiguredTests(config)) {
+      const target = await realpath(file);
+      if (contained(root, target)) files.add(target);
+      else
+        problems.push({
+          file: "<outside-project>",
+          code: "outside_root",
+          message: "A configured test is outside the project root.",
+          fix: "Keep the test directory inside the project.",
+        });
+    }
   } else {
     for (const requested of paths) {
       const candidate = path.resolve(config.projectRoot, requested);
