@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -36,8 +36,12 @@ describe("CLI in-flight cancellation", () => {
     const previous = process.cwd();
     try {
       process.chdir(root);
+      await writeFile(
+        path.join(root, "test.test.yaml"),
+        "url: https://example.test\nsteps: [verify page]\n",
+      );
       const controller = new AbortController();
-      const pending = runCli(["run", "test.yaml"], "0.0.0", {
+      const pending = runCli(["run", "test.test.yaml"], "0.0.0", {
         signal: controller.signal,
       });
       await new Promise((resolve) => setTimeout(resolve, 20));

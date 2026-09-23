@@ -30,7 +30,7 @@ node packages/cli/dist/cli.js run fixtures/saucedemo-wrong-claim.test.yaml
 node packages/cli/dist/cli.js run fixtures/saucedemo-checkout.test.yaml
 ```
 
-For temporary visual debugging only, prefix a run with `SEDUM_HEADED=1`. This escape hatch will be removed once the final CLI launch configuration lands.
+Add `--headed` to watch the browser while debugging.
 
 ## Packages
 

@@ -2,66 +2,21 @@
 
 ## `sedum doctor`
 
-`sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure:
+`sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure: Node 20.19 or newer, valid config and `.env`, an installed browser, network and authenticated access to TypeSafe, and output directory write access. The authentication check sends one small request and may incur a provider charge. Doctor does not launch a browser or run tests.
 
-1. Node 20.19.0 or newer.
-2. A valid `sedum.config.yaml` and readable project-root `.env`.
-3. The configured Chrome or Chromium executable. The default `chrome` setting accepts Chrome or the Chromium installed by `sedum browsers install chromium`; `chromium` requires the latter.
-4. Network access to `https://api.typesafe.ai`.
-5. `TYPESAFE_API_KEY` from the invoking process or project-root `.env`, with the same precedence as `sedum run`.
-6. Acceptance of that key by the TypeSafe API.
-7. Write access to the configured output directory, including its path and symlink safety rules.
+`sedum doctor --json` writes one versioned JSON object, including when checks fail. Both output forms omit the API key and raw provider errors. The exit code is `0` when every check passes and `3` otherwise.
 
-The authentication check sends one small request to the TypeSafe API and may incur a provider charge. It has a short timeout. Doctor does not launch a browser or run tests. It creates and removes a temporary write probe and any output directories it needed to create for the probe.
+## `sedum run`
 
-`sedum doctor --json` writes one JSON object to stdout, including when checks fail:
+`sedum run [paths...]` runs the configured test directory, or the named test files and directories. Paths are relative to the project root. Directories are searched recursively; symlinked test files and directories are skipped or rejected. Explicit paths form the candidate set, while a run with no paths uses `tests.directory`, `tests.include`, and `tests.exclude` from configuration.
 
-```json
-{
-  "schemaVersion": 1,
-  "checks": [
-    {
-      "id": "node",
-      "status": "pass",
-      "message": "Node 20.19.0 meets the >=20.19.0 requirement.",
-      "fix": null
-    }
-  ]
-}
-```
+Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` for project-relative paths, use `--labels smoke,auth` to require both YAML `tags`, and repeat `--name <text>` to match any case-insensitive substring of a test `id` or `description`. Excludes win. Bad test files are named in the result and valid files still run; the command exits 3 because the suite was incomplete. A selection with no valid tests also exits 3.
 
-The actual `checks` array always contains `node`, `config`, `browser`, `api_network`, `api_key`, `api_auth`, and `output` in that order. A failed check has `status: "fail"` and a nonempty `fix`. Checks that depend on invalid config or unavailable network fail with a fix for that prerequisite. Neither output form includes the key or raw API errors.
+`--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
-The exit code is `0` if every check passes and `3` if any check fails.
+`--env <name>` selects a configured environment. `--url-override <url>` replaces the origin of each test's initial URL while keeping its resolved path, query, and fragment; a later explicit `goto` step is unaffected. `--browser chrome|chromium`, `--slow <ms>`, `--output-dir <path>`, `--strict`, and `--costs` control browser and output behavior. `--headed` shows the browser and marks the element about to be clicked or filled with a browser overlay that does not change page content or intercept input. Canonical `progress.json` and `result.json` are always written under `<outputDir>/<run-id>/`.
 
-## `sedum run` reporters
-
-`sedum run` uses the `list` terminal reporter by default. Select `steps` to see
-each completed step as it runs, or repeat `--reporter` to use both:
-
-```sh
-sedum run tests/checkout.test.yaml --reporter steps
-sedum run --reporter list --reporter steps
-```
-
-The terminal reporters read the same validated `RunResult` as `progress.json`
-and `result.json`. The run prints the progress path after it is created. Each
-reporter prints live lines as tests or steps complete, followed by the run
-summary. TTY output may use color; redirected output is plain and does not
-shorten step text. Token and cost lines appear by default in a TTY, or with
-`--costs` when output is redirected.
-
-Every failed, errored, or flagged step in the selected attempt gets a **needs
-attention** block with its full recorded sentence, source location, reason,
-available judgement numbers or locator choices, page context, and evidence
-status. Module binding problems appear there too. The final `next` block names
-the result files and evidence to read, then gives a quoted `sedum run` command
-for each affected test. When the output directory fails, the CLI identifies
-the intended result path as unavailable instead of telling you to read it.
-
-`--reporter` accepts `list` and `steps`; repeated names are shown once. It
-changes presentation only. Verdicts, flags, `--strict` exit codes, and the
-canonical result stay the same.
+The default `list` terminal reporter shows test results. Select `steps` for each completed step, or repeat `--reporter` to use both; `terminal` is an alias for `list`. Failed or flagged steps include a needs-attention block with their recorded sentence, source, reason, page context, and evidence status. Terminal output may use color in a TTY; redirected output is plain. `--reporter json` writes a separate final JSON result under `<reporterDir>/<run-id>/`, and `--reporter-dir <path>` selects that project-root-relative directory. You can combine JSON with terminal reporters. SED-41–43 add JUnit, markdown, and HTML formats.
 
 ## `sedum validate`
 

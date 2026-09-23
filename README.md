@@ -114,12 +114,12 @@ See the [test file format](docs/format.md) for the full reference.
 
 Each test ends in a verdict:
 
-| Exit | Meaning                                                                   |
-| ---- | ------------------------------------------------------------------------- |
-| `0`  | Every test passed.                                                        |
-| `1`  | A test failed.                                                            |
-| `2`  | Tests passed, but some claims were uncertain (only with `--strict`).      |
-| `3`  | Sedum could not reach a verdict: a missing browser, key, file, or config. |
+| Exit | Meaning                                                                                         |
+| ---- | ----------------------------------------------------------------------------------------------- |
+| `0`  | Every test passed.                                                                              |
+| `1`  | A test failed.                                                                                  |
+| `2`  | Tests passed, but some claims were uncertain (only with `--strict`).                            |
+| `3`  | Sedum could not reach a verdict: a missing browser, key, file, or config, or the run timed out. |
 
 A pass can carry a flag. `low_confidence` means the claim was supported, but
 only just. `contradiction` means the page also gave some evidence against it.
@@ -134,7 +134,32 @@ command to rerun that test. The full result is saved to
 ```sh
 sedum run --reporter steps      # show each step as it runs
 sedum run --strict --costs      # fail on flags; always show token cost
+sedum run --reporter json       # also write a final JSON copy under .sedum/reports
 ```
+
+## Choosing what to run
+
+`sedum run` with no paths runs the configured test directory. You can also name
+files or directories, and filter what they contain:
+
+```sh
+sedum run tests/checkout                  # one directory
+sedum run --labels smoke,auth             # tests tagged with both
+sedum run --name checkout                 # id or description contains "checkout"
+sedum run --include '**/*login*.test.yaml' --exclude 'tests/legacy/**'
+```
+
+Other useful options:
+
+- `--retries <n>` reruns a failed test up to `n` times, each from a fresh
+  browser and its `before` steps. Every attempt is kept in the result.
+- `--timeout-minutes <m>` bounds the whole run. On timeout, partial results are
+  saved and Sedum exits `3`.
+- `--env <name>` selects a configured environment.
+- `--url-override <url>` runs the same tests against another origin, such as a
+  preview deploy, keeping each test's path.
+- `--headed` shows the browser and highlights each element before it is
+  clicked or filled. `--slow <ms>` slows it down.
 
 ## Configuration
 
@@ -169,14 +194,14 @@ in CI, install a browser, set `TYPESAFE_API_KEY` as a secret, and run
 
 ## Commands
 
-| Command                  | Does                                         |
-| ------------------------ | -------------------------------------------- |
-| `sedum run [file]`       | Runs one test, or every test in the project. |
-| `sedum validate [paths]` | Checks tests and modules offline.            |
-| `sedum list [paths]`     | Lists tests with their ids, tags, and paths. |
-| `sedum doctor`           | Checks that this machine can run Sedum.      |
-| `sedum browsers install` | Installs Chromium.                           |
-| `sedum cache`            | Manages the local locator cache.             |
+| Command                  | Does                                           |
+| ------------------------ | ---------------------------------------------- |
+| `sedum run [paths]`      | Runs tests: the whole project, or named paths. |
+| `sedum validate [paths]` | Checks tests and modules offline.              |
+| `sedum list [paths]`     | Lists tests with their ids, tags, and paths.   |
+| `sedum doctor`           | Checks that this machine can run Sedum.        |
+| `sedum browsers install` | Installs Chromium.                             |
+| `sedum cache`            | Manages the local locator cache.               |
 
 Every command has `--help`. See [CLI commands](docs/cli.md) for details.
 
@@ -198,9 +223,9 @@ cache](docs/locator-cache.md) skips repeat lookups during development. See the
 Planned for the 0.1 alpha:
 
 - `sedum init` to scaffold a project
-- run filters, retries, timeouts, parallel runs, and sharding
+- parallel runs and sharding
 - starting your app before a run
-- JSON, JUnit, Markdown, and HTML reports
+- JUnit, Markdown, and HTML reports
 - a GitHub Action and an npm release
 
 ## More

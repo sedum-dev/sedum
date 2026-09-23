@@ -180,9 +180,25 @@ describe("canonical RunResult", () => {
     const recorder = new RunRecorder(async () => {}, "run-retry");
     await recorder.start();
     await recorder.startTest({ id: "test-retry", file: "cart.test.yaml" });
+    const classification = {
+      purpose: "classification" as const,
+      requestedModel: "jev",
+      model: "jev",
+      attempts: 1,
+      inputTokens: 10,
+      outputTokens: 2,
+      apiMs: 5,
+      inputUsdPerMillion: 1,
+      outputUsdPerMillion: 2,
+      rateSource: "fixture",
+      rateCheckedAt: null,
+      costUsd: 0.000014,
+    };
+    await recorder.addAttemptCalls([classification]);
     await recorder.addStep(step("retry-failed", "failed"));
     await recorder.finishTest("failed");
     await recorder.startAttempt();
+    await recorder.addAttemptCalls([classification]);
     await recorder.addStep(step("retry-passed", "passed"));
     await recorder.finishTest("passed");
     await recorder.finish();
@@ -194,11 +210,18 @@ describe("canonical RunResult", () => {
         passedSteps: 1,
         failedSteps: 0,
         historicalAttempts: 1,
+        modelCalls: 2,
+        costUsd: 0.000028,
       },
     });
     expect(
       recorder.snapshot.tests[0]?.attempts.map((attempt) => attempt.verdict),
     ).toEqual(["failed", "passed"]);
+    expect(
+      recorder.snapshot.tests[0]?.attempts.map(
+        (attempt) => attempt.calls?.length,
+      ),
+    ).toEqual([1, 1]);
   });
 
   it("rejects contradictory totals, duplicate IDs and zero-test completion", async () => {
@@ -223,6 +246,32 @@ describe("canonical RunResult", () => {
         totals: { ...recorder.snapshot.totals, modelCalls: 7 },
       }),
     ).toThrow();
+  });
+
+  it("keeps attempt IDs distinct from user-chosen test IDs", async () => {
+    const recorder = new RunRecorder(async () => {}, "collision-run");
+    await recorder.start();
+    await recorder.startTest({ id: "foo", file: "foo.test.yaml" });
+    await recorder.finishTest("passed");
+    await recorder.startTest({
+      id: "foo:attempt:1",
+      file: "other.test.yaml",
+    });
+    await recorder.finishTest("passed");
+    await recorder.finish();
+    const result = recorder.snapshot;
+    expect(result.tests.map((test) => test.id)).toEqual([
+      "foo",
+      "foo:attempt:1",
+    ]);
+    expect(
+      new Set(
+        result.tests.flatMap((test) =>
+          test.attempts.map((attempt) => attempt.id),
+        ),
+      ).size,
+    ).toBe(2);
+    expect(validateRunResult(result).verdict).toBe("passed");
   });
 
   it("rejects broken problem order, links, and primary outcome", async () => {

@@ -77,6 +77,7 @@ export interface BrowserLaunchOptions {
   readonly browser?: BrowserKind;
   readonly headless?: boolean;
   readonly slowMoMs?: number;
+  readonly overlay?: boolean;
 }
 
 export interface BrowserContextOptions {
@@ -294,6 +295,7 @@ class PlaywrightPage implements BrowserPage {
   constructor(
     private readonly page: Page,
     private readonly contextState: () => BrowserDriverState,
+    private readonly overlay: boolean,
   ) {
     page.on("crash", () => {
       this.crashed = true;
@@ -422,6 +424,33 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
+  /** Chromium's developer overlay does not mutate the tested page or intercept input. */
+  private async highlight(
+    element: import("playwright-core").ElementHandle,
+  ): Promise<() => Promise<void>> {
+    if (!this.overlay) return async () => undefined;
+    try {
+      const box = await element.boundingBox();
+      if (!box) return async () => undefined;
+      const session = await this.page.context().newCDPSession(this.page);
+      await session.send("Overlay.enable");
+      await session.send("Overlay.highlightRect", {
+        x: Math.round(box.x),
+        y: Math.round(box.y),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+        color: { r: 44, g: 158, b: 255, a: 0.18 },
+        outlineColor: { r: 44, g: 158, b: 255, a: 0.9 },
+      });
+      return async () => {
+        await session.send("Overlay.hideHighlight").catch(() => undefined);
+        await session.detach().catch(() => undefined);
+      };
+    } catch {
+      return async () => undefined;
+    }
+  }
+
   async clickRef(
     aim: Aim,
     options: { readonly timeoutMs?: number } = {},
@@ -489,6 +518,7 @@ class PlaywrightPage implements BrowserPage {
         reason: "stale" as const,
       }));
       if (!ready.actionable) return ready as AimResult;
+      const hide = await this.highlight(element);
       try {
         // Playwright and the browser own final actionability, event dispatch,
         // cancellation, and navigation. Once this starts, a failure cannot
@@ -502,6 +532,8 @@ class PlaywrightPage implements BrowserPage {
           retryable: false,
           callLog: safeCallLog(error),
         };
+      } finally {
+        await hide();
       }
     } finally {
       await handle.dispose().catch(() => undefined);
@@ -542,6 +574,7 @@ class PlaywrightPage implements BrowserPage {
         .catch(() => false);
       if (!sameElement)
         return { acted: false, reason: "stale", retryable: true };
+      const hide = await this.highlight(element);
       try {
         await element.fill(value, { timeout: remaining() });
         return { acted: true };
@@ -552,6 +585,8 @@ class PlaywrightPage implements BrowserPage {
           retryable: false,
           callLog: safeCallLog(error),
         };
+      } finally {
+        await hide();
       }
     } finally {
       await handle.dispose().catch(() => undefined);
@@ -610,6 +645,7 @@ class PlaywrightContext implements BrowserContextSession {
   constructor(
     private readonly context: BrowserContext,
     private readonly browserState: () => BrowserDriverState,
+    private readonly overlay: boolean,
   ) {
     context.on("close", () => {
       this.closed = true;
@@ -624,11 +660,15 @@ class PlaywrightContext implements BrowserContextSession {
       );
     }
     try {
-      return new PlaywrightPage(await this.context.newPage(), () => ({
-        ...this.browserState(),
-        closed: this.closed,
-        crashed: false,
-      }));
+      return new PlaywrightPage(
+        await this.context.newPage(),
+        () => ({
+          ...this.browserState(),
+          closed: this.closed,
+          crashed: false,
+        }),
+        this.overlay,
+      );
     } catch (error) {
       throw operationError(
         error,
@@ -649,7 +689,10 @@ class PlaywrightSession implements BrowserSession {
   private disconnected = false;
   private closed = false;
 
-  constructor(private readonly browser: Browser) {
+  constructor(
+    private readonly browser: Browser,
+    private readonly overlay: boolean,
+  ) {
     browser.on("disconnected", () => {
       this.disconnected = true;
     });
@@ -695,7 +738,7 @@ class PlaywrightSession implements BrowserSession {
         );
       }
       await context.addInitScript({ path: asset });
-      return new PlaywrightContext(context, () => this.state());
+      return new PlaywrightContext(context, () => this.state(), this.overlay);
     } catch (error) {
       if (
         error instanceof BrowserDriverError &&
@@ -717,12 +760,14 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
   async launch(options: BrowserLaunchOptions = {}): Promise<BrowserSession> {
     const headless = options.headless ?? true;
     const slowMo = options.slowMoMs ?? 0;
+    const overlay = options.overlay ?? false;
     const browserKind = options.browser ?? "chrome";
 
     if (browserKind === "chrome") {
       try {
         return new PlaywrightSession(
           await chromium.launch({ channel: "chrome", headless, slowMo }),
+          overlay,
         );
       } catch (error) {
         if (!isMissingExecutable(error)) {
@@ -740,7 +785,10 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     }
 
     try {
-      return new PlaywrightSession(await chromium.launch({ headless, slowMo }));
+      return new PlaywrightSession(
+        await chromium.launch({ headless, slowMo }),
+        overlay,
+      );
     } catch (error) {
       if (isMissingExecutable(error)) throw missingBrowserError();
       throw new BrowserDriverError(

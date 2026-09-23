@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -20,6 +20,10 @@ describe("CLI early progress", () => {
     const previous = process.cwd();
     try {
       process.chdir(root);
+      await writeFile(
+        path.join(root, "missing.test.yaml"),
+        "url: https://example.test\nsteps: [verify page]\n",
+      );
       const paths: string[] = [];
       const output = await runCli(["run", "missing.test.yaml"], "0.0.0");
       expect(output.exitCode).toBe(3);
@@ -56,6 +60,10 @@ describe("CLI early progress", () => {
     const previous = process.cwd();
     try {
       process.chdir(root);
+      await writeFile(
+        path.join(root, "missing.test.yaml"),
+        "url: https://example.test\nsteps: [verify page]\n",
+      );
       const controller = new AbortController();
       controller.abort();
       const paths: string[] = [];
