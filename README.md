@@ -56,7 +56,7 @@ sedum init
 ```
 
 The command keeps existing files and prints the next steps. In an interactive
-terminal, it shows a small plant mark; redirected output stays plain.
+color terminal, it shows the Sedum wordmark; redirected output stays plain.
 
 ### 3. Install a browser
 

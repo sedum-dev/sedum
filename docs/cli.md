@@ -21,7 +21,7 @@ On a fresh project, `init` asks no questions. Existing scaffold files are kept
 as they are, including on repeated runs. An existing `.gitignore` is amended
 only after confirmation in an interactive terminal. In a noninteractive shell,
 the command prints any missing rules to add manually. A symlink or nonregular
-file where a scaffold file belongs is an error. The small plant banner appears
+file where a scaffold file belongs is an error. The Sedum wordmark appears
 only in an interactive color terminal; redirected and `NO_COLOR` output is plain.
 If `.env.example` already exists, `init` keeps it and calls out the public
 `SAUCE_PASSWORD=secret_sauce` value needed by the generated demo when that
