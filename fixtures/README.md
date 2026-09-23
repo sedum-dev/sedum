@@ -13,6 +13,12 @@ buttons, cart and checkout, duplicate same-text links, a delayed page, and a
 rerendering list. Each browser test uses a fresh context. No external assets or
 Sauce Demo content are copied into the site.
 
+`ui-login-products.test.yaml` and `ui-login-checkout.test.yaml` both use
+`modules/ui-login.module.yaml`. The fixture integration test substitutes the
+ephemeral local base URL, then runs both flows with recorded provider replies.
+The first asserts a signed-in products page; the second exercises the cart and
+checkout. No live provider key is needed in replay mode.
+
 ## Recorded TypeSafe replies
 
 `replies/v1.json` contains the versioned request and reply data used by the

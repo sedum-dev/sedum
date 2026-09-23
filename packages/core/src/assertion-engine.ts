@@ -58,6 +58,8 @@ export class AssertionEngineError extends Error {
 
 export interface AssertionOptions {
   readonly signal?: AbortSignal;
+  /** Redact sensitive page-derived text only at the Judge boundary. */
+  readonly projectText?: (text: string) => string;
   /** Maximum time for the settled page read, before the provider call. */
   readonly observationTimeoutMs?: number;
 }
@@ -305,14 +307,19 @@ async function judgePage(
   claim: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  projectText?: (text: string) => string,
 ) {
   const digest = await settledDigest(page, timeoutMs, signal);
+  const projectedText = projectText ? projectText(digest.text) : digest.text;
   canceled(signal);
   let decision: Awaited<ReturnType<Judge["holds"]>> | undefined;
   try {
     decision = await judge.holds(
-      claim,
-      { complete: true, text: digest.text },
+      projectText ? projectText(claim) : claim,
+      {
+        complete: true,
+        text: projectedText,
+      },
       signal ? { signal } : {},
     );
     if (signal?.aborted)
@@ -344,7 +351,7 @@ async function judgePage(
   }
   if (!sameVersion(current, digest.version))
     throw new AssertionEngineError("stale_observation", decision.call);
-  return { decision, digest };
+  return { decision, digest: { ...digest, text: projectedText } };
 }
 
 export async function verify(
@@ -363,6 +370,7 @@ export async function verify(
     claim,
     timeoutMs,
     options.signal,
+    options.projectText,
   );
   const policy = evaluateVerifyScores(
     decision.holds,

@@ -95,6 +95,9 @@ export interface FillTarget {
   readonly tag: string;
   readonly name: string;
 }
+export type ReadTargetResult =
+  | { readonly status: "ok"; readonly text: string }
+  | { readonly status: "stale" | "empty" | "too_long" };
 export type AimResult =
   | { readonly actionable: true; readonly aim: Aim }
   | {
@@ -124,6 +127,7 @@ export interface PageBridge {
   clickTarget(ref: string): AimResult;
   checkAim(aim: Aim): AimResult;
   fillElement(target: FillTarget): Element | null;
+  readTarget(target: FillTarget): ReadTargetResult;
   clearRefs(): void;
 }
 declare global {

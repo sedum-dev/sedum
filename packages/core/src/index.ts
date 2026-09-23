@@ -17,6 +17,7 @@ export * from "./locator.js";
 export * from "./flow-types.js";
 export * from "./flow-values.js";
 export * from "./flow-loader.js";
+export * from "./flow-modules.js";
 export * from "./classification.js";
 export * from "./classification-cache.js";
 export * from "./flow-classification.js";

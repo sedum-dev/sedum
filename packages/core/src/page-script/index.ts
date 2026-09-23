@@ -14,6 +14,7 @@ import {
   type Operation,
   type PageBridge,
   type PageVersion,
+  type ReadTargetResult,
 } from "../page-protocol.js";
 
 if (!window.__sedum) {
@@ -656,6 +657,36 @@ if (!window.__sedum) {
       return null;
     return element;
   }
+  function readTarget(target: FillTarget): ReadTargetResult {
+    const current = version();
+    if (
+      !snapshot ||
+      snapshot.operation !== "read" ||
+      !same(snapshot.version, current) ||
+      !same(target.version, current)
+    )
+      return { status: "stale" };
+    const element = refElement(target.ref);
+    const candidate = snapshot.candidates.find(
+      (item) => item.ref === target.ref,
+    );
+    if (
+      !element ||
+      !candidate ||
+      element.tagName.toLowerCase() !== target.tag ||
+      candidate.name !== target.name ||
+      !readable(element) ||
+      !visible(element) ||
+      label(element) !== candidate.name ||
+      JSON.stringify(peers(element, candidate.name).texts) !==
+        JSON.stringify(candidate.peers)
+    )
+      return { status: "stale" };
+    const text = publicText(element);
+    if (!text) return { status: "empty" };
+    if (Array.from(text).length > 4096) return { status: "too_long" };
+    return { status: "ok", text };
+  }
   function aim(ref: string, expected?: Aim): AimResult {
     const current = version();
     if (!snapshot || !same(snapshot.version, current))
@@ -750,6 +781,7 @@ if (!window.__sedum) {
       return { ...first, candidates: snapshot?.candidates ?? [], next: null };
     },
     clickTarget: (ref) => aim(ref),
+    readTarget,
     checkAim: (expected) => aim(expected.ref, expected),
     fillElement,
     clearRefs,

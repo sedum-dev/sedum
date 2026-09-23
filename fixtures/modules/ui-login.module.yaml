@@ -1,0 +1,5 @@
+parameters: [username, password]
+steps:
+  - type {{username}} into the Username field
+  - type {{password}} into the Password field
+  - click the Login button

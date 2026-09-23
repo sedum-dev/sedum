@@ -14,11 +14,13 @@ cache, environment, and repository-root dependencies; it does not read process
 state or expose SDK/Playwright types. The initial slice supports a flow URL and
 ordinary `steps` classified as `type`, `click`, and `verify`. A failed verify
 is a test failure; invalid data, browser/provider/locator/action failures, and
-unsupported operations are `could_not_run`. `before`, `after`, and modules are
-rejected before browser launch pending their owning work. Runtime values remain
-opaque outside the executor.
+unsupported operations are `could_not_run`. The SED-29 lifecycle executes
+`before`, conditional `steps`, and exhaustive `after` within one browser
+context. Reusable modules are validated as a complete contained graph before
+classification and browser launch. Their arguments resolve lazily in an
+attempt-local scope. Runtime values remain opaque outside the executor.
 
-The loader reports `format` coverage and leaves `steps: not_checked`. `classifyParsedFlow` composes the parsed definition with SED-28 classification, static type-operand checking, and source-located diagnostics, marking steps checked only when every sentence succeeds. It marks `modules: not_checked` for any `use:` call, since SED-29 must resolve and validate referenced modules; otherwise modules are `not_needed`. SED-37's `sedum validate` must combine this result with SED-29 module validation before claiming full success. An unresolved sentence, invalid type operand, or unresolved module needs a source-located nonzero diagnostic. `isFullyValidated` encodes this gate for the composed result. SED-19 consumes the typed definition for running tests, with URL/config resolution and runtime environment lookup at that later boundary.
+The loader reports `format` coverage and leaves `steps: not_checked`. `resolveFlowModules` resolves every reachable `use`, checks exact parameter bindings, canonical containment, cycles, and depth, then marks modules `checked` or `incomplete`. `classifyParsedFlow` classifies every expanded sentence, validates type operands, and marks steps checked only when the whole graph succeeds. SED-37's `sedum validate` can compose those checks through `isFullyValidated`; a format-only check never claims full validation. The public format and hook contract are described in [docs/format.md](../../docs/format.md).
 
 Build `@sedum-dev/core` before launching the Playwright driver. The package ships `./page-script.js` as a browser-only IIFE; `PlaywrightBrowserDriver` installs it as a context init script before pages are created. A missing asset produces `script-missing`; a missing or incompatible bridge produces `PageScriptError`.
 

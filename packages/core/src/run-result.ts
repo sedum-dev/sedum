@@ -125,6 +125,16 @@ export const ResultStepSchema = z.strictObject({
     })
     .nullable(),
 });
+export const ResultProblemSchema = z.strictObject({
+  id: z.string().min(1),
+  ordinal: z.number().int().positive(),
+  origin: z.enum(["step", "module_binding"]),
+  outcome: z.enum(["failed", "error"]),
+  phase: z.enum(["before", "steps", "after"]),
+  sourceStack: z.array(ResultSourceSchema).min(1),
+  stepId: z.string().nullable(),
+  error: ResultErrorSchema,
+});
 export const ResultAttemptSchema = z.strictObject({
   id: z.string().min(1),
   ordinal: z.number().int().positive(),
@@ -137,6 +147,8 @@ export const ResultAttemptSchema = z.strictObject({
   timeoutReason: z.string().max(120).nullable(),
   error: ResultErrorSchema.nullable(),
   steps: z.array(ResultStepSchema),
+  problems: z.array(ResultProblemSchema),
+  primaryProblemId: z.string().nullable(),
 });
 export const ResultTestSchema = z.strictObject({
   id: z.string().min(1),
@@ -184,6 +196,7 @@ export type RunResult = z.infer<typeof RunResultSchema>;
 export type ResultStep = z.infer<typeof ResultStepSchema>;
 export type ResultTest = z.infer<typeof ResultTestSchema>;
 export type ResultAttempt = z.infer<typeof ResultAttemptSchema>;
+export type ResultProblem = z.infer<typeof ResultProblemSchema>;
 export type ResultCall = z.infer<typeof ResultCallSchema>;
 export type ResultPage = z.infer<typeof ResultPageSchema>;
 export type ResultFrame = z.infer<typeof ResultFrameSchema>;
@@ -266,6 +279,61 @@ export function validateRunResult(value: unknown): RunResult {
         )
           throw new Error("Completed step has no verdict");
       }
+      if (attempt.problems.length === 0 && attempt.primaryProblemId !== null)
+        throw new Error("Problem-free attempt has a primary problem");
+      if (
+        attempt.problems.length > 0 &&
+        attempt.primaryProblemId !== attempt.problems[0]?.id
+      )
+        throw new Error("The first problem must be primary");
+      for (const [index, problem] of attempt.problems.entries()) {
+        addId(problem.id);
+        if (problem.ordinal !== index + 1)
+          throw new Error("Problem ordinals must be consecutive");
+        const linked = attempt.steps.find((step) => step.id === problem.stepId);
+        if (problem.origin === "step") {
+          if (!linked) throw new Error("Problem step link is missing");
+          if (
+            linked.phase !== problem.phase ||
+            JSON.stringify(linked.sourceStack) !==
+              JSON.stringify(problem.sourceStack) ||
+            (problem.outcome === "failed" && linked.verdict !== "failed") ||
+            (problem.outcome === "error" && linked.state !== "error")
+          )
+            throw new Error("Problem disagrees with linked step");
+        } else if (problem.stepId !== null)
+          throw new Error("Module binding problem cannot link a step");
+      }
+      for (const step of attempt.steps) {
+        const expected =
+          step.state === "error" || step.verdict === "failed" ? 1 : 0;
+        const actual = attempt.problems.filter(
+          (problem) => problem.origin === "step" && problem.stepId === step.id,
+        ).length;
+        if (actual !== expected)
+          throw new Error("Executed step problem count is inconsistent");
+      }
+      const primary = attempt.problems[0];
+      if (attempt.state === "completed" && primary?.outcome === "error")
+        throw new Error("Operational primary cannot complete an attempt");
+      if (
+        attempt.state === "completed" &&
+        attempt.verdict === "failed" &&
+        primary?.outcome !== "failed"
+      )
+        throw new Error("Failed attempt needs a failed primary problem");
+      if (
+        attempt.state === "completed" &&
+        attempt.verdict === "passed" &&
+        attempt.problems.length > 0
+      )
+        throw new Error("Passed attempt has problems");
+      if (
+        attempt.state === "error" &&
+        attempt.problems.length > 0 &&
+        primary?.outcome !== "error"
+      )
+        throw new Error("Error attempt needs an error primary problem");
     }
     const selected = test.attempts.find(
       (attempt) => attempt.id === test.selectedAttemptId,
