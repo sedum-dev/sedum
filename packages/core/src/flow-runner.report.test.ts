@@ -155,6 +155,7 @@ describe("runner report facts", () => {
   it("publishes a failed verify with exact scores, safe page and default frame", async () => {
     const { result, final, snapshots, saveFrame } = await reportRun();
     expect(result.status).toBe("failed");
+    expect(final.tests[0]?.id).toBe("cart.test.yaml");
     expect(
       snapshots.some(
         (snapshot) => snapshot.tests[0]?.attempts[0]?.steps.length === 1,

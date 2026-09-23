@@ -38,6 +38,26 @@ class FakePage extends EventEmitter {
   readonly innerText = vi.fn(async () => "fixture page");
   readonly keyboard = { press: vi.fn(async () => undefined) };
   readonly mouse = { wheel: vi.fn(async () => undefined) };
+  readonly cdp = {
+    send: vi.fn(async (...args: unknown[]) => {
+      void args;
+    }),
+    detach: vi.fn(async () => undefined),
+  };
+  readonly cdpContext = { newCDPSession: vi.fn(async () => this.cdp) };
+  readonly target = {
+    waitForElementState: vi.fn(async () => undefined),
+    boundingBox: vi.fn(async () => ({ x: 10, y: 20, width: 100, height: 30 })),
+    click: vi.fn(async () => undefined),
+  };
+  readonly evaluateHandle = vi.fn(async () => ({
+    asElement: () => this.target,
+    dispose: vi.fn(async () => undefined),
+  }));
+
+  context() {
+    return this.cdpContext;
+  }
 
   url(): string {
     return this.currentUrl;
@@ -124,6 +144,43 @@ describe("PlaywrightBrowserDriver", () => {
 
     expect(session).toBeDefined();
     expect(launch).toHaveBeenNthCalledWith(2, { headless: false, slowMo: 20 });
+  });
+
+  it("marks a headed action with a browser overlay and removes it after dispatch", async () => {
+    const browser = new FakeBrowser();
+    launch.mockResolvedValue(browser);
+    const session = await new PlaywrightBrowserDriver().launch({
+      browser: "chromium",
+      headless: false,
+      overlay: true,
+    });
+    const context = await session.newContext();
+    const page = await context.newPage();
+    vi.spyOn(browser.context.page, "evaluate").mockResolvedValue({
+      actionable: true,
+    } as never);
+    const aim = {
+      ref: "target",
+      document: "doc",
+      route: "https://example.test",
+      revision: 1,
+      tag: "button",
+      name: "Submit",
+      point: { x: 5, y: 5 },
+    };
+    await expect(page.clickRef(aim)).resolves.toMatchObject({
+      actionable: true,
+    });
+    expect(
+      browser.context.page.cdp.send.mock.calls.map(([method]) => method),
+    ).toEqual([
+      "Overlay.enable",
+      "Overlay.highlightRect",
+      "Overlay.hideHighlight",
+    ]);
+    expect(browser.context.page.target.click).toHaveBeenCalledOnce();
+    expect(browser.context.page.cdp.detach).toHaveBeenCalledOnce();
+    await session.close();
   });
 
   it("reports a direct installation fix when neither browser is available", async () => {

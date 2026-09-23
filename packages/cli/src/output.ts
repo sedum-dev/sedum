@@ -10,6 +10,7 @@ export interface OutputCapabilities {
 export interface RunArtifactPaths {
   readonly progressPath: string;
   readonly resultPath: string;
+  readonly reporterPath?: string;
   readonly authoritative: boolean;
 }
 
@@ -70,6 +71,10 @@ export function renderRunSummary(
     lines.push(
       `test ${paint(label.text, label.color, color)} ${test.file}${flags}`,
     );
+    if (test.attempts.length > 1)
+      lines.push(
+        `  attempts ${test.attempts.length} (${test.attempts.map((attempt) => attempt.verdict ?? attempt.state).join(" -> ")})`,
+      );
     const selected = test.attempts.find(
       (attempt) => attempt.id === test.selectedAttemptId,
     );
@@ -88,6 +93,10 @@ export function renderRunSummary(
   }
   const runLabel = stateLabel(value.state, value.verdict);
   lines.push(`run  ${paint(runLabel.text, runLabel.color, color)}`);
+  for (const problem of value.discoveryProblems ?? [])
+    lines.push(
+      `discovery ${problem.file}${problem.line === undefined ? "" : `:${problem.line}:${problem.col ?? 1}`}: ${problem.message} Fix: ${problem.fix}`,
+    );
   lines.push(
     `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed`,
   );
@@ -97,6 +106,8 @@ export function renderRunSummary(
   if (artifacts.authoritative) {
     lines.push(`progress ${artifacts.progressPath}`);
     lines.push(`result ${artifacts.resultPath}`);
+    if (artifacts.reporterPath)
+      lines.push(`reporter ${artifacts.reporterPath}`);
   } else {
     lines.push(`result unavailable (intended ${artifacts.resultPath})`);
   }

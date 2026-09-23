@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -78,6 +78,10 @@ async function inTemporaryRoot() {
   root = await mkdtemp(path.join(tmpdir(), "sedum-output-failure-"));
   previous = process.cwd();
   process.chdir(root);
+  await writeFile(
+    path.join(root, "fixture.test.yaml"),
+    "url: https://example.test\nsteps: [verify page]\n",
+  );
   vi.mocked(runFlow).mockClear();
 }
 
@@ -99,6 +103,312 @@ const options = {
 };
 
 describe("run output failure contract", () => {
+  it("rejects unavailable reporter choices before starting a browser or provider", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      reporters: ["junit"],
+    });
+    expect(output.result).toMatchObject({
+      state: "error",
+      error: { code: "unsupported_reporter" },
+    });
+    expect(runFlow).not.toHaveBeenCalled();
+    expect(output.artifacts.authoritative).toBe(true);
+  });
+
+  it("writes requested JSON to the project-root reporter directory from the same final result", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      reporters: ["json", "json"],
+      reporterDir: "reports",
+    });
+    const reporterPath = path.join(
+      root!,
+      "reports",
+      output.result.runId,
+      "result.json",
+    );
+    expect(output.artifacts.reporterPath).toMatch(/[/\\]reports[/\\]/u);
+    expect(JSON.parse(await readFile(reporterPath, "utf8"))).toEqual(
+      output.result,
+    );
+    expect(
+      JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+    ).toEqual(output.result);
+  });
+
+  it("uses the canonical JSON when reporter and output directories coincide", async () => {
+    await inTemporaryRoot();
+    const output = await executeRunCommand({
+      ...options,
+      reporters: ["json"],
+      outputDir: "same",
+      reporterDir: "same",
+    });
+    expect(output.result.state).toBe("completed");
+    expect(output.artifacts.reporterPath).toBe(output.artifacts.resultPath);
+  });
+
+  it("makes a reporter write failure operational while retaining the canonical result", async () => {
+    await inTemporaryRoot();
+    const finish = ProgressWriter.prototype.finish;
+    vi.spyOn(ProgressWriter.prototype, "finish").mockImplementation(
+      async function (this: ProgressWriter, result) {
+        if (this.directory.includes(`${path.sep}reports${path.sep}`))
+          throw new ProgressWriterError(this.resultPath);
+        return finish.call(this, result);
+      },
+    );
+    const output = await executeRunCommand({
+      ...options,
+      reporterDir: "reports",
+    });
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "output_error" },
+    });
+    expect(output.artifacts.reporterPath).toBeUndefined();
+    expect(
+      JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+    ).toEqual(output.result);
+  });
+
+  it("keeps an earlier run error primary when its reporter write fails", async () => {
+    await inTemporaryRoot();
+    const finish = ProgressWriter.prototype.finish;
+    vi.spyOn(ProgressWriter.prototype, "finish").mockImplementation(
+      async function (this: ProgressWriter, result) {
+        if (this.directory.includes(`${path.sep}reports${path.sep}`))
+          throw new ProgressWriterError(this.resultPath);
+        return finish.call(this, result);
+      },
+    );
+    const output = await executeRunCommand({
+      ...options,
+      paths: ["missing.test.yaml"],
+      reporterDir: "reports",
+    });
+    expect(output.result.error?.code).toBe("no_tests");
+    expect(output.diagnostic?.code).toBe("output_error");
+    expect(
+      JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+    ).toEqual(output.result);
+  });
+
+  it("runs valid selected files but exits incomplete when another selected file is invalid", async () => {
+    await inTemporaryRoot();
+    await writeFile(
+      path.join(root!, "good.test.yaml"),
+      "url: https://example.test\nsteps: [verify page]\n",
+    );
+    await writeFile(path.join(root!, "bad.test.yaml"), "stepz: []\n");
+    const output = await executeRunCommand({
+      ...options,
+      paths: ["good.test.yaml", "bad.test.yaml"],
+    });
+    expect(
+      vi.mocked(runFlow).mock.calls.map(([file]) => path.basename(file)),
+    ).toEqual(["good.test.yaml"]);
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "discovery_error" },
+      totals: { executedTests: 1 },
+    });
+    expect(output.result.discoveryProblems?.[0]).toMatchObject({
+      file: "bad.test.yaml",
+      line: 1,
+      col: 1,
+    });
+  });
+
+  it("keeps URLs and credentials out of invalid-file result diagnostics", async () => {
+    await inTemporaryRoot();
+    await writeFile(
+      path.join(root!, "private.test.yaml"),
+      '"https://user:password@example.test/private?token=abc": true\nsteps: [verify page]\n',
+    );
+    const output = await executeRunCommand({
+      ...options,
+      paths: ["private.test.yaml"],
+    });
+    const resultText = JSON.stringify(output.result);
+    expect(output.result.error?.code).toBe("no_tests");
+    expect(output.result.discoveryProblems?.[0]?.line).toBe(1);
+    expect(resultText).not.toContain("password");
+    expect(resultText).not.toContain("token=abc");
+  });
+
+  it("retries a failed test as a fresh numbered attempt and keeps both outcomes", async () => {
+    await inTemporaryRoot();
+    await writeFile(
+      path.join(root!, "fixture.test.yaml"),
+      "url: https://example.test\nsteps: [verify page]\n",
+    );
+    let calls = 0;
+    vi.mocked(runFlow).mockImplementationOnce(async (file, dependencies) => {
+      const recorder = dependencies.report!.recorder;
+      await recorder.startTest({ id: "retry-test", file });
+      await recorder.addStep({
+        id: "retry-test:attempt:1:step:1",
+        index: 1,
+        kind: "verify",
+        operation: "verify",
+        phase: "steps",
+        sentence: "verify page",
+        detail: "failed",
+        sourceStack: [{ file: "fixture.test.yaml", line: 2, col: 1 }],
+        state: "completed",
+        verdict: "failed",
+        flags: [],
+        elapsedMs: 1,
+        page: { status: "unavailable", reason: "fixture" },
+        locator: null,
+        judgement: null,
+        observations: [],
+        calls: [],
+        error: null,
+        evidence: { status: "omitted", reason: "fixture" },
+        replayFrame: null,
+        targetBox: null,
+      });
+      await recorder.finishTest("failed");
+      calls++;
+      return { status: "failed", file, source: { file, line: 2, col: 1 } };
+    });
+    vi.mocked(runFlow).mockImplementationOnce(async (file, dependencies) => {
+      const recorder = dependencies.report!.recorder;
+      await recorder.addStep({
+        id: "retry-test:attempt:2:step:1",
+        index: 1,
+        kind: "verify",
+        operation: "verify",
+        phase: "steps",
+        sentence: "verify page",
+        detail: "passed",
+        sourceStack: [{ file: "fixture.test.yaml", line: 2, col: 1 }],
+        state: "completed",
+        verdict: "passed",
+        flags: [],
+        elapsedMs: 1,
+        page: { status: "unavailable", reason: "fixture" },
+        locator: null,
+        judgement: null,
+        observations: [],
+        calls: [],
+        error: null,
+        evidence: { status: "omitted", reason: "fixture" },
+        replayFrame: null,
+        targetBox: null,
+      });
+      await recorder.finishTest("passed");
+      calls++;
+      return { status: "passed", file };
+    });
+    const output = await executeRunCommand({
+      ...options,
+      paths: ["fixture.test.yaml"],
+      retries: 1,
+    });
+    expect(calls).toBe(2);
+    expect(output.result.tests).toHaveLength(1);
+    expect(
+      output.result.tests[0]?.attempts.map((attempt) => attempt.verdict),
+    ).toEqual(["failed", "passed"]);
+    expect(output.result).toMatchObject({
+      verdict: "passed",
+      totals: { historicalAttempts: 1, failedTests: 0, passedTests: 1 },
+    });
+  });
+
+  it("expires an active run with a typed error and partial attempt", async () => {
+    await inTemporaryRoot();
+    await writeFile(
+      path.join(root!, "fixture.test.yaml"),
+      "url: https://example.test\nsteps: [verify page]\n",
+    );
+    await writeFile(
+      path.join(root!, "later.test.yaml"),
+      "url: https://example.test\nsteps: [verify page]\n",
+    );
+    vi.mocked(runFlow).mockImplementationOnce(async (file, dependencies) => {
+      await dependencies.report!.recorder.startTest({ id: "timed-test", file });
+      await new Promise<void>((resolve) => {
+        if (dependencies.signal?.aborted) resolve();
+        else
+          dependencies.signal?.addEventListener("abort", () => resolve(), {
+            once: true,
+          });
+      });
+      return {
+        status: "could_not_run",
+        file,
+        code: "canceled",
+        message: "canceled",
+      };
+    });
+    const onDeadline = vi.fn();
+    const output = await executeRunCommand({
+      ...options,
+      paths: ["fixture.test.yaml", "later.test.yaml"],
+      timeoutMinutes: 0.001,
+      onDeadline,
+    });
+    expect(onDeadline).toHaveBeenCalledOnce();
+    expect(output.result).toMatchObject({
+      state: "error",
+      verdict: null,
+      error: { code: "run_timeout" },
+    });
+    expect(output.result.tests[0]?.attempts[0]?.state).toBe("error");
+    expect(output.result.tests[0]?.attempts[0]?.timeoutReason).toBe(
+      "run_timeout",
+    );
+    expect(output.result.totals).toMatchObject({
+      selectedTests: 2,
+      executedTests: 1,
+    });
+  });
+
+  it("keeps an earlier interrupt primary when its cleanup crosses the run deadline", async () => {
+    await inTemporaryRoot();
+    const interrupt = new AbortController();
+    const onDeadline = vi.fn();
+    vi.mocked(runFlow).mockImplementationOnce(async (file, dependencies) => {
+      await dependencies.report!.recorder.startTest({
+        id: "interrupted",
+        file,
+      });
+      await new Promise<void>((resolve) => {
+        dependencies.signal?.addEventListener("abort", () => resolve(), {
+          once: true,
+        });
+      });
+      await new Promise((resolve) => setTimeout(resolve, 90));
+      return {
+        status: "could_not_run",
+        file,
+        code: "canceled",
+        message: "canceled",
+      };
+    });
+    setTimeout(() => interrupt.abort(new Error("SIGINT")), 10);
+    const output = await executeRunCommand({
+      ...options,
+      signal: interrupt.signal,
+      timeoutMinutes: 0.001,
+      onDeadline,
+    });
+    expect(output.result).toMatchObject({
+      state: "interrupted",
+      error: { code: "canceled" },
+    });
+    expect(onDeadline).not.toHaveBeenCalled();
+  });
+
   it("returns an operational result for invalid config before starting a test", async () => {
     await inTemporaryRoot();
     await writeFile(
@@ -202,6 +512,32 @@ baseUrl: https://example.com/app/
     expect(output.diagnostic).toBeNull();
   });
 
+  it("applies run filters to configured discovery with no positional paths", async () => {
+    await inTemporaryRoot();
+    await mkdir(path.join(root!, "tests"));
+    await writeFile(
+      path.join(root!, "tests", "one.test.yaml"),
+      "id: one\ntags: [smoke]\nsteps: [verify page]\n",
+    );
+    await writeFile(
+      path.join(root!, "tests", "two.test.yaml"),
+      "id: two\ntags: [other]\nsteps: [verify page]\n",
+    );
+    const output = await executeRunCommand({
+      replay: false,
+      evidence: false,
+      sensitiveOrigins: [],
+      filters: { labels: ["smoke"] },
+    });
+    expect(output.result.totals).toMatchObject({
+      selectedTests: 1,
+      executedTests: 1,
+    });
+    expect(vi.mocked(runFlow).mock.calls[0]?.[0]).toMatch(
+      /[/\\]tests[/\\]one\.test\.yaml$/u,
+    );
+  });
+
   it("reports directory creation failure without claiming an artifact", async () => {
     await inTemporaryRoot();
     vi.spyOn(ProgressWriter, "create").mockRejectedValueOnce(
@@ -250,7 +586,7 @@ baseUrl: https://example.com/app/
       result,
     ) {
       writes += 1;
-      return writes === 2
+      return writes === 3
         ? Promise.reject(new ProgressWriterError("progress.json"))
         : write.call(this, result);
     });

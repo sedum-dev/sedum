@@ -147,6 +147,7 @@ export const ResultAttemptSchema = z.strictObject({
   timeoutReason: z.string().max(120).nullable(),
   error: ResultErrorSchema.nullable(),
   steps: z.array(ResultStepSchema),
+  calls: z.array(ResultCallSchema).optional(),
   problems: z.array(ResultProblemSchema),
   primaryProblemId: z.string().nullable(),
 });
@@ -186,9 +187,22 @@ export const RunResultSchema = z.strictObject({
   updatedAt: z.string().datetime(),
   finishedAt: z.string().datetime().nullable(),
   elapsedMs: nonnegative,
+  selectedTestCount: count.optional(),
   totals: ResultTotalsSchema,
   setupCalls: z.array(ResultCallSchema),
   tests: z.array(ResultTestSchema),
+  discoveryProblems: z
+    .array(
+      z.strictObject({
+        file: z.string().max(512),
+        line: z.number().int().positive().optional(),
+        col: z.number().int().positive().optional(),
+        code: z.string().max(120),
+        message: z.string().max(512),
+        fix: z.string().max(512),
+      }),
+    )
+    .optional(),
   error: ResultErrorSchema.nullable(),
 });
 
@@ -204,6 +218,7 @@ export type ResultFrame = z.infer<typeof ResultFrameSchema>;
 export function resultTotals(
   tests: readonly ResultTest[],
   setupCalls: readonly ResultCall[] = [],
+  selectedTestCount = tests.length,
 ): RunResult["totals"] {
   const selected = tests.flatMap((test) =>
     test.attempts.filter((attempt) => attempt.id === test.selectedAttemptId),
@@ -212,14 +227,15 @@ export function resultTotals(
   const calls = [
     ...setupCalls,
     ...tests.flatMap((test) =>
-      test.attempts.flatMap((attempt) =>
-        attempt.steps.flatMap((step) => step.calls),
-      ),
+      test.attempts.flatMap((attempt) => [
+        ...(attempt.calls ?? []),
+        ...attempt.steps.flatMap((step) => step.calls),
+      ]),
     ),
   ];
   const complete = calls.every((call) => call.costUsd !== null);
   return {
-    selectedTests: tests.length,
+    selectedTests: selectedTestCount,
     executedTests: tests.filter((test) => test.attempts.length > 0).length,
     passedTests: tests.filter((test) => test.verdict === "passed").length,
     failedTests: tests.filter((test) => test.verdict === "failed").length,
@@ -242,6 +258,16 @@ export function resultTotals(
 
 export function validateRunResult(value: unknown): RunResult {
   const result = RunResultSchema.parse(value);
+  if (
+    result.selectedTestCount !== undefined &&
+    result.selectedTestCount < result.tests.length
+  )
+    throw new Error("Selected test count is smaller than started tests");
+  if (
+    result.state === "completed" &&
+    (result.discoveryProblems?.length ?? 0) > 0
+  )
+    throw new Error("Run with discovery problems cannot complete cleanly");
   const ids = new Set<string>();
   const addId = (id: string) => {
     if (ids.has(id)) throw new Error(`Duplicate result ID: ${id}`);
@@ -347,7 +373,13 @@ export function validateRunResult(value: unknown): RunResult {
   }
   if (
     JSON.stringify(result.totals) !==
-    JSON.stringify(resultTotals(result.tests, result.setupCalls))
+    JSON.stringify(
+      resultTotals(
+        result.tests,
+        result.setupCalls,
+        result.selectedTestCount ?? result.tests.length,
+      ),
+    )
   )
     throw new Error("Run totals differ from children");
   const finalVerdict =

@@ -96,6 +96,9 @@ export interface FlowRunnerDependencies {
   readonly viewport?: { readonly width: number; readonly height: number };
   readonly verifyPolicy?: VerifyPolicy;
   readonly baseUrl?: string;
+  readonly urlOverride?: string;
+  readonly slowMoMs?: number;
+  readonly headedOverlay?: boolean;
   readonly signal?: AbortSignal;
   readonly report?: {
     readonly recorder: RunRecorder;
@@ -243,10 +246,21 @@ function claim(
 }
 
 /** SED-10 entry URL semantics; SED-33 adds origin-preserving --url-override. */
-export function resolveEntryUrl(testUrl?: string, baseUrl?: string): string {
+export function resolveEntryUrl(
+  testUrl?: string,
+  baseUrl?: string,
+  urlOverride?: string,
+): string {
+  let override: URL | undefined;
+  if (urlOverride) {
+    override = new URL(urlOverride);
+    if (!["http:", "https:"].includes(override.protocol))
+      throw new Error("The URL override must use HTTP or HTTPS.");
+  }
+  let resolved: URL;
   if (testUrl) {
     try {
-      return baseUrl ? new URL(testUrl, baseUrl).href : new URL(testUrl).href;
+      resolved = baseUrl ? new URL(testUrl, baseUrl) : new URL(testUrl);
     } catch {
       throw new Error(
         baseUrl
@@ -254,9 +268,15 @@ export function resolveEntryUrl(testUrl?: string, baseUrl?: string): string {
           : "The test URL is relative but no baseUrl is configured.",
       );
     }
+  } else if (baseUrl) resolved = new URL(baseUrl);
+  else throw new Error("The test has no URL and no baseUrl is configured.");
+  if (override) {
+    resolved.protocol = override.protocol;
+    resolved.host = override.host;
+    resolved.username = override.username;
+    resolved.password = override.password;
   }
-  if (baseUrl) return new URL(baseUrl).href;
-  throw new Error("The test has no URL and no baseUrl is configured.");
+  return resolved.href;
 }
 
 async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
@@ -905,6 +925,7 @@ export async function runFlow(
   const absolute = path.resolve(file);
   const loaded = await loadFlowFile(absolute, {
     repoRoot: dependencies.repoRoot,
+    rejectSymlinks: true,
   });
   const parsed = await resolveFlowModules(loaded, {
     repoRoot: dependencies.repoRoot,
@@ -912,7 +933,11 @@ export async function runFlow(
   if (!parsed.value) return firstDiagnostic(parsed.diagnostics);
   let entryUrl: string;
   try {
-    entryUrl = resolveEntryUrl(parsed.value.url, dependencies.baseUrl);
+    entryUrl = resolveEntryUrl(
+      parsed.value.url,
+      dependencies.baseUrl,
+      dependencies.urlOverride,
+    );
   } catch (error) {
     return {
       status: "could_not_run",
@@ -926,6 +951,26 @@ export async function runFlow(
       fix: "Add an absolute test URL or configure baseUrl in sedum.config.yaml.",
     };
   }
+  if (dependencies.report) {
+    const privacy = dependencies.report.privacy;
+    const file = safeSource(
+      { file: absolute, line: 1, col: 1 },
+      dependencies.repoRoot,
+      privacy,
+    ).file;
+    const existing = dependencies.report.recorder.snapshot.tests.at(-1);
+    const retrying =
+      existing?.file === file &&
+      existing.state === "running" &&
+      existing.attempts.at(-1)?.state === "running";
+    if (!retrying)
+      await dependencies.report.recorder.startTest({
+        id: parsed.value.identity,
+        file,
+        description: safeText(parsed.value.description ?? "", privacy, 512),
+        tags: parsed.value.tags.map((tag) => safeText(tag, privacy, 120)),
+      });
+  }
   const classified = await classifyParsedFlow(parsed, {
     mode: "allow-model",
     cache: dependencies.classificationCache,
@@ -933,7 +978,7 @@ export async function runFlow(
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),
   });
   if (dependencies.report && classified.calls.length)
-    await dependencies.report.recorder.addSetupCalls(
+    await dependencies.report.recorder.addAttemptCalls(
       classified.calls.map((call) => resultCall(call, "classification")),
     );
   if (!classified.value) return firstDiagnostic(classified.diagnostics);
@@ -956,26 +1001,6 @@ export async function runFlow(
         .filter((entry) => entry.sensitive)
         .map((entry) => entry.value.reveal()),
     );
-  if (dependencies.report) {
-    const privacy = dependencies.report.privacy;
-    const file = safeSource(
-      { file: absolute, line: 1, col: 1 },
-      dependencies.repoRoot,
-      privacy,
-    ).file;
-    const existing = dependencies.report.recorder.snapshot.tests.at(-1);
-    const retrying =
-      existing?.file === file &&
-      existing.state === "running" &&
-      existing.attempts.at(-1)?.state === "running";
-    if (!retrying)
-      await dependencies.report.recorder.startTest({
-        id: `${dependencies.report.recorder.runId}:test:${dependencies.report.recorder.snapshot.tests.length + 1}`,
-        file,
-        description: safeText(classified.value.description ?? "", privacy, 512),
-        tags: classified.value.tags.map((tag) => safeText(tag, privacy, 120)),
-      });
-  }
   let session: Awaited<ReturnType<BrowserDriver["launch"]>> | undefined;
   let context:
     | Awaited<
@@ -991,6 +1016,10 @@ export async function runFlow(
       ...(dependencies.headless === undefined
         ? {}
         : { headless: dependencies.headless }),
+      ...(dependencies.slowMoMs === undefined
+        ? {}
+        : { slowMoMs: dependencies.slowMoMs }),
+      ...(dependencies.headedOverlay ? { overlay: true } : {}),
     });
     context = await session.newContext(
       dependencies.viewport === undefined
