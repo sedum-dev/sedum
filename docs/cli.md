@@ -1,5 +1,41 @@
 # CLI commands
 
+## `sedum init`
+
+Run `sedum init` in the directory you want to turn into a Sedum project. It
+creates `sedum.config.yaml`, `tests/example.test.yaml`, `.env.example`, and
+`.gitignore` entries for `.env`, `.sedum/runs/`, and `.sedum/reports/`. The
+classification cache at `.sedum/classifications.json` remains trackable.
+
+The generated test signs in to the public SauceDemo sample store at
+`https://www.saucedemo.com/` with `standard_user` and the public demo password
+`secret_sauce`. `.env.example` supplies `SAUCE_PASSWORD`; the user must supply
+their own `TYPESAFE_API_KEY`. Running the test calls the TypeSafe API and may
+incur a charge. The generated config selects Chromium. If no matching browser
+is installed, `init` prints `sedum browsers install chromium`; on Linux,
+`sedum browsers install chromium --with-deps` also installs system libraries.
+The command reports a missing key, previews the YAML test it creates, and
+prints a headed run command. It does not contact the provider or install a
+browser itself.
+
+On a fresh project, `init` asks no questions. Existing scaffold files are kept
+as they are, including on repeated runs. An existing `.gitignore` is amended
+only after confirmation in an interactive terminal. In a noninteractive shell,
+the command prints any missing rules to add manually. A symlink or nonregular
+file where a scaffold file belongs is an error. The Sedum wordmark appears
+only in an interactive color terminal; redirected and `NO_COLOR` output is plain.
+If `.env.example` already exists, `init` keeps it and calls out the public
+`SAUCE_PASSWORD=secret_sauce` value needed by the generated demo when that
+variable is not already available.
+
+```sh
+mkdir my-sedum-tests && cd my-sedum-tests
+sedum init
+cp .env.example .env  # only when .env does not already exist
+# Edit .env to set TYPESAFE_API_KEY. Install Chromium if init says it is missing.
+sedum run tests/example.test.yaml --headed
+```
+
 ## `sedum doctor`
 
 `sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure: Node 20.19 or newer, valid config and `.env`, an installed browser, network and authenticated access to TypeSafe, and output directory write access. The authentication check sends one small request and may incur a provider charge. Doctor does not launch a browser or run tests.
