@@ -1,5 +1,39 @@
 # CLI commands
 
+## `sedum doctor`
+
+`sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure:
+
+1. Node 20.19.0 or newer.
+2. A valid `sedum.config.yaml` and readable project-root `.env`.
+3. The configured Chrome or Chromium executable. The default `chrome` setting accepts Chrome or the Chromium installed by `sedum browsers install chromium`; `chromium` requires the latter.
+4. Network access to `https://api.typesafe.ai`.
+5. `TYPESAFE_API_KEY` from the invoking process or project-root `.env`, with the same precedence as `sedum run`.
+6. Acceptance of that key by the TypeSafe API.
+7. Write access to the configured output directory, including its path and symlink safety rules.
+
+The authentication check sends one small request to the TypeSafe API and may incur a provider charge. It has a short timeout. Doctor does not launch a browser or run tests. It creates and removes a temporary write probe and any output directories it needed to create for the probe.
+
+`sedum doctor --json` writes one JSON object to stdout, including when checks fail:
+
+```json
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "node",
+      "status": "pass",
+      "message": "Node 20.19.0 meets the >=20.19.0 requirement.",
+      "fix": null
+    }
+  ]
+}
+```
+
+The actual `checks` array always contains `node`, `config`, `browser`, `api_network`, `api_key`, `api_auth`, and `output` in that order. A failed check has `status: "fail"` and a nonempty `fix`. Checks that depend on invalid config or unavailable network fail with a fix for that prerequisite. Neither output form includes the key or raw API errors.
+
+The exit code is `0` if every check passes and `3` if any check fails.
+
 ## `sedum run` reporters
 
 `sedum run` uses the `list` terminal reporter by default. Select `steps` to see

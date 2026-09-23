@@ -336,3 +336,5 @@ export class TypeSafeAdapter
 
 export type TypeSafeResolver = Resolver;
 export type TypeSafeJudge = Judge;
+export { probeTypeSafeApiKey } from "./doctor.js";
+export type { AuthProbeResult } from "./doctor.js";
