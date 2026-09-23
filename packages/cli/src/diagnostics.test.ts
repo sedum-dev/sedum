@@ -34,7 +34,7 @@ describe("actionable CLI diagnostics", () => {
     const diagnostic = outputDiagnostic("/repo/.sedum/runs/1/result.json");
     expect(renderDiagnostic(diagnostic)).toBe(
       "The run result could not be written to /repo/.sedum/runs/1/result.json.\n" +
-        "Fix: Make the .sedum output directory writable and rerun the command.\n",
+        "Fix: Make the configured output directory writable and rerun the command.\n",
     );
   });
 

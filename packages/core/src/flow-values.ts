@@ -2,6 +2,7 @@ import { RuntimeValue } from "./step-executor.js";
 import type {
   DeclaredDataValue,
   FlowDiagnostic,
+  ModuleBinding,
   FlowScalar,
   FlowToken,
   SentenceStep,
@@ -15,6 +16,41 @@ interface TemplatePart {
 export interface ResolvedDataEntry {
   readonly value: RuntimeValue;
   readonly sensitive: boolean;
+  /** A page-observed value may be used in Judge claims; environment values may not. */
+  readonly modelVisible?: boolean;
+  /** Opaque environment components used only for attempt-local taint checks. */
+  readonly opaqueValues?: readonly RuntimeValue[];
+}
+
+/** A page echo of an environment value is still environment-derived. */
+export function opaqueMatches(
+  text: string,
+  entries: readonly ResolvedDataEntry[],
+): readonly RuntimeValue[] {
+  return entries
+    .flatMap((entry) => entry.opaqueValues ?? [])
+    .filter(
+      (value) => value.reveal().length > 0 && text.includes(value.reveal()),
+    );
+}
+
+/** Project text to a model without sending attempt-known environment components. */
+export function redactOpaqueText(
+  text: string,
+  entries: readonly ResolvedDataEntry[],
+): string {
+  const values = [
+    ...new Set(
+      entries
+        .flatMap((entry) => entry.opaqueValues ?? [])
+        .map((value) => value.reveal())
+        .filter(Boolean),
+    ),
+  ].sort((a, b) => b.length - a.length);
+  return values.reduce(
+    (safe, value) => safe.replaceAll(value, "[sensitive]"),
+    text,
+  );
 }
 
 export class DataResolutionError extends Error {
@@ -26,6 +62,18 @@ export class DataResolutionError extends Error {
       `${file}:${line}:${col}: data.${dataKey} needs $${variable}, which is not set`,
     );
     this.name = "DataResolutionError";
+  }
+}
+
+export class ModuleBindingResolutionError extends Error {
+  constructor(
+    readonly code: "missing_module_binding" | "missing_environment_variable",
+    readonly outcome: "failed" | "error",
+    readonly source: ModuleBinding["source"],
+    message: string,
+  ) {
+    super(`${source.file}:${source.line}:${source.col}: ${message}`);
+    this.name = "ModuleBindingResolutionError";
   }
 }
 
@@ -102,6 +150,7 @@ export function resolveData(
       );
     let text = "";
     let sensitive = false;
+    const opaqueValues: RuntimeValue[] = [];
     for (const part of parsed.parts) {
       if (part.literal !== undefined) text += part.literal;
       if (part.variable !== undefined) {
@@ -110,9 +159,121 @@ export function resolveData(
           throw new DataResolutionError(key, part.variable, item);
         text += value;
         sensitive = true;
+        opaqueValues.push(new RuntimeValue(value, `{{${key}}}`));
       }
     }
-    resolved[key] = { value: new RuntimeValue(text, `{{${key}}}`), sensitive };
+    resolved[key] = {
+      value: new RuntimeValue(text, `{{${key}}}`),
+      sensitive,
+      opaqueValues,
+    };
+  }
+  return resolved;
+}
+
+/** Resolve one reached module occurrence against its live caller scope. */
+export function resolveModuleBindings(
+  parameters: readonly string[],
+  bindings: Readonly<Record<string, ModuleBinding>>,
+  caller: Readonly<Record<string, ResolvedDataEntry>>,
+  env: Readonly<Record<string, string | undefined>>,
+): Readonly<Record<string, ResolvedDataEntry>> {
+  const resolved: Record<string, ResolvedDataEntry> = Object.create(
+    null,
+  ) as Record<string, ResolvedDataEntry>;
+  const substitute = (
+    literal: string,
+    binding: ModuleBinding,
+  ): {
+    text: string;
+    sensitive: boolean;
+    modelVisible: boolean;
+    remembered: boolean;
+    opaqueValues: readonly RuntimeValue[];
+  } => {
+    let sensitive = false;
+    let modelVisible = true;
+    let remembered = false;
+    const opaqueValues: RuntimeValue[] = [];
+    const text = literal.replace(
+      /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g,
+      (_whole, key: string) => {
+        const found = caller[key];
+        if (!found)
+          throw new ModuleBindingResolutionError(
+            "missing_module_binding",
+            "failed",
+            binding.source,
+            `module argument needs {{${key}}}, which is unavailable in this attempt`,
+          );
+        sensitive ||= found.sensitive;
+        modelVisible &&= !found.sensitive || found.modelVisible === true;
+        remembered ||= found.modelVisible === true;
+        opaqueValues.push(...(found.opaqueValues ?? []));
+        return found.value.reveal();
+      },
+    );
+    return { text, sensitive, modelVisible, remembered, opaqueValues };
+  };
+  for (const parameter of parameters) {
+    const binding = bindings[parameter];
+    if (!binding)
+      throw new ModuleBindingResolutionError(
+        "missing_module_binding",
+        "failed",
+        { file: "module", line: 1, col: 1 },
+        `module argument ${parameter} is unavailable`,
+      );
+    if (typeof binding.value !== "string") {
+      resolved[parameter] = {
+        value: new RuntimeValue(String(binding.value), `{{${parameter}}}`),
+        sensitive: false,
+      };
+      continue;
+    }
+    const parsed = parseDataTemplate(binding.value);
+    if ("error" in parsed)
+      throw new ModuleBindingResolutionError(
+        "missing_module_binding",
+        "failed",
+        binding.source,
+        parsed.error,
+      );
+    let text = "";
+    let sensitive = false;
+    let modelVisible = true;
+    let remembered = false;
+    const opaqueValues: RuntimeValue[] = [];
+    for (const part of parsed.parts) {
+      if (part.literal !== undefined) {
+        const replaced = substitute(part.literal, binding);
+        text += replaced.text;
+        sensitive ||= replaced.sensitive;
+        modelVisible &&= replaced.modelVisible;
+        remembered ||= replaced.remembered;
+        opaqueValues.push(...replaced.opaqueValues);
+      }
+      if (part.variable !== undefined) {
+        const value = env[part.variable];
+        if (!Object.hasOwn(env, part.variable) || typeof value !== "string")
+          throw new ModuleBindingResolutionError(
+            "missing_environment_variable",
+            "error",
+            binding.source,
+            `module argument ${parameter} needs $${part.variable}, which is not set`,
+          );
+        text += value;
+        sensitive = true;
+        modelVisible = false;
+        opaqueValues.push(new RuntimeValue(value, `{{${parameter}}}`));
+      }
+    }
+    resolved[parameter] = {
+      value: new RuntimeValue(text, `{{${parameter}}}`),
+      sensitive,
+      modelVisible: modelVisible && remembered,
+      opaqueValues,
+    };
   }
   return resolved;
 }

@@ -152,6 +152,8 @@ export interface LocatorOptions {
   readonly timeoutMs?: number;
   readonly cache?: CacheStore;
   readonly runtimeDependent?: boolean;
+  /** Redact sensitive page-derived text only at the Resolver boundary. */
+  readonly projectText?: (text: string) => string;
 }
 
 class LocatorError extends Error {
@@ -641,7 +643,13 @@ export async function resolveTarget(
             options: [
               ...projectCandidates(requestOptions(pool)).map((candidate) => ({
                 kind: "candidate" as const,
-                candidate,
+                candidate: options.projectText
+                  ? {
+                      ...candidate,
+                      name: options.projectText(candidate.name),
+                      peers: candidate.peers.map(options.projectText),
+                    }
+                  : candidate,
               })),
               { kind: "none" as const, id: "none" as const },
             ],

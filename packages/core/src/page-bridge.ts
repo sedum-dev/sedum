@@ -6,6 +6,8 @@ import {
   type DigestResult,
   type Operation,
   type PageVersion,
+  type FillTarget,
+  type ReadTargetResult,
 } from "./page-protocol.js";
 import { matchEntry, type CacheEntry, type MatchResult } from "./page-cache.js";
 
@@ -25,6 +27,7 @@ type Method =
   | "quiet"
   | "findBySignals"
   | "clickTarget"
+  | "readTarget"
   | "clearRefs";
 function validVersion(value: unknown): value is PageVersion {
   if (!value || typeof value !== "object") return false;
@@ -159,6 +162,21 @@ export function clickTarget(
   ref: string,
 ): Promise<AimResult> {
   return call(page, "clickTarget", ref);
+}
+export async function readTarget(
+  page: BrowserPage,
+  target: FillTarget,
+): Promise<ReadTargetResult> {
+  const result = await call<ReadTargetResult>(page, "readTarget", target);
+  if (
+    !result ||
+    (result.status !== "stale" &&
+      result.status !== "empty" &&
+      result.status !== "too_long" &&
+      !(result.status === "ok" && typeof result.text === "string"))
+  )
+    throw new PageScriptError("invalid-result", "Invalid target read.");
+  return result;
 }
 export function clearPageRefs(page: BrowserPage): Promise<void> {
   return call(page, "clearRefs");

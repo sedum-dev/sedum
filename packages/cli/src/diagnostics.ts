@@ -1,4 +1,5 @@
 import { BrowserDriverError, ProviderError } from "@sedum-dev/core";
+import { ProjectConfigError } from "./config.js";
 
 export interface CliDiagnostic {
   readonly code: string;
@@ -12,6 +13,7 @@ export interface CanonicalDiagnosticError {
 }
 
 export function setupDiagnostic(error: unknown): CliDiagnostic {
+  if (error instanceof ProjectConfigError) return configDiagnostic(error);
   if (error instanceof ProviderError && error.code === "configuration")
     return {
       code: "missing_key",
@@ -31,11 +33,28 @@ export function setupDiagnostic(error: unknown): CliDiagnostic {
   };
 }
 
+export function configDiagnostic(error: ProjectConfigError): CliDiagnostic {
+  const first = error.diagnostics[0];
+  if (!first)
+    return {
+      code: "invalid_config",
+      message: "The Sedum configuration is invalid.",
+      fix: "Correct sedum.config.yaml and rerun the command.",
+    };
+  return {
+    code: first.code,
+    message: bounded(
+      `${first.file}:${first.line}:${first.col}: ${first.message} (key: ${first.key})`,
+    ),
+    fix: bounded(first.fix),
+  };
+}
+
 export function outputDiagnostic(path: string): CliDiagnostic {
   return {
     code: "output_error",
     message: `The run result could not be written to ${path}.`,
-    fix: "Make the .sedum output directory writable and rerun the command.",
+    fix: "Make the configured output directory writable and rerun the command.",
   };
 }
 

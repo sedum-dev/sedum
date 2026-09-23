@@ -38,14 +38,30 @@ export interface SentenceStep {
   readonly sourceStack?: readonly FlowSource[];
 }
 
+export interface ModuleBinding {
+  readonly value: FlowScalar;
+  readonly source: FlowSource;
+}
+
 export interface ModuleStep {
   readonly kind: "module";
   readonly phase: "before" | "steps" | "after";
   readonly use: string;
   readonly with: Readonly<Record<string, FlowScalar>>;
+  readonly withSources: Readonly<Record<string, FlowSource>>;
   readonly source: FlowSource;
   /** SED-29 adds each resolved module source after this call site. */
   readonly sourceStack: readonly FlowSource[];
+  /** Present only after the complete module graph has been resolved. */
+  readonly resolved?: ResolvedModuleCall;
+}
+
+export interface ResolvedModuleCall {
+  readonly id: string;
+  readonly file: string;
+  readonly parameters: readonly string[];
+  readonly bindings: Readonly<Record<string, ModuleBinding>>;
+  readonly steps: readonly FlowStep[];
 }
 
 export type FlowStep = SentenceStep | ModuleStep;
@@ -58,12 +74,26 @@ export interface FlowDefinition {
   readonly idSource?: FlowSource;
   readonly description?: string;
   readonly url?: string;
+  /** Position of the `url` value, for entry-URL diagnostics. */
+  readonly urlSource?: FlowSource;
   readonly tags: readonly string[];
   readonly meta: Readonly<Record<string, unknown>>;
   readonly data: Readonly<Record<string, DeclaredDataValue>>;
   readonly before: readonly FlowStep[];
   readonly steps: readonly FlowStep[];
   readonly after: readonly FlowStep[];
+}
+
+export interface ModuleDefinition {
+  readonly file: string;
+  readonly source: FlowSource;
+  readonly parameters: readonly string[];
+  readonly steps: readonly FlowStep[];
+}
+
+export interface ParsedModuleResult {
+  readonly value?: ModuleDefinition;
+  readonly diagnostics: readonly FlowDiagnostic[];
 }
 
 /** A format-only result cannot be mistaken for full validation. */
@@ -78,7 +108,7 @@ export interface ParsedFlowResult {
   /** Parsed steps retained only for collecting later errors; never executable. */
   readonly candidate?: FlowDefinition;
   readonly diagnostics: readonly FlowDiagnostic[];
-  readonly coverage: FormatCoverage;
+  readonly coverage: FullValidationCoverage;
 }
 
 export interface ValidationInput {

@@ -131,6 +131,19 @@ describe("canonical RunResult", () => {
           ],
         },
       ],
+      problems: [
+        {
+          id: "attempt-1:problem:1",
+          ordinal: 1,
+          origin: "step" as const,
+          outcome: "failed" as const,
+          phase: "steps" as const,
+          sourceStack: [{ file: "cart.test.yaml", line: 2, col: 5 }],
+          stepId: "step-failed",
+          error: { code: "step_failed", message: "The step failed." },
+        },
+      ],
+      primaryProblemId: "attempt-1:problem:1",
     };
     const selected = {
       ...prior,
@@ -138,6 +151,8 @@ describe("canonical RunResult", () => {
       ordinal: 2,
       verdict: "passed" as const,
       steps: [step("step-passed", "passed")],
+      problems: [],
+      primaryProblemId: null,
     };
     const test = {
       id: "test",
@@ -208,6 +223,49 @@ describe("canonical RunResult", () => {
         totals: { ...recorder.snapshot.totals, modelCalls: 7 },
       }),
     ).toThrow();
+  });
+
+  it("rejects broken problem order, links, and primary outcome", async () => {
+    const recorder = new RunRecorder(async () => {}, "problem-run");
+    await recorder.start();
+    await recorder.startTest({ id: "problem-test", file: "cart.test.yaml" });
+    await recorder.addStep(step("problem-step", "failed"));
+    await recorder.finishTest("failed");
+    await recorder.finish();
+    const result = recorder.snapshot;
+    const attempt = result.tests[0]!.attempts[0]!;
+    const problem = attempt.problems[0]!;
+    expect(problem).toMatchObject({
+      origin: "step",
+      outcome: "failed",
+      stepId: "problem-step",
+      ordinal: 1,
+    });
+    const changed = (overrides: Partial<typeof attempt>) => ({
+      ...result,
+      tests: [
+        {
+          ...result.tests[0]!,
+          attempts: [{ ...attempt, ...overrides }],
+        },
+      ],
+    });
+    expect(() =>
+      validateRunResult(changed({ problems: [{ ...problem, ordinal: 2 }] })),
+    ).toThrow("Problem ordinals");
+    expect(() =>
+      validateRunResult(
+        changed({ problems: [{ ...problem, stepId: "missing" }] }),
+      ),
+    ).toThrow("Problem step link");
+    expect(() =>
+      validateRunResult(changed({ primaryProblemId: null })),
+    ).toThrow("first problem");
+    expect(() =>
+      validateRunResult(
+        changed({ problems: [{ ...problem, outcome: "error" }] }),
+      ),
+    ).toThrow("Problem disagrees");
   });
 });
 

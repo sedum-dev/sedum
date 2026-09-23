@@ -158,7 +158,7 @@ describe("CLI command framework", () => {
   });
 
   it("makes every malformed invocation actionable and operational", async () => {
-    for (const args of [[], ["run"], ["--unknown"], ["browsers"]]) {
+    for (const args of [[], ["--unknown"], ["browsers"]]) {
       const output = await runCli(args, "1.2.3");
       expect(output.exitCode).toBe(3);
       expect(output.stderr).toContain("Fix:");
@@ -170,6 +170,18 @@ describe("CLI command framework", () => {
     );
     expect(invalid.exitCode).toBe(3);
     expect(invalid.stderr).toContain("absolute URL");
+  });
+
+  it("allows a config-driven run without a positional file", async () => {
+    const canonical = await result([
+      { file: "configured.test.yaml", verdict: "passed" },
+    ]);
+    const executeRun = vi.fn(async () => execution(canonical));
+    const output = await runCli(["run"], "1.2.3", { executeRun });
+    expect(output.exitCode).toBe(0);
+    expect(executeRun).toHaveBeenCalledWith(
+      expect.not.objectContaining({ file: expect.anything() }),
+    );
   });
 
   it("passes normalized flags to the run command", async () => {

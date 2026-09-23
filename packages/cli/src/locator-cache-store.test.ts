@@ -120,14 +120,16 @@ describe("local locator cache", () => {
       "utf8",
     );
     expect(cacheText).not.toMatch(/secret|Camera|example\.test/u);
-    expect((await stat(a.directory)).mode & 0o777).toBe(0o700);
-    expect((await stat(path.join(a.directory, "key"))).mode & 0o777).toBe(
-      0o600,
-    );
-    expect(
-      (await stat(path.join(a.directory, "entries", `${digest}.json`))).mode &
-        0o777,
-    ).toBe(0o600);
+    if (process.platform !== "win32") {
+      expect((await stat(a.directory)).mode & 0o777).toBe(0o700);
+      expect((await stat(path.join(a.directory, "key"))).mode & 0o777).toBe(
+        0o600,
+      );
+      expect(
+        (await stat(path.join(a.directory, "entries", `${digest}.json`)))
+          .mode & 0o777,
+      ).toBe(0o600);
+    }
     expect(await clearLocatorCache(root)).toBe(true);
     const cold = await openLocatorCache(root, { env: {} });
     expect(cold.key).not.toEqual(a.key);

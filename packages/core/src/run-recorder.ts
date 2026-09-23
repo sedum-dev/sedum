@@ -5,6 +5,7 @@ import {
   type ResultAttempt,
   type ResultCall,
   type ResultStep,
+  type ResultProblem,
   type ResultTest,
   type RunResult,
 } from "./run-result.js";
@@ -90,6 +91,8 @@ export class RunRecorder {
       timeoutReason: null,
       error: null,
       steps: [],
+      problems: [],
+      primaryProblemId: null,
     };
     const test: ResultTest = {
       id: input.id,
@@ -111,7 +114,31 @@ export class RunRecorder {
     const attempt = test?.attempts.at(-1);
     if (!test || !attempt || attempt.state !== "running")
       throw new Error("No running attempt");
-    const updatedAttempt = { ...attempt, steps: [...attempt.steps, step] };
+    const problem: ResultProblem | null =
+      step.state === "error" || step.verdict === "failed"
+        ? {
+            id: `${attempt.id}:problem:${attempt.problems.length + 1}`,
+            ordinal: attempt.problems.length + 1,
+            origin: "step",
+            outcome: step.state === "error" ? "error" : "failed",
+            phase: step.phase,
+            sourceStack: step.sourceStack,
+            stepId: step.id,
+            error: step.error ?? {
+              code: step.state === "error" ? "step_error" : "step_failed",
+              message:
+                step.state === "error"
+                  ? "The step could not complete."
+                  : "The step failed.",
+            },
+          }
+        : null;
+    const updatedAttempt = {
+      ...attempt,
+      steps: [...attempt.steps, step],
+      problems: problem ? [...attempt.problems, problem] : attempt.problems,
+      primaryProblemId: attempt.primaryProblemId ?? problem?.id ?? null,
+    };
     const updatedTest = {
       ...test,
       attempts: [...test.attempts.slice(0, -1), updatedAttempt],
@@ -119,6 +146,36 @@ export class RunRecorder {
     this.value = {
       ...this.value,
       tests: [...this.value.tests.slice(0, -1), updatedTest],
+    };
+    await this.publish();
+  }
+
+  async addProblem(
+    input: Pick<
+      ResultProblem,
+      "origin" | "outcome" | "phase" | "sourceStack" | "stepId" | "error"
+    >,
+  ): Promise<void> {
+    const test = this.value.tests.at(-1);
+    const attempt = test?.attempts.at(-1);
+    if (!test || !attempt || attempt.state !== "running")
+      throw new Error("No running attempt");
+    const problem: ResultProblem = {
+      ...input,
+      id: `${attempt.id}:problem:${attempt.problems.length + 1}`,
+      ordinal: attempt.problems.length + 1,
+    };
+    const updatedAttempt: ResultAttempt = {
+      ...attempt,
+      problems: [...attempt.problems, problem],
+      primaryProblemId: attempt.primaryProblemId ?? problem.id,
+    };
+    this.value = {
+      ...this.value,
+      tests: [
+        ...this.value.tests.slice(0, -1),
+        { ...test, attempts: [...test.attempts.slice(0, -1), updatedAttempt] },
+      ],
     };
     await this.publish();
   }
@@ -143,6 +200,8 @@ export class RunRecorder {
       timeoutReason: null,
       error: null,
       steps: [],
+      problems: [],
+      primaryProblemId: null,
     };
     const updatedTest: ResultTest = {
       ...test,

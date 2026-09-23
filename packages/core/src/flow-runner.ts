@@ -2,11 +2,13 @@ import path from "node:path";
 import {
   AssertionEngineError,
   verify,
+  type VerifyPolicy,
   type VerifyResult,
 } from "./assertion-engine.js";
 import {
   BrowserDriverError,
   type BrowserDriver,
+  type BrowserKind,
   type BrowserPage,
 } from "./browser-driver.js";
 import type {
@@ -17,17 +19,24 @@ import type { CacheStore } from "./cache-store.js";
 import {
   classifyParsedFlow,
   type ClassifiedFlowSentence,
+  type ClassifiedFlowStep,
 } from "./flow-classification.js";
 import { loadFlowFile } from "./flow-loader.js";
+import { resolveFlowModules } from "./flow-modules.js";
 import {
+  ModuleBindingResolutionError,
+  opaqueMatches,
+  redactOpaqueText,
   resolveData,
+  resolveModuleBindings,
   resolveTypeOperand,
   validateTypeOperand,
+  type ResolvedDataEntry,
 } from "./flow-values.js";
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import { stageEntry } from "./page-cache.js";
-import { pageVersion, quietPage } from "./page-bridge.js";
+import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
@@ -50,6 +59,7 @@ import type {
 } from "./run-result.js";
 import type { RunRecorder } from "./run-recorder.js";
 import {
+  RuntimeValue,
   RuntimeUrl,
   StepExecutionError,
   type StepCommand,
@@ -82,6 +92,10 @@ export interface FlowRunnerDependencies {
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Temporary debug switch; the final CLI/config surface owns launch policy. */
   readonly headless?: boolean;
+  readonly browserKind?: BrowserKind;
+  readonly viewport?: { readonly width: number; readonly height: number };
+  readonly verifyPolicy?: VerifyPolicy;
+  readonly baseUrl?: string;
   readonly signal?: AbortSignal;
   readonly report?: {
     readonly recorder: RunRecorder;
@@ -211,13 +225,38 @@ function runtimeFailure(file: string, error: unknown): FlowRunResult {
   };
 }
 
-function claim(step: ClassifiedFlowSentence): string {
+function claim(
+  step: ClassifiedFlowSentence,
+  data: Readonly<Record<string, ResolvedDataEntry>>,
+): string {
   return step.text
     .replace(
       /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:that\s+)?/iu,
       "",
     )
-    .trim();
+    .trim()
+    .replace(
+      /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
+      (placeholder, key: string) =>
+        data[key]?.modelVisible ? data[key].value.reveal() : placeholder,
+    );
+}
+
+/** SED-10 entry URL semantics; SED-33 adds origin-preserving --url-override. */
+export function resolveEntryUrl(testUrl?: string, baseUrl?: string): string {
+  if (testUrl) {
+    try {
+      return baseUrl ? new URL(testUrl, baseUrl).href : new URL(testUrl).href;
+    } catch {
+      throw new Error(
+        baseUrl
+          ? "The test URL is invalid relative to the configured baseUrl."
+          : "The test URL is relative but no baseUrl is configured.",
+      );
+    }
+  }
+  if (baseUrl) return new URL(baseUrl).href;
+  throw new Error("The test has no URL and no baseUrl is configured.");
 }
 
 async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
@@ -228,7 +267,8 @@ async function executeSentence(
   page: BrowserPage,
   step: ClassifiedFlowSentence,
   dependencies: FlowRunnerDependencies,
-  data: ReturnType<typeof resolveData>,
+  data: Record<string, ResolvedDataEntry>,
+  opaqueEntries: ResolvedDataEntry[],
 ): Promise<"continue" | "failed" | FlowRunResult> {
   const started = performance.now();
   const report = dependencies.report;
@@ -438,14 +478,125 @@ async function executeSentence(
         },
       },
     );
+  let typeValue: RuntimeValue | undefined;
+  if (step.op === "type") {
+    const operand = validateTypeOperand(step);
+    if ("diagnostic" in operand)
+      return record(firstDiagnostic([operand.diagnostic]), {
+        error: {
+          code: operand.diagnostic.code,
+          message: operand.diagnostic.message,
+        },
+      });
+    try {
+      typeValue = resolveTypeOperand(operand.operand, data);
+    } catch {
+      return record("failed", {
+        error: {
+          code: "missing_remembered_binding",
+          message:
+            "This step needs a value that is unavailable in this attempt.",
+        },
+      });
+    }
+  }
+  if (step.op === "remember") {
+    const match =
+      /^(?:remember|capture)\s+(.+?)\s+as\s+\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}\s*\.?$/iu.exec(
+        step.text.trim(),
+      );
+    if (!match)
+      return record(
+        unsupported(
+          step.source.file,
+          step.source,
+          "The remember target could not be understood.",
+        ),
+        {
+          error: {
+            code: "invalid_remember_target",
+            message: "The remember target could not be understood.",
+          },
+        },
+      );
+    try {
+      let remembered: string;
+      let locator: LocatorResult | undefined;
+      if (/^(?:the\s+)?page\s+text$/iu.test(match[1]!.trim())) {
+        remembered = await page.text();
+      } else {
+        locator = await resolveTarget(page, dependencies.provider, {
+          operation: "read",
+          sentence: match[1]!,
+          projectText: (text) => redactOpaqueText(text, opaqueEntries),
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        });
+        if (locator.kind !== "resolved")
+          return record("failed", {
+            locator,
+            error: {
+              code: locator.reason,
+              message: "The remember target could not be resolved.",
+            },
+          });
+        const read = await readTarget(page, locator.target.driverTarget());
+        if (read.status !== "ok")
+          return record("failed", {
+            locator,
+            error: {
+              code: `remember_${read.status}`,
+              message: "The remember target did not contain usable text.",
+            },
+          });
+        remembered = read.text;
+      }
+      if (!remembered.trim() || Array.from(remembered).length > 4096)
+        return record("failed", {
+          ...(locator ? { locator } : {}),
+          error: {
+            code: "remember_invalid_text",
+            message: "The remember target did not contain usable text.",
+          },
+        });
+      const echoedSecrets = opaqueMatches(remembered, opaqueEntries);
+      const sensitivePage = report
+        ? safeUrl(page.url, report.privacy).sensitive
+        : false;
+      const opaqueValues = sensitivePage
+        ? [...echoedSecrets, new RuntimeValue(remembered, `{{${match[2]!}}}`)]
+        : echoedSecrets;
+      data[match[2]!] = {
+        value: new RuntimeValue(remembered, `{{${match[2]!}}}`),
+        sensitive: true,
+        modelVisible: opaqueValues.length === 0,
+        opaqueValues,
+      };
+      opaqueEntries.push(data[match[2]!]!);
+      report?.privacy.secretValues.push(remembered);
+      return record("continue", locator ? { locator } : {});
+    } catch {
+      return record(
+        unsupported(
+          step.source.file,
+          step.source,
+          "The target text could not be remembered.",
+        ),
+        {
+          error: {
+            code: "remember_error",
+            message: "The target text could not be remembered.",
+          },
+        },
+      );
+    }
+  }
   if (step.op === "verify") {
     const judge = () =>
-      verify(
-        page,
-        dependencies.provider,
-        claim(step),
-        dependencies.signal ? { signal: dependencies.signal } : {},
-      );
+      verify(page, dependencies.provider, claim(step, data), {
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        projectText: (text) => redactOpaqueText(text, opaqueEntries),
+        ...(dependencies.verifyPolicy ?? {}),
+      });
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider
@@ -563,6 +714,7 @@ async function executeSentence(
       ...(dependencies.locatorCache
         ? { cache: dependencies.locatorCache }
         : {}),
+      projectText: (text) => redactOpaqueText(text, opaqueEntries),
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     });
   let resolved: LocatorResult;
@@ -591,8 +743,25 @@ async function executeSentence(
       quiet: false,
     }));
     if (settled.quiet) {
-      const retried = await locate();
-      resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+      try {
+        const retried = await locate();
+        resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+      } catch {
+        return record(
+          unsupported(
+            step.source.file,
+            step.source,
+            "The target could not be resolved.",
+          ),
+          {
+            failedCalls: priorCalls.map((call) => resultCall(call, "locator")),
+            error: {
+              code: "locator_error",
+              message: "The target could not be resolved.",
+            },
+          },
+        );
+      }
     }
   }
   if (resolved.kind !== "resolved") {
@@ -626,19 +795,10 @@ async function executeSentence(
   let command: StepCommand;
   if (step.op === "click") command = { op: "click", target: resolved.target };
   else {
-    const operand = validateTypeOperand(step);
-    if ("diagnostic" in operand)
-      return record(firstDiagnostic([operand.diagnostic]), {
-        locator: resolved,
-        error: {
-          code: operand.diagnostic.code,
-          message: operand.diagnostic.message,
-        },
-      });
     command = {
       op: "type",
       target: resolved.target,
-      value: resolveTypeOperand(operand.operand, data),
+      value: typeValue!,
     };
   }
   // An action may navigate or rerender. Preserve metadata from the accepted
@@ -737,29 +897,34 @@ async function executeSentence(
   }
 }
 
-/** Run one plain `steps` flow. Hooks and modules remain owned by SED-29. */
+/** Run one validated attempt with setup, body, and exhaustive teardown. */
 export async function runFlow(
   file: string,
   dependencies: FlowRunnerDependencies,
 ): Promise<FlowRunResult> {
   const absolute = path.resolve(file);
-  const parsed = await loadFlowFile(absolute, {
+  const loaded = await loadFlowFile(absolute, {
+    repoRoot: dependencies.repoRoot,
+  });
+  const parsed = await resolveFlowModules(loaded, {
     repoRoot: dependencies.repoRoot,
   });
   if (!parsed.value) return firstDiagnostic(parsed.diagnostics);
-  if (parsed.value.before.length || parsed.value.after.length)
-    return unsupported(
-      absolute,
-      (parsed.value.before[0] ?? parsed.value.after[0])!.source,
-      "before/after hooks are not supported by this walking skeleton.",
-    );
-  if (parsed.value.steps.some((step) => step.kind === "module")) {
-    const step = parsed.value.steps.find((item) => item.kind === "module")!;
-    return unsupported(
-      absolute,
-      step.source,
-      "Modules are not supported by this walking skeleton.",
-    );
+  let entryUrl: string;
+  try {
+    entryUrl = resolveEntryUrl(parsed.value.url, dependencies.baseUrl);
+  } catch (error) {
+    return {
+      status: "could_not_run",
+      file: absolute,
+      code: "invalid_test",
+      source: { file: absolute, line: 1, col: 1 },
+      message:
+        error instanceof Error
+          ? error.message
+          : "The test entry URL could not be resolved.",
+      fix: "Add an absolute test URL or configure baseUrl in sedum.config.yaml.",
+    };
   }
   const classified = await classifyParsedFlow(parsed, {
     mode: "allow-model",
@@ -772,9 +937,9 @@ export async function runFlow(
       classified.calls.map((call) => resultCall(call, "classification")),
     );
   if (!classified.value) return firstDiagnostic(classified.diagnostics);
-  let data: ReturnType<typeof resolveData>;
+  let data: Record<string, ResolvedDataEntry>;
   try {
-    data = resolveData(classified.value.data, dependencies.env);
+    data = { ...resolveData(classified.value.data, dependencies.env) };
   } catch (error) {
     return {
       status: "could_not_run",
@@ -784,6 +949,7 @@ export async function runFlow(
         error instanceof Error ? error.message : "Could not resolve test data.",
     };
   }
+  const opaqueEntries = Object.values(data);
   if (dependencies.report)
     dependencies.report.privacy.secretValues.push(
       ...Object.values(data)
@@ -819,34 +985,136 @@ export async function runFlow(
   let page: BrowserPage | undefined;
   try {
     session = await dependencies.browser.launch({
+      ...(dependencies.browserKind === undefined
+        ? {}
+        : { browser: dependencies.browserKind }),
       ...(dependencies.headless === undefined
         ? {}
         : { headless: dependencies.headless }),
     });
-    context = await session.newContext();
+    context = await session.newContext(
+      dependencies.viewport === undefined
+        ? {}
+        : { viewport: dependencies.viewport },
+    );
     page = await context.newPage();
-    if (classified.value.url)
-      await executeStep(
-        page,
-        { op: "goto", url: new RuntimeUrl([classified.value.url]) },
-        dependencies.signal ? { signal: dependencies.signal } : {},
-      );
-    for (const item of classified.value.steps) {
-      if (item.kind !== "sentence")
-        return unsupported(
-          absolute,
-          item.source,
-          "Modules are not supported by this walking skeleton.",
-        );
-      const outcome = await executeSentence(page, item, dependencies, data);
-      if (outcome === "failed") {
-        await dependencies.report?.recorder.finishTest("failed");
-        return { status: "failed", file: absolute, source: item.source };
+    await executeStep(
+      page,
+      { op: "goto", url: new RuntimeUrl([entryUrl]) },
+      dependencies.signal ? { signal: dependencies.signal } : {},
+    );
+    const activePage = page;
+    type Problem = Exclude<FlowRunResult, { status: "passed" }>;
+    const runItems = async (
+      items: readonly ClassifiedFlowStep[],
+      scope: Record<string, ResolvedDataEntry>,
+      continueAfterFailure: boolean,
+    ): Promise<Problem | null> => {
+      let first: Problem | null = null;
+      for (const item of items) {
+        let problem: Problem | null = null;
+        if (item.kind === "sentence") {
+          const outcome = await executeSentence(
+            activePage,
+            item,
+            dependencies,
+            scope,
+            opaqueEntries,
+          );
+          if (outcome === "failed")
+            problem = { status: "failed", file: absolute, source: item.source };
+          else if (outcome !== "continue" && outcome.status !== "passed")
+            problem = outcome;
+        } else {
+          if (!item.resolved)
+            problem = unsupported(
+              absolute,
+              item.source,
+              "The module graph is incomplete.",
+            ) as Problem;
+          else {
+            let local: Record<string, ResolvedDataEntry> | undefined;
+            try {
+              local = {
+                ...resolveModuleBindings(
+                  item.resolved.parameters,
+                  item.resolved.bindings,
+                  scope,
+                  dependencies.env,
+                ),
+              };
+            } catch (error) {
+              const bindingError =
+                error instanceof ModuleBindingResolutionError ? error : null;
+              const message =
+                bindingError?.message ??
+                "The module binding could not be resolved.";
+              await dependencies.report?.recorder.addProblem({
+                origin: "module_binding",
+                outcome: bindingError?.outcome ?? "error",
+                phase: item.phase,
+                sourceStack: item.sourceStack.map((source) =>
+                  safeSource(
+                    source,
+                    dependencies.repoRoot,
+                    dependencies.report!.privacy,
+                  ),
+                ),
+                stepId: null,
+                error: {
+                  code: bindingError?.code ?? "module_binding_error",
+                  message: safeText(message, dependencies.report!.privacy, 512),
+                },
+              });
+              problem =
+                bindingError?.outcome === "failed"
+                  ? { status: "failed", file: absolute, source: item.source }
+                  : {
+                      status: "could_not_run",
+                      file: absolute,
+                      code: bindingError?.code ?? "module_binding_error",
+                      source: item.source,
+                      message,
+                    };
+            }
+            if (local) {
+              if (dependencies.report)
+                dependencies.report.privacy.secretValues.push(
+                  ...Object.values(local)
+                    .filter((entry) => entry.sensitive)
+                    .map((entry) => entry.value.reveal()),
+                );
+              opaqueEntries.push(...Object.values(local));
+              problem = await runItems(
+                item.resolved.steps,
+                local,
+                continueAfterFailure,
+              );
+            }
+          }
+        }
+        if (problem) {
+          first ??= problem;
+          if (!continueAfterFailure) return first;
+        }
       }
-      if (outcome !== "continue") return outcome;
+      return first;
+    };
+    const setupProblem = await runItems(classified.value.before, data, false);
+    const bodyProblem = setupProblem
+      ? null
+      : await runItems(classified.value.steps, data, false);
+    const teardownProblem = activePage.closed
+      ? null
+      : await runItems(classified.value.after, data, true);
+    const primary = setupProblem ?? bodyProblem ?? teardownProblem;
+    if (!primary) {
+      await dependencies.report?.recorder.finishTest("passed");
+      return { status: "passed", file: absolute };
     }
-    await dependencies.report?.recorder.finishTest("passed");
-    return { status: "passed", file: absolute };
+    if (primary.status === "failed")
+      await dependencies.report?.recorder.finishTest("failed");
+    return primary;
   } catch (error) {
     return runtimeFailure(absolute, error);
   } finally {

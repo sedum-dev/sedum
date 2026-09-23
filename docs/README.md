@@ -2,11 +2,16 @@
 
 See [TypeSafe provider](provider-typesafe.md) for provider configuration, data sent, and the opt-in live check. See [step classification](classification.md) for operations, offline validation, and the classification cache.
 
+See [CLI commands](cli.md) for `sedum validate` and `sedum list`, including offline validation, exit codes, and the `list --json` shape.
+
 See [assertion engine](assertion-engine.md) for `verify` / `measure` results, verdict policy, observation errors, and current page limits.
 
 See [local locator cache](locator-cache.md) for development and CI defaults, privacy, and clearing the cache.
 
 Public design and usage documentation will live here as engine behavior lands. The current package boundaries are described in the root README.
+
+See [project configuration](configuration.md) for `sedum.config.yaml`, named
+environments, `.env` loading, test discovery, and precedence.
 
 ## CLI output and exits
 

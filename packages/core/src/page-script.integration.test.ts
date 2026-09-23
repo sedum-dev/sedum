@@ -12,6 +12,7 @@ import {
   pageDigest,
   pageVersion,
   quietPage,
+  readTarget,
 } from "./page-bridge.js";
 import { stageEntry } from "./page-cache.js";
 import { pageKey, type CacheEntry } from "./page-cache.js";
@@ -135,6 +136,35 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(
         await page.evaluate("document.querySelector('#email').value"),
       ).toBe("fixture-value");
+      await context.close();
+    });
+    it("reads only the selected, fresh text target", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<span id="price">$42</span><span id="other">Private note</span>'`);
+      const model = recordedResolver((options) => {
+        const selected = options.options.find(
+          (option) =>
+            option.kind === "candidate" && option.candidate.name === "$42",
+        );
+        return selected?.kind === "candidate" ? selected.candidate.id : "none";
+      });
+      const resolved = await resolveTarget(page, model, {
+        operation: "read",
+        sentence: "the price",
+      });
+      expect(resolved.kind).toBe("resolved");
+      if (resolved.kind === "resolved") {
+        const target = resolved.target.driverTarget();
+        expect(await readTarget(page, target)).toEqual({
+          status: "ok",
+          text: "$42",
+        });
+        await page.evaluate(
+          "document.querySelector('#price').textContent = '$43'",
+        );
+        expect(await readTarget(page, target)).toEqual({ status: "stale" });
+      }
       await context.close();
     });
     it("resolves a repeated product button on a dense local page without a wrong click", async () => {

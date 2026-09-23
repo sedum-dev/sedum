@@ -1,0 +1,11 @@
+# The fixture test replaces __BASE_URL__ with the local server's ephemeral URL.
+url: __BASE_URL__/login
+data:
+  username: fixture_user
+before:
+  - use: ./modules/ui-login.module.yaml
+    with:
+      username: "{{username}}"
+      password: $FIXTURE_PASSWORD
+steps:
+  - verify a Products heading is shown
