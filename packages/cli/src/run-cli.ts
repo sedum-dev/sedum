@@ -12,6 +12,7 @@ import {
   type OutputCapabilities,
 } from "./output.js";
 import type { RunCommandExecution, RunCommandOptions } from "./run-command.js";
+import type { DoctorProbes } from "./doctor-command.js";
 import {
   createTypeSafeClassifier,
   executeValidateCommand,
@@ -47,6 +48,7 @@ export interface CliRuntime {
   readonly cwd?: string;
   /** Used only by `validate --online`. */
   readonly createClassificationProvider?: ClassificationProviderFactory;
+  readonly doctorProbes?: DoctorProbes;
 }
 
 const plainOutput: OutputCapabilities = {
@@ -116,7 +118,7 @@ export async function runCli(
     })
     .addHelpText(
       "after",
-      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
+      "\nExamples:\n  sedum run tests/login.test.yaml\n  sedum validate\n  sedum list --json\n  sedum doctor --json\n  sedum browsers install chromium\n\nExit codes:\n  0 passed\n  1 failed test (validate and list: invalid test files)\n  2 flagged pass with --strict\n  3 command or operational error\n",
     );
 
   program.action(() => commandHelp(program, writeErr));
@@ -208,6 +210,26 @@ export async function runCli(
           : "No Git checkout locator cache was found.\n",
       );
       exitCode = 0;
+    });
+
+  program
+    .command("doctor")
+    .description("check whether this environment can run Sedum")
+    .option("--json", "print versioned JSON checks on stdout", false)
+    .addHelpText(
+      "after",
+      "\nThe authenticated API check makes one small, potentially billable request.\n\nExit codes:\n  0 all checks passed\n  3 one or more prerequisites failed\n",
+    )
+    .action(async (options: { json: boolean }) => {
+      const { executeDoctorCommand, renderDoctorText } =
+        await import("./doctor-command.js");
+      const result = await executeDoctorCommand(cwd, runtime.doctorProbes);
+      writeOut(
+        options.json ? `${JSON.stringify(result)}\n` : renderDoctorText(result),
+      );
+      exitCode = result.checks.every((check) => check.status === "pass")
+        ? 0
+        : 3;
     });
 
   program

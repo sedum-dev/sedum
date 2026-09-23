@@ -29,6 +29,7 @@ Inspect the available commands and command-specific options with:
 node packages/cli/dist/cli.js --help
 node packages/cli/dist/cli.js run --help
 node packages/cli/dist/cli.js browsers install --help
+node packages/cli/dist/cli.js doctor --help
 ```
 
 For project defaults and a no-argument `sedum run`, add a
