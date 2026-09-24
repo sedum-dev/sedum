@@ -1,5 +1,4 @@
 import path from "node:path";
-import { createHash } from "node:crypto";
 import {
   AssertionEngineError,
   verify,
@@ -38,13 +37,8 @@ import {
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import { stageEntry } from "./page-cache.js";
-import {
-  pageDigest,
-  pageVersion,
-  quietPage,
-  readTarget,
-} from "./page-bridge.js";
-import { codePoints, DIGEST_LIMIT, type PageVersion } from "./page-protocol.js";
+import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
+import type { PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
   type Judge,
@@ -272,7 +266,7 @@ function claim(
 ): string {
   return step.text
     .replace(
-      /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:eventually\s+)?(?:that\s+)?/iu,
+      /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:that\s+)?/iu,
       "",
     )
     .trim()
@@ -656,119 +650,6 @@ async function executeSentence(
         projectText: (text) => redactOpaqueText(text, opaqueEntries),
         ...(dependencies.verifyPolicy ?? {}),
       });
-    if (/^\s*verify\s+eventually\b/iu.test(step.text)) {
-      const deadline = performance.now() + 10_000;
-      const priorCalls: ResultCall[] = [];
-      let lastError: AssertionEngineError | undefined;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        if (dependencies.signal?.aborted) break;
-        let result: VerifyResult;
-        try {
-          result = await judge();
-        } catch (error) {
-          if (
-            !(error instanceof AssertionEngineError) ||
-            error.code !== "stale_observation"
-          ) {
-            return record(
-              unsupported(
-                step.source.file,
-                step.source,
-                error instanceof Error
-                  ? error.message
-                  : "The assertion could not be judged.",
-              ),
-              {
-                failedCalls: [
-                  ...priorCalls,
-                  ...(error instanceof AssertionEngineError && error.failedCall
-                    ? [resultCall(error.failedCall, "judge")]
-                    : []),
-                ],
-                error: {
-                  code:
-                    error instanceof AssertionEngineError
-                      ? error.code
-                      : "assertion_error",
-                  message: "The assertion could not be judged.",
-                },
-              },
-            );
-          }
-          lastError = error;
-          if (error.failedCall)
-            priorCalls.push(resultCall(error.failedCall, "judge"));
-          if (performance.now() >= deadline || attempt === 4) break;
-          await quietPage(
-            page,
-            200,
-            Math.min(1_000, Math.max(1, deadline - performance.now())),
-          ).catch(() => undefined);
-          continue;
-        }
-        if (result.verdict === "passed")
-          return record("continue", {
-            verify: result,
-            failedCalls: priorCalls,
-          });
-        lastError = undefined;
-        if (attempt === 4 || performance.now() >= deadline)
-          return record("failed", { verify: result, failedCalls: priorCalls });
-        // A failed current observation can be the loading shell. Wait for a
-        // new complete digest or route before spending another Judge call.
-        let changed = false;
-        while (performance.now() < deadline && !dependencies.signal?.aborted) {
-          await new Promise<void>((resolve) => setTimeout(resolve, 200));
-          try {
-            const digest = await pageDigest(page);
-            if (
-              !digest.complete ||
-              digest.error ||
-              codePoints(digest.text) > DIGEST_LIMIT
-            )
-              continue;
-            const current = await pageVersion(page);
-            if (
-              current.document !== digest.version.document ||
-              current.route !== digest.version.route ||
-              current.revision !== digest.version.revision
-            )
-              continue;
-            const text = redactOpaqueText(digest.text, opaqueEntries);
-            const hash = createHash("sha256").update(text).digest("hex");
-            if (
-              hash !== result.evidenceHash ||
-              digest.version.document !== result.observationVersion.document ||
-              digest.version.route !== result.observationVersion.route
-            ) {
-              changed = true;
-              break;
-            }
-          } catch {
-            // Navigation can replace the evaluation context during polling.
-          }
-        }
-        if (dependencies.signal?.aborted) break;
-        if (!changed)
-          return record("failed", { verify: result, failedCalls: priorCalls });
-        priorCalls.push(resultCall(result.call, "judge", result.elapsedMs));
-      }
-      return record(
-        unsupported(
-          step.source.file,
-          step.source,
-          "The assertion did not have stable evidence within its deadline.",
-        ),
-        {
-          failedCalls: priorCalls,
-          error: {
-            code: lastError?.code ?? "observation_timeout",
-            message:
-              "The assertion did not have stable evidence within its deadline.",
-          },
-        },
-      );
-    }
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider

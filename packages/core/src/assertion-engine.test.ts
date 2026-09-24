@@ -381,8 +381,6 @@ describe("assertion engine", () => {
     const result = await verify(page.page, judge, "One way selected");
     expect(result.verdict).toBe("passed");
     expect(result.observationVersion).toEqual(revision);
-    expect(result.evidenceHash).toMatch(/^[0-9a-f]{64}$/u);
-    expect(JSON.stringify(result)).not.toContain("evidenceHash");
     expect(holds).toHaveBeenCalledOnce();
   });
 

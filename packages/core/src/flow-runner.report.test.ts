@@ -25,19 +25,14 @@ async function reportRun(
   navigateAfterJudge = false,
   retry = false,
   staleFirstJudge = false,
-  lateResult = false,
 ) {
   const root = await mkdtemp(path.join(tmpdir(), "sedum-report-runner-"));
   try {
     const file = path.join(root, "cart.test.yaml");
-    await writeFile(
-      file,
-      `steps:\n  - verify ${lateResult ? "eventually " : ""}the cart total is $42\n`,
-    );
+    await writeFile(file, "steps:\n  - verify the cart total is $42\n");
     const route = "https://store.test/cart?token=hidden";
     const version = { document: "doc-1", route, revision: 1 };
     let currentVersion = version;
-    let digestText = "Cart total is $0; customer secret-123";
     let versionReads = 0;
     const captureFrame = vi.fn(async () => new Uint8Array([1, 2, 3]));
     const page = {
@@ -68,7 +63,7 @@ async function reportRun(
             ? {
                 protocol: 1,
                 version: currentVersion,
-                text: digestText,
+                text: "Cart total is $0; customer secret-123",
                 complete: true,
               }
             : currentVersion;
@@ -102,25 +97,14 @@ async function reportRun(
         choose: vi.fn(),
         holds: vi.fn(async () => {
           judgeCalls++;
-          if (lateResult && judgeCalls === 1)
-            setTimeout(() => {
-              currentVersion = { ...version, revision: 2 };
-              digestText = "Cart total is $42; customer secret-123";
-            }, 50);
           if (providerFails)
             throw new ProviderError("timeout", "Timeout with secret-123", 2);
           if (staleFirstJudge && judgeCalls === 1) {
             currentVersion = { document: "doc-2", route, revision: 1 };
           }
           return {
-            holds:
-              (retry && judgeCalls > 1) || (lateResult && judgeCalls > 1)
-                ? 0.9
-                : 0.1,
-            contradicted:
-              (retry && judgeCalls > 1) || (lateResult && judgeCalls > 1)
-                ? 0.1
-                : 0.9,
+            holds: retry && judgeCalls > 1 ? 0.9 : 0.1,
+            contradicted: retry && judgeCalls > 1 ? 0.1 : 0.9,
             call: staleFirstJudge
               ? { ...call, model: `jev-test-${judgeCalls}` }
               : call,
@@ -161,7 +145,6 @@ async function reportRun(
       snapshots,
       saveFrame,
       captureFrame,
-      judgeCalls,
     };
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -169,21 +152,6 @@ async function reportRun(
 }
 
 describe("runner report facts", () => {
-  it("rejudges an eventual claim only after the page evidence changes", async () => {
-    const { result, final, judgeCalls } = await reportRun(
-      false,
-      false,
-      false,
-      false,
-      false,
-      true,
-    );
-    expect(result.status).toBe("passed");
-    expect(judgeCalls).toBe(2);
-    expect(final.totals.modelCalls).toBe(2);
-    expect(final.tests[0]?.attempts[0]?.steps[0]?.verdict).toBe("passed");
-  });
-
   it("publishes a failed verify with exact scores, safe page and default frame", async () => {
     const { result, final, snapshots, saveFrame } = await reportRun();
     expect(result.status).toBe("failed");

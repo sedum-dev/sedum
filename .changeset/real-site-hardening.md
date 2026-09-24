@@ -14,5 +14,4 @@ same-route page revision can retain a judgment only if a fresh complete
 digest is identical.
 Control discovery also accepts placeholder and title fallback names, and
 ranked-story phrasing retains the repeated-link safety check.
-Empty fill candidate scans briefly wait for late labels, and explicit
-`verify eventually` steps rejudge only after complete page evidence changes.
+Empty fill candidate scans briefly wait for late labels.

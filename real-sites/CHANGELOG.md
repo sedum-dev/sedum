@@ -1,25 +1,19 @@
 # Real site hardening log
 
-## 2026-09-24 — Delayed labels and result timing
+## 2026-09-24 — Delayed input labels
 
 **Problem.** The visible Google Maps search field briefly had no associated
-label after navigation, so its first fill scan returned no candidates. After
-search submission, the initial map shell did not yet contain the place result;
-an immediate assertion failed before the result panel loaded.
+label after navigation, so its first fill scan returned no candidates.
 
 **Alternatives considered.** A site-specific selector would couple the locator
-to one page. A fixed sleep in a YAML journey would either slow every run or remain
-too short on a slow load. Globally retrying failed assertions could hide a
-genuine failure. The fill locator now briefly rescans only when its initial
-candidate set is empty. An explicit `verify eventually` step waits up to ten
-seconds for changed, complete page evidence and rejudges at most five times.
-Ordinary `verify` keeps its immediate semantics.
+to one page. A fixed sleep in a YAML journey would slow every run and could
+still be too short on a slow load. The fill locator now briefly rescans only
+when its initial candidate set is empty.
 
 **Verification.** DevTools showed the input label arriving after the initial
-scan and the Buenos Aires panel appearing after the search. A local browser
-test covers the delayed label; a runner test covers rejudging only after
-evidence changes. The exploratory Google Maps YAML journey was removed from
-the committed suite because its later hotel flow was incomplete.
+scan. A local browser test covers the delayed label. The exploratory Google
+Maps YAML journey was removed from the committed suite because its later hotel
+flow was incomplete.
 
 ## 2026-09-24 — Google Flights trip type accessible name
 
@@ -240,5 +234,5 @@ their steps within Sedum's supported click and type operations.
 zero flagged steps. The committed suite contains eight YAML journeys after
 removing the exploratory Booking and Google Maps tests. All eight passed in one
 headed run with the locator cache disabled and zero flagged steps. The full
-default regression suite passed 536 tests, and the browser integration suite
+default regression suite passed 535 tests, and the browser integration suite
 passed 47 tests.

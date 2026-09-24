@@ -1,5 +1,4 @@
 import { BrowserDriverError, type BrowserPage } from "./browser-driver.js";
-import { createHash } from "node:crypto";
 import {
   pageDigest,
   pageVersion,
@@ -89,8 +88,6 @@ export type VerifyResult = AssertionScores & {
   readonly contradictionCutoff: number;
   /** Present for flagged or failed checks; always drawn from the judged digest. */
   readonly judgedExcerpt?: string;
-  /** Internal comparison key; never included in run reports. */
-  readonly evidenceHash: string;
 };
 
 export type MeasureResult = AssertionScores & {
@@ -430,10 +427,6 @@ export async function verify(
     },
     {
       observationVersion: { value: digest.version, enumerable: false },
-      evidenceHash: {
-        value: createHash("sha256").update(digest.text).digest("hex"),
-        enumerable: false,
-      },
     },
   ) as VerifyResult;
 }
