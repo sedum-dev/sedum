@@ -7,5 +7,12 @@
     "@sedum-dev/provider-typesafe": "0.0.0",
     "@sedum-dev/reporters": "0.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "agent-markdown-report",
+    "junit-reporter",
+    "parallel-runs-and-sharding",
+    "replay-type-steps",
+    "sed-51-release-pipeline",
+    "warm-html-report"
+  ]
 }
