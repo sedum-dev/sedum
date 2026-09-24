@@ -1,5 +1,14 @@
 # sedum-cli
 
+## 0.1.0-alpha.1
+
+### Patch Changes
+
+- Updated dependencies [99bd8ea]
+  - @sedum-dev/core@0.1.0-alpha.1
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.1
+  - @sedum-dev/reporters@0.1.0-alpha.1
+
 ## 0.1.0-alpha.0
 
 ### Minor Changes

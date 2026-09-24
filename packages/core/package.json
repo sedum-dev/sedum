@@ -1,6 +1,6 @@
 {
   "name": "@sedum-dev/core",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "repository": "https://github.com/sedum-dev/sedum",
   "publishConfig": {
     "access": "public"
