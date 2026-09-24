@@ -1,47 +1,13 @@
 # Docs
 
-See [TypeSafe provider](provider-typesafe.md) for provider configuration, data sent, and the opt-in live check. See [step classification](classification.md) for operations, offline validation, and the classification cache.
+These pages describe how to write, configure, and run Sedum tests.
 
-See [CLI commands](cli.md) for `sedum validate` and `sedum list`, including offline validation, exit codes, and the `list --json` shape.
-
-See [running in CI](ci.md) for JUnit output, job summaries, and GitHub Actions, GitLab and Jenkins examples.
-
-See [assertion engine](assertion-engine.md) for `verify` / `measure` results, verdict policy, observation errors, and current page limits.
-
-See [local locator cache](locator-cache.md) for development and CI defaults, privacy, and clearing the cache.
-
-Public design and usage documentation will live here as engine behavior lands. The current package boundaries are described in the root README.
-
-See [project configuration](configuration.md) for `sedum.config.yaml`, named
-environments, `.env` loading, test discovery, and precedence.
-
-## CLI output and exits
-
-`sedum --help` lists only implemented commands; every command has its own
-`--help`. `sedum run <file.test.yaml>` prints one ordered result line per test
-and aggregate verdict counts plus separate `low_confidence` and `contradiction`
-counts. Terminals receive coloured result labels and
-transient progress. Redirected output contains no ANSI or cursor controls and
-does not truncate paths or diagnostics.
-
-Run exits are `0` for a pass (including a flagged pass by default), `1` for a
-failed test, `2` for a flagged pass under `--strict`, and `3` when the command
-or run could not produce a trustworthy verdict. `--strict` never changes the
-canonical verdict or flags. Model tokens and costs are shown automatically in
-a terminal; pass `--costs` to include them in redirected output.
-
-## Browser setup
-
-Sedum uses `playwright-core` and does not download a browser during a test run. Install the matching managed Chromium binary explicitly:
-
-```sh
-sedum browsers install chromium
-```
-
-On supported Linux environments, install system dependencies as well:
-
-```sh
-sedum browsers install chromium --with-deps
-```
-
-Sedum prefers an installed Google Chrome channel when available. If Chrome is not available, it uses the matching Playwright-managed Chromium binary. An arbitrary Chromium executable on `PATH` is not used as a fallback.
+- [Test file format](format.md): the `*.test.yaml` and `*.module.yaml` format, data, placeholders, modules, and hooks.
+- [Project configuration](configuration.md): `sedum.config.yaml`, named environments, `.env` loading, test discovery, and precedence.
+- [CLI commands](cli.md): `sedum init`, `doctor`, `run`, `validate`, `list`, and `browsers install`, with options, output, and exit codes.
+- [Running in CI](ci.md): JUnit output, job summaries, and GitHub Actions, GitLab, and Jenkins examples.
+- [Run results](run-result.md): the `RunResult` schema, live progress, reporters, and evidence privacy.
+- [Assertion engine](assertion-engine.md): `verify` and `measure` results, verdict policy, observation errors, and page limits.
+- [Step classification](classification.md): supported operations, offline validation, and the classification cache.
+- [Local locator cache](locator-cache.md): development and CI defaults, parallel runs, privacy, and clearing the cache.
+- [TypeSafe provider](provider-typesafe.md): provider setup, data sent to the provider, and the opt-in live check.

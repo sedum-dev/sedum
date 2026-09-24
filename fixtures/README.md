@@ -43,7 +43,6 @@ may incur charges. The recorder writes to a private staging file, runs keyless
 replay verification against it, and replaces `replies/v1.json` only if both runs
 pass. Review the diff in `replies/v1.json`, then run `pnpm fixtures:verify`
 without a key. The fixture tests cover delayed evidence, an observation timeout,
-a stale target after rerender, and one executed click. SED-65 owns broader retry
-policy tests.
+a stale target after rerender, and one executed click.
 The dedicated GitHub Actions live-provider workflow is manual and uses a
 repository secret. It never runs on pull requests.

@@ -15,7 +15,7 @@ steps:
   - verify a list of products with prices is shown
 ```
 
-`steps` is required and contains at least one sentence. Optional `before` and `after` lists use the same step shape. A `use:` entry names a `*.module.yaml` file. `tags` is a list of strings and `meta` is a free-form mapping. `goal`, top-level `verify`, `name`, `fileType`, and `run:` are not accepted by the v1 loader.
+`steps` is required and contains at least one sentence. Optional `before` and `after` lists use the same step shape. A `use:` entry names a `*.module.yaml` file. `tags` is a list of strings and `meta` is a free-form mapping. `name`, `fileType`, and `run:` are not accepted. `goal` and top-level `verify` are not accepted yet; goal-based tests are coming soon.
 
 ## Reusable modules and hooks
 
@@ -52,7 +52,7 @@ Module paths are relative to the file containing the `use` entry. Canonical targ
 
 Navigation precedes `before`. A failed `before` skips `steps`; `after` still runs after an ordinary setup or body pass or failure while the page remains usable. Teardown continues through later entries after one fails. The first failure remains primary, and later teardown failures are retained separately. A teardown failure fails an otherwise passing attempt. External cancellation or a lost browser cannot guarantee cleanup.
 
-The [local fixture flows](../fixtures/README.md) show two tests sharing one UI login module. Direct API or session authentication through user code belongs to SED-11 and SED-30.
+The [local fixture flows](../fixtures/README.md) show two tests sharing one UI login module. Signing in through an API or a saved session is not supported yet; use a UI login module.
 
 `data` values can be strings, numbers, booleans, or null. Quote a value when its written characters matter, such as a postcode with a leading zero. `$VAR` and `${VAR}` read environment variables when that test runs; `$$` writes a literal dollar. They are not resolved while tests are discovered or checked for format errors. An unset variable therefore affects only a selected run. Environment-derived values are treated as secrets in displays and model requests.
 

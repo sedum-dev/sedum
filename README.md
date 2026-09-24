@@ -1,6 +1,12 @@
 # Sedum
 
-Write browser tests in plain English. Sedum runs them in a real browser.
+[![CI](https://github.com/sedum-dev/sedum/actions/workflows/ci.yml/badge.svg)](https://github.com/sedum-dev/sedum/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
+![Node >= 20.19](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg)
+
+Write browser tests in plain English. Sedum runs them in a real browser, cheaply
+enough to run the whole suite on every pull request.
 
 ```yaml
 # tests/login.test.yaml
@@ -22,13 +28,39 @@ sedum run tests/login.test.yaml
 
 Sedum uses a model for two jobs only: finding the element a sentence refers to,
 and judging whether a claim such as "a list of products with prices is shown"
-holds on the page. The model returns probabilities, not free text. Everything
-else is deterministic: clicking, typing, waiting, verdicts, and exit codes run
-on Playwright.
+holds on the page. That model is [Jev](https://typesafe.ai), from TypeSafe. It
+returns probabilities, not free text. Everything else is deterministic:
+clicking, typing, waiting, verdicts, and exit codes run on Playwright.
 
 > **Status: pre-alpha.** Sedum is working toward a 0.1 alpha. It is not on npm
 > yet, the test format may change before 1.0, and Windows is experimental.
 > Linux and macOS are verified.
+
+## Why Sedum
+
+Writing tests in English is not new. Running them on every pull request is
+usually too expensive, because hosted tools charge per step. Sedum is open
+source, runs on your machine with your own key, and calls a model that is fast
+and cheap enough to ask on every step.
+
+|                                   | Per-step platform | Sedum on Jev           |
+| --------------------------------- | ----------------- | ---------------------- |
+| Monthly cost of a team's PR suite | $4,875            | $38–$91 (**53× less**) |
+| 17-step checkout on saucedemo.com | 69 s              | 14 s (**4.9× faster**) |
+
+The cost row is 50 tests of 10 steps (3 of them AI steps), run about 20 times a
+day by a 20-person team, priced at a per-step platform's published
+pay-as-you-go rates and at Jev's posted token price ($91 with the cache off).
+The speed row is five runs each with every cache off, on one laptop. See
+[sedum.dev](https://sedum.dev) for the full method.
+
+- **Probabilities, not guesses.** Every claim is scored against a threshold you
+  set, and checked for contradicting evidence. A marginal pass is flagged, not
+  silently green.
+- **No black box.** Prompts, scoring, and caching are in this repo. You can see
+  exactly what goes to the model and what comes back.
+- **Built for coding agents.** A failing run can write a `report.md` that you
+  hand to Claude Code, Cursor, or another agent to fix.
 
 ## Get started
 
@@ -70,8 +102,8 @@ sedum browsers install chromium --with-deps   # Linux: also installs system depe
 
 ### 4. Add your model key
 
-Sedum uses [TypeSafe](https://typesafe.ai) to find elements and judge claims.
-Copy `.env.example` to `.env` if `.env` does not already exist, then put your
+Sedum calls Jev through [TypeSafe](https://typesafe.ai) to find elements and
+judge claims. Copy `.env.example` to `.env` if `.env` does not already exist, then put your
 key there or in the environment. The example file also contains the public
 SauceDemo password `secret_sauce`:
 
@@ -239,13 +271,26 @@ cache](docs/locator-cache.md) skips repeat lookups during development. See the
 
 ## Coming next
 
+Recently shipped: `sedum init` to scaffold a project, parallel runs and
+sharding, and JUnit reports.
+
 Planned for the 0.1 alpha:
 
-- `sedum init` to scaffold a project
-- parallel runs and sharding
+- an npm release and a GitHub Action
 - starting your app before a run
-- JUnit reports
-- a GitHub Action and an npm release
+
+Coming soon after that:
+
+- **Goal-based tests.** State the outcome and let Sedum work out the steps:
+
+  ```yaml
+  url: https://shop.example.com/
+  goal: >
+    sign in, add a hat to the cart, check out with the saved card
+  verify: the confirmation page shows an order number
+  ```
+
+  Until then, write each step as a sentence.
 
 ## More
 

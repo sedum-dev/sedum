@@ -1,3 +1,3 @@
 # Evals
 
-Deterministic evaluation fixtures and recorded provider replies will live here when Resolver and Judge behavior is implemented.
+`classification-cost.mjs` reports classification request counts, tokens, cost, and latency for a small test file. See [step classification](../docs/classification.md#cost-probe) for how to run it.
