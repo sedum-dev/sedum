@@ -377,8 +377,15 @@ async function judgePage(
       )
         throw new AssertionEngineError("stale_observation", decision.call);
       digest = fresh;
-    } catch {
-      throw new AssertionEngineError("stale_observation", decision.call);
+    } catch (error) {
+      // Cancellation must stay cancellation; any other failure to prove the
+      // evidence unchanged is a stale observation.
+      throw new AssertionEngineError(
+        observationError(error, signal).code === "canceled"
+          ? "canceled"
+          : "stale_observation",
+        decision.call,
+      );
     }
   }
   return { decision, digest: { ...digest, text: projectedText } };

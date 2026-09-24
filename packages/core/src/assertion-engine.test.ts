@@ -406,6 +406,23 @@ describe("assertion engine", () => {
     });
   });
 
+  it("keeps cancellation during the unchanged-evidence recheck", async () => {
+    const page = fakePage("One way selected");
+    const revision = { ...firstVersion, revision: 2 };
+    const controller = new AbortController();
+    const { judge, holds } = fakeJudge();
+    holds.mockImplementation(async () => {
+      page.setVersion(revision);
+      page.onDigest(() => controller.abort());
+      return { holds: 0.9, contradicted: 0.1, call };
+    });
+    await expect(
+      verify(page.page, judge, "One way selected", {
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: "canceled", failedCall: call });
+  });
+
   it("does not return a verdict when the post-Judge version read fails", async () => {
     const page = fakePage();
     const { judge, holds } = fakeJudge();

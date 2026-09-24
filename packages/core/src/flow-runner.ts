@@ -788,15 +788,15 @@ async function executeSentence(
       },
     );
   }
-  // A resolver response can arrive during an unrelated DOM revision. Bounded
-  // fresh reads are safe: they reuse neither a target nor a prior action.
+  // A resolver response can arrive during an unrelated DOM revision. One fresh
+  // read after a longer quiet period is safe: it reuses neither a target nor a
+  // prior action.
   if (resolved.kind === "unresolved" && resolved.reason === "stale") {
-    for (const quietMs of [400, 1_000, 1_000]) {
-      const priorCalls: readonly ProviderCall[] = resolved.calls;
-      const settled = await quietPage(page, quietMs, 4_000).catch(() => ({
-        quiet: false,
-      }));
-      if (!settled.quiet) break;
+    const priorCalls = resolved.calls;
+    const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
+      quiet: false,
+    }));
+    if (settled.quiet) {
       try {
         const retried = await locate();
         resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
@@ -816,7 +816,6 @@ async function executeSentence(
           },
         );
       }
-      if (resolved.kind !== "unresolved" || resolved.reason !== "stale") break;
     }
   }
   // A navigation can briefly leave a quiet, empty document before the real
