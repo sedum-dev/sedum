@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="sedum" tests="1" failures="0" errors="0" time="4.321">
+  <testsuite name="sedum run" tests="0" failures="0" errors="0" skipped="0" time="4.321" timestamp="2026-09-23T10:00:00.000Z">
+    <properties>
+      <property name="sedum.run_id" value="run-clean"/>
+      <property name="sedum.state" value="completed"/>
+      <property name="sedum.verdict" value="passed"/>
+      <property name="sedum.strict" value="true"/>
+      <property name="sedum.tests.selected" value="1"/>
+      <property name="sedum.tests.passed" value="1"/>
+      <property name="sedum.tests.failed" value="0"/>
+      <property name="sedum.flagged_steps" value="0"/>
+      <property name="sedum.flags.low_confidence" value="0"/>
+      <property name="sedum.flags.contradiction" value="0"/>
+    </properties>
+  </testsuite>
+  <testsuite name="tests/login.test.yaml" tests="1" failures="0" errors="0" skipped="0" time="1.000" timestamp="2026-09-23T10:00:00.000Z" file="tests/login.test.yaml">
+    <properties>
+      <property name="sedum.run_id" value="run-clean"/>
+      <property name="sedum.test_id" value="test:tests/login.test.yaml"/>
+      <property name="sedum.verdict" value="passed"/>
+      <property name="sedum.attempts" value="1"/>
+      <property name="sedum.strict" value="true"/>
+    </properties>
+    <testcase classname="tests/login.test.yaml" name="Signs in and sees products" time="1.000"/>
+  </testsuite>
+</testsuites>

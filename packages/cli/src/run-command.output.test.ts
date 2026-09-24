@@ -9,7 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { symlinkSync } from "node:fs";
+import { rmSync, symlinkSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runFlow, validateRunResult, type ResultStep } from "@sedum-dev/core";
 
@@ -396,7 +396,7 @@ describe("run output failure contract", () => {
     await inTemporaryRoot();
     const output = await executeRunCommand({
       ...options,
-      reporters: ["junit"],
+      reporters: ["tap", "junit"],
     });
     expect(output.result).toMatchObject({
       state: "error",
@@ -404,6 +404,14 @@ describe("run output failure contract", () => {
     });
     expect(runFlow).not.toHaveBeenCalled();
     expect(output.artifacts.authoritative).toBe(true);
+    // CI still gets a JUnit file whose run suite carries the error.
+    expect(
+      output.artifacts.junitPath?.endsWith(
+        path.join(".sedum", "reports", output.result.runId, "junit.xml"),
+      ),
+    ).toBe(true);
+    const junit = await readFile(output.artifacts.junitPath!, "utf8");
+    expect(junit).toContain('<error type="unsupported_reporter"');
   });
 
   it("writes requested JSON to the project-root reporter directory from the same final result", async () => {
@@ -485,6 +493,383 @@ describe("run output failure contract", () => {
     expect(
       JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
     ).toEqual(output.result);
+  });
+
+  describe("junit reporter", () => {
+    const reportsDirectory = (runId: string) =>
+      path.join(root!, "reports", runId);
+
+    it("writes only junit.xml to the reporter directory when JSON is not requested", async () => {
+      await inTemporaryRoot();
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["junit"],
+      });
+      const directory = path.dirname(output.artifacts.junitPath!);
+      expect(
+        directory.endsWith(path.join(".sedum", "reports", output.result.runId)),
+      ).toBe(true);
+      expect(output.artifacts.reporterPath).toBeUndefined();
+      expect((await readdir(directory)).sort()).toEqual(["junit.xml"]);
+      const junit = await readFile(output.artifacts.junitPath!, "utf8");
+      expect(junit).toContain('<property name="sedum.strict" value="false"/>');
+      expect(junit).toContain(
+        `<property name="sedum.run_id" value="${output.result.runId}"/>`,
+      );
+    });
+
+    it("writes junit.xml beside the JSON copy, with --strict recorded", async () => {
+      await inTemporaryRoot();
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["json", "junit"],
+        reporterDir: "reports",
+        strict: true,
+      });
+      const directory = reportsDirectory(output.result.runId);
+      expect((await readdir(directory)).sort()).toEqual([
+        "junit.xml",
+        "progress.json",
+        "result.json",
+      ]);
+      expect(
+        output.artifacts.reporterPath?.endsWith(
+          path.join("reports", output.result.runId, "result.json"),
+        ),
+      ).toBe(true);
+      expect(
+        await readFile(path.join(directory, "junit.xml"), "utf8"),
+      ).toContain('<property name="sedum.strict" value="true"/>');
+      // The canonical directory never gets a JUnit copy.
+      await expect(
+        lstat(
+          path.join(path.dirname(output.artifacts.resultPath), "junit.xml"),
+        ),
+      ).rejects.toThrow();
+    });
+
+    it("writes junit.xml into the canonical run directory when the directories coincide", async () => {
+      await inTemporaryRoot();
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["junit"],
+        outputDir: "same",
+        reporterDir: "same",
+      });
+      expect(output.artifacts.junitPath).toBe(
+        path.join(path.dirname(output.artifacts.resultPath), "junit.xml"),
+      );
+      await lstat(output.artifacts.junitPath!);
+    });
+
+    it("writes the JUnit error suite for a config error", async () => {
+      await inTemporaryRoot();
+      await writeFile(
+        path.join(root!, "sedum.config.yaml"),
+        "browser: firefox\n",
+      );
+      const output = await executeRunCommand({
+        replay: false,
+        evidence: false,
+        sensitiveOrigins: [],
+        reporters: ["junit"],
+      });
+      expect(output.result.error?.code).toBe("invalid_config_browser");
+      const junit = await readFile(output.artifacts.junitPath!, "utf8");
+      expect(junit).toContain('<error type="invalid_config_browser"');
+    });
+
+    for (const placement of ["reporter directory", "canonical directory"])
+      it(`drops every report when junit.xml cannot be written in the ${placement}`, async () => {
+        await inTemporaryRoot();
+        const output = await executeRunCommand({
+          ...options,
+          reporters: ["json", "junit", "markdown"],
+          ...(placement === "canonical directory"
+            ? { outputDir: "same", reporterDir: "same" }
+            : { reporterDir: "reports" }),
+          onSnapshot: (snapshot, artifacts) => {
+            if (snapshot.state === "completed" && artifacts.junitPath)
+              symlinkSync("trap", artifacts.junitPath);
+          },
+        });
+        expect(output.diagnostic).toMatchObject({
+          code: "reporter_output_error",
+          message: expect.stringContaining("JUnit report"),
+        });
+        expect(output.result).toMatchObject({
+          state: "error",
+          error: { code: "reporter_output_error" },
+        });
+        expect(output.artifacts).toMatchObject({ authoritative: true });
+        expect(output.artifacts.junitPath).toBeUndefined();
+        expect(output.artifacts.htmlPath).toBeUndefined();
+        expect(output.artifacts.markdownPath).toBeUndefined();
+        const canonical = path.dirname(output.artifacts.resultPath);
+        for (const report of ["report.html", "report.md"])
+          await expect(lstat(path.join(canonical, report))).rejects.toThrow();
+        for (const resultPath of [
+          output.artifacts.resultPath,
+          output.artifacts.reporterPath!,
+        ])
+          expect(
+            validateRunResult(JSON.parse(await readFile(resultPath, "utf8"))),
+          ).toEqual(output.result);
+      });
+
+    it("keeps an earlier run error primary when junit.xml then fails", async () => {
+      await inTemporaryRoot();
+      const output = await executeRunCommand({
+        ...options,
+        paths: ["missing.test.yaml"],
+        reporters: ["junit"],
+        reporterDir: "reports",
+        onSnapshot: (snapshot, artifacts) => {
+          if (snapshot.state !== "running" && artifacts.junitPath)
+            symlinkSync("trap", artifacts.junitPath);
+        },
+      });
+      expect(output.result.error?.code).toBe("no_tests");
+      expect(output.diagnostic?.code).toBe("reporter_output_error");
+      expect(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ).toEqual(output.result);
+      expect(output.artifacts.htmlPath).toBeUndefined();
+    });
+
+    it("records a failed JSON copy in every canonical file before writing reports", async () => {
+      await inTemporaryRoot();
+      const finish = ProgressWriter.prototype.finish;
+      vi.spyOn(ProgressWriter.prototype, "finish").mockImplementation(
+        async function (this: ProgressWriter, result, only) {
+          if (this.directory.includes(`${path.sep}reports${path.sep}`))
+            throw new ProgressWriterError(this.resultPath);
+          return finish.call(this, result, only);
+        },
+      );
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["json", "junit", "markdown"],
+        reporterDir: "reports",
+      });
+      expect(output.result).toMatchObject({
+        state: "error",
+        error: { code: "output_error" },
+      });
+      expect(output.artifacts.authoritative).toBe(true);
+      expect(output.artifacts.reporterPath).toBeUndefined();
+      expect(output.artifacts.junitPath).toBeUndefined();
+      expect(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ).toEqual(output.result);
+      // Reports exist only to describe the errored run, never a pass.
+      expect(await readFile(output.artifacts.markdownPath!, "utf8")).toContain(
+        "**error**",
+      );
+      await expect(
+        lstat(path.join(reportsDirectory(output.result.runId), "junit.xml")),
+      ).rejects.toThrow();
+    });
+
+    it("keeps canonical output when the whole reporter directory breaks", async () => {
+      await inTemporaryRoot();
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["json", "junit", "markdown"],
+        reporterDir: "reports",
+        onSnapshot: (snapshot) => {
+          if (snapshot.state !== "completed") return;
+          const directory = reportsDirectory(snapshot.runId);
+          rmSync(directory, { recursive: true, force: true });
+          symlinkSync(path.join(root!, "nowhere"), directory);
+        },
+      });
+      expect(output.artifacts.authoritative).toBe(true);
+      expect(output.result.error?.code).toBe("output_error");
+      expect(output.artifacts.junitPath).toBeUndefined();
+      expect(output.artifacts.reporterPath).toBeUndefined();
+      expect(
+        validateRunResult(
+          JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+        ),
+      ).toEqual(output.result);
+      expect(await readFile(output.artifacts.markdownPath!, "utf8")).toContain(
+        "**error**",
+      );
+    });
+
+    it("rewrites junit.xml as an errored run when a terminal reporter fails", async () => {
+      await inTemporaryRoot();
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["junit"],
+        onSnapshot: (snapshot) => {
+          if (snapshot.state === "completed")
+            throw new Error("display is unavailable");
+        },
+      });
+      expect(output.result.error?.code).toBe("reporter_output_error");
+      const junit = await readFile(output.artifacts.junitPath!, "utf8");
+      expect(junit).toContain('<error type="reporter_output_error"');
+      expect(junit).not.toContain(
+        'value="passed"/>\n      <property name="sedum.strict"',
+      );
+    });
+
+    it("gives up only the JSON copy when it cannot be rewritten after a report fails", async () => {
+      await inTemporaryRoot();
+      const finish = ProgressWriter.prototype.finish;
+      vi.spyOn(ProgressWriter.prototype, "finish").mockImplementation(
+        async function (this: ProgressWriter, result, only) {
+          if (
+            this.directory.includes(`${path.sep}reports${path.sep}`) &&
+            result.error?.code === "reporter_output_error"
+          )
+            throw new ProgressWriterError(this.resultPath);
+          return finish.call(this, result, only);
+        },
+      );
+      const output = await executeRunCommand({
+        ...options,
+        reporters: ["json", "junit"],
+        reporterDir: "reports",
+        onSnapshot: (snapshot, artifacts) => {
+          if (snapshot.state === "completed" && artifacts.htmlPath)
+            symlinkSync("trap", artifacts.htmlPath);
+        },
+      });
+      expect(output.artifacts.authoritative).toBe(true);
+      expect(output.result.error?.code).toBe("reporter_output_error");
+      expect(output.artifacts.reporterPath).toBeUndefined();
+      expect(output.artifacts.junitPath).toBeUndefined();
+      expect(
+        JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
+      ).toEqual(output.result);
+      await expect(
+        lstat(path.join(reportsDirectory(output.result.runId), "result.json")),
+      ).rejects.toThrow();
+    });
+
+    it("puts a config error's JUnit file in --reporter-dir", async () => {
+      await inTemporaryRoot();
+      await writeFile(
+        path.join(root!, "sedum.config.yaml"),
+        "browser: firefox\n",
+      );
+      const output = await executeRunCommand({
+        replay: false,
+        evidence: false,
+        sensitiveOrigins: [],
+        reporters: ["junit"],
+        reporterDir: "ci-reports",
+      });
+      expect(
+        output.artifacts.junitPath?.endsWith(
+          path.join("ci-reports", output.result.runId, "junit.xml"),
+        ),
+      ).toBe(true);
+    });
+
+    it("claims no files when a config error's run directory cannot be created", async () => {
+      await inTemporaryRoot();
+      await writeFile(
+        path.join(root!, "sedum.config.yaml"),
+        "browser: firefox\n",
+      );
+      await writeFile(path.join(root!, ".sedum"), "not a directory");
+      const output = await executeRunCommand({
+        replay: false,
+        evidence: false,
+        sensitiveOrigins: [],
+        reporters: ["junit"],
+      });
+      expect(output.result.error?.code).toBe("invalid_config_browser");
+      expect(output.artifacts.authoritative).toBe(false);
+      expect(output.artifacts.junitPath).toBeUndefined();
+    });
+
+    it("invalidates a pre-run failure's files when its result cannot be written", async () => {
+      await inTemporaryRoot();
+      await writeFile(
+        path.join(root!, "sedum.config.yaml"),
+        "browser: firefox\n",
+      );
+      vi.spyOn(ProgressWriter.prototype, "finish").mockRejectedValue(
+        new ProgressWriterError("result.json"),
+      );
+      const output = await executeRunCommand({
+        replay: false,
+        evidence: false,
+        sensitiveOrigins: [],
+        reporters: ["junit"],
+      });
+      expect(output.artifacts.authoritative).toBe(false);
+      await expect(lstat(output.artifacts.resultPath)).rejects.toThrow();
+    });
+
+    it("names evidence relative to the CI checkout when the project is in a subdirectory", async () => {
+      await inTemporaryRoot();
+      const project = path.join(root!, "apps", "web");
+      await mkdir(project, { recursive: true });
+      await writeFile(path.join(project, "sedum.config.yaml"), "{}\n");
+      await writeFile(
+        path.join(project, "fixture.test.yaml"),
+        "url: https://example.test\nsteps: [verify page]\n",
+      );
+      process.chdir(project);
+      vi.mocked(runFlow).mockImplementationOnce(async (file, dependencies) => {
+        const recorder = dependencies.report!.recorder;
+        await recorder.startTest({ id: "failing", file: "fixture.test.yaml" });
+        await recorder.addStep({
+          id: "failing-step",
+          index: 1,
+          kind: "verify",
+          operation: "verify",
+          phase: "steps",
+          sentence: "verify the page",
+          detail: "",
+          sourceStack: [{ file: "fixture.test.yaml", line: 2, col: 9 }],
+          state: "completed",
+          verdict: "failed",
+          flags: [],
+          elapsedMs: 1,
+          page: { status: "unavailable", reason: "fixture" },
+          locator: null,
+          judgement: null,
+          observations: [],
+          calls: [],
+          error: null,
+          evidence: {
+            status: "captured",
+            path: "evidence/a1-000000000000/frame.jpg",
+            mediaType: "image/jpeg",
+          },
+          replayFrame: null,
+          targetBox: null,
+        });
+        await recorder.finishTest("failed");
+        return { status: "failed" as const, file } as Awaited<
+          ReturnType<typeof runFlow>
+        >;
+      });
+      vi.stubEnv("CI_PROJECT_DIR", root!);
+      vi.stubEnv("GITLAB_CI", "true");
+      vi.stubEnv("WORKSPACE", "");
+      vi.stubEnv("GITHUB_WORKSPACE", "");
+      try {
+        const output = await executeRunCommand({
+          ...options,
+          reporters: ["junit"],
+        });
+        const junit = await readFile(output.artifacts.junitPath!, "utf8");
+        expect(junit).toContain(
+          `[[ATTACHMENT|apps/web/.sedum/runs/${output.result.runId}/evidence/a1-000000000000/frame.jpg]]`,
+        );
+        expect(junit).not.toContain(root!);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
 
   it("runs valid selected files but exits incomplete when another selected file is invalid", async () => {

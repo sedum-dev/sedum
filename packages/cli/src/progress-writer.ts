@@ -3,7 +3,12 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ResultFrame, RunResult } from "@sedum-dev/core";
 import { validateRunResult } from "@sedum-dev/core";
-import { renderHtml, renderMarkdown } from "@sedum-dev/reporters";
+import {
+  renderHtml,
+  renderJunit,
+  renderMarkdown,
+  type JunitReportOptions,
+} from "@sedum-dev/reporters";
 
 export class ProgressWriterError extends Error {
   constructor(
@@ -15,24 +20,34 @@ export class ProgressWriterError extends Error {
   }
 }
 
+/** Which files a writer produces in its run directory. */
+export interface WriterFiles {
+  /** `progress.json` and `result.json`. */
+  readonly json: boolean;
+  readonly html: boolean;
+  readonly markdown: boolean;
+  readonly junit: JunitReportOptions | null;
+}
+
 /** Owns only a newly created run directory, never an existing output tree. */
 export class ProgressWriter {
   private revision = 0;
   private pending: Promise<void> = Promise.resolve();
   private readonly attemptFolders = new Map<string, Promise<string>>();
+  private files: WriterFiles;
 
   private constructor(
     readonly directory: string,
-    private readonly includeHtml: boolean,
-    readonly includeMarkdown: boolean,
-  ) {}
+    files: WriterFiles,
+  ) {
+    this.files = files;
+  }
 
   static async create(
     root: string,
     runId: string,
     outputDirectory = path.join(root, ".sedum", "runs"),
-    includeHtml = true,
-    includeMarkdown = false,
+    files: Partial<WriterFiles> = {},
   ): Promise<ProgressWriter> {
     if (!/^[a-zA-Z0-9-]+$/.test(runId)) throw new Error("Invalid run ID");
     const resolvedRoot = path.resolve(root);
@@ -52,7 +67,28 @@ export class ProgressWriter {
     }
     const directory = path.join(base, runId);
     await mkdir(directory, { mode: 0o700 });
-    return new ProgressWriter(directory, includeHtml, includeMarkdown);
+    return new ProgressWriter(directory, {
+      json: true,
+      html: true,
+      markdown: false,
+      junit: null,
+      ...files,
+    });
+  }
+
+  get includeMarkdown(): boolean {
+    return this.files.markdown;
+  }
+  get includesJson(): boolean {
+    return this.files.json;
+  }
+  get includesJunit(): boolean {
+    return this.files.junit !== null;
+  }
+
+  /** Add `junit.xml`, once the evidence location is known. */
+  includeJunit(options: JunitReportOptions): void {
+    this.files = { ...this.files, junit: options };
   }
 
   get progressPath(): string {
@@ -66,6 +102,9 @@ export class ProgressWriter {
   }
   get markdownPath(): string {
     return path.join(this.directory, "report.md");
+  }
+  get junitPath(): string {
+    return path.join(this.directory, "junit.xml");
   }
 
   private async atomicWrite(name: string, content: string): Promise<void> {
@@ -111,19 +150,28 @@ export class ProgressWriter {
     });
   }
 
+  /**
+   * Write this writer's files from one validated snapshot: JSON first, then
+   * the rendered reports. `reports: false` rewrites only the JSON, and
+   * `json: false` renders only the reports.
+   */
   async finish(
     result: RunResult,
-    includeHtml = this.includeHtml,
-    includeMarkdown = this.includeMarkdown,
+    only: { readonly json?: boolean; readonly reports?: boolean } = {},
   ): Promise<void> {
+    const json = this.files.json && only.json !== false;
+    const reports = only.reports !== false;
     try {
-      await this.write(result);
       const snapshot = validateRunResult(result);
-      await this.atomicWrite(
-        "result.json",
-        `${JSON.stringify(snapshot, null, 2)}\n`,
-      );
-      if (includeHtml) {
+      if (json) {
+        await this.write(snapshot);
+        await this.atomicWrite(
+          "result.json",
+          `${JSON.stringify(snapshot, null, 2)}\n`,
+        );
+      }
+      if (!reports) return;
+      if (this.files.html) {
         try {
           const frames = await this.loadReplayFrames(snapshot);
           await this.atomicWrite(
@@ -134,11 +182,19 @@ export class ProgressWriter {
           throw new ProgressWriterError(this.htmlPath, { cause });
         }
       }
-      if (includeMarkdown) {
+      if (this.files.markdown) {
         try {
           await this.atomicWrite("report.md", renderMarkdown(snapshot));
         } catch (cause) {
           throw new ProgressWriterError(this.markdownPath, { cause });
+        }
+      }
+      const junit = this.files.junit;
+      if (junit) {
+        try {
+          await this.atomicWrite("junit.xml", renderJunit(snapshot, junit));
+        } catch (cause) {
+          throw new ProgressWriterError(this.junitPath, { cause });
         }
       }
     } catch (cause) {
@@ -148,9 +204,14 @@ export class ProgressWriter {
     }
   }
 
+  /** Whether `path` is one of this writer's rendered reports. */
+  isReport(target: string): boolean {
+    return [this.htmlPath, this.markdownPath, this.junitPath].includes(target);
+  }
+
   /** Remove this writer's own rendered reports after one of them failed. */
   async removeReports(): Promise<void> {
-    for (const report of [this.htmlPath, this.markdownPath])
+    for (const report of [this.htmlPath, this.markdownPath, this.junitPath])
       await unlink(report).catch((error: unknown) => {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       });
@@ -163,6 +224,7 @@ export class ProgressWriter {
       unlink(this.resultPath).catch(() => undefined),
       unlink(this.htmlPath).catch(() => undefined),
       unlink(this.markdownPath).catch(() => undefined),
+      unlink(this.junitPath).catch(() => undefined),
     ]);
   }
 
