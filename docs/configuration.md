@@ -68,11 +68,9 @@ TYPESAFE_API_KEY=...
 
 The base URL must use HTTPS and must not contain credentials, a query, or a
 fragment. Sedum's TypeSafe SDK appends `/v1/systemone`; the service must accept
-that request and return the TypeSafe System One response shape. These settings
-do not make ordinary OpenAI-compatible chat endpoints compatible. These names
-match the TypeSafe SDK. The URL defaults to TypeSafe and the model to
-`jev-latest`; the API key is read from `TYPESAFE_API_KEY`. Set the URL and key
-together for a custom service: Sedum sends that key to the configured URL.
+that request and return the TypeSafe System One response shape. The URL defaults
+to TypeSafe and the model to `jev-latest`; the API key is read from 
+`TYPESAFE_API_KEY`. 
 Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
 from `sedum.config.yaml`.
 
