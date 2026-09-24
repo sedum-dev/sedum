@@ -105,12 +105,14 @@ omitted the text because it was inside a noneditable combobox and an
 
 **Alternatives considered.** Including all control text would expose editable
 field values. Asking the judge to infer state from surrounding page prose
-would leave the actual selection unobserved. The digest now includes bounded
-rendered selection text from noneditable comboboxes and native selects while
-continuing to exclude editable values and enforce the 4,096 point limit.
+would leave the actual selection unobserved. The digest now includes the rendered
+selection of select-only controls (native selects and comboboxes with no text
+entry), inline and prefixed with the control's name, while continuing to
+exclude editable values and enforce the 4,096 point limit.
 
-**Verification.** A browser regression checks the selected text under
-`aria-hidden`, a native select, and privacy of editable values. The Flights
+**Verification.** Browser regressions check the selected text under
+`aria-hidden`, a native select, APG-style and multiple named comboboxes, and
+privacy of editable values. The Flights
 YAML journey then passed its “One way” verification. A separate negative
 Return-field claim was removed from the journey because the digest does not
 contain a complete form-control inventory and cannot prove that absence.

@@ -762,17 +762,67 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(resolved.kind).toBe("resolved");
       await context.close();
     });
-    it("includes rendered noneditable combobox selection without editable values", async () => {
+    it("includes rendered select-only selections without editable values", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
-        'document.querySelector(\'#app\').innerHTML = \'<div role="combobox" aria-autocomplete="none"><span aria-hidden="true">One way</span></div><div role="combobox" aria-autocomplete="list">private-query-123</div><input value="private-input-456"><select><option>Round trip</option><option selected>Economy</option></select>\'',
+        'document.querySelector(\'#app\').innerHTML = \'<div role="combobox" aria-autocomplete="none"><span aria-hidden="true">One way</span></div><div role="combobox" aria-autocomplete="list">private-query-123</div><input value="private-input-456"><select aria-label="Cabin"><option>Round trip</option><option selected>Economy</option></select>\'',
       );
       const digest = await pageDigest(page);
       expect(digest.complete).toBe(true);
-      expect(digest.text).toContain("Selected combobox: One way");
-      expect(digest.text).toContain("Selected combobox: Economy");
-      expect(digest.text).not.toContain("private-query-123");
-      expect(digest.text).not.toContain("private-input-456");
+      expect(digest.text).toBe("One way Cabin: Economy");
+      await context.close();
+    });
+    it("names select-only comboboxes inline in document order", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<p>Before</p><span id="from-label">Departure</span><div role="combobox" tabindex="0" aria-labelledby="from-label"><span>Paris</span></div><p>Between</p><div role="combobox" tabindex="0" aria-label="Passengers"><span>2 adults</span></div><p>After</p>\'',
+      );
+      const digest = await pageDigest(page);
+      expect(digest.complete).toBe(true);
+      expect(digest.text).toBe(
+        "Before Departure Departure: Paris Between Passengers: 2 adults After",
+      );
+      await context.close();
+    });
+    it("emits only the selection when the name already contains it", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<div role="combobox" tabindex="0" aria-labelledby="trip"><span id="trip">Round trip</span></div>\'',
+      );
+      expect((await pageDigest(page)).text).toBe("Round trip");
+      await context.close();
+    });
+    it("keeps the descriptive part of a name that references the value", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<span id="sort-label" hidden>Sort by</span><div role="combobox" tabindex="0" aria-labelledby="sort-label sort-value"><span id="sort-value">Newest</span></div>\'',
+      );
+      expect((await pageDigest(page)).text).toBe("Sort by: Newest");
+      await context.close();
+    });
+    it("ignores an option list nested inside a select-only combobox", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<div role="combobox" tabindex="0" aria-label="Size"><span>Medium</span><ul role="listbox"><li role="option">Small</li><li role="option" aria-selected="true">Medium</li><li role="option">Large</li></ul></div>\'',
+      );
+      expect((await pageDigest(page)).text).toBe("Size: Medium");
+      await context.close();
+    });
+    it("excludes editable comboboxes and their typed values", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<p>Start</p><input role=\"combobox\" aria-label=\"City\"><div role=\"combobox\" aria-label=\"Airport\"><span>typed-wrapper-hint</span><input></div><p>End</p>'; document.querySelectorAll('input')[0].value = 'private-city-123'; document.querySelectorAll('input')[1].value = 'private-airport-456'",
+      );
+      const digest = await pageDigest(page);
+      expect(digest.text).toBe("Start End");
+      await context.close();
+    });
+    it("counts select-only selections toward the digest limit", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<p>' + 'x'.repeat(4090) + '</p><select aria-label=\"Cabin\"><option>Economy</option></select>'",
+      );
+      expect((await pageDigest(page)).error).toBe("digest_too_large");
       await context.close();
     });
     it("keeps rendered display-contents text in a complete digest", async () => {

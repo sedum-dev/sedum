@@ -9,7 +9,8 @@ scrolling. A pre-dispatch stale action can be resolved once against the current
 page; an action that may have started is never replayed. Dynamic candidate
 pagination preserves one snapshot while fresh target revalidation protects
 actions. Bounded empty-page and stale reads handle delayed navigation.
-Assertion digests include rendered noneditable combobox selections, and a
+Assertion digests include the named, rendered selection of select-only
+controls in document order, and a
 same-route page revision can retain a judgment only if a fresh complete
 digest is identical.
 Control discovery also accepts placeholder and title fallback names, and

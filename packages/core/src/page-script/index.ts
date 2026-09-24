@@ -611,6 +611,45 @@ if (!window.__sedum) {
       candidates,
     };
   }
+  /** A native select, or a combobox with no text entry anywhere inside it. */
+  function selectOnly(control: Element): boolean {
+    if (control instanceof HTMLSelectElement) return true;
+    if (
+      control.getAttribute("role") !== "combobox" ||
+      control.matches("input,textarea") ||
+      (control instanceof HTMLElement && control.isContentEditable) ||
+      control.querySelector(
+        "input,textarea,[contenteditable]:not([contenteditable='false']),[role='textbox'],[role='searchbox'],[role='spinbutton']",
+      ) ||
+      (control.parentElement && excludedTextAncestor(control.parentElement))
+    )
+      return false;
+    const autocomplete = control.getAttribute("aria-autocomplete");
+    return autocomplete === null || autocomplete.toLowerCase() === "none";
+  }
+  function selectedText(control: Element): string {
+    if (control instanceof HTMLSelectElement)
+      return (control.selectedOptions[0]?.textContent ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+    // Visual-only visibility: the rendered selection may sit under aria-hidden.
+    // An option list nested in the control holds choices, not the selection.
+    const walker = document.createTreeWalker(control, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    while (walker.nextNode()) {
+      const parent = walker.currentNode.parentElement;
+      if (
+        !parent ||
+        !visible(parent, true) ||
+        parent.closest(
+          "input,textarea,select,[contenteditable],script,style,noscript,[role='textbox'],[role='searchbox'],[role='spinbutton'],[role='listbox'],[role='option']",
+        )
+      )
+        continue;
+      parts.push(walker.currentNode.textContent ?? "");
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
   function digest(): DigestResult {
     const current = version();
     const selectedModal = modal();
@@ -632,6 +671,7 @@ if (!window.__sedum) {
       };
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const pieces: string[] = [];
+    const emitted = new Set<Element>();
     let size = 0;
     let count = 0;
     while (walker.nextNode()) {
@@ -645,65 +685,44 @@ if (!window.__sedum) {
         };
       const node = walker.currentNode;
       const parent = node.parentElement;
+      // Select-only controls render their chosen option as visible text, which
+      // the ordinary control exclusion would drop (sometimes under
+      // aria-hidden). Emit it once, named, where the control sits. Editable
+      // comboboxes still fall through to the exclusion so typed values stay
+      // private.
+      const control = parent?.closest("select,[role='combobox']");
+      if (control && (emitted.has(control) || selectOnly(control))) {
+        if (emitted.has(control) || !visible(control)) continue;
+        emitted.add(control);
+        const selection = selectedText(control);
+        // Names often reference the value too ("Sort by Newest"). Keep only
+        // the descriptive rest so the value is not repeated or lost.
+        const name = selection
+          ? label(control)
+              .replace(selection, "")
+              .replace(/^[\s.,:;–-]+|[\s.,:;–-]+$/g, "")
+          : "";
+        const part = !selection
+          ? ""
+          : name
+            ? `${name}: ${selection}`
+            : selection;
+        if (!part) continue;
+        size += Array.from(part).length + (pieces.length ? 1 : 0);
+        if (size > DIGEST_LIMIT)
+          return {
+            protocol: PAGE_PROTOCOL,
+            version: current,
+            text: "",
+            complete: false,
+            error: "digest_too_large",
+          };
+        pieces.push(part);
+        continue;
+      }
       if (!parent || !visible(parent) || excludedTextAncestor(parent)) continue;
       const part = (node.textContent ?? "").replace(/\s+/g, " ").trim();
       if (!part) continue;
-      size += Array.from(part).length + (pieces.length ? 1 : 0);
-      if (size > DIGEST_LIMIT)
-        return {
-          protocol: PAGE_PROTOCOL,
-          version: current,
-          text: "",
-          complete: false,
-          error: "digest_too_large",
-        };
-      pieces.push(part);
-    }
-    // A non-editable combobox can render its selected value inside an
-    // aria-hidden descendant. That text is visually present, but the ordinary
-    // digest intentionally skips controls. Include only rendered selection
-    // text; editable controls and their values remain excluded.
-    for (const control of Array.from(
-      root.querySelectorAll("[role='combobox'],select"),
-    )) {
-      if (
-        !visible(control) ||
-        control.matches("input,textarea,[contenteditable]")
-      )
-        continue;
-      if (
-        control.getAttribute("aria-autocomplete")?.toLowerCase() !== "none" &&
-        !(control instanceof HTMLSelectElement)
-      )
-        continue;
-      let selection = "";
-      if (control instanceof HTMLSelectElement) {
-        selection = control.selectedOptions[0]?.textContent?.trim() ?? "";
-      } else {
-        const stateWalker = document.createTreeWalker(
-          control,
-          NodeFilter.SHOW_TEXT,
-        );
-        const stateParts: string[] = [];
-        while (stateWalker.nextNode()) {
-          const parent = stateWalker.currentNode.parentElement;
-          if (
-            !parent ||
-            !visible(parent, true) ||
-            parent.closest(
-              "input,textarea,select,[contenteditable],script,style,noscript,[role='textbox'],[role='searchbox'],[role='spinbutton']",
-            )
-          )
-            continue;
-          const part = (stateWalker.currentNode.textContent ?? "")
-            .replace(/\s+/g, " ")
-            .trim();
-          if (part) stateParts.push(part);
-        }
-        selection = stateParts.join(" ");
-      }
-      if (!selection) continue;
-      const part = `Selected combobox: ${selection}`;
       size += Array.from(part).length + (pieces.length ? 1 : 0);
       if (size > DIGEST_LIMIT)
         return {
