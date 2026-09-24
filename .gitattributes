@@ -1,0 +1,2 @@
+# Golden report samples are compared byte for byte on every OS.
+packages/reporters/test-fixtures/golden/** text eol=lf
