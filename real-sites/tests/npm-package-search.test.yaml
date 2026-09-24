@@ -1,0 +1,6 @@
+id: npm-package-search
+description: Open the exact playwright package from npm search results
+url: https://www.npmjs.com/search?q=playwright
+tags: [real-site, npm, search-results]
+steps:
+  - click the playwright exact match package in the search results

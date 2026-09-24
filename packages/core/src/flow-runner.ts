@@ -63,6 +63,7 @@ import {
   RuntimeValue,
   RuntimeUrl,
   StepExecutionError,
+  type ResolvedStepTarget,
   type StepCommand,
   executeStep,
 } from "./step-executor.js";
@@ -788,10 +789,11 @@ async function executeSentence(
     );
   }
   // A resolver response can arrive during an unrelated DOM revision. One fresh
-  // read is safe: it does not reuse a target or replay the preceding action.
+  // read after a longer quiet period is safe: it reuses neither a target nor a
+  // prior action.
   if (resolved.kind === "unresolved" && resolved.reason === "stale") {
     const priorCalls = resolved.calls;
-    const settled = await quietPage(page, 80, 4_000).catch(() => ({
+    const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
       quiet: false,
     }));
     if (settled.quiet) {
@@ -813,6 +815,31 @@ async function executeSentence(
             },
           },
         );
+      }
+    }
+  }
+  // A navigation can briefly leave a quiet, empty document before the real
+  // page commits. Re-observe only an empty candidate set within a deadline;
+  // no model choice or action has happened, and an actually empty page still
+  // ends with no_candidates.
+  if (resolved.kind === "unresolved" && resolved.reason === "no_candidates") {
+    const deadline = performance.now() + 8_000;
+    while (performance.now() < deadline && !dependencies.signal?.aborted) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      const settled = await quietPage(page, 80, 1_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!settled.quiet) continue;
+      try {
+        const fresh = await locate();
+        resolved = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
+        if (
+          resolved.kind !== "unresolved" ||
+          resolved.reason !== "no_candidates"
+        )
+          break;
+      } catch {
+        // A redirect can invalidate the read-only execution context.
       }
     }
   }
@@ -844,18 +871,14 @@ async function executeSentence(
       },
     );
   }
-  let command: StepCommand;
-  if (step.op === "click") command = { op: "click", target: resolved.target };
-  else {
-    command = {
-      op: "type",
-      target: resolved.target,
-      value: typeValue!,
-    };
-  }
+  const commandFor = (target: ResolvedStepTarget): StepCommand =>
+    step.op === "click"
+      ? { op: "click", target }
+      : { op: "type", target, value: typeValue! };
+  let command = commandFor(resolved.target);
   // An action may navigate or rerender. Preserve metadata from the accepted
   // locator observation before dispatch, rather than borrowing the new page.
-  const locatedPage = report
+  let locatedPage = report
     ? await reportPage(
         page,
         `${stepId}:observation:1`,
@@ -865,8 +888,8 @@ async function executeSentence(
     : undefined;
   let replayFrame: ResultFrame | undefined;
   let targetBox: ResultStep["targetBox"] = null;
-  try {
-    await executeStep(page, command, {
+  const performAction = () =>
+    executeStep(page, command, {
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       ...(report?.replay
         ? {
@@ -888,6 +911,44 @@ async function executeSentence(
           }
         : {}),
     });
+  try {
+    try {
+      await performAction();
+    } catch (error) {
+      if (
+        !(error instanceof StepExecutionError) ||
+        error.code !== "stale" ||
+        !error.retryable
+      )
+        throw error;
+      // The first attempt provably did not dispatch input. Re-observe and
+      // resolve against the current page once; never replay an uncertain act.
+      const priorCalls = resolved.calls;
+      replayFrame = undefined;
+      targetBox = null;
+      const quiet = await quietPage(page, 80, 4_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!quiet.quiet) throw error;
+      const retried = await locate();
+      if (retried.kind !== "resolved") {
+        resolved = { ...resolved, calls: [...priorCalls, ...retried.calls] };
+        throw error;
+      }
+      resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+      command = commandFor(resolved.target);
+      locatedPage = report
+        ? await reportPage(
+            page,
+            `${stepId}:observation:2`,
+            report.privacy,
+            resolved.target.driverTarget().version,
+          )
+        : undefined;
+      replayFrame = undefined;
+      targetBox = null;
+      await performAction();
+    }
     let recordedLocator = resolved;
     if (resolved.cacheSeed && dependencies.locatorCache?.key) {
       const seed = resolved.cacheSeed;

@@ -10,4 +10,6 @@ The engine waits for `domcontentloaded` and a quiet page, then compares the dige
 
 `AssertionEngineError.code` distinguishes missing, ambiguous, incomplete, oversized, stale, timed-out, canceled, browser, and provider failures. These are operational errors rather than failed assertions. Its JSON form carries only the code and a safe message.
 
+The digest is the visible page text in document order. Control text is excluded, except that a select-only control (a native `<select>`, or a combobox with no text entry inside it) contributes its rendered selection, prefixed with its accessible name, as in `Cabin: Economy`. When the name repeats the value (`Sort by Newest`), only the rest is kept (`Sort by: Newest`); a name that is only the value gives the bare selection. Option lists nested inside the control are ignored. Editable fields, including editable comboboxes, never contribute their values. Checkbox, radio, and tab state are not yet included.
+
 The page digest is limited to 4,096 Unicode code points, and the TypeSafe adapter limits each serialized request to 64 KiB. Long pages that exceed these limits, such as a long Wikipedia article, cannot be judged yet and fail with an operational error.

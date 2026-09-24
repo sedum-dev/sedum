@@ -1,0 +1,9 @@
+id: wikipedia-search
+description: Search Wikipedia for Charles Babbage from an article
+url: https://en.wikipedia.org/wiki/Ada_Lovelace
+tags: [real-site, wikipedia]
+data:
+  query: Charles Babbage
+steps:
+  - type {{query}} in the Search Wikipedia field
+  - click the Search button next to the Search Wikipedia field

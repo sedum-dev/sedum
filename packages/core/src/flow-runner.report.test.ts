@@ -364,7 +364,7 @@ describe("runner report facts", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 12_000);
 
   it("never pairs a replay box with a frame after the aimed target rerenders", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "sedum-replay-race-"));

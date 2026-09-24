@@ -164,6 +164,7 @@ export function stageEntry(
   eligible: CandidatePage,
 ): CacheEntry {
   if (
+    candidate.signals.nameTruncated ||
     codePoints(candidate.name) > NAME_LIMIT ||
     (candidate.role !== "" && !isSafeRole(candidate.role)) ||
     candidate.peers.length > 2 ||
@@ -243,6 +244,8 @@ function score(
   candidate: Candidate,
   key: Uint8Array,
 ): { score: number; conflict: boolean; identity: boolean } {
+  if (candidate.signals.nameTruncated)
+    return { score: 0, conflict: false, identity: false };
   if (
     entry.tag !== candidate.tag ||
     entry.role !== candidate.role ||

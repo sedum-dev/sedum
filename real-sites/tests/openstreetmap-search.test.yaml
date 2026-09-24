@@ -1,0 +1,9 @@
+id: openstreetmap-search
+description: Search OpenStreetMap for Buenos Aires
+url: https://www.openstreetmap.org/
+tags: [real-site, openstreetmap, search]
+data:
+  place: Buenos Aires
+steps:
+  - type {{place}} in the Search field
+  - click the Go button beside the Search field

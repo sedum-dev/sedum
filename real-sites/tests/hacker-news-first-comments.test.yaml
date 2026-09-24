@@ -1,0 +1,6 @@
+id: hacker-news-first-comments
+description: Open the discussion for the first ranked Hacker News story
+url: https://news.ycombinator.com/
+tags: [real-site, hacker-news, ranked-list]
+steps:
+  - click the comments link for the first ranked story

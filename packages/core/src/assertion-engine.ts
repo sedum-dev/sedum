@@ -311,7 +311,7 @@ async function judgePage(
   signal?: AbortSignal,
   projectText?: (text: string) => string,
 ) {
-  const digest = await settledDigest(page, timeoutMs, signal);
+  let digest = await settledDigest(page, timeoutMs, signal);
   const projectedText = projectText ? projectText(digest.text) : digest.text;
   canceled(signal);
   let decision: Awaited<ReturnType<Judge["holds"]>> | undefined;
@@ -351,8 +351,43 @@ async function judgePage(
     const observed = observationError(error, signal);
     throw new AssertionEngineError(observed.code, decision.call);
   }
-  if (!sameVersion(current, digest.version))
-    throw new AssertionEngineError("stale_observation", decision.call);
+  if (!sameVersion(current, digest.version)) {
+    // Dynamic pages can revise unrelated DOM while the Judge runs. The
+    // verdict remains valid only if a new complete digest is byte-for-byte
+    // identical, on the same document and route, and itself current.
+    if (
+      current.document !== digest.version.document ||
+      current.route !== digest.version.route
+    )
+      throw new AssertionEngineError("stale_observation", decision.call);
+    try {
+      const deadline = performance.now() + POST_JUDGE_VERSION_TIMEOUT_MS;
+      const fresh = await withinObservation(pageDigest(page), deadline, signal);
+      validateDigest(fresh);
+      const latest = await withinObservation(
+        pageVersion(page),
+        deadline,
+        signal,
+      );
+      if (
+        fresh.text !== digest.text ||
+        !sameVersion(fresh.version, latest) ||
+        fresh.version.document !== digest.version.document ||
+        fresh.version.route !== digest.version.route
+      )
+        throw new AssertionEngineError("stale_observation", decision.call);
+      digest = fresh;
+    } catch (error) {
+      // Cancellation must stay cancellation; any other failure to prove the
+      // evidence unchanged is a stale observation.
+      throw new AssertionEngineError(
+        observationError(error, signal).code === "canceled"
+          ? "canceled"
+          : "stale_observation",
+        decision.call,
+      );
+    }
+  }
   return { decision, digest: { ...digest, text: projectedText } };
 }
 
@@ -387,7 +422,7 @@ export async function verify(
       : { contradictionCutoff: options.contradictionCutoff }),
   });
   const needsExcerpt = policy.verdict === "failed" || policy.flags.length > 0;
-  return Object.defineProperty(
+  return Object.defineProperties(
     {
       kind: "verify",
       ...policy,
@@ -397,8 +432,9 @@ export async function verify(
       elapsedMs: performance.now() - started,
       ...(needsExcerpt ? { judgedExcerpt: excerpt(digest.text) } : {}),
     },
-    "observationVersion",
-    { value: digest.version, enumerable: false },
+    {
+      observationVersion: { value: digest.version, enumerable: false },
+    },
   ) as VerifyResult;
 }
 

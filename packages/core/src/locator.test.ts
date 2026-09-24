@@ -141,6 +141,69 @@ function resolver(
 }
 
 describe("locator", () => {
+  it("accepts a uniquely named same-node target after unrelated page churn", async () => {
+    const target = candidate(1, {
+      name: "Go to file",
+      peers: ["Branches"],
+      signals: { path: "main/input:0", nodeId: "node-1" },
+    });
+    const other = candidate(2, {
+      name: "Old activity",
+      signals: { path: "main/button:1", nodeId: "node-2" },
+    });
+    const recorded = recordedPage([target, other], {
+      live: () => [
+        { ...target, peers: ["Code"] },
+        { ...other, name: "New activity" },
+      ],
+    });
+    const model = resolver((options) => {
+      recorded.setVersion({ ...initial, revision: 2 });
+      return answer(options, target.ref);
+    });
+    const result = await resolveTarget(recorded.page, model, {
+      operation: "click",
+      sentence: "click the Go to file control",
+    });
+    expect(result.kind).toBe("resolved");
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe(`fresh-${target.ref}`);
+  });
+
+  it("rejects a same-name competitor or replacement node after a model choice", async () => {
+    const target = candidate(1, {
+      name: "Go to file",
+      signals: { path: "main/input:0", nodeId: "node-1" },
+    });
+    for (const live of [
+      [
+        target,
+        candidate(2, {
+          name: "Go to file",
+          signals: { path: "main/input:1", nodeId: "node-2" },
+        }),
+      ],
+      [
+        {
+          ...target,
+          signals: { ...target.signals, nodeId: "replacement-node" },
+        },
+      ],
+    ]) {
+      const recorded = recordedPage([target], { live: () => live });
+      const model = resolver((options) => {
+        recorded.setVersion({ ...initial, revision: 2 });
+        return answer(options, target.ref);
+      });
+      expect(
+        await resolveTarget(recorded.page, model, {
+          operation: "click",
+          sentence: "click the Go to file control",
+        }),
+      ).toMatchObject({ kind: "unresolved", reason: "stale" });
+    }
+  });
+
   it("uses a uniquely validated warm recipe without a locator model call", async () => {
     const key = new Uint8Array(32).fill(9);
     const selected = candidate(1, {
@@ -720,6 +783,12 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        sentence: "the comments link for the first ranked story",
+      }),
+    ).toMatchObject({ kind: "resolved" });
+    expect(
+      await resolveTarget(page, model, {
+        operation: "click",
         sentence: "the comments link",
       }),
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
@@ -925,9 +994,11 @@ describe("locator", () => {
     ).toMatchObject({ kind: "unresolved", reason: "timeout" });
   });
 
-  it("fails closed on a changed page during Choice and on cancellation", async () => {
+  it("fails closed on a changed target during Choice and on cancellation", async () => {
     const items = [candidate(0)];
-    const changing = recordedPage(items);
+    const changing = recordedPage(items, {
+      live: () => [candidate(0, { name: "Different item" })],
+    });
     const model = resolver((options) => {
       changing.setVersion({ ...initial, revision: 2 });
       return answer(options, "r0");
