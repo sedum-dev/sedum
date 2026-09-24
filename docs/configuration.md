@@ -62,7 +62,7 @@ itself. A test with neither fails before the browser starts. Invalid config
 errors name the file, source position, dotted key, and a concrete fix and exit
 with code 3.
 
-The assertion thresholds are the user-facing SED-13 policy. Resolver and step
+The `thresholds` settings control assertion verdicts. Locator and step
 classification safety gates are deliberately not configurable. An explicit
 JSON reporter writes to `reporterDir/<run-id>/result.json`; canonical progress
 and result artifacts are always written under `outputDir/<run-id>/`.

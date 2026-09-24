@@ -42,6 +42,22 @@ sedum run tests/example.test.yaml --headed
 
 `sedum doctor --json` writes one versioned JSON object, including when checks fail. Both output forms omit the API key and raw provider errors. The exit code is `0` when every check passes and `3` otherwise.
 
+## `sedum browsers install`
+
+Sedum uses `playwright-core` and does not download a browser during a test run. Install the matching managed Chromium binary explicitly:
+
+```sh
+sedum browsers install chromium
+```
+
+On supported Linux environments, install system dependencies as well:
+
+```sh
+sedum browsers install chromium --with-deps
+```
+
+Sedum prefers an installed Google Chrome channel when available. If Chrome is not available, it uses the matching Playwright-managed Chromium binary. An arbitrary Chromium executable on `PATH` is not used as a fallback.
+
 ## `sedum run`
 
 `sedum run [paths...]` runs the configured test directory, or the named test files and directories. Paths are relative to the project root. Directories are searched recursively; symlinked test files and directories are skipped or rejected. Explicit paths form the candidate set, while a run with no paths uses `tests.directory`, `tests.include`, and `tests.exclude` from configuration.
@@ -95,6 +111,12 @@ With more than one lane, the `list` reporter prints one line per finished test w
 
 `--env <name>` selects a configured environment. `--url-override <url>` replaces the origin of each test's initial URL while keeping its resolved path, query, and fragment; a later explicit `goto` step is unaffected. `--browser chrome|chromium`, `--slow <ms>`, `--output-dir <path>`, `--strict`, and `--costs` control browser and output behavior. `--headed` shows the browser and marks the element about to be clicked or filled with a browser overlay that does not change page content or intercept input. Canonical `progress.json`, `result.json`, and the offline `report.html` are written under `<outputDir>/<run-id>/`.
 
+### Output and exit codes
+
+`sedum --help` lists the available commands; every command has its own `--help`. `sedum run` prints one ordered result line per test and aggregate verdict counts, plus separate `low_confidence` and `contradiction` counts. Terminals receive colored result labels and transient progress. Redirected output contains no ANSI or cursor controls and does not truncate paths or diagnostics.
+
+Run exits are `0` for a pass (including a flagged pass by default), `1` for a failed test, `2` for a flagged pass under `--strict`, and `3` when the command or run could not produce a trustworthy verdict. `--strict` never changes the canonical verdict or flags. Model tokens and costs are shown automatically in a terminal; pass `--costs` to include them in redirected output.
+
 The default `list` terminal reporter shows test results. Select `steps` for each completed step, or repeat `--reporter` (or give a comma-separated list such as `--reporter list,junit`) to use several; `terminal` is an alias for `list`. Failed or flagged steps include a needs-attention block with their recorded sentence, source, reason, page context, and evidence status. Terminal output may use color in a TTY; redirected output is plain. `--reporter json` writes a separate final JSON result under `<reporterDir>/<run-id>/`, and `--reporter-dir <path>` selects that project-root-relative directory. You can combine JSON with terminal reporters. The JSON copy is the canonical `RunResult` unchanged and validates against `@sedum-dev/core/run-result.schema.json`.
 
 `--reporter junit` writes `<reporterDir>/<run-id>/junit.xml` for CI test views (GitLab, Jenkins, CircleCI, Azure DevOps, or a JUnit action on GitHub); it writes no JSON copy unless you also select `json` or pass `--reporter-dir`. When the reporter and output directories are the same, it goes in the run directory. A flagged pass is a passing testcase with its flags as properties and output; `--strict` adds a failure to it, so the file matches the exit code. See [running in CI](ci.md) for the full mapping and pipeline examples. When `markdown` is the only other reporter, stdout prints `junit <path>` after the `markdown <path>` line; the run summary lists it otherwise.
@@ -118,7 +140,7 @@ Both commands find the project the same way `sedum run` does; see [project confi
 
 It checks the following:
 
-- **Format.** Every test and module is checked against the [v1 format](format.md): keys, types, data, placeholders, and a `type` step that names exactly one value.
+- **Format.** Every test and module is checked against the [test file format](format.md): keys, types, data, placeholders, and a `type` step that names exactly one value.
 - **Module calls.** Every `use:` call is resolved: missing files, cycles, depth, and arguments.
 - **Sentences.** Every sentence in a test or a reachable module is classified into one operation (`click`, `type`, `verify`, …).
 - **Identities.** Every test must have a unique identity. That identity is its explicit `id`, or else its path relative to the project root.
@@ -222,7 +244,8 @@ In the JSON:
 
 ## In CI and pre-commit
 
-Neither command needs a browser or a key:
+Neither command needs a browser or a key. These examples assume `sedum-cli` is
+a dev dependency of the project; see [running in CI](ci.md#install-sedum-in-the-project).
 
 ```yaml
 # .github/workflows/tests.yml
