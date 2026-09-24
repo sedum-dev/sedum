@@ -11,6 +11,7 @@
     "agent-markdown-report",
     "junit-reporter",
     "parallel-runs-and-sharding",
+    "real-site-hardening",
     "replay-type-steps",
     "sed-51-release-pipeline",
     "warm-html-report"
