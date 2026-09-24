@@ -364,6 +364,50 @@ describe("assertion engine", () => {
     expect(holds).toHaveBeenCalledOnce();
   });
 
+  it("accepts an unrelated revision only when the complete judged digest is unchanged", async () => {
+    const page = fakePage("One way selected");
+    const revision = { ...firstVersion, revision: 2 };
+    const { judge, holds } = fakeJudge();
+    holds.mockImplementation(async () => {
+      page.setVersion(revision);
+      page.setDigest({
+        protocol: 1,
+        version: revision,
+        text: "One way selected",
+        complete: true,
+      });
+      return { holds: 0.9, contradicted: 0.1, call };
+    });
+    const result = await verify(page.page, judge, "One way selected");
+    expect(result.verdict).toBe("passed");
+    expect(result.observationVersion).toEqual(revision);
+    expect(result.evidenceHash).toMatch(/^[0-9a-f]{64}$/u);
+    expect(JSON.stringify(result)).not.toContain("evidenceHash");
+    expect(holds).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a same-route revision that changes assertion evidence", async () => {
+    const page = fakePage("One way selected");
+    const revision = { ...firstVersion, revision: 2 };
+    const { judge, holds } = fakeJudge();
+    holds.mockImplementation(async () => {
+      page.setVersion(revision);
+      page.setDigest({
+        protocol: 1,
+        version: revision,
+        text: "Round trip selected",
+        complete: true,
+      });
+      return { holds: 0.9, contradicted: 0.1, call };
+    });
+    await expect(
+      verify(page.page, judge, "One way selected"),
+    ).rejects.toMatchObject({
+      code: "stale_observation",
+      failedCall: call,
+    });
+  });
+
   it("does not return a verdict when the post-Judge version read fails", async () => {
     const page = fakePage();
     const { judge, holds } = fakeJudge();

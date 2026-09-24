@@ -99,6 +99,74 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         },
       };
     }
+    it("uses explicitly referenced hidden text as a control's accessible name", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<div role="combobox" tabindex="0" aria-labelledby="trip-label"><span id="trip-label" aria-hidden="true">Round trip</span></div>'`);
+      const click = await collectCandidates(page, "click");
+      expect(click.candidates).toEqual([
+        expect.objectContaining({ role: "combobox", name: "Round trip" }),
+      ]);
+      await context.close();
+    });
+    it("keeps long controls available without losing their full-name guard", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<button id="long">' + 'A'.repeat(130) + ' original</button><button id="short">Continue</button>'`);
+      const click = await collectCandidates(page, "click");
+      const long = click.candidates.find((candidate) =>
+        candidate.name.startsWith("A"),
+      );
+      expect(long).toMatchObject({
+        signals: {
+          nameTruncated: true,
+          rawName: "A".repeat(130) + " original",
+        },
+      });
+      expect(Array.from(long!.name)).toHaveLength(120);
+      expect(long!.name.endsWith("…")).toBe(true);
+      expect(projectCandidates(click)).toHaveLength(2);
+      const model = recordedResolver((options) => {
+        const short = options.options.find(
+          (option) =>
+            option.kind === "candidate" && option.candidate.name === "Continue",
+        );
+        return short?.kind === "candidate" ? short.candidate.id : "none";
+      });
+      expect(
+        (
+          await resolveTarget(page, model, {
+            operation: "click",
+            sentence: "Continue button",
+          })
+        ).kind,
+      ).toBe("resolved");
+      const changed = await page.evaluate<{ actionable: boolean }>(`(() => {
+        document.querySelector('#long').textContent = 'A'.repeat(130) + ' changed';
+        return window.__sedum.clickTarget(${JSON.stringify(long!.ref)});
+      })()`);
+      expect(changed.actionable).toBe(false);
+      await context.close();
+    });
+    it("does not scroll a visible target before aiming it", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`(() => {
+        document.querySelector('#app').innerHTML = '<button id="choice">One way</button>';
+        const button = document.querySelector('#choice');
+        button.scrollIntoView = () => { button.textContent = 'Changed by scroll'; };
+      })()`);
+      const click = await collectCandidates(page, "click");
+      const target = click.candidates.find(
+        (candidate) => candidate.name === "One way",
+      );
+      expect(target).toBeDefined();
+      const aimed = await clickTarget(page, target!.ref);
+      expect(aimed.actionable).toBe(true);
+      expect(
+        await page.evaluate("document.querySelector('#choice').textContent"),
+      ).toBe("One way");
+      await context.close();
+    });
     it("resolves and fills only actual text controls", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =
@@ -362,7 +430,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(first?.signals.contextComplete).toBe(false);
       await context.close();
     });
-    it("injects on navigation, pages all controls, and rejects a stale cursor", async () => {
+    it("injects on navigation and keeps one candidate snapshot across page revisions", async () => {
       const { page, context } = await fresh();
       await page.evaluate(
         "document.querySelector('#app').innerHTML = Array.from({length:150}, (_,i)=>`<button>Item ${i}</button>`).join('')",
@@ -384,10 +452,18 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await page.evaluate(
         "document.querySelector('#app').setAttribute('class','changed')",
       );
+      const continuation = await collectCandidates(
+        page,
+        "click",
+        first.next!,
+        first.version,
+      );
+      expect(continuation.complete).toBe(true);
+      expect(continuation.candidates).toHaveLength(22);
+      expect(continuation.version).toEqual(first.version);
       expect(
-        (await collectCandidates(page, "click", first.next!, first.version))
-          .complete,
-      ).toBe(false);
+        (await collectCandidates(page, "click")).version.revision,
+      ).toBeGreaterThan(first.version.revision);
       await page.goto(`${base}/next`);
       expect((await collectCandidates(page, "click")).total).toBe(0);
       await context.close();
@@ -643,6 +719,60 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const digest = await pageDigest(page);
       expect(digest.text).not.toContain("secret-field-123");
       expect(digest.text).not.toContain("secret-hidden");
+      await context.close();
+    });
+    it("uses placeholder and title as fallback control names without exposing input values", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<form><input placeholder="Search" value="private-query-123"><button title="Go"><svg width="10" height="10"></svg></button><input aria-label="Named search" placeholder="Wrong fallback"><input aria-label="   " aria-labelledby="missing" placeholder="Fallback search"><input type="submit" value="" title="Submit form"></form><input hidden placeholder="Hidden search">\'',
+      );
+      const fills = await collectCandidates(page, "fill");
+      expect(fills.candidates.map((candidate) => candidate.name)).toEqual([
+        "Search",
+        "Named search",
+        "Fallback search",
+      ]);
+      const clicks = await collectCandidates(page, "click");
+      expect(clicks.candidates.map((candidate) => candidate.name)).toEqual([
+        "Go",
+        "Submit form",
+      ]);
+      expect(JSON.stringify(projectCandidates(fills))).not.toContain(
+        "private-query-123",
+      );
+      await context.close();
+    });
+    it("waits for a late input label before falling back to click controls", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        "document.querySelector('#app').innerHTML = '<form><label>Search Google Maps</label><input name=\"q\"><button>Search</button></form>'; setTimeout(() => { const input = document.querySelector('input'); input.id = 'map-query'; document.querySelector('label').htmlFor = input.id; }, 350)",
+      );
+      const pick = recordedResolver((options) => {
+        const target = options.options.find(
+          (option) =>
+            option.kind === "candidate" &&
+            option.candidate.name === "Search Google Maps",
+        );
+        return target?.kind === "candidate" ? target.candidate.id : "none";
+      });
+      const resolved = await resolveTarget(page, pick, {
+        operation: "fill",
+        sentence: "type Buenos Aires in the Search Google Maps field",
+      });
+      expect(resolved.kind).toBe("resolved");
+      await context.close();
+    });
+    it("includes rendered noneditable combobox selection without editable values", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        'document.querySelector(\'#app\').innerHTML = \'<div role="combobox" aria-autocomplete="none"><span aria-hidden="true">One way</span></div><div role="combobox" aria-autocomplete="list">private-query-123</div><input value="private-input-456"><select><option>Round trip</option><option selected>Economy</option></select>\'',
+      );
+      const digest = await pageDigest(page);
+      expect(digest.complete).toBe(true);
+      expect(digest.text).toContain("Selected combobox: One way");
+      expect(digest.text).toContain("Selected combobox: Economy");
+      expect(digest.text).not.toContain("private-query-123");
+      expect(digest.text).not.toContain("private-input-456");
       await context.close();
     });
     it("keeps rendered display-contents text in a complete digest", async () => {

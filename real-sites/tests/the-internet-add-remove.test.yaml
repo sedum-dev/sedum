@@ -1,0 +1,7 @@
+id: the-internet-add-remove
+description: Add and remove a dynamic element
+url: https://the-internet.herokuapp.com/add_remove_elements/
+tags: [real-site, the-internet, dynamic-controls]
+steps:
+  - click the Add Element button
+  - click the Delete button that appeared

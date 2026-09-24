@@ -1,0 +1,7 @@
+id: python-docs-library
+description: Navigate from Python documentation to the standard library reference
+url: https://docs.python.org/3/
+tags: [real-site, python-docs, navigation]
+steps:
+  - click the Library reference link in the documentation sections
+  - click the datetime module link

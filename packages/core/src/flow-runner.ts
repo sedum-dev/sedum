@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createHash } from "node:crypto";
 import {
   AssertionEngineError,
   verify,
@@ -37,8 +38,13 @@ import {
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import { stageEntry } from "./page-cache.js";
-import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
-import type { PageVersion } from "./page-protocol.js";
+import {
+  pageDigest,
+  pageVersion,
+  quietPage,
+  readTarget,
+} from "./page-bridge.js";
+import { codePoints, DIGEST_LIMIT, type PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
   type Judge,
@@ -63,6 +69,7 @@ import {
   RuntimeValue,
   RuntimeUrl,
   StepExecutionError,
+  type ResolvedStepTarget,
   type StepCommand,
   executeStep,
 } from "./step-executor.js";
@@ -265,7 +272,7 @@ function claim(
 ): string {
   return step.text
     .replace(
-      /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:that\s+)?/iu,
+      /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:eventually\s+)?(?:that\s+)?/iu,
       "",
     )
     .trim()
@@ -649,6 +656,119 @@ async function executeSentence(
         projectText: (text) => redactOpaqueText(text, opaqueEntries),
         ...(dependencies.verifyPolicy ?? {}),
       });
+    if (/^\s*verify\s+eventually\b/iu.test(step.text)) {
+      const deadline = performance.now() + 10_000;
+      const priorCalls: ResultCall[] = [];
+      let lastError: AssertionEngineError | undefined;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (dependencies.signal?.aborted) break;
+        let result: VerifyResult;
+        try {
+          result = await judge();
+        } catch (error) {
+          if (
+            !(error instanceof AssertionEngineError) ||
+            error.code !== "stale_observation"
+          ) {
+            return record(
+              unsupported(
+                step.source.file,
+                step.source,
+                error instanceof Error
+                  ? error.message
+                  : "The assertion could not be judged.",
+              ),
+              {
+                failedCalls: [
+                  ...priorCalls,
+                  ...(error instanceof AssertionEngineError && error.failedCall
+                    ? [resultCall(error.failedCall, "judge")]
+                    : []),
+                ],
+                error: {
+                  code:
+                    error instanceof AssertionEngineError
+                      ? error.code
+                      : "assertion_error",
+                  message: "The assertion could not be judged.",
+                },
+              },
+            );
+          }
+          lastError = error;
+          if (error.failedCall)
+            priorCalls.push(resultCall(error.failedCall, "judge"));
+          if (performance.now() >= deadline || attempt === 4) break;
+          await quietPage(
+            page,
+            200,
+            Math.min(1_000, Math.max(1, deadline - performance.now())),
+          ).catch(() => undefined);
+          continue;
+        }
+        if (result.verdict === "passed")
+          return record("continue", {
+            verify: result,
+            failedCalls: priorCalls,
+          });
+        lastError = undefined;
+        if (attempt === 4 || performance.now() >= deadline)
+          return record("failed", { verify: result, failedCalls: priorCalls });
+        // A failed current observation can be the loading shell. Wait for a
+        // new complete digest or route before spending another Judge call.
+        let changed = false;
+        while (performance.now() < deadline && !dependencies.signal?.aborted) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 200));
+          try {
+            const digest = await pageDigest(page);
+            if (
+              !digest.complete ||
+              digest.error ||
+              codePoints(digest.text) > DIGEST_LIMIT
+            )
+              continue;
+            const current = await pageVersion(page);
+            if (
+              current.document !== digest.version.document ||
+              current.route !== digest.version.route ||
+              current.revision !== digest.version.revision
+            )
+              continue;
+            const text = redactOpaqueText(digest.text, opaqueEntries);
+            const hash = createHash("sha256").update(text).digest("hex");
+            if (
+              hash !== result.evidenceHash ||
+              digest.version.document !== result.observationVersion.document ||
+              digest.version.route !== result.observationVersion.route
+            ) {
+              changed = true;
+              break;
+            }
+          } catch {
+            // Navigation can replace the evaluation context during polling.
+          }
+        }
+        if (dependencies.signal?.aborted) break;
+        if (!changed)
+          return record("failed", { verify: result, failedCalls: priorCalls });
+        priorCalls.push(resultCall(result.call, "judge", result.elapsedMs));
+      }
+      return record(
+        unsupported(
+          step.source.file,
+          step.source,
+          "The assertion did not have stable evidence within its deadline.",
+        ),
+        {
+          failedCalls: priorCalls,
+          error: {
+            code: lastError?.code ?? "observation_timeout",
+            message:
+              "The assertion did not have stable evidence within its deadline.",
+          },
+        },
+      );
+    }
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider
@@ -787,14 +907,15 @@ async function executeSentence(
       },
     );
   }
-  // A resolver response can arrive during an unrelated DOM revision. One fresh
-  // read is safe: it does not reuse a target or replay the preceding action.
+  // A resolver response can arrive during an unrelated DOM revision. Bounded
+  // fresh reads are safe: they reuse neither a target nor a prior action.
   if (resolved.kind === "unresolved" && resolved.reason === "stale") {
-    const priorCalls = resolved.calls;
-    const settled = await quietPage(page, 80, 4_000).catch(() => ({
-      quiet: false,
-    }));
-    if (settled.quiet) {
+    for (const quietMs of [400, 1_000, 1_000]) {
+      const priorCalls: readonly ProviderCall[] = resolved.calls;
+      const settled = await quietPage(page, quietMs, 4_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!settled.quiet) break;
       try {
         const retried = await locate();
         resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
@@ -813,6 +934,32 @@ async function executeSentence(
             },
           },
         );
+      }
+      if (resolved.kind !== "unresolved" || resolved.reason !== "stale") break;
+    }
+  }
+  // A navigation can briefly leave a quiet, empty document before the real
+  // page commits. Re-observe only an empty candidate set within a deadline;
+  // no model choice or action has happened, and an actually empty page still
+  // ends with no_candidates.
+  if (resolved.kind === "unresolved" && resolved.reason === "no_candidates") {
+    const deadline = performance.now() + 8_000;
+    while (performance.now() < deadline && !dependencies.signal?.aborted) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      const settled = await quietPage(page, 80, 1_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!settled.quiet) continue;
+      try {
+        const fresh = await locate();
+        resolved = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
+        if (
+          resolved.kind !== "unresolved" ||
+          resolved.reason !== "no_candidates"
+        )
+          break;
+      } catch {
+        // A redirect can invalidate the read-only execution context.
       }
     }
   }
@@ -844,18 +991,14 @@ async function executeSentence(
       },
     );
   }
-  let command: StepCommand;
-  if (step.op === "click") command = { op: "click", target: resolved.target };
-  else {
-    command = {
-      op: "type",
-      target: resolved.target,
-      value: typeValue!,
-    };
-  }
+  const commandFor = (target: ResolvedStepTarget): StepCommand =>
+    step.op === "click"
+      ? { op: "click", target }
+      : { op: "type", target, value: typeValue! };
+  let command = commandFor(resolved.target);
   // An action may navigate or rerender. Preserve metadata from the accepted
   // locator observation before dispatch, rather than borrowing the new page.
-  const locatedPage = report
+  let locatedPage = report
     ? await reportPage(
         page,
         `${stepId}:observation:1`,
@@ -865,8 +1008,8 @@ async function executeSentence(
     : undefined;
   let replayFrame: ResultFrame | undefined;
   let targetBox: ResultStep["targetBox"] = null;
-  try {
-    await executeStep(page, command, {
+  const performAction = () =>
+    executeStep(page, command, {
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       ...(report?.replay
         ? {
@@ -888,6 +1031,44 @@ async function executeSentence(
           }
         : {}),
     });
+  try {
+    try {
+      await performAction();
+    } catch (error) {
+      if (
+        !(error instanceof StepExecutionError) ||
+        error.code !== "stale" ||
+        !error.retryable
+      )
+        throw error;
+      // The first attempt provably did not dispatch input. Re-observe and
+      // resolve against the current page once; never replay an uncertain act.
+      const priorCalls = resolved.calls;
+      replayFrame = undefined;
+      targetBox = null;
+      const quiet = await quietPage(page, 80, 4_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!quiet.quiet) throw error;
+      const retried = await locate();
+      if (retried.kind !== "resolved") {
+        resolved = { ...resolved, calls: [...priorCalls, ...retried.calls] };
+        throw error;
+      }
+      resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+      command = commandFor(resolved.target);
+      locatedPage = report
+        ? await reportPage(
+            page,
+            `${stepId}:observation:2`,
+            report.privacy,
+            resolved.target.driverTarget().version,
+          )
+        : undefined;
+      replayFrame = undefined;
+      targetBox = null;
+      await performAction();
+    }
     let recordedLocator = resolved;
     if (resolved.cacheSeed && dependencies.locatorCache?.key) {
       const seed = resolved.cacheSeed;

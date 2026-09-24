@@ -3,6 +3,7 @@ import {
   DIGEST_LIMIT,
   isSafeRole,
   isWeakPeer,
+  NAME_LIMIT,
   PAGE_PROTOCOL,
   PEER_LIMIT,
   type Aim,
@@ -33,7 +34,12 @@ if (!window.__sedum) {
         complete: boolean;
       }
     | undefined;
-  const owned = new Map<Element, { old: string | null; ref: string }>();
+  const owned = new Map<
+    Element,
+    { old: string | null; ref: string; rawName: string }
+  >();
+  const nodeIds = new WeakMap<Element, string>();
+  let nodeSequence = 0;
   const MAX_ELEMENTS = 20_000;
   const MAX_TEXT_NODES = 20_000;
   const FILLABLE_INPUT_TYPES = new Set([
@@ -104,10 +110,12 @@ if (!window.__sedum) {
     owned.clear();
     snapshot = undefined;
   }
-  function visible(element: Element): boolean {
+  function visible(element: Element, visualOnly = false): boolean {
     if (
       element.closest(
-        "[hidden],[inert],[aria-hidden='true'],dialog:not([open])",
+        visualOnly
+          ? "[hidden],[inert],dialog:not([open])"
+          : "[hidden],[inert],[aria-hidden='true'],dialog:not([open])",
       )
     )
       return false;
@@ -153,7 +161,7 @@ if (!window.__sedum) {
       document.querySelectorAll(
         "dialog:modal,[role='dialog'][aria-modal='true']",
       ),
-    ).filter(visible);
+    ).filter((element) => visible(element));
     if (!dialogs.length) return null;
     const native = dialogs.filter((element): element is HTMLDialogElement =>
       element.matches("dialog:modal"),
@@ -203,29 +211,67 @@ if (!window.__sedum) {
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
+  function referencedLabelText(element: Element): string {
+    // ARIA names may explicitly reference visually hidden text inside the
+    // control. That text is part of its accessible name even though it is not
+    // ordinary page text for a digest or nearby context.
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    while (walker.nextNode()) {
+      const parent = walker.currentNode.parentElement;
+      if (
+        parent?.closest(
+          "script,style,noscript,input,textarea,select,[contenteditable]",
+        )
+      )
+        continue;
+      parts.push(walker.currentNode.textContent ?? "");
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
   function label(element: Element): string {
-    const aria = element.getAttribute("aria-label");
-    if (aria) return aria.trim();
+    const aria = element.getAttribute("aria-label")?.trim();
+    if (aria) return aria;
     const labelledby = element.getAttribute("aria-labelledby");
-    if (labelledby)
-      return labelledby
+    if (labelledby) {
+      const text = labelledby
         .split(/\s+/)
         .map((id) => {
           const named = document.getElementById(id);
-          return named ? publicText(named) : "";
+          return named ? referencedLabelText(named) : "";
         })
         .filter(Boolean)
         .join(" ");
+      if (text) return text;
+    }
     if (element instanceof HTMLElement && "labels" in element) {
       const labels = (element as HTMLInputElement).labels;
-      if (labels?.length) return Array.from(labels).map(publicText).join(" ");
+      const text = labels?.length
+        ? Array.from(labels).map(publicText).join(" ").trim()
+        : "";
+      if (text) return text;
+    }
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      const placeholder = element.getAttribute("placeholder")?.trim();
+      if (placeholder) return placeholder;
     }
     if (
       element instanceof HTMLInputElement &&
       ["button", "submit", "reset"].includes(element.type)
-    )
-      return element.value.trim();
-    return publicText(element);
+    ) {
+      const value = element.value.trim();
+      if (value) return value;
+    }
+    return publicText(element) || element.getAttribute("title")?.trim() || "";
+  }
+  function boundedName(name: string): string {
+    const points = Array.from(name);
+    return points.length <= NAME_LIMIT
+      ? name
+      : points.slice(0, NAME_LIMIT - 1).join("") + "…";
   }
   function role(element: Element): string {
     const explicit = element.getAttribute("role");
@@ -458,11 +504,21 @@ if (!window.__sedum) {
         !element.matches("input[type='checkbox'],input[type='radio']")
       )
         continue;
-      const name = label(element);
-      if (!name) continue;
+      const rawName = label(element);
+      if (!rawName) continue;
+      const name = boundedName(rawName);
       const ref = `${documentId}-${++sequence}`;
+      let nodeId = nodeIds.get(element);
+      if (!nodeId) {
+        nodeId = `${documentId}-node-${++nodeSequence}`;
+        nodeIds.set(element, nodeId);
+      }
       const peerData = peers(element, name);
-      owned.set(element, { old: element.getAttribute("data-sedum-ref"), ref });
+      owned.set(element, {
+        old: element.getAttribute("data-sedum-ref"),
+        ref,
+        rawName,
+      });
       element.setAttribute("data-sedum-ref", ref);
       refs.set(ref, element);
       candidates.push(
@@ -489,6 +545,8 @@ if (!window.__sedum) {
             ...(inArticleBody(element)
               ? { region: "article-body" as const }
               : {}),
+            ...(rawName !== name ? { nameTruncated: true, rawName } : {}),
+            nodeId,
             path: path(element),
             contextComplete: peerData.contextComplete,
           }),
@@ -509,8 +567,7 @@ if (!window.__sedum) {
       (!snapshot ||
         snapshot.operation !== input.operation ||
         !input.version ||
-        !same(snapshot.version, input.version) ||
-        !same(current, input.version))
+        !same(snapshot.version, input.version))
     )
       return {
         protocol: PAGE_PROTOCOL,
@@ -602,6 +659,62 @@ if (!window.__sedum) {
         };
       pieces.push(part);
     }
+    // A non-editable combobox can render its selected value inside an
+    // aria-hidden descendant. That text is visually present, but the ordinary
+    // digest intentionally skips controls. Include only rendered selection
+    // text; editable controls and their values remain excluded.
+    for (const control of Array.from(
+      root.querySelectorAll("[role='combobox'],select"),
+    )) {
+      if (
+        !visible(control) ||
+        control.matches("input,textarea,[contenteditable]")
+      )
+        continue;
+      if (
+        control.getAttribute("aria-autocomplete")?.toLowerCase() !== "none" &&
+        !(control instanceof HTMLSelectElement)
+      )
+        continue;
+      let selection = "";
+      if (control instanceof HTMLSelectElement) {
+        selection = control.selectedOptions[0]?.textContent?.trim() ?? "";
+      } else {
+        const stateWalker = document.createTreeWalker(
+          control,
+          NodeFilter.SHOW_TEXT,
+        );
+        const stateParts: string[] = [];
+        while (stateWalker.nextNode()) {
+          const parent = stateWalker.currentNode.parentElement;
+          if (
+            !parent ||
+            !visible(parent, true) ||
+            parent.closest(
+              "input,textarea,select,[contenteditable],script,style,noscript,[role='textbox'],[role='searchbox'],[role='spinbutton']",
+            )
+          )
+            continue;
+          const part = (stateWalker.currentNode.textContent ?? "")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (part) stateParts.push(part);
+        }
+        selection = stateParts.join(" ");
+      }
+      if (!selection) continue;
+      const part = `Selected combobox: ${selection}`;
+      size += Array.from(part).length + (pieces.length ? 1 : 0);
+      if (size > DIGEST_LIMIT)
+        return {
+          protocol: PAGE_PROTOCOL,
+          version: current,
+          text: "",
+          complete: false,
+          error: "digest_too_large",
+        };
+      pieces.push(part);
+    }
     return {
       protocol: PAGE_PROTOCOL,
       version: current,
@@ -647,7 +760,7 @@ if (!window.__sedum) {
         (element instanceof HTMLElement && element.isContentEditable)
       ) ||
       candidate.name !== target.name ||
-      label(element) !== candidate.name ||
+      label(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       !editable(element) ||
@@ -677,7 +790,7 @@ if (!window.__sedum) {
       candidate.name !== target.name ||
       !readable(element) ||
       !visible(element) ||
-      label(element) !== candidate.name ||
+      label(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers)
     )
@@ -705,7 +818,7 @@ if (!window.__sedum) {
     const candidate = snapshot?.candidates.find((item) => item.ref === ref);
     if (
       !candidate ||
-      label(element) !== candidate.name ||
+      label(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       (expected && expected.name !== candidate.name)
@@ -725,51 +838,59 @@ if (!window.__sedum) {
       )
         return { actionable: false, reason: "not_actionable" };
     }
-    if (!expected)
-      element.scrollIntoView({
-        block: "center",
-        inline: "center",
-        behavior: "instant",
-      });
-    const rect = element.getBoundingClientRect();
-    if (!rect.width || !rect.height)
-      return { actionable: false, reason: "not_actionable" };
-    const points = expected
-      ? [[expected.point.x / rect.width, expected.point.y / rect.height]]
-      : [
-          [0.5, 0.5],
-          [0.25, 0.5],
-          [0.75, 0.5],
-          [0.5, 0.25],
-          [0.5, 0.75],
-        ];
-    for (const [fx, fy] of points) {
-      const x = rect.left + rect.width * fx!;
-      const y = rect.top + rect.height * fy!;
-      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
-      const hit = document.elementFromPoint(x, y);
-      if (hit && (hit === element || element.contains(hit))) {
-        return {
-          actionable: true,
-          aim: {
-            ref,
-            document: current.document,
-            route: current.route,
-            revision: current.revision,
-            tag: element.tagName.toLowerCase(),
-            name: candidate.name,
-            point: { x: rect.width * fx!, y: rect.height * fy! },
-            box: {
-              x: Math.max(0, rect.left / innerWidth),
-              y: Math.max(0, rect.top / innerHeight),
-              width: Math.min(1, rect.width / innerWidth),
-              height: Math.min(1, rect.height / innerHeight),
+    const hitTest = (): AimResult | null => {
+      const rect = element.getBoundingClientRect();
+      if (!rect.width || !rect.height) return null;
+      const points = expected
+        ? [[expected.point.x / rect.width, expected.point.y / rect.height]]
+        : [
+            [0.5, 0.5],
+            [0.25, 0.5],
+            [0.75, 0.5],
+            [0.5, 0.25],
+            [0.5, 0.75],
+          ];
+      for (const [fx, fy] of points) {
+        const x = rect.left + rect.width * fx!;
+        const y = rect.top + rect.height * fy!;
+        if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+        const hit = document.elementFromPoint(x, y);
+        if (hit && (hit === element || element.contains(hit))) {
+          return {
+            actionable: true,
+            aim: {
+              ref,
+              document: current.document,
+              route: current.route,
+              revision: current.revision,
+              tag: element.tagName.toLowerCase(),
+              name: candidate.name,
+              point: { x: rect.width * fx!, y: rect.height * fy! },
+              box: {
+                x: Math.max(0, rect.left / innerWidth),
+                y: Math.max(0, rect.top / innerHeight),
+                width: Math.min(1, rect.width / innerWidth),
+                height: Math.min(1, rect.height / innerHeight),
+              },
             },
-          },
-        };
+          };
+        }
       }
-    }
-    return { actionable: false, reason: "not_actionable" };
+      return null;
+    };
+    // Scrolling a visible menu item can close or rerender its menu. Only move
+    // the page when no point on the existing rect is currently hittable.
+    const inPlace = hitTest();
+    if (inPlace) return inPlace;
+    if (expected) return { actionable: false, reason: "not_actionable" };
+    element.scrollIntoView({
+      block: "center",
+      inline: "center",
+      behavior: "instant",
+    });
+    if (!same(version(), current) || refElement(ref) !== element)
+      return { actionable: false, reason: "stale" };
+    return hitTest() ?? { actionable: false, reason: "not_actionable" };
   }
   const bridge: PageBridge = {
     protocol: PAGE_PROTOCOL,

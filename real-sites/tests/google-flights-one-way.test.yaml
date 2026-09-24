@@ -1,0 +1,8 @@
+id: google-flights-one-way
+description: Change Google Flights from round trip to one way and verify the selection
+url: https://www.google.com/travel/flights
+tags: [real-site, google-flights]
+steps:
+  - click the trip type selector showing Round trip
+  - click the One way option in the open trip type list
+  - verify the trip type is One way

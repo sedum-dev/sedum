@@ -209,11 +209,7 @@ async function fullSet(
     }
     next = part.next;
   }
-  if (
-    collected.length !== first.total ||
-    !sameVersion(await pageVersion(page), first.version)
-  )
-    throw new LocatorError("stale");
+  if (collected.length !== first.total) throw new LocatorError("stale");
   return { ...first, next: null, candidates: collected };
 }
 
@@ -380,7 +376,7 @@ function sentenceEvidence(
       (word) => !WEAK_MEMBER_WORDS.has(word) && sentenceWords.includes(word),
     );
   if (
-    /\b(first|top) story\b/i.test(sentence) &&
+    /\b(first|top)(?:\s+ranked)?\s+story\b/i.test(sentence) &&
     firstStory(selected) &&
     namesRequestedPurpose(selected) &&
     group.filter(
@@ -419,7 +415,7 @@ function explicitRegionEvidence(
   )
     return false;
   if (
-    /\b(first|top) story\b/i.test(sentence) &&
+    /\b(first|top)(?:\s+ranked)?\s+story\b/i.test(sentence) &&
     !candidate.peers.some((peer) => /^1[.)]\s/.test(peer))
   )
     return false;
@@ -428,20 +424,72 @@ function explicitRegionEvidence(
 
 function sameIdentity(a: Candidate, b: Candidate): boolean {
   if (
+    a.signals.nodeId !== b.signals.nodeId ||
     a.tag !== b.tag ||
     a.role !== b.role ||
     a.name !== b.name ||
     a.inputType !== b.inputType ||
     a.editable !== b.editable ||
     a.disabled !== b.disabled ||
+    a.signals.rawName !== b.signals.rawName ||
+    a.signals.nameTruncated !== b.signals.nameTruncated ||
     a.signals.region !== b.signals.region ||
+    a.signals.path !== b.signals.path ||
     JSON.stringify(a.peers) !== JSON.stringify(b.peers)
   )
     return false;
   for (const key of ["hook", "id", "name", "href"] as const) {
-    if (a.signals[key] && a.signals[key] !== b.signals[key]) return false;
+    if (a.signals[key] !== b.signals[key]) return false;
   }
   return true;
+}
+
+function sameChoiceSurface(
+  original: readonly Candidate[],
+  fresh: readonly Candidate[],
+): boolean {
+  return (
+    original.length === fresh.length &&
+    original.every((candidate, index) => {
+      const next = fresh[index];
+      return next && sameIdentity(candidate, next);
+    })
+  );
+}
+
+function exactNameRequested(sentence: string, candidate: Candidate): boolean {
+  if (candidate.signals.nameTruncated) return false;
+  const words = (text: string) =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const name = words(candidate.name);
+  const request = words(sentence);
+  return (
+    name.length > 0 &&
+    request.some((_, index) =>
+      name.every((word, offset) => request[index + offset] === word),
+    )
+  );
+}
+
+function sameNodeControl(a: Candidate, b: Candidate): boolean {
+  return (
+    !!a.signals.nodeId &&
+    a.signals.nodeId === b.signals.nodeId &&
+    a.tag === b.tag &&
+    a.role === b.role &&
+    a.name === b.name &&
+    a.inputType === b.inputType &&
+    a.editable === b.editable &&
+    a.disabled === b.disabled &&
+    a.signals.rawName === b.signals.rawName &&
+    a.signals.nameTruncated === b.signals.nameTruncated &&
+    a.signals.region === b.signals.region &&
+    a.signals.path === b.signals.path &&
+    a.signals.hook === b.signals.hook &&
+    a.signals.id === b.signals.id &&
+    a.signals.name === b.signals.name &&
+    a.signals.href === b.signals.href
+  );
 }
 
 function provedTargetChange(
@@ -526,8 +574,18 @@ export async function resolveTarget(
     let source = await fullSet(page, options.operation);
     observationVersion = source.version;
     ensureActive();
-    if (options.operation === "fill" && source.candidates.length === 0)
-      source = await fullSet(page, "click");
+    if (options.operation === "fill" && source.candidates.length === 0) {
+      // Hydrating forms can render a visible input before attaching its label.
+      // Wait briefly for a named fill target before asking the model to choose
+      // among click controls. No target or action is reused during this read.
+      const deadline = performance.now() + 1_500;
+      while (source.candidates.length === 0 && performance.now() < deadline) {
+        ensureActive();
+        await new Promise<void>((resolve) => setTimeout(resolve, 150));
+        source = await fullSet(page, "fill");
+      }
+      if (source.candidates.length === 0) source = await fullSet(page, "click");
+    }
     observationVersion = source.version;
     ensureActive();
     if (options.cache) {
@@ -669,6 +727,7 @@ export async function resolveTarget(
     let pool: Candidate[] = [...candidates];
     let finalists: Candidate[] = [];
     let decision: ResolverDecision;
+    let reducedAcrossBatches = false;
     while (true) {
       const heats = batches(options.sentence, pool);
       if (heats.length === 1) {
@@ -676,6 +735,7 @@ export async function resolveTarget(
         decision = await choose(finalists);
         break;
       }
+      reducedAcrossBatches = true;
       const reduced: Candidate[] = [];
       for (let index = 0; index < heats.length; index += MAX_PARALLEL_CHOICES) {
         ensureActive();
@@ -707,7 +767,10 @@ export async function resolveTarget(
         throw new LocatorError("resource_limit");
       pool = reduced;
     }
-    if (!sameVersion(await pageVersion(page), source.version))
+    if (
+      reducedAcrossBatches &&
+      !sameVersion(await pageVersion(page), source.version)
+    )
       return unresolved("stale");
     top = topOptions(decision, finalists);
     confidence = decision.confidence;
@@ -795,9 +858,36 @@ export async function resolveTarget(
         !sameVersion(await pageVersion(page), fresh.version)
       )
         return unresolved("stale");
-      const matches = fresh.candidates.filter((candidate) =>
+      const surfaceStable = sameChoiceSurface(
+        source.candidates,
+        fresh.candidates,
+      );
+      let matches = fresh.candidates.filter((candidate) =>
         sameIdentity(selectedCandidate, candidate),
       );
+      if (!surfaceStable) {
+        const uniqueBefore =
+          source.candidates.filter(
+            (candidate) =>
+              candidate.name === selectedCandidate.name &&
+              candidate.role === selectedCandidate.role,
+          ).length === 1;
+        const uniqueAfter =
+          fresh.candidates.filter(
+            (candidate) =>
+              candidate.name === selectedCandidate.name &&
+              candidate.role === selectedCandidate.role,
+          ).length === 1;
+        if (
+          !uniqueBefore ||
+          !uniqueAfter ||
+          !exactNameRequested(options.sentence, selectedCandidate)
+        )
+          return unresolved("stale");
+        matches = fresh.candidates.filter((candidate) =>
+          sameNodeControl(selectedCandidate, candidate),
+        );
+      }
       if (matches.length !== 1) return unresolved("stale");
       if (!explicitRegionEvidence(options.sentence, matches[0]!)) {
         gate = "explicit_region_unproven";

@@ -55,6 +55,12 @@ export interface Candidate {
     readonly path: string;
     /** True only when the first peer contains the entire non-interactive item context. */
     readonly contextComplete?: boolean;
+    /** Local signal: the model sees only a visibly shortened accessible name. */
+    readonly nameTruncated?: boolean;
+    /** Full name for same-target checks; never included in provider projection. */
+    readonly rawName?: string;
+    /** Stable document-local element identity; never included in provider projection. */
+    readonly nodeId?: string;
   };
 }
 export interface CandidatePage {
