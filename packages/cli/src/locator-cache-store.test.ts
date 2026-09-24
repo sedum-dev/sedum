@@ -7,12 +7,17 @@ import {
   rmdir,
   stat,
   unlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { pageKey, type CacheEntry } from "@sedum-dev/core";
+import {
+  LocatorCacheConflict,
+  pageKey,
+  type CacheEntry,
+} from "@sedum-dev/core";
 import {
   LocalLocatorCacheStore,
   clearLocatorCache,
@@ -238,5 +243,81 @@ describe("local locator cache", () => {
     expect(await first.lookup(digest)).toMatchObject({ entry: newer });
     await second.invalidate(digest, newer);
     expect(await first.lookup(digest)).toEqual({ reason: "absent" });
+  });
+
+  it("breaks a stale lock left by a crashed writer", async () => {
+    const root = await checkout();
+    const store = (await openLocatorCache(root, {
+      env: {},
+    })) as LocalLocatorCacheStore;
+    const digest = pageKey(
+      store.key,
+      "https://example.test/",
+      "click",
+      "Buy Camera",
+    );
+    const lock = path.join(store.directory, "entries", `${digest}.json.lock`);
+    await mkdir(lock);
+    const old = new Date(Date.now() - 60_000);
+    await utimes(lock, old, old);
+    await store.put(digest, entry(digest));
+    expect(await store.lookup(digest)).toMatchObject({
+      entry: { pageKey: digest },
+    });
+    await expect(stat(lock)).rejects.toThrow();
+  });
+
+  it("reports a live lock held too long as a typed conflict, not corruption", async () => {
+    const root = await checkout();
+    const store = (await openLocatorCache(root, {
+      env: {},
+    })) as LocalLocatorCacheStore;
+    const digest = pageKey(
+      store.key,
+      "https://example.test/",
+      "click",
+      "Buy Camera",
+    );
+    await store.put(digest, entry(digest));
+    const lock = path.join(store.directory, "entries", `${digest}.json.lock`);
+    await mkdir(lock);
+    await expect(store.put(digest, entry(digest))).rejects.toBeInstanceOf(
+      LocatorCacheConflict,
+    );
+    expect(await store.lookup(digest)).toMatchObject({
+      entry: { pageKey: digest },
+    });
+    await rmdir(lock);
+  });
+
+  it("keeps entries valid under concurrent writers from parallel lanes", async () => {
+    const root = await checkout();
+    const stores = (await Promise.all(
+      Array.from({ length: 4 }, () => openLocatorCache(root, { env: {} })),
+    )) as LocalLocatorCacheStore[];
+    const digest = pageKey(
+      stores[0]!.key,
+      "https://example.test/",
+      "click",
+      "Buy Camera",
+    );
+    const variants = stores.map((_, index): CacheEntry => ({
+      ...entry(digest),
+      path: `body>article>button:nth-of-type(${index + 1})`,
+    }));
+    const outcomes = await Promise.allSettled(
+      stores.flatMap((store, index) => [
+        store.put(digest, variants[index]!),
+        store.invalidate(digest, variants[(index + 1) % variants.length]!),
+        store.put(digest, variants[index]!),
+      ]),
+    );
+    for (const outcome of outcomes)
+      if (outcome.status === "rejected")
+        expect(outcome.reason).toBeInstanceOf(LocatorCacheConflict);
+    const final = await stores[0]!.lookup(digest);
+    if ("entry" in final && final.entry)
+      expect(variants).toContainEqual(final.entry);
+    else expect(final).toEqual({ reason: "absent" });
   });
 });

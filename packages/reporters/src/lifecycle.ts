@@ -74,8 +74,11 @@ export class ReporterLifecycle {
           events.push({ type: "attemptCompleted", test, attempt });
         }
       }
-      if (test.state !== "running" && !this.finishedTests.has(test.id)) {
-        this.finishedTests.add(test.id);
+      // Once per selected attempt: a retried test completes again with its
+      // new outcome instead of keeping the first attempt's verdict.
+      const finishedKey = `${test.id}\u0000${test.selectedAttemptId ?? ""}`;
+      if (test.state !== "running" && !this.finishedTests.has(finishedKey)) {
+        this.finishedTests.add(finishedKey);
         events.push({ type: "testCompleted", test });
       }
     }

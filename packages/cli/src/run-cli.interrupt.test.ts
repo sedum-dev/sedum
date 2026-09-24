@@ -4,7 +4,13 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { validateRunResult } from "@sedum-dev/core";
 
-vi.mock("@sedum-dev/provider-typesafe", () => ({ TypeSafeAdapter: class {} }));
+vi.mock("@sedum-dev/provider-typesafe", () => ({
+  TypeSafeAdapter: class {},
+  ProviderGate: class {
+    close() {}
+  },
+  DEFAULT_PROVIDER_CONCURRENCY: 4,
+}));
 vi.mock("@sedum-dev/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@sedum-dev/core")>();
   return {

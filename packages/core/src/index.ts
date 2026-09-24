@@ -8,6 +8,7 @@ export * from "./run-recorder.js";
 export * from "./report-privacy.js";
 
 export * from "./browser-driver.js";
+export * from "./reusable-browser.js";
 export * from "./page-protocol.js";
 export * from "./page-bridge.js";
 export * from "./page-cache.js";

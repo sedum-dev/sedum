@@ -22,6 +22,7 @@ export type CacheMissReason =
   | "matcher_mismatch"
   | "corrupt"
   | "storage_error"
+  | "conflict"
   | "target_missing"
   | "strong_signal_conflict"
   | "low_score"

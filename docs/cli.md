@@ -50,6 +50,49 @@ Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` f
 
 `--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
+### Parallel runs and sharding
+
+`--parallel <n|auto>` runs selected tests in up to `n` lanes at once (1 to 64). `auto` uses half the logical CPU cores, as Playwright Test does. The default is `1`, so behavior and provider cost only change when you ask. Each lane keeps one browser. Every attempt gets a fresh browser context, and a lane restarts its browser after a browser or operational error. A lane runs a test's retries before it takes the next test. The result lists tests in selection order, whatever order they finish in, and records each attempt's `lane`.
+
+```sh
+sedum run --parallel auto
+sedum run --parallel 4 --retries 1
+```
+
+Tests that share backend state can keep it apart with values Sedum adds to each attempt's environment:
+
+- `SEDUM_PARALLEL_INDEX` is the lane, from 0.
+- `SEDUM_SHARD_INDEX` is the shard, from 1.
+- `SEDUM_ATTEMPT_KEY` is a short random value that is new for every attempt, including retries.
+
+Like other environment values, they are hidden from the model and from reports:
+
+```yaml
+data:
+  email: qa+${SEDUM_ATTEMPT_KEY}@example.com
+```
+
+`--provider-concurrency <n>` caps model-provider requests in flight across all lanes (1 to 32). It defaults to `min(4, 2 × lanes)`. When the provider returns HTTP 429, every lane pauses until its `Retry-After`, up to 60 seconds for each pause. Requests then resume one at a time, and concurrency climbs back by one for each success. Waiting for a slot or a pause does not use up the 30-second request deadline or the three-attempt retry limit. A call that is still being rate limited after five minutes stops the run with `provider_rate_limited` (exit 3); lower `--parallel` or `--provider-concurrency`, or retry later. The run deadline and Ctrl-C end any wait sooner.
+
+`--shard-index <i> --shard-count <n>` runs one of `n` deterministic slices of the selection; the index starts at 1. Sharding happens after paths and filters, so every job must use the same paths, filters, and config. As in Jest and Vitest, tests are ordered by a hash of their identity (explicit `id`, else path) and cut into contiguous slices:
+
+- Shard sizes differ by at most one.
+- The split does not depend on discovery order.
+- Adding or removing one test moves at most `n − 1` others between shards.
+
+Each invalid test file is reported by exactly one shard. A shard that receives no tests fails with `empty_shard` (exit 3), so keep `--shard-count` at or below the suite size. Each shard writes its own result; merging shard results is not supported yet.
+
+```yaml
+# .github/workflows/e2e.yml
+strategy:
+  matrix:
+    shard: [1, 2, 3, 4]
+steps:
+  - run: npx sedum run --parallel 2 --shard-index ${{ matrix.shard }} --shard-count 4
+```
+
+With more than one lane, the `list` reporter prints one line per finished test with a counter (`[3/20] test PASSED …`). A retried test gets one line, showing the outcome that counts and its attempt count. The `steps` reporter prints each test's steps as one block when that test finishes, so output from tests running at the same time never interleaves. The summary adds the lane count, the shard, time spent in provider rate-limit pauses, and any locator cache write conflicts.
+
 `--env <name>` selects a configured environment. `--url-override <url>` replaces the origin of each test's initial URL while keeping its resolved path, query, and fragment; a later explicit `goto` step is unaffected. `--browser chrome|chromium`, `--slow <ms>`, `--output-dir <path>`, `--strict`, and `--costs` control browser and output behavior. `--headed` shows the browser and marks the element about to be clicked or filled with a browser overlay that does not change page content or intercept input. Canonical `progress.json`, `result.json`, and the offline `report.html` are written under `<outputDir>/<run-id>/`.
 
 The default `list` terminal reporter shows test results. Select `steps` for each completed step, or repeat `--reporter` to use both; `terminal` is an alias for `list`. Failed or flagged steps include a needs-attention block with their recorded sentence, source, reason, page context, and evidence status. Terminal output may use color in a TTY; redirected output is plain. `--reporter json` writes a separate final JSON result under `<reporterDir>/<run-id>/`, and `--reporter-dir <path>` selects that project-root-relative directory. You can combine JSON with terminal reporters. The HTML file is created for every run with an authoritative result; open it directly in a browser, without a server.

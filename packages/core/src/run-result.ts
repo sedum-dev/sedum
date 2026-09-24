@@ -57,6 +57,12 @@ export const ResultCallSchema = z.strictObject({
   rateSource: z.string().max(120).nullable(),
   rateCheckedAt: z.string().nullable(),
   costUsd: nonnegative.nullable(),
+  /** Set when a 429 made this call wait for the shared provider cooldown. */
+  rateLimited: z.boolean().optional(),
+  /** Time spent waiting in shared rate-limit cooldowns. */
+  rateLimitWaitMs: nonnegative.optional(),
+  /** Time spent waiting for a provider concurrency slot. */
+  queueWaitMs: nonnegative.optional(),
 });
 export const ResultObservationSchema = z.strictObject({
   id: z.string().min(1),
@@ -144,6 +150,8 @@ export const ResultAttemptSchema = z.strictObject({
   startedAt: z.string().datetime(),
   finishedAt: z.string().datetime().nullable(),
   elapsedMs: nonnegative,
+  /** Zero-based parallel lane that ran this attempt. */
+  lane: count.optional(),
   timeoutReason: z.string().max(120).nullable(),
   error: ResultErrorSchema.nullable(),
   steps: z.array(ResultStepSchema),
@@ -177,6 +185,20 @@ export const ResultTotalsSchema = z.strictObject({
   costUsd: nonnegative.nullable(),
   costComplete: z.boolean(),
 });
+export const ResultExecutionSchema = z.strictObject({
+  parallel: z.strictObject({
+    requested: z.union([z.number().int().positive(), z.literal("auto")]),
+    lanes: z.number().int().positive(),
+  }),
+  shard: z
+    .strictObject({
+      index: z.number().int().positive(),
+      count: z.number().int().positive(),
+      globalSelectedTests: count,
+    })
+    .nullable(),
+  providerConcurrency: z.number().int().positive(),
+});
 export const RunResultSchema = z.strictObject({
   schemaVersion: z.literal(1),
   runId: z.string().min(1),
@@ -188,6 +210,7 @@ export const RunResultSchema = z.strictObject({
   finishedAt: z.string().datetime().nullable(),
   elapsedMs: nonnegative,
   selectedTestCount: count.optional(),
+  execution: ResultExecutionSchema.optional(),
   totals: ResultTotalsSchema,
   setupCalls: z.array(ResultCallSchema),
   tests: z.array(ResultTestSchema),
@@ -214,6 +237,7 @@ export type ResultProblem = z.infer<typeof ResultProblemSchema>;
 export type ResultCall = z.infer<typeof ResultCallSchema>;
 export type ResultPage = z.infer<typeof ResultPageSchema>;
 export type ResultFrame = z.infer<typeof ResultFrameSchema>;
+export type ResultExecution = z.infer<typeof ResultExecutionSchema>;
 
 export function resultTotals(
   tests: readonly ResultTest[],
@@ -258,6 +282,9 @@ export function resultTotals(
 
 export function validateRunResult(value: unknown): RunResult {
   const result = RunResultSchema.parse(value);
+  const shard = result.execution?.shard;
+  if (shard && shard.index > shard.count)
+    throw new Error("Shard index exceeds shard count");
   if (
     result.selectedTestCount !== undefined &&
     result.selectedTestCount < result.tests.length

@@ -105,10 +105,27 @@ export function validateNoul(response: unknown): number {
   return probability(answer.noul);
 }
 
+/** How a logical call reached its reply, as recorded by the adapter. */
+export interface CallMeta {
+  /** HTTP requests sent, including rate-limited ones. */
+  readonly attempts: number;
+  /** Requests that could have been billed; a 429 is not. */
+  readonly billableAttempts?: number;
+  readonly rateLimited?: boolean;
+  readonly rateLimitWaitMs?: number;
+  readonly queueWaitMs?: number;
+}
+
 export function validateCall(
   response: unknown,
-  attempts: number,
+  metaOrAttempts: CallMeta | number,
 ): ProviderCall {
+  const meta: CallMeta =
+    typeof metaOrAttempts === "number"
+      ? { attempts: metaOrAttempts }
+      : metaOrAttempts;
+  const attempts = meta.attempts;
+  const billable = meta.billableAttempts ?? attempts;
   const reply = record(response);
   if (typeof reply.model !== "string" || reply.model.length === 0)
     throw new ProviderError(
@@ -134,7 +151,12 @@ export function validateCall(
     usage: tokens,
     rate,
     successfulResponseCostUsd: cost,
-    totalCostUsd: attempts === 1 ? cost : null,
+    totalCostUsd: billable === 1 ? cost : null,
+    ...(meta.rateLimited ? { rateLimited: true } : {}),
+    ...(meta.rateLimitWaitMs
+      ? { rateLimitWaitMs: Math.round(meta.rateLimitWaitMs) }
+      : {}),
+    ...(meta.queueWaitMs ? { queueWaitMs: Math.round(meta.queueWaitMs) } : {}),
   };
 }
 

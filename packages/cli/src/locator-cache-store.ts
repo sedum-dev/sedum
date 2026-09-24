@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  LocatorCacheConflict,
   NoopCacheStore,
   type CacheEntry,
   type CacheStore,
@@ -14,6 +15,8 @@ const run = promisify(execFile);
 const HASH = /^[a-f0-9]{64}$/u;
 const MAX_ENTRY_BYTES = 16 * 1024;
 const KEY_FILE = "key";
+/** A lock older than this was left by a crashed writer and may be broken. */
+const STALE_LOCK_MS = 10_000;
 const ENTRY_DIR = "entries";
 
 export interface LocatorCachePolicy {
@@ -153,6 +156,24 @@ export class LocalLocatorCacheStore implements CacheStore {
     return current.byteLength === 32 && Buffer.from(this.key).equals(current);
   }
 
+  /**
+   * Break a lock a crashed writer left behind, as `proper-lockfile` does: an
+   * mtime older than `STALE_LOCK_MS`. The atomic rename means only one waiter
+   * can break it.
+   */
+  private async breakStaleLock(lock: string): Promise<void> {
+    const stat = await fs.lstat(lock).catch(() => null);
+    if (!stat?.isDirectory() || Date.now() - stat.mtimeMs <= STALE_LOCK_MS)
+      return;
+    const stale = `${lock}.stale-${randomBytes(6).toString("hex")}`;
+    try {
+      await fs.rename(lock, stale);
+    } catch {
+      return;
+    }
+    await fs.rm(stale, { recursive: true, force: true });
+  }
+
   private async withEntryLock<T>(
     key: string,
     operation: () => Promise<T>,
@@ -166,10 +187,11 @@ export class LocalLocatorCacheStore implements CacheStore {
         break;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        await this.breakStaleLock(lock);
         await new Promise((resolve) => setTimeout(resolve, 20));
       }
     }
-    if (!acquired) throw new Error("Locator cache entry lock timed out");
+    if (!acquired) throw new LocatorCacheConflict();
     try {
       return await operation();
     } finally {

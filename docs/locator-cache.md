@@ -29,6 +29,16 @@ its own cache. There is no age-based expiry in 0.1. Incompatible formats or
 matching rules, corrupt data, and failed current-page validation cause misses
 and invalidation. Local files are not uploaded to a hosted cache.
 
+## Parallel lanes
+
+Lanes and concurrent runs in one worktree share the cache safely:
+
+- Each entry is written under its own lock and moved into place atomically.
+- An invalidation removes an entry only if it still holds the recipe that lane saw.
+- A lock left by a crashed run is broken once it is more than ten seconds old.
+
+If a lane cannot get an entry's lock in about two seconds, the step records the cache reason `conflict` and keeps its model result, and the run summary counts the conflict. The test itself is unaffected.
+
 ## What is retained
 
 The stored key is a keyed digest of the full origin, path, query, fragment,

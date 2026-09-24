@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   RunRecorder,
   validateRunResult,
@@ -227,6 +227,49 @@ describe("live progress writer", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(elsewhere, { recursive: true, force: true });
+    }
+  });
+
+  it("coalesces queued snapshots to the newest one and keeps progress monotonic", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "sedum-progress-"));
+    try {
+      const writer = await ProgressWriter.create(root, "run-burst");
+      const writes = vi.spyOn(
+        writer as unknown as { atomicWrite: () => Promise<void> },
+        "atomicWrite",
+      );
+      const recorder = new RunRecorder(async () => undefined, "run-burst");
+      await recorder.start();
+      const snapshots = [];
+      for (let count = 1; count <= 20; count++) {
+        await recorder.selectTests(count);
+        snapshots.push(recorder.snapshot);
+      }
+      await Promise.all(snapshots.map((snapshot) => writer.write(snapshot)));
+      expect(writes.mock.calls.length).toBeLessThan(snapshots.length);
+      const progress = validateRunResult(
+        JSON.parse(await readFile(writer.progressPath, "utf8")),
+      );
+      expect(progress.selectedTestCount).toBe(20);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps failing every later write after one progress write fails", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "sedum-progress-"));
+    try {
+      const writer = await ProgressWriter.create(root, "run-fail");
+      const recorder = new RunRecorder(async () => undefined, "run-fail");
+      await recorder.start();
+      vi.spyOn(
+        writer as unknown as { atomicWrite: () => Promise<void> },
+        "atomicWrite",
+      ).mockRejectedValueOnce(new Error("disk full"));
+      await expect(writer.write(recorder.snapshot)).rejects.toThrow();
+      await expect(writer.write(recorder.snapshot)).rejects.toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
     }
   });
 });

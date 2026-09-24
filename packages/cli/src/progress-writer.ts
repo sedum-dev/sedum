@@ -19,6 +19,8 @@ export class ProgressWriterError extends Error {
 export class ProgressWriter {
   private revision = 0;
   private pending: Promise<void> = Promise.resolve();
+  private queued: string | null = null;
+  private draining: Promise<void> | null = null;
   private readonly attemptFolders = new Map<string, Promise<string>>();
 
   private constructor(
@@ -96,19 +98,35 @@ export class ProgressWriter {
     }
   }
 
+  /**
+   * Parallel lanes publish many snapshots at once. Writes stay serialized and
+   * monotonic, but snapshots that queue behind an in-flight write collapse to
+   * the newest one, so each step does not cost its own fsync. A failed write
+   * stays failed for every later write.
+   */
   write(result: RunResult): Promise<void> {
     const snapshot = validateRunResult(result);
-    this.pending = this.pending.then(() =>
-      this.atomicWrite(
-        "progress.json",
-        `${JSON.stringify(snapshot, null, 2)}\n`,
-      ),
-    );
-    return this.pending.catch((cause: unknown) => {
+    this.queued = `${JSON.stringify(snapshot, null, 2)}\n`;
+    this.draining ??= this.drain();
+    return this.draining.catch((cause: unknown) => {
       throw cause instanceof ProgressWriterError
         ? cause
         : new ProgressWriterError(this.progressPath, { cause });
     });
+  }
+
+  private async drain(): Promise<void> {
+    try {
+      await this.pending;
+      while (this.queued !== null) {
+        const content = this.queued;
+        this.queued = null;
+        this.pending = this.atomicWrite("progress.json", content);
+        await this.pending;
+      }
+    } finally {
+      this.draining = null;
+    }
   }
 
   async finish(

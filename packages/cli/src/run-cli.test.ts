@@ -449,4 +449,114 @@ describe("CLI command framework", () => {
     );
     expect(output.stdout).not.toContain("progress /intended/progress.json");
   });
+
+  it("threads parallel, shard, and provider flags and validates them before running", async () => {
+    const canonical = await result([
+      { file: "selected.test.yaml", verdict: "passed" },
+    ]);
+    const executeRun = vi.fn(async () => execution(canonical));
+    const ran = await runCli(
+      [
+        "run",
+        "--parallel",
+        "auto",
+        "--shard-index",
+        "2",
+        "--shard-count",
+        "3",
+        "--provider-concurrency",
+        "5",
+      ],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(ran.exitCode).toBe(0);
+    expect(executeRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parallel: "auto",
+        shard: { index: 2, count: 3 },
+        providerConcurrency: 5,
+      }),
+    );
+    for (const args of [
+      ["--shard-index", "2"],
+      ["--shard-count", "2"],
+      ["--shard-index", "3", "--shard-count", "2"],
+    ]) {
+      const invalid = await runCli(["run", ...args], "1.2.3", { executeRun });
+      expect(invalid.exitCode).toBe(3);
+      expect(invalid.stderr).toContain(
+        "--shard-index and --shard-count must be given together",
+      );
+    }
+    for (const args of [
+      ["--parallel", "0"],
+      ["--parallel", "65"],
+      ["--parallel", "many"],
+      ["--shard-index", "0", "--shard-count", "2"],
+      ["--provider-concurrency", "33"],
+      ["--provider-concurrency", "1.5"],
+    ]) {
+      const invalid = await runCli(["run", ...args], "1.2.3", { executeRun });
+      expect(invalid.exitCode).toBe(3);
+    }
+    expect(executeRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("prints completion lines with a counter and an execution summary in parallel", async () => {
+    const recorder = new RunRecorder(async () => undefined, "parallel");
+    await recorder.start();
+    await recorder.selectTests(2, {
+      parallel: { requested: 2, lanes: 2 },
+      shard: { index: 1, count: 2, globalSelectedTests: 4 },
+      providerConcurrency: 4,
+    });
+    const first = await recorder.beginTest({
+      id: "one",
+      file: "one.test.yaml",
+      ordinal: 0,
+      lane: 0,
+    });
+    const second = await recorder.beginTest({
+      id: "two",
+      file: "two.test.yaml",
+      ordinal: 1,
+      lane: 1,
+    });
+    await second.addStep(step("two-1", "passed", []));
+    await second.addAttemptCalls([
+      {
+        purpose: "judge",
+        requestedModel: "jev",
+        model: "jev",
+        attempts: 2,
+        inputTokens: 1,
+        outputTokens: 1,
+        apiMs: null,
+        inputUsdPerMillion: null,
+        outputUsdPerMillion: null,
+        rateSource: null,
+        rateCheckedAt: null,
+        costUsd: null,
+        rateLimited: true,
+        rateLimitWaitMs: 2500,
+      },
+    ]);
+    await second.finishTest("passed");
+    await first.addStep(step("one-1", "passed", []));
+    await first.finishTest("passed");
+    await recorder.finish();
+    const executeRun = vi.fn(async () => execution(recorder.snapshot));
+    const ran = await runCli(["run"], "1.2.3", { executeRun });
+    expect(ran.exitCode).toBe(0);
+    expect(ran.stdout).not.toContain("test RUNNING");
+    expect(ran.stdout).toContain("[1/2] test PASSED one.test.yaml");
+    expect(ran.stdout).toContain("[2/2] test PASSED two.test.yaml");
+    expect(ran.stdout).toContain(
+      "lanes 2, provider concurrency 4, shard 1/2 of 4 selected",
+    );
+    expect(ran.stdout).toContain(
+      "provider rate limited 1 call(s), waited 2.5s in shared cooldowns",
+    );
+  });
 });

@@ -138,6 +138,13 @@ export function flowDiagnostic(result: {
   };
   const diagnostic = known[result.code];
   if (diagnostic) return { code: result.code, ...diagnostic };
+  if (result.code === "provider_rate_limited")
+    return {
+      code: result.code,
+      message:
+        "The model provider kept rate limiting requests for five minutes.",
+      fix: "Lower --parallel or --provider-concurrency, or retry later.",
+    };
   if (result.code.startsWith("provider_"))
     return {
       code: result.code,

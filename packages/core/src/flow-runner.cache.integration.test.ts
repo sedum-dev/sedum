@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PlaywrightBrowserDriver } from "./browser-driver.js";
-import type { CacheStore } from "./cache-store.js";
+import { LocatorCacheConflict, type CacheStore } from "./cache-store.js";
 import { NoopClassificationCache } from "./classification-cache.js";
 import { runFlow } from "./flow-runner.js";
 import { pageKey, type CacheEntry } from "./page-cache.js";
@@ -198,6 +198,87 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         stale.result.tests[0]?.attempts[0]?.steps[0]?.locator?.source,
       ).toBe("none");
       expect(store.put).toHaveBeenCalledTimes(1);
+    }, 15_000);
+
+    it("records a lost cache write race as a conflict and keeps the model result", async () => {
+      cards = true;
+      chosen.length = 0;
+      const file = path.join(root, "conflict.test.yaml");
+      await writeFile(
+        file,
+        `url: ${base}/\nsteps:\n  - click Add to cart for Camera\n`,
+      );
+      const store: CacheStore = {
+        key: new Uint8Array(32).fill(21),
+        lookup: async () => ({ reason: "absent" }),
+        put: vi.fn(async () => {
+          throw new LocatorCacheConflict();
+        }),
+        invalidate: vi.fn(async () => undefined),
+        clear: async () => undefined,
+      };
+      const recorder = new RunRecorder(async () => undefined, "conflict");
+      await recorder.start();
+      const flow = await runFlow(file, {
+        repoRoot: root,
+        browser: new PlaywrightBrowserDriver(),
+        classificationCache: new NoopClassificationCache(),
+        locatorCache: store,
+        provider: {
+          classifyBatch: vi.fn(),
+          choose: vi.fn(
+            async (_sentence: string, offered: ResolverCandidates) => {
+              const candidates = offered.options.filter(
+                (option) => option.kind === "candidate",
+              );
+              const camera = candidates.find((option) =>
+                option.candidate.peers.some((peer) => peer.includes("Camera")),
+              )!;
+              const ids = [
+                ...candidates.map((option) => option.candidate.id),
+                "none",
+              ];
+              return {
+                selection: {
+                  kind: "candidate",
+                  id: camera.candidate.id,
+                } as const,
+                probabilities: Object.fromEntries(
+                  ids.map((id) => [
+                    id,
+                    id === camera.candidate.id ? 0.8 : 0.2 / (ids.length - 1),
+                  ]),
+                ),
+                confidence: null,
+                call: {
+                  requestedModel: "recorded",
+                  model: "recorded",
+                  attempts: 1,
+                  usage: { inputTokens: 10, outputTokens: 2 },
+                  rate: null,
+                  successfulResponseCostUsd: 0.002,
+                  totalCostUsd: 0.002,
+                },
+              };
+            },
+          ),
+          holds: vi.fn(),
+        },
+        env: {},
+        report: {
+          recorder,
+          privacy: { secretValues: [], sensitiveOrigins: [] },
+          evidenceEnabled: false,
+          replay: false,
+          saveFrame: async () => ({ status: "omitted", reason: "disabled" }),
+        },
+      });
+      await recorder.finish();
+      expect(flow.status).toBe("passed");
+      expect(chosen).toEqual(["Camera"]);
+      expect(
+        recorder.snapshot.tests[0]?.attempts[0]?.steps[0]?.locator?.cache,
+      ).toMatchObject({ outcome: "miss", reason: "conflict" });
     }, 15_000);
 
     it("warms unique login and checkout controls without peer text", async () => {

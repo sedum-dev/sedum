@@ -10,12 +10,13 @@ import {
   type BrowserDriver,
   type BrowserKind,
   type BrowserPage,
+  type BrowserSession,
 } from "./browser-driver.js";
 import type {
   ClassificationCache,
   ClassificationProvider,
 } from "./classification.js";
-import type { CacheStore } from "./cache-store.js";
+import { LocatorCacheConflict, type CacheStore } from "./cache-store.js";
 import {
   classifyParsedFlow,
   type ClassifiedFlowSentence,
@@ -57,7 +58,7 @@ import type {
   ResultPage,
   ResultStep,
 } from "./run-result.js";
-import type { RunRecorder } from "./run-recorder.js";
+import type { RunRecorder, TestRecording } from "./run-recorder.js";
 import {
   RuntimeValue,
   RuntimeUrl,
@@ -85,6 +86,7 @@ export type FlowRunResult =
 /** Dependencies are injected so the engine never owns process state or SDK types. */
 export interface FlowRunnerDependencies {
   readonly repoRoot: string;
+  /** Parallel lanes pass a `ReusableBrowserDriver` so attempts share one browser. */
   readonly browser: BrowserDriver;
   readonly provider: ClassificationProvider & Resolver & Judge;
   readonly classificationCache: ClassificationCache;
@@ -102,6 +104,11 @@ export interface FlowRunnerDependencies {
   readonly signal?: AbortSignal;
   readonly report?: {
     readonly recorder: RunRecorder;
+    /**
+     * Selection position and lane for parallel runs. Without it the runner
+     * treats the most recently started test as the one being retried.
+     */
+    readonly slot?: { readonly ordinal: number; readonly lane?: number };
     readonly privacy: ReportPrivacy;
     readonly evidenceEnabled: boolean;
     readonly replay: boolean;
@@ -113,6 +120,17 @@ export interface FlowRunnerDependencies {
     ) => Promise<ResultFrame>;
   };
 }
+
+type RunReport = NonNullable<FlowRunnerDependencies["report"]>;
+
+/** One attempt's report: its own test handle and its own privacy state. */
+type AttemptReport = Omit<RunReport, "recorder" | "slot"> & {
+  readonly test: TestRecording;
+};
+
+type AttemptDependencies = Omit<FlowRunnerDependencies, "report"> & {
+  readonly report?: AttemptReport;
+};
 
 function resultCall(
   call: ProviderCall,
@@ -132,6 +150,9 @@ function resultCall(
     rateSource: call.rate?.source ?? null,
     rateCheckedAt: call.rate?.checkedAt ?? null,
     costUsd: call.totalCostUsd,
+    ...(call.rateLimited ? { rateLimited: true } : {}),
+    ...(call.rateLimitWaitMs ? { rateLimitWaitMs: call.rateLimitWaitMs } : {}),
+    ...(call.queueWaitMs ? { queueWaitMs: call.queueWaitMs } : {}),
   };
 }
 
@@ -210,6 +231,14 @@ function runtimeFailure(file: string, error: unknown): FlowRunResult {
     };
   }
   if (error instanceof ProviderError) {
+    if (error.code === "rate-limited")
+      return {
+        status: "could_not_run",
+        file,
+        code: "provider_rate_limited",
+        message: "The provider kept rate limiting requests for five minutes.",
+        fix: "Lower --parallel or --provider-concurrency, or retry later.",
+      };
     return {
       status: "could_not_run",
       file,
@@ -288,19 +317,14 @@ async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
 async function executeSentence(
   page: BrowserPage,
   step: ClassifiedFlowSentence,
-  dependencies: FlowRunnerDependencies,
+  dependencies: AttemptDependencies,
   data: Record<string, ResolvedDataEntry>,
   opaqueEntries: ResolvedDataEntry[],
 ): Promise<"continue" | "failed" | FlowRunResult> {
   const started = performance.now();
   const report = dependencies.report;
-  const stepIndex = report
-    ? (report.recorder.snapshot.tests.at(-1)?.attempts.at(-1)?.steps.length ??
-        0) + 1
-    : 0;
-  const currentAttempt = report?.recorder.snapshot.tests
-    .at(-1)
-    ?.attempts.at(-1);
+  const currentAttempt = report?.test.currentAttempt ?? undefined;
+  const stepIndex = report ? (currentAttempt?.stepCount ?? 0) + 1 : 0;
   const attemptId = currentAttempt?.id ?? "";
   const stepId = `${attemptId}:step:${stepIndex}`;
   const sameVersion = (a: PageVersion, b: PageVersion) =>
@@ -482,7 +506,7 @@ async function executeSentence(
       targetBox:
         replayFrame?.status === "captured" ? (facts.targetBox ?? null) : null,
     };
-    await report.recorder.addStep(result);
+    await report.test.addStep(result);
     return outcome;
   };
   // Observe one settled DOM before locating/judging the next step. This avoids
@@ -885,7 +909,13 @@ async function executeSentence(
         )
           recordedLocator = {
             ...resolved,
-            cache: { ...resolved.cache, reason: "storage_error" },
+            cache: {
+              ...resolved.cache,
+              reason:
+                error instanceof LocatorCacheConflict
+                  ? "conflict"
+                  : "storage_error",
+            },
           };
       }
     }
@@ -928,23 +958,23 @@ async function executeSentence(
 /** Run one validated attempt with setup, body, and exhaustive teardown. */
 export async function runFlow(
   file: string,
-  dependencies: FlowRunnerDependencies,
+  runDependencies: FlowRunnerDependencies,
 ): Promise<FlowRunResult> {
   const absolute = path.resolve(file);
   const loaded = await loadFlowFile(absolute, {
-    repoRoot: dependencies.repoRoot,
+    repoRoot: runDependencies.repoRoot,
     rejectSymlinks: true,
   });
   const parsed = await resolveFlowModules(loaded, {
-    repoRoot: dependencies.repoRoot,
+    repoRoot: runDependencies.repoRoot,
   });
   if (!parsed.value) return firstDiagnostic(parsed.diagnostics);
   let entryUrl: string;
   try {
     entryUrl = resolveEntryUrl(
       parsed.value.url,
-      dependencies.baseUrl,
-      dependencies.urlOverride,
+      runDependencies.baseUrl,
+      runDependencies.urlOverride,
     );
   } catch (error) {
     return {
@@ -959,26 +989,38 @@ export async function runFlow(
       fix: "Add an absolute test URL or configure baseUrl in sedum.config.yaml.",
     };
   }
-  if (dependencies.report) {
-    const privacy = dependencies.report.privacy;
+  let dependencies: AttemptDependencies;
+  const { report: runReport, ...runBase } = runDependencies;
+  if (runReport) {
+    const { recorder, slot, ...shared } = runReport;
+    // Each attempt redacts with its own copy: secrets one test resolves or
+    // remembers never enter a list another concurrently running test mutates.
+    const privacy = {
+      ...shared.privacy,
+      secretValues: [...shared.privacy.secretValues],
+    };
     const file = safeSource(
       { file: absolute, line: 1, col: 1 },
-      dependencies.repoRoot,
+      runDependencies.repoRoot,
       privacy,
     ).file;
-    const existing = dependencies.report.recorder.snapshot.tests.at(-1);
+    const existing = slot
+      ? recorder.testAt(slot.ordinal)
+      : recorder.latestTest();
     const retrying =
-      existing?.file === file &&
-      existing.state === "running" &&
-      existing.attempts.at(-1)?.state === "running";
-    if (!retrying)
-      await dependencies.report.recorder.startTest({
-        id: parsed.value.identity,
-        file,
-        description: safeText(parsed.value.description ?? "", privacy, 512),
-        tags: parsed.value.tags.map((tag) => safeText(tag, privacy, 120)),
-      });
-  }
+      existing?.file === file && existing.currentAttempt?.running === true;
+    const test = retrying
+      ? existing
+      : await recorder.beginTest({
+          id: parsed.value.identity,
+          file,
+          description: safeText(parsed.value.description ?? "", privacy, 512),
+          tags: parsed.value.tags.map((tag) => safeText(tag, privacy, 120)),
+          ...(slot ? { ordinal: slot.ordinal } : {}),
+          ...(slot?.lane === undefined ? {} : { lane: slot.lane }),
+        });
+    dependencies = { ...runBase, report: { ...shared, privacy, test } };
+  } else dependencies = runBase;
   const classified = await classifyParsedFlow(parsed, {
     mode: "allow-model",
     cache: dependencies.classificationCache,
@@ -986,7 +1028,7 @@ export async function runFlow(
     ...(dependencies.signal ? { signal: dependencies.signal } : {}),
   });
   if (dependencies.report && classified.calls.length)
-    await dependencies.report.recorder.addAttemptCalls(
+    await dependencies.report.test.addAttemptCalls(
       classified.calls.map((call) => resultCall(call, "classification")),
     );
   if (!classified.value) return firstDiagnostic(classified.diagnostics);
@@ -1009,12 +1051,8 @@ export async function runFlow(
         .filter((entry) => entry.sensitive)
         .map((entry) => entry.value.reveal()),
     );
-  let session: Awaited<ReturnType<BrowserDriver["launch"]>> | undefined;
-  let context:
-    | Awaited<
-        ReturnType<Awaited<ReturnType<BrowserDriver["launch"]>>["newContext"]>
-      >
-    | undefined;
+  let session: BrowserSession | undefined;
+  let context: Awaited<ReturnType<BrowserSession["newContext"]>> | undefined;
   let page: BrowserPage | undefined;
   try {
     session = await dependencies.browser.launch({
@@ -1086,7 +1124,7 @@ export async function runFlow(
               const message =
                 bindingError?.message ??
                 "The module binding could not be resolved.";
-              await dependencies.report?.recorder.addProblem({
+              await dependencies.report?.test.addProblem({
                 origin: "module_binding",
                 outcome: bindingError?.outcome ?? "error",
                 phase: item.phase,
@@ -1146,11 +1184,11 @@ export async function runFlow(
       : await runItems(classified.value.after, data, true);
     const primary = setupProblem ?? bodyProblem ?? teardownProblem;
     if (!primary) {
-      await dependencies.report?.recorder.finishTest("passed");
+      await dependencies.report?.test.finishTest("passed");
       return { status: "passed", file: absolute };
     }
     if (primary.status === "failed")
-      await dependencies.report?.recorder.finishTest("failed");
+      await dependencies.report?.test.finishTest("failed");
     return primary;
   } catch (error) {
     return runtimeFailure(absolute, error);

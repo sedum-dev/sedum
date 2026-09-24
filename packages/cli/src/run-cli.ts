@@ -7,6 +7,11 @@ import {
   type TerminalReporterName,
 } from "@sedum-dev/reporters";
 import { renderDiagnostic } from "./diagnostics.js";
+import {
+  MAX_PARALLEL,
+  parseParallel,
+  type ParallelRequest,
+} from "./run-pool.js";
 import { clearLocatorCache } from "./locator-cache-store.js";
 import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
 import { executeListCommand } from "./list-command.js";
@@ -121,6 +126,30 @@ function nonnegativeSlow(value: string): number {
   if (!Number.isSafeInteger(number) || number < 0 || number > 30000)
     throw new InvalidArgumentError("Expected milliseconds from 0 to 30000.");
   return number;
+}
+
+function parallelValue(value: string): ParallelRequest {
+  const parsed = parseParallel(value);
+  if (parsed === null)
+    throw new InvalidArgumentError(
+      `Expected auto or an integer from 1 to ${MAX_PARALLEL}.`,
+    );
+  return parsed;
+}
+
+function positiveCount(maximum: number) {
+  return (value: string): number => {
+    const number = Number(value);
+    if (
+      !/^[1-9]\d*$/u.test(value) ||
+      !Number.isSafeInteger(number) ||
+      number > maximum
+    )
+      throw new InvalidArgumentError(
+        `Expected an integer from 1 to ${maximum}.`,
+      );
+    return number;
+  };
 }
 
 function positiveMinutes(value: string): number {
@@ -286,6 +315,26 @@ export async function runCli(
       "whole-run deadline",
       positiveMinutes,
     )
+    .option(
+      "--parallel <n|auto>",
+      "run tests in parallel lanes; auto uses half the CPU cores (default 1)",
+      parallelValue,
+    )
+    .option(
+      "--shard-index <index>",
+      "run only this 1-based shard of the selection (with --shard-count)",
+      positiveCount(10_000),
+    )
+    .option(
+      "--shard-count <count>",
+      "split the selection into this many deterministic shards",
+      positiveCount(10_000),
+    )
+    .option(
+      "--provider-concurrency <n>",
+      "cap concurrent model-provider requests (default min(4, 2 x lanes))",
+      positiveCount(32),
+    )
     .option("--replay", "capture replay frames for executed steps", false)
     .option("--no-evidence", "disable non-passing evidence frames")
     .option("--no-locator-cache", "disable the local locator cache")
@@ -330,6 +379,10 @@ export async function runCli(
           slow?: number;
           retries: number;
           timeoutMinutes?: number;
+          parallel?: ParallelRequest;
+          shardIndex?: number;
+          shardCount?: number;
+          providerConcurrency?: number;
           replay: boolean;
           evidence: boolean;
           sensitiveOrigin: string[];
@@ -339,6 +392,23 @@ export async function runCli(
           locatorCacheCi: boolean;
         },
       ) => {
+        if (
+          (options.shardIndex === undefined) !==
+            (options.shardCount === undefined) ||
+          (options.shardIndex !== undefined &&
+            options.shardIndex > options.shardCount!)
+        ) {
+          writeErr(
+            renderDiagnostic({
+              code: "invalid_shard",
+              message:
+                "--shard-index and --shard-count must be given together, with the index from 1 to the count.",
+              fix: "Use --shard-index 1 --shard-count 4 through --shard-index 4 --shard-count 4.",
+            }),
+          );
+          exitCode = 3;
+          return;
+        }
         const lifecycle = new ReporterLifecycle();
         const terminalNames = options.reporter.length
           ? options.reporter
@@ -358,10 +428,24 @@ export async function runCli(
         });
         const emit = (snapshot: RunResult, artifacts: RunArtifactPaths) => {
           const events = lifecycle.feed(snapshot);
+          const lanes = snapshot.execution?.parallel.lanes ?? 1;
+          const parallel =
+            lanes > 1
+              ? {
+                  parallel: {
+                    lanes,
+                    total: snapshot.selectedTestCount ?? snapshot.tests.length,
+                    retries: options.retries,
+                  },
+                }
+              : {};
           for (const event of events)
             for (const [index, reporter] of reporters.entries()) {
               if (event.type === "runStarted" && index > 0) continue;
-              const output = reporter.onEvent(event, context(artifacts));
+              const output = reporter.onEvent(event, {
+                ...context(artifacts),
+                ...parallel,
+              });
               if (output) writeOut(output);
             }
         };
@@ -382,6 +466,21 @@ export async function runCli(
           headed: options.headed,
           ...(options.slow !== undefined ? { slowMoMs: options.slow } : {}),
           retries: options.retries,
+          ...(options.parallel !== undefined
+            ? { parallel: options.parallel }
+            : {}),
+          ...(options.shardIndex !== undefined &&
+          options.shardCount !== undefined
+            ? {
+                shard: {
+                  index: options.shardIndex,
+                  count: options.shardCount,
+                },
+              }
+            : {}),
+          ...(options.providerConcurrency !== undefined
+            ? { providerConcurrency: options.providerConcurrency }
+            : {}),
           ...(options.timeoutMinutes !== undefined
             ? { timeoutMinutes: options.timeoutMinutes }
             : {}),
