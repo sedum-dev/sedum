@@ -74,6 +74,19 @@ pixels; `--sensitive-origin` and `--no-evidence` omit them.
 Text from test files and pages can never form an attachment marker: every
 `[[` in it is written as `[ [`.
 
+## Install Sedum in the project
+
+The examples below run `npx sedum`, which uses the version installed in your
+project. Add it as a dev dependency first:
+
+```sh
+npm install -D sedum-cli
+```
+
+Without it, `npx sedum` would download an unrelated npm package that happens
+to be named `sedum`. To run Sedum without installing it, use
+`npx sedum-cli` instead.
+
 ## GitHub Actions
 
 GitHub renders Markdown job summaries natively, so `report.md` is the

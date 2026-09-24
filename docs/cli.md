@@ -244,7 +244,8 @@ In the JSON:
 
 ## In CI and pre-commit
 
-Neither command needs a browser or a key:
+Neither command needs a browser or a key. These examples assume `sedum-cli` is
+a dev dependency of the project; see [running in CI](ci.md#install-sedum-in-the-project).
 
 ```yaml
 # .github/workflows/tests.yml
