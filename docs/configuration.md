@@ -56,6 +56,26 @@ the same name. `TYPESAFE_API_KEY` is accepted only from the process or this
 `.env`, never from `sedum.config.yaml`. `.env` is ignored by Git and should not
 be committed.
 
+By default, Sedum sends `jev-latest` requests to TypeSafe. A gateway or other
+TypeSafe System One-compatible service can be selected with these connection
+variables:
+
+```dotenv
+TYPESAFE_BASE_URL=https://example.com
+TYPESAFE_DEFAULT_MODEL=jev-compatible-model
+TYPESAFE_API_KEY=...
+```
+
+The base URL must use HTTPS and must not contain credentials, a query, or a
+fragment. Sedum's TypeSafe SDK appends `/v1/systemone`; the service must accept
+that request and return the TypeSafe System One response shape. These settings
+do not make ordinary OpenAI-compatible chat endpoints compatible. These names
+match the TypeSafe SDK. The URL defaults to TypeSafe and the model to
+`jev-latest`; the API key is read from `TYPESAFE_API_KEY`. Set the URL and key
+together for a custom service: Sedum sends that key to the configured URL.
+Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
+from `sedum.config.yaml`.
+
 An absolute test `url` is unchanged. A relative test URL resolves against
 `baseUrl` with standard URL semantics, and a missing test URL uses `baseUrl`
 itself. A test with neither fails before the browser starts. Invalid config

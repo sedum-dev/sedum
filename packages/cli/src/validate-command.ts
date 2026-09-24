@@ -8,23 +8,31 @@ import {
   type ProjectValidationResult,
 } from "@sedum-dev/core";
 import path from "node:path";
-import { loadProjectConfig, type ConfigDiagnostic } from "./config.js";
+import {
+  DEFAULT_PROVIDER_MODEL,
+  loadProjectConfig,
+  type ConfigDiagnostic,
+} from "./config.js";
 import type { CliDiagnostic } from "./diagnostics.js";
 import { loadProjectContext } from "./project-context.js";
 
 /** Must match the requested model `sedum run` stores classifications under. */
-export const CLASSIFICATION_MODEL = "jev-latest";
+export const CLASSIFICATION_MODEL = DEFAULT_PROVIDER_MODEL;
 
 export type ClassificationProviderFactory = (options: {
   readonly apiKey?: string;
+  readonly baseURL: string;
+  readonly model: string;
 }) => ClassificationProvider | Promise<ClassificationProvider>;
 
 /** Loaded only for `--online`, so offline commands never touch the provider. */
 export const createTypeSafeClassifier: ClassificationProviderFactory = async ({
   apiKey,
+  baseURL,
+  model,
 }) => {
   const { TypeSafeAdapter } = await import("@sedum-dev/provider-typesafe");
-  return new TypeSafeAdapter(apiKey ? { apiKey } : {});
+  return new TypeSafeAdapter({ ...(apiKey ? { apiKey } : {}), baseURL, model });
 };
 
 export interface ValidateCommandOptions {
@@ -62,17 +70,27 @@ function emptyProjectProblem(
 
 const missingKey: CliDiagnostic = {
   code: "missing_key",
-  message: "`sedum validate --online` needs a configured TypeSafe provider.",
-  fix: "Set TYPESAFE_API_KEY in the environment or the project-root .env and rerun, or omit --online to validate offline.",
+  message: "`sedum validate --online` needs a configured model provider.",
+  fix: "Set TYPESAFE_API_KEY for the configured endpoint and rerun; otherwise omit --online.",
 };
 
 async function onlineProvider(
   options: ValidateCommandOptions,
-): Promise<ClassificationProvider | CliDiagnostic> {
+): Promise<
+  | { readonly provider: ClassificationProvider; readonly model: string }
+  | CliDiagnostic
+> {
   try {
     // Only the explicit online path reads secrets: process env and .env.
-    const { apiKey } = await loadProjectConfig(options.cwd);
-    return await options.createProvider(apiKey ? { apiKey } : {});
+    const config = await loadProjectConfig(options.cwd);
+    return {
+      provider: await options.createProvider({
+        ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+        baseURL: config.providerBaseUrl,
+        model: config.providerModel,
+      }),
+      model: config.providerModel,
+    };
   } catch (error) {
     if (error instanceof ProviderError && error.code === "configuration")
       return missingKey;
@@ -120,14 +138,16 @@ export async function executeValidateCommand(
       null,
     );
   let provider: ClassificationProvider | undefined;
+  let classificationModel = config.providerModel;
   if (options.online) {
     const prepared = await onlineProvider(options);
     if ("code" in prepared) return stop(discovery, prepared);
-    provider = prepared;
+    provider = prepared.provider;
+    classificationModel = prepared.model;
   }
   const cache = await FileClassificationCache.load(
     path.join(discovery.root, ".sedum", "classifications.json"),
-    CLASSIFICATION_MODEL,
+    classificationModel,
   );
   const result = await validateProject(discovery, {
     repoRoot: discovery.root,

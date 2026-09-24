@@ -34,12 +34,13 @@ fixture page or test sentence changes, update that allowlist in
 
 After building and installing Chromium with `node packages/cli/dist/cli.js
 browsers install chromium`, run `pnpm fixtures:verify`. It removes
-`TYPESAFE_API_KEY` from the test process. Normal `sedum run` against a user site
-still needs a provider key.
+provider credentials and overrides from the test process. Normal `sedum run`
+against a user site still needs a provider key.
 
-To replace recordings intentionally, set both `SEDUM_RECORD_REPLIES=1` and
-`TYPESAFE_API_KEY`, then run `pnpm fixtures:record`. This calls the live API and
-may incur charges. The recorder writes to a private staging file, runs keyless
+To replace direct TypeSafe recordings intentionally, set both
+`SEDUM_RECORD_REPLIES=1` and `TYPESAFE_API_KEY`, then run
+`pnpm fixtures:record`. This calls the live API and may incur charges. The
+recorder writes to a private staging file, runs keyless
 replay verification against it, and replaces `replies/v1.json` only if both runs
 pass. Review the diff in `replies/v1.json`, then run `pnpm fixtures:verify`
 without a key. The fixture tests cover delayed evidence, an observation timeout,

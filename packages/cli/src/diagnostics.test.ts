@@ -13,8 +13,8 @@ describe("actionable CLI diagnostics", () => {
       setupDiagnostic(new ProviderError("configuration", "secret")),
     ).toEqual({
       code: "missing_key",
-      message: "The TypeSafe provider is not configured.",
-      fix: "Set TYPESAFE_API_KEY and rerun the command.",
+      message: "The model provider is not configured.",
+      fix: "Set TYPESAFE_API_KEY for the configured endpoint, then rerun the command.",
     });
     expect(
       setupDiagnostic(

@@ -77,7 +77,39 @@ afterEach(() => {
 });
 
 describe("TypeSafeAdapter wire and lifecycle", () => {
-  it("reuses one client for Choice and two Noul questions and pins SDK settings", async () => {
+  it("uses an explicit compatible base URL and model", async () => {
+    const transport = fake([json(choiceReply)]);
+    const adapter = new TypeSafeAdapter({
+      apiKey: "gateway-key",
+      baseURL: "https://gateway.example/system-one/",
+      model: "jev-compatible-model",
+      fetch: transport.fetch,
+    });
+    const selected = await adapter.choose("Buy", offered);
+    expect(transport.calls[0]?.url).toBe(
+      "https://gateway.example/system-one/v1/systemone",
+    );
+    expect(JSON.parse(transport.calls[0]!.body).model).toBe(
+      "jev-compatible-model",
+    );
+    expect(selected.call.requestedModel).toBe("jev-compatible-model");
+    expect(selected.call.rate).toBeNull();
+  });
+
+  it("rejects unsafe provider connection settings", () => {
+    expect(
+      () =>
+        new TypeSafeAdapter({
+          apiKey: "key",
+          baseURL: "http://gateway.example",
+        }),
+    ).toThrow(/HTTPS/);
+    expect(() => new TypeSafeAdapter({ apiKey: "key", model: " " })).toThrow(
+      /model/,
+    );
+  });
+
+  it("reuses one client for Choice and two Noul questions and honors explicit settings", async () => {
     vi.stubEnv("TYPESAFE_BASE_URL", "https://wrong.example");
     vi.stubEnv("TYPESAFE_DEFAULT_MODEL", "wrong-model");
     vi.stubEnv("TYPESAFE_LOG_LEVEL", "debug");
@@ -86,6 +118,8 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
     const transport = fake([json(choiceReply), json(judgeReply)]);
     const adapter = new TypeSafeAdapter({
       apiKey: "test-key",
+      baseURL: "https://api.typesafe.ai",
+      model: "jev-latest",
       fetch: transport.fetch,
     });
     const selected = await adapter.choose("Buy SECRET-SENTENCE", offered);
@@ -125,6 +159,22 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
     expect(JSON.stringify([log.mock.calls, debug.mock.calls])).not.toMatch(
       /SECRET-SENTENCE|SECRET-PAGE|test-key/,
     );
+  });
+
+  it("uses the SDK environment names when connection options are omitted", async () => {
+    vi.stubEnv("TYPESAFE_BASE_URL", "https://gateway.example/api");
+    vi.stubEnv("TYPESAFE_DEFAULT_MODEL", "gateway-jev");
+    const transport = fake([json(choiceReply)]);
+    const adapter = new TypeSafeAdapter({
+      apiKey: "gateway-key",
+      fetch: transport.fetch,
+    });
+    const selected = await adapter.choose("Buy", offered);
+    expect(transport.calls[0]?.url).toBe(
+      "https://gateway.example/api/v1/systemone",
+    );
+    expect(JSON.parse(transport.calls[0]!.body).model).toBe("gateway-jev");
+    expect(selected.call.requestedModel).toBe("gateway-jev");
   });
 
   it("returns none unchanged and prevents network calls on rejected input", async () => {

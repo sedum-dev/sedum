@@ -87,7 +87,7 @@ describe("sedum validate", () => {
       "broken/typo.test.yaml:4:1: error unknown_key: Unknown top-level key `stepz`.\n  Fix: Did you mean `steps`?\n",
     );
     expect(output.stdout).toContain(
-      'broken/unclear.test.yaml:3:5: not checked offline: Classification is unavailable offline for this sentence (cache: absent). Sentence: "add the cheapest item to the basket".\n  Fix: Rephrase with a supported verb, or run `sedum validate --online` with TYPESAFE_API_KEY set and commit .sedum/classifications.json.\n',
+      'broken/unclear.test.yaml:3:5: not checked offline: Classification is unavailable offline for this sentence (cache: absent). Sentence: "add the cheapest item to the basket".\n  Fix: Rephrase with a supported verb, or run `sedum validate --online` with a provider API key configured and commit .sedum/classifications.json.\n',
     );
     expect(output.stdout).toContain(
       "broken/uses-missing.test.yaml:3:5: error unreadable_module:",
@@ -198,7 +198,7 @@ describe("sedum validate", () => {
     expect(output.exitCode).toBe(3);
     expect(output.stdout).toBe("");
     expect(output.stderr).toBe(
-      "`sedum validate --online` needs a configured TypeSafe provider.\nFix: Set TYPESAFE_API_KEY in the environment or the project-root .env and rerun, or omit --online to validate offline.\n",
+      "`sedum validate --online` needs a configured model provider.\nFix: Set TYPESAFE_API_KEY for the configured endpoint and rerun; otherwise omit --online.\n",
     );
     const broken = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
@@ -220,7 +220,7 @@ describe("sedum validate", () => {
         capabilities: plain,
       });
       expect(output.exitCode).toBe(3);
-      expect(output.stderr).toContain("Set TYPESAFE_API_KEY");
+      expect(output.stderr).toContain("TYPESAFE_API_KEY");
     } finally {
       vi.unstubAllEnvs();
     }
@@ -461,10 +461,50 @@ describe("project configuration", () => {
         createClassificationProvider: factory,
       });
       expect(online.exitCode).toBe(0);
-      expect(factory).toHaveBeenCalledWith({ apiKey: "from-dotenv" });
+      expect(factory).toHaveBeenCalledWith({
+        apiKey: "from-dotenv",
+        baseURL: "https://api.typesafe.ai",
+        model: "jev-latest",
+      });
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it("passes a complete custom provider connection to online validation", async () => {
+    const cwd = await project({
+      "custom.test.yaml":
+        "url: https://example.test\nsteps:\n  - tidy up the shopping list\n",
+      ".env":
+        "TYPESAFE_BASE_URL=https://gateway.example/api/\nTYPESAFE_DEFAULT_MODEL=gateway-jev\nTYPESAFE_API_KEY=gateway-key\n",
+    });
+    const factory = vi.fn(
+      ({ model }: { model: string }) =>
+        ({
+          classifyBatch: async () => ({
+            answers: clickReply.answers.map((answer) => ({
+              ...answer,
+              requestedModel: model,
+            })),
+            calls: clickReply.calls.map((call) => ({
+              ...call,
+              requestedModel: model,
+            })),
+          }),
+        }) as const,
+    );
+    const output = await runCli(["validate", "--online"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+      createClassificationProvider: factory,
+    });
+    expect(output.exitCode).toBe(0);
+    expect(factory).toHaveBeenCalledWith({
+      apiKey: "gateway-key",
+      baseURL: "https://gateway.example/api",
+      model: "gateway-jev",
+    });
+    expect(output.stdout + output.stderr).not.toContain("gateway-key");
   });
 });
 

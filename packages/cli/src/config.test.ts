@@ -34,6 +34,8 @@ describe("project configuration", () => {
       viewport: { width: 1280, height: 900 },
       thresholds: { minP: 0.75, band: 0.15, contradictionCutoff: 0.5 },
       baseUrl: null,
+      providerBaseUrl: "https://api.typesafe.ai",
+      providerModel: "jev-latest",
     });
     expect(config.testDirectory).toBe(path.join(root, "tests"));
     expect(config.outputDir).toBe(path.join(root, ".sedum", "runs"));
@@ -120,6 +122,73 @@ environments:
     expect(config.variables.VALUE).toBe("process");
     expect(config.variables.SIBLING).toBeUndefined();
     expect(config.apiKey).toBe("process-key");
+  });
+
+  it("loads one complete custom provider connection with process precedence", async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, "sedum.config.yaml"), "{}\n");
+    await writeFile(
+      path.join(root, ".env"),
+      "TYPESAFE_BASE_URL=https://file.example/api/\nTYPESAFE_DEFAULT_MODEL=file-model\nTYPESAFE_API_KEY=file-key\n",
+    );
+    const config = await loadProjectConfig(root, {
+      TYPESAFE_BASE_URL: "https://process.example/api",
+      TYPESAFE_DEFAULT_MODEL: "process-model",
+      TYPESAFE_API_KEY: "process-key",
+    });
+    expect(config).toMatchObject({
+      providerBaseUrl: "https://process.example/api",
+      providerModel: "process-model",
+      apiKey: "process-key",
+    });
+  });
+
+  it("allows independent SDK-style provider overrides", async () => {
+    const root = await temporaryRoot();
+    await expect(
+      loadProjectConfig(root, {
+        TYPESAFE_API_KEY: "provider-key",
+      }),
+    ).resolves.toMatchObject({
+      providerBaseUrl: "https://api.typesafe.ai",
+      providerModel: "jev-latest",
+      apiKey: "provider-key",
+    });
+    await expect(
+      loadProjectConfig(root, {
+        TYPESAFE_DEFAULT_MODEL: "jev-preview",
+        TYPESAFE_API_KEY: "provider-key",
+      }),
+    ).resolves.toMatchObject({
+      providerBaseUrl: "https://api.typesafe.ai",
+      providerModel: "jev-preview",
+      apiKey: "provider-key",
+    });
+    await expect(
+      loadProjectConfig(root, {
+        TYPESAFE_BASE_URL: "https://gateway.example",
+        TYPESAFE_API_KEY: "gateway-key",
+      }),
+    ).resolves.toMatchObject({
+      providerBaseUrl: "https://gateway.example",
+      providerModel: "jev-latest",
+      apiKey: "gateway-key",
+    });
+  });
+
+  it("rejects unsafe custom provider URLs", async () => {
+    const root = await temporaryRoot();
+    await expect(
+      loadProjectConfig(root, {
+        TYPESAFE_BASE_URL: "https://key@gateway.example?secret=value",
+        TYPESAFE_DEFAULT_MODEL: "model",
+        TYPESAFE_API_KEY: "must-not-leak",
+      }),
+    ).rejects.toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ code: "invalid_provider_url" }),
+      ]),
+    });
   });
 
   it("collects source-located actionable errors without exposing secret values", async () => {

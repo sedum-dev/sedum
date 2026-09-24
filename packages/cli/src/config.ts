@@ -49,6 +49,8 @@ export interface ResolvedProjectConfig {
   readonly baseUrl: string | null;
   readonly variables: Readonly<Record<string, string | undefined>>;
   readonly apiKey: string | undefined;
+  readonly providerBaseUrl: string;
+  readonly providerModel: string;
 }
 
 interface RawEnvironment {
@@ -81,6 +83,9 @@ const DEFAULTS = {
   outputDir: ".sedum/runs",
   reporterDir: ".sedum/reports",
 };
+
+export const DEFAULT_PROVIDER_BASE_URL = "https://api.typesafe.ai";
+export const DEFAULT_PROVIDER_MODEL = "jev-latest";
 
 const allowed = {
   root: new Set([
@@ -190,8 +195,8 @@ function scalarVariables(
         node,
         `${key}.${name}`,
         "api_key_in_config",
-        "TYPESAFE_API_KEY must not be stored in sedum.config.yaml.",
-        "Put TYPESAFE_API_KEY in the project-root .env or invoking process environment.",
+        `${name} must not be stored in sedum.config.yaml.`,
+        `Put ${name} in the project-root .env or invoking process environment.`,
       );
       continue;
     }
@@ -788,10 +793,40 @@ export async function loadProjectConfig(
     ...fileEnvironment,
     ...hostEnvironment,
   };
-  const apiKey =
-    hostEnvironment.TYPESAFE_API_KEY?.trim() ||
-    fileEnvironment.TYPESAFE_API_KEY?.trim() ||
-    undefined;
+  const providerValue = (name: string): string | undefined =>
+    hostEnvironment[name]?.trim() || fileEnvironment[name]?.trim() || undefined;
+  const customProvider = {
+    baseUrl: providerValue("TYPESAFE_BASE_URL"),
+    model: providerValue("TYPESAFE_DEFAULT_MODEL"),
+  };
+  let providerBaseUrl = DEFAULT_PROVIDER_BASE_URL;
+  if (customProvider.baseUrl) {
+    try {
+      const parsed = new URL(customProvider.baseUrl);
+      if (
+        parsed.protocol !== "https:" ||
+        parsed.username ||
+        parsed.password ||
+        parsed.search ||
+        parsed.hash
+      )
+        throw new Error("unsafe provider URL");
+      providerBaseUrl = parsed.href.replace(/\/$/u, "");
+    } catch {
+      diagnostics.push({
+        code: "invalid_provider_url",
+        file: environmentFile,
+        line: 1,
+        col: 1,
+        key: "TYPESAFE_BASE_URL",
+        message:
+          "TYPESAFE_BASE_URL must be an absolute HTTPS URL without credentials, query, or fragment.",
+        fix: "Use a base URL such as https://api.typesafe.ai.",
+      });
+    }
+  }
+  const providerModel = customProvider.model ?? DEFAULT_PROVIDER_MODEL;
+  const apiKey = providerValue("TYPESAFE_API_KEY");
   const testDirectory = relativePath(
     found.root,
     tests.directory,
@@ -857,6 +892,8 @@ export async function loadProjectConfig(
     baseUrl,
     variables,
     apiKey,
+    providerBaseUrl,
+    providerModel,
   });
 }
 

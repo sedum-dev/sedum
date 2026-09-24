@@ -29,6 +29,7 @@ steps:
 `;
 
 const ENV_EXAMPLE = `# Get a TypeSafe key and put it in .env, or set it in your shell.
+# For a compatible provider, also set TYPESAFE_BASE_URL and optionally TYPESAFE_DEFAULT_MODEL.
 TYPESAFE_API_KEY=
 # Public SauceDemo sample account; no Sauce Labs account is required.
 SAUCE_PASSWORD=secret_sauce
@@ -212,10 +213,11 @@ export async function executeInitCommand(
     const hasBrowser = (options.browser ?? browserAvailable)(config.browser);
     const hasEnv = await pathExists(path.join(root, ".env"));
     if (!keyPresent(config))
-      next("Add your TypeSafe API key", [
+      next("Add a provider API key", [
         "Get a key at https://typesafe.ai/.",
         ...(hasEnv ? [] : ["cp .env.example .env"]),
         "Open .env and set TYPESAFE_API_KEY to your key (or set it in your shell).",
+        "For a compatible provider, also set TYPESAFE_BASE_URL and use that provider's key as TYPESAFE_API_KEY.",
       ]);
     if (!hasBrowser)
       next(

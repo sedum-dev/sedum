@@ -5,7 +5,12 @@ import {
   probeTypeSafeApiKey,
   type AuthProbeResult,
 } from "@sedum-dev/provider-typesafe";
-import { loadProjectConfig, type ResolvedProjectConfig } from "./config.js";
+import {
+  DEFAULT_PROVIDER_BASE_URL,
+  DEFAULT_PROVIDER_MODEL,
+  loadProjectConfig,
+  type ResolvedProjectConfig,
+} from "./config.js";
 
 export type DoctorCheckId =
   | "node"
@@ -32,8 +37,11 @@ export interface DoctorProbes {
   readonly nodeVersion?: string;
   readonly loadConfig?: (cwd: string) => Promise<ResolvedProjectConfig>;
   readonly browser?: (kind: BrowserKind) => boolean;
-  readonly network?: () => Promise<boolean>;
-  readonly auth?: (apiKey: string) => Promise<AuthProbeResult>;
+  readonly network?: (baseURL: string) => Promise<boolean>;
+  readonly auth?: (
+    apiKey: string,
+    options: { readonly baseURL: string; readonly model: string },
+  ) => Promise<AuthProbeResult>;
   readonly output?: (config: ResolvedProjectConfig) => Promise<void>;
 }
 
@@ -73,10 +81,10 @@ export function keyPresent(config: ResolvedProjectConfig): boolean {
   return Boolean(config.apiKey?.trim());
 }
 
-async function networkReachable(): Promise<boolean> {
+async function networkReachable(baseURL: string): Promise<boolean> {
   try {
     // Any HTTP response proves DNS, TLS and HTTP reachability.
-    await fetch("https://api.typesafe.ai/", {
+    await fetch(baseURL, {
       method: "GET",
       redirect: "manual",
       signal: AbortSignal.timeout(5_000),
@@ -186,19 +194,21 @@ export async function executeDoctorCommand(
     );
   }
 
+  const providerBaseUrl = config?.providerBaseUrl ?? DEFAULT_PROVIDER_BASE_URL;
+  const providerModel = config?.providerModel ?? DEFAULT_PROVIDER_MODEL;
   let network = false;
   try {
-    network = await (probes.network ?? networkReachable)();
+    network = await (probes.network ?? networkReachable)(providerBaseUrl);
   } catch {
     network = false;
   }
   checks.push(
     network
-      ? pass("api_network", "TypeSafe API is reachable.")
+      ? pass("api_network", "Model provider API is reachable.")
       : fail(
           "api_network",
-          "TypeSafe API could not be reached.",
-          "Check DNS, TLS, proxy, firewall, and access to https://api.typesafe.ai.",
+          "Model provider API could not be reached.",
+          `Check DNS, TLS, proxy, firewall, and access to ${providerBaseUrl}.`,
         ),
   );
 
@@ -211,11 +221,11 @@ export async function executeDoctorCommand(
           "Fix project configuration, then rerun doctor.",
         )
       : key
-        ? pass("api_key", "TYPESAFE_API_KEY is present.")
+        ? pass("api_key", "Provider API key is present.")
         : fail(
             "api_key",
-            "TYPESAFE_API_KEY is missing.",
-            "Set TYPESAFE_API_KEY in the process environment or project-root .env.",
+            "Provider API key is missing.",
+            "Set TYPESAFE_API_KEY for the configured endpoint.",
           ),
   );
 
@@ -232,7 +242,7 @@ export async function executeDoctorCommand(
       fail(
         "api_auth",
         "API authentication could not be checked without a key.",
-        "Set TYPESAFE_API_KEY, then rerun doctor.",
+        "Set the provider API key, then rerun doctor.",
       ),
     );
   else if (!network)
@@ -240,34 +250,37 @@ export async function executeDoctorCommand(
       fail(
         "api_auth",
         "API authentication could not be checked without API access.",
-        "Restore TypeSafe API network access, then rerun doctor.",
+        "Restore model provider API network access, then rerun doctor.",
       ),
     );
   else {
     let result: AuthProbeResult;
     try {
-      result = await (probes.auth ?? probeTypeSafeApiKey)(key);
+      result = await (probes.auth ?? probeTypeSafeApiKey)(key, {
+        baseURL: providerBaseUrl,
+        model: providerModel,
+      });
     } catch {
       result = "unavailable";
     }
     checks.push(
       result === "accepted"
-        ? pass("api_auth", "TypeSafe API accepted the key.")
+        ? pass("api_auth", "Model provider API accepted the key.")
         : result === "rejected"
           ? fail(
               "api_auth",
-              "TypeSafe API rejected the key.",
-              "Replace TYPESAFE_API_KEY with a valid key and rerun doctor.",
+              "Model provider API rejected the key.",
+              "Replace the provider API key with a valid key and rerun doctor.",
             )
           : result === "unreachable"
             ? fail(
                 "api_auth",
-                "Authenticated TypeSafe request could not reach the API.",
+                "Authenticated provider request could not reach the API.",
                 "Check the API connection and retry.",
               )
             : fail(
                 "api_auth",
-                "TypeSafe could not complete the authentication probe.",
+                "The model provider could not complete the authentication probe.",
                 "Check API availability and account access, then retry.",
               ),
     );

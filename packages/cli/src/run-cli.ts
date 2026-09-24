@@ -366,7 +366,7 @@ export async function runCli(
     )
     .addHelpText(
       "after",
-      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and set TYPESAFE_API_KEY.\n\nExamples:\n  sedum run tests/login.test.yaml\n  sedum run tests/login.test.yaml --strict --costs\n",
+      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and set TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible provider).\n\nExamples:\n  sedum run tests/login.test.yaml\n  sedum run tests/login.test.yaml --strict --costs\n",
     )
     .action(
       async (
@@ -607,7 +607,7 @@ export async function runCli(
     )
     .option(
       "--online",
-      "classify sentences the offline cache cannot, using TYPESAFE_API_KEY, and update .sedum/classifications.json",
+      "classify sentences the offline cache cannot, using the configured provider API key, and update .sedum/classifications.json",
       false,
     )
     .addHelpText(

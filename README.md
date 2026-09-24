@@ -40,7 +40,7 @@ clicking, typing, waiting, verdicts, and exit codes run on Playwright.
 
 ## Quickstart
 
-You need Node.js 20.19 or newer and a [TypeSafe](https://typesafe.ai) API key.
+You need Node.js 20.19 or newer and a [TypeSafe](https://typesafe.ai) API key or a compatible provider key.
 
 ```sh
 mkdir my-sedum-tests && cd my-sedum-tests
@@ -51,6 +51,11 @@ npx sedum browsers install chromium   # if init says it is missing
 cp .env.example .env                  # then set TYPESAFE_API_KEY in .env
 npx sedum run tests/example.test.yaml --headed
 ```
+
+For a compatible provider, set `TYPESAFE_BASE_URL` to its API root and
+`TYPESAFE_API_KEY` to that provider's key. Set `TYPESAFE_DEFAULT_MODEL` if its
+model name differs from the default. See
+[provider configuration](docs/configuration.md).
 
 The example signs in to a demo shop. To see a failure, change its last step to
 a false claim, such as `verify the cart is empty`, and run it again. If

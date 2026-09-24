@@ -42,7 +42,7 @@ describe("sedum init", () => {
       await readFile(path.join(cwd, "tests/example.test.yaml"), "utf8"),
     );
     expect(result.stdout).toContain("1. Update Node.js");
-    expect(result.stdout).toContain("2. Add your TypeSafe API key");
+    expect(result.stdout).toContain("2. Add a provider API key");
     expect(result.stdout).toContain("cp .env.example .env");
     expect(result.stdout).not.toContain("sedum validate");
     expect(result.stdout).toContain("may incur a charge");

@@ -43,7 +43,7 @@ export function renderValidation(
           : paint(`error ${item.code}`, "red", capabilities);
     const fix =
       item.code === NOT_CHECKED_OFFLINE_CODE
-        ? "Rephrase with a supported verb, or run `sedum validate --online` with TYPESAFE_API_KEY set and commit .sedum/classifications.json."
+        ? "Rephrase with a supported verb, or run `sedum validate --online` with a provider API key configured and commit .sedum/classifications.json."
         : item.fix;
     lines.push(`${where}: ${label}: ${item.message}`, `  Fix: ${fix}`);
   }

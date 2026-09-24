@@ -110,6 +110,11 @@ simplest summary. Keep the steps running when the test step fails.
       .sedum/reports/
 ```
 
+This uses the default TypeSafe endpoint. For a compatible provider, also set
+`TYPESAFE_BASE_URL` and, if needed, `TYPESAFE_DEFAULT_MODEL` in the step's
+environment, and use that provider's key for `TYPESAFE_API_KEY`. See
+[provider configuration](configuration.md).
+
 To show the JUnit file as a test summary instead, add a JUnit action such as
 `mikepenz/action-junit-report` with `report_paths: .sedum/reports/*/junit.xml`.
 Its `annotate_only: true` mode needs no `checks: write` permission.

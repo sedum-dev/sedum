@@ -119,6 +119,8 @@ export interface CallMeta {
 export function validateCall(
   response: unknown,
   metaOrAttempts: CallMeta | number,
+  requestedModel = MODEL,
+  estimateJevCost = true,
 ): ProviderCall {
   const meta: CallMeta =
     typeof metaOrAttempts === "number"
@@ -137,7 +139,7 @@ export function validateCall(
     inputTokens: tokenCount(usage.input_tokens),
     outputTokens: tokenCount(usage.output_tokens),
   };
-  const rate = /^jev(?:-|$)/.test(reply.model) ? RATE : null;
+  const rate = estimateJevCost && /^jev(?:-|$)/.test(reply.model) ? RATE : null;
   const cost =
     rate === null
       ? null
@@ -145,7 +147,7 @@ export function validateCall(
           tokens.outputTokens * rate.outputUsdPerMillion) /
         1_000_000;
   return {
-    requestedModel: MODEL,
+    requestedModel,
     model: reply.model,
     attempts,
     usage: tokens,
