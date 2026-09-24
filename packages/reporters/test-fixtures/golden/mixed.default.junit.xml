@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="sedum" tests="3" failures="1" errors="0" time="4.321">
+  <testsuite name="sedum run" tests="0" failures="0" errors="0" skipped="0" time="4.321" timestamp="2026-09-23T10:00:00.000Z">
+    <properties>
+      <property name="sedum.run_id" value="run-mixed"/>
+      <property name="sedum.state" value="completed"/>
+      <property name="sedum.verdict" value="failed"/>
+      <property name="sedum.strict" value="false"/>
+      <property name="sedum.tests.selected" value="3"/>
+      <property name="sedum.tests.passed" value="2"/>
+      <property name="sedum.tests.failed" value="1"/>
+      <property name="sedum.flagged_steps" value="1"/>
+      <property name="sedum.flags.low_confidence" value="1"/>
+      <property name="sedum.flags.contradiction" value="0"/>
+    </properties>
+  </testsuite>
+  <testsuite name="tests/login.test.yaml" tests="1" failures="0" errors="0" skipped="0" time="1.000" timestamp="2026-09-23T10:00:00.000Z" file="tests/login.test.yaml">
+    <properties>
+      <property name="sedum.run_id" value="run-mixed"/>
+      <property name="sedum.test_id" value="test:tests/login.test.yaml"/>
+      <property name="sedum.verdict" value="passed"/>
+      <property name="sedum.tags" value="smoke"/>
+      <property name="sedum.attempts" value="1"/>
+      <property name="sedum.strict" value="false"/>
+    </properties>
+    <testcase classname="tests/login.test.yaml" name="Signs in and sees products" time="1.000"/>
+  </testsuite>
+  <testsuite name="tests/cart.test.yaml" tests="1" failures="0" errors="0" skipped="0" time="2.000" timestamp="2026-09-23T10:00:00.000Z" file="tests/cart.test.yaml">
+    <properties>
+      <property name="sedum.run_id" value="run-mixed"/>
+      <property name="sedum.test_id" value="test:tests/cart.test.yaml"/>
+      <property name="sedum.verdict" value="passed"/>
+      <property name="sedum.flags" value="low_confidence"/>
+      <property name="sedum.attempts" value="1"/>
+      <property name="sedum.strict" value="false"/>
+    </properties>
+    <testcase classname="tests/cart.test.yaml" name="Cart shows the added item" time="2.000">
+      <system-out>flags: low_confidence 1, contradiction 0 (flagged steps)
+passed, flagged — steps step 2 (verify): verify the cart shows 2 items
+  where: tests/cart.test.yaml:4:5
+  result: The claim held with reservations.
+  holds 0.74 — fails below 0.60; passes at 0.75
+  contradiction 0.08 / cutoff 0.50
+  page: https://shop.test/checkout "Checkout"
+  judged page text (untrusted):
+    Cart (2)
+    Subtotal $42.00
+  frame: .sedum/runs/golden/evidence/a1-000000000000/000000000000000000000002.jpg
+rerun: sedum run 'tests/cart.test.yaml'
+[[ATTACHMENT|.sedum/runs/golden/evidence/a1-000000000000/000000000000000000000002.jpg]]</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="tests/checkout.test.yaml" tests="1" failures="1" errors="0" skipped="0" time="3.000" timestamp="2026-09-23T10:00:00.000Z" file="tests/checkout.test.yaml">
+    <properties>
+      <property name="sedum.run_id" value="run-mixed"/>
+      <property name="sedum.test_id" value="test:tests/checkout.test.yaml"/>
+      <property name="sedum.verdict" value="failed"/>
+      <property name="sedum.attempts" value="1"/>
+      <property name="sedum.strict" value="false"/>
+    </properties>
+    <testcase classname="tests/checkout.test.yaml" name="Checks out with the saved card" time="3.000">
+      <failure type="ambiguous" message="steps step 2 failed: click the Checkout button">failed — steps step 2 (action): click the Checkout button
+  where: tests/checkout.test.yaml:4:5
+  result: The target was ambiguous.
+  page: https://shop.test/checkout "Checkout"
+  error: ambiguous: Could not choose the button.
+    waiting for getByRole('button', { name: 'Checkout' })
+    element is visible, enabled and stable
+  frame: .sedum/runs/golden/evidence/a1-000000000000/000000000000000000000002.jpg
+rerun: sedum run 'tests/checkout.test.yaml'</failure>
+      <system-out>[[ATTACHMENT|.sedum/runs/golden/evidence/a1-000000000000/000000000000000000000002.jpg]]</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>

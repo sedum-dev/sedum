@@ -84,12 +84,19 @@ function collectValue(value: string, previous: readonly string[]): string[] {
   return [...previous, value];
 }
 
+const REPORTERS = ["list", "steps", "terminal", "json", "markdown", "junit"];
+
+/** `--reporter` is repeatable and also takes a comma list, e.g. junit,markdown. */
 function collectReporter(value: string, previous: readonly string[]): string[] {
-  if (!["list", "steps", "terminal", "json", "markdown"].includes(value))
-    throw new InvalidArgumentError(
-      `Unknown reporter ${JSON.stringify(value)}. Use list or steps for terminal output, or terminal, json, or markdown.`,
-    );
-  return previous.includes(value) ? [...previous] : [...previous, value];
+  const selected = [...previous];
+  for (const item of value.split(",").map((name) => name.trim())) {
+    if (!REPORTERS.includes(item))
+      throw new InvalidArgumentError(
+        `Unknown reporter ${JSON.stringify(item)}. Use list or steps for terminal output, or terminal, json, markdown, or junit.`,
+      );
+    if (!selected.includes(item)) selected.push(item);
+  }
+  return selected;
 }
 
 function collectGlob(value: string, previous: readonly string[]): string[] {
@@ -348,7 +355,7 @@ export async function runCli(
     .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
     .option(
       "--reporter <name>",
-      "reporter: list, steps, terminal, json, or markdown (repeatable; default list)",
+      "reporter: list, steps, terminal, json, markdown, or junit (repeatable or comma-separated; default list)",
       collectReporter,
       [],
     )
@@ -412,7 +419,10 @@ export async function runCli(
         const lifecycle = new ReporterLifecycle();
         const terminalNames = options.reporter.length
           ? options.reporter
-              .filter((name) => name !== "json" && name !== "markdown")
+              .filter(
+                (name) =>
+                  name !== "json" && name !== "markdown" && name !== "junit",
+              )
               .map((name) => (name === "terminal" ? "list" : name))
           : ["list"];
         const reporters = [...new Set(terminalNames)].map((name) =>
@@ -463,6 +473,7 @@ export async function runCli(
           ...(options.outputDir ? { outputDir: options.outputDir } : {}),
           ...(options.reporterDir ? { reporterDir: options.reporterDir } : {}),
           reporters: options.reporter,
+          strict: options.strict,
           headed: options.headed,
           ...(options.slow !== undefined ? { slowMoMs: options.slow } : {}),
           retries: options.retries,
@@ -531,13 +542,17 @@ export async function runCli(
             return;
           }
         }
-        // Without a terminal reporter, still say where the agent report is.
+        // Without a terminal reporter, still say where the agent report is,
+        // and the JUnit file beside it for a CI step reading both.
         if (
           !reporters.length &&
           execution.artifacts.authoritative &&
           execution.artifacts.markdownPath
-        )
+        ) {
           writeOut(`markdown ${execution.artifacts.markdownPath}\n`);
+          if (execution.artifacts.junitPath)
+            writeOut(`junit ${execution.artifacts.junitPath}\n`);
+        }
         if (execution.diagnostic)
           writeErr(renderDiagnostic(execution.diagnostic));
         exitCode = runExitCode(execution.result, options.strict);

@@ -131,6 +131,99 @@ describe("CLI command framework", () => {
     expect(executeRun).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts comma-separated reporters, passes --strict, and rejects a bad item", async () => {
+    const canonical = await result([
+      { file: "selected.test.yaml", verdict: "passed" },
+    ]);
+    const executeRun = vi.fn(async () => execution(canonical));
+    for (const argv of [
+      ["--reporter", "junit,markdown"],
+      ["--reporter", "junit", "--reporter", "markdown"],
+      ["--reporter", " junit , markdown ,junit"],
+    ]) {
+      await runCli(
+        ["run", "selected.test.yaml", ...argv, "--strict"],
+        "1.2.3",
+        {
+          executeRun,
+        },
+      );
+      expect(executeRun).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          reporters: ["junit", "markdown"],
+          strict: true,
+        }),
+      );
+    }
+    await runCli(
+      ["run", "selected.test.yaml", "--reporter", "json,junit"],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(executeRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ reporters: ["json", "junit"], strict: false }),
+    );
+    const calls = executeRun.mock.calls.length;
+    for (const [value, named] of [
+      ["junit,", '""'],
+      ["junit,bogus", '"bogus"'],
+    ] as const) {
+      const invalid = await runCli(
+        ["run", "selected.test.yaml", "--reporter", value],
+        "1.2.3",
+        { executeRun },
+      );
+      expect(invalid.exitCode).toBe(3);
+      expect(invalid.stderr).toContain(`Unknown reporter ${named}`);
+    }
+    expect(executeRun).toHaveBeenCalledTimes(calls);
+  });
+
+  it("prints the JUnit path after the markdown path and in the run summary", async () => {
+    const canonical = await result([
+      { file: "selected.test.yaml", verdict: "passed" },
+    ]);
+    const withReports = (value: RunResult) => ({
+      ...execution(value),
+      artifacts: {
+        ...execution(value).artifacts,
+        markdownPath: "/repo/.sedum/runs/fixture/report.md",
+        junitPath: "/repo/.sedum/reports/fixture/junit.xml",
+      },
+    });
+    const executeRun = vi.fn(async () => withReports(canonical));
+    const both = await runCli(
+      ["run", "selected.test.yaml", "--reporter", "junit,markdown"],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(both.stdout).toBe(
+      "markdown /repo/.sedum/runs/fixture/report.md\njunit /repo/.sedum/reports/fixture/junit.xml\n",
+    );
+    // A junit-only run writes no report.md, so stdout stays empty.
+    const junitOnly = vi.fn(async () => ({
+      ...execution(canonical),
+      artifacts: {
+        ...execution(canonical).artifacts,
+        junitPath: "/repo/.sedum/reports/fixture/junit.xml",
+      },
+    }));
+    const alone = await runCli(
+      ["run", "selected.test.yaml", "--reporter", "junit"],
+      "1.2.3",
+      { executeRun: junitOnly },
+    );
+    expect(alone.stdout).toBe("");
+    const listed = await runCli(
+      ["run", "selected.test.yaml", "--reporter", "list,junit"],
+      "1.2.3",
+      { executeRun },
+    );
+    expect(listed.stdout).toContain(
+      "junit /repo/.sedum/reports/fixture/junit.xml\n",
+    );
+  });
+
   it("prints only the report path when markdown is the only reporter", async () => {
     const canonical = await result([
       { file: "selected.test.yaml", verdict: "failed" },

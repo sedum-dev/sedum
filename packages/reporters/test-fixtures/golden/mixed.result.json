@@ -1,0 +1,537 @@
+{
+  "schemaVersion": 1,
+  "runId": "run-mixed",
+  "state": "completed",
+  "verdict": "failed",
+  "flags": ["low_confidence"],
+  "startedAt": "2026-09-23T10:00:00.000Z",
+  "updatedAt": "2026-09-23T10:00:00.000Z",
+  "finishedAt": "2026-09-23T10:00:00.000Z",
+  "elapsedMs": 4321,
+  "selectedTestCount": 3,
+  "totals": {
+    "selectedTests": 3,
+    "executedTests": 3,
+    "passedTests": 2,
+    "failedTests": 1,
+    "passedSteps": 5,
+    "failedSteps": 1,
+    "historicalAttempts": 0,
+    "flaggedSteps": 1,
+    "modelCalls": 0,
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "costUsd": 0,
+    "costComplete": true
+  },
+  "setupCalls": [],
+  "tests": [
+    {
+      "id": "test:tests/login.test.yaml",
+      "file": "tests/login.test.yaml",
+      "description": "Signs in and sees products",
+      "tags": ["smoke"],
+      "state": "completed",
+      "verdict": "passed",
+      "flags": [],
+      "selectedAttemptId": "run-mixed:attempt:1.1",
+      "attempts": [
+        {
+          "id": "run-mixed:attempt:1.1",
+          "ordinal": 1,
+          "state": "completed",
+          "verdict": "passed",
+          "flags": [],
+          "startedAt": "2026-09-23T10:00:00.000Z",
+          "finishedAt": "2026-09-23T10:00:00.000Z",
+          "elapsedMs": 1000,
+          "timeoutReason": null,
+          "error": null,
+          "steps": [
+            {
+              "id": "tests/login.test.yaml:step:1",
+              "index": 1,
+              "kind": "verify",
+              "operation": "verify",
+              "phase": "steps",
+              "sentence": "verify the cart shows 1 item",
+              "detail": "",
+              "sourceStack": [
+                {
+                  "file": "tests/login.test.yaml",
+                  "line": 3,
+                  "col": 5
+                }
+              ],
+              "state": "completed",
+              "verdict": "passed",
+              "flags": [],
+              "elapsedMs": 100,
+              "page": {
+                "status": "available",
+                "observationId": "tests/login.test.yaml:step:1:observation:2",
+                "url": "https://shop.test/checkout",
+                "title": "Checkout"
+              },
+              "locator": null,
+              "judgement": {
+                "holds": 0.92,
+                "contradicted": 0.08,
+                "threshold": 0.75,
+                "band": 0.15,
+                "contradictionCutoff": 0.5,
+                "judgedExcerpt": null
+              },
+              "observations": [
+                {
+                  "id": "tests/login.test.yaml:step:1:observation:1",
+                  "ordinal": 1,
+                  "elapsedMs": 20,
+                  "outcome": "retried",
+                  "reason": "stale_observation",
+                  "timeoutReason": null
+                },
+                {
+                  "id": "tests/login.test.yaml:step:1:observation:2",
+                  "ordinal": 2,
+                  "elapsedMs": 60,
+                  "outcome": "accepted",
+                  "reason": null,
+                  "timeoutReason": null
+                }
+              ],
+              "calls": [],
+              "error": null,
+              "evidence": {
+                "status": "omitted",
+                "reason": "passed"
+              },
+              "replayFrame": null,
+              "targetBox": null
+            },
+            {
+              "id": "tests/login.test.yaml:step:2",
+              "index": 2,
+              "kind": "verify",
+              "operation": "verify",
+              "phase": "steps",
+              "sentence": "verify the cart shows 2 items",
+              "detail": "",
+              "sourceStack": [
+                {
+                  "file": "tests/login.test.yaml",
+                  "line": 4,
+                  "col": 5
+                }
+              ],
+              "state": "completed",
+              "verdict": "passed",
+              "flags": [],
+              "elapsedMs": 200,
+              "page": {
+                "status": "available",
+                "observationId": "tests/login.test.yaml:step:2:observation:2",
+                "url": "https://shop.test/checkout",
+                "title": "Checkout"
+              },
+              "locator": null,
+              "judgement": {
+                "holds": 0.92,
+                "contradicted": 0.08,
+                "threshold": 0.75,
+                "band": 0.15,
+                "contradictionCutoff": 0.5,
+                "judgedExcerpt": null
+              },
+              "observations": [
+                {
+                  "id": "tests/login.test.yaml:step:2:observation:1",
+                  "ordinal": 1,
+                  "elapsedMs": 20,
+                  "outcome": "retried",
+                  "reason": "stale_observation",
+                  "timeoutReason": null
+                },
+                {
+                  "id": "tests/login.test.yaml:step:2:observation:2",
+                  "ordinal": 2,
+                  "elapsedMs": 60,
+                  "outcome": "accepted",
+                  "reason": null,
+                  "timeoutReason": null
+                }
+              ],
+              "calls": [],
+              "error": null,
+              "evidence": {
+                "status": "omitted",
+                "reason": "passed"
+              },
+              "replayFrame": null,
+              "targetBox": null
+            }
+          ],
+          "calls": [],
+          "problems": [],
+          "primaryProblemId": null
+        }
+      ]
+    },
+    {
+      "id": "test:tests/cart.test.yaml",
+      "file": "tests/cart.test.yaml",
+      "description": "Cart shows the added item",
+      "tags": [],
+      "state": "completed",
+      "verdict": "passed",
+      "flags": ["low_confidence"],
+      "selectedAttemptId": "run-mixed:attempt:2.1",
+      "attempts": [
+        {
+          "id": "run-mixed:attempt:2.1",
+          "ordinal": 1,
+          "state": "completed",
+          "verdict": "passed",
+          "flags": ["low_confidence"],
+          "startedAt": "2026-09-23T10:00:00.000Z",
+          "finishedAt": "2026-09-23T10:00:00.000Z",
+          "elapsedMs": 2000,
+          "timeoutReason": null,
+          "error": null,
+          "steps": [
+            {
+              "id": "tests/cart.test.yaml:step:1",
+              "index": 1,
+              "kind": "verify",
+              "operation": "verify",
+              "phase": "steps",
+              "sentence": "verify the cart shows 1 item",
+              "detail": "",
+              "sourceStack": [
+                {
+                  "file": "tests/cart.test.yaml",
+                  "line": 3,
+                  "col": 5
+                }
+              ],
+              "state": "completed",
+              "verdict": "passed",
+              "flags": [],
+              "elapsedMs": 100,
+              "page": {
+                "status": "available",
+                "observationId": "tests/cart.test.yaml:step:1:observation:2",
+                "url": "https://shop.test/checkout",
+                "title": "Checkout"
+              },
+              "locator": null,
+              "judgement": {
+                "holds": 0.92,
+                "contradicted": 0.08,
+                "threshold": 0.75,
+                "band": 0.15,
+                "contradictionCutoff": 0.5,
+                "judgedExcerpt": null
+              },
+              "observations": [
+                {
+                  "id": "tests/cart.test.yaml:step:1:observation:1",
+                  "ordinal": 1,
+                  "elapsedMs": 20,
+                  "outcome": "retried",
+                  "reason": "stale_observation",
+                  "timeoutReason": null
+                },
+                {
+                  "id": "tests/cart.test.yaml:step:1:observation:2",
+                  "ordinal": 2,
+                  "elapsedMs": 60,
+                  "outcome": "accepted",
+                  "reason": null,
+                  "timeoutReason": null
+                }
+              ],
+              "calls": [],
+              "error": null,
+              "evidence": {
+                "status": "omitted",
+                "reason": "passed"
+              },
+              "replayFrame": null,
+              "targetBox": null
+            },
+            {
+              "id": "tests/cart.test.yaml:step:2",
+              "index": 2,
+              "kind": "verify",
+              "operation": "verify",
+              "phase": "steps",
+              "sentence": "verify the cart shows 2 items",
+              "detail": "The claim held with reservations.",
+              "sourceStack": [
+                {
+                  "file": "tests/cart.test.yaml",
+                  "line": 4,
+                  "col": 5
+                }
+              ],
+              "state": "completed",
+              "verdict": "passed",
+              "flags": ["low_confidence"],
+              "elapsedMs": 200,
+              "page": {
+                "status": "available",
+                "observationId": "tests/cart.test.yaml:step:2:observation:2",
+                "url": "https://shop.test/checkout",
+                "title": "Checkout"
+              },
+              "locator": null,
+              "judgement": {
+                "holds": 0.7449,
+                "contradicted": 0.08,
+                "threshold": 0.75,
+                "band": 0.15,
+                "contradictionCutoff": 0.5,
+                "judgedExcerpt": "Cart (2)\nSubtotal $42.00"
+              },
+              "observations": [
+                {
+                  "id": "tests/cart.test.yaml:step:2:observation:1",
+                  "ordinal": 1,
+                  "elapsedMs": 20,
+                  "outcome": "retried",
+                  "reason": "stale_observation",
+                  "timeoutReason": null
+                },
+                {
+                  "id": "tests/cart.test.yaml:step:2:observation:2",
+                  "ordinal": 2,
+                  "elapsedMs": 60,
+                  "outcome": "accepted",
+                  "reason": null,
+                  "timeoutReason": null
+                }
+              ],
+              "calls": [],
+              "error": null,
+              "evidence": {
+                "status": "captured",
+                "path": "evidence/a1-000000000000/000000000000000000000002.jpg",
+                "mediaType": "image/jpeg"
+              },
+              "replayFrame": null,
+              "targetBox": null
+            }
+          ],
+          "calls": [],
+          "problems": [],
+          "primaryProblemId": null
+        }
+      ]
+    },
+    {
+      "id": "test:tests/checkout.test.yaml",
+      "file": "tests/checkout.test.yaml",
+      "description": "Checks out with the saved card",
+      "tags": [],
+      "state": "completed",
+      "verdict": "failed",
+      "flags": [],
+      "selectedAttemptId": "run-mixed:attempt:3.1",
+      "attempts": [
+        {
+          "id": "run-mixed:attempt:3.1",
+          "ordinal": 1,
+          "state": "completed",
+          "verdict": "failed",
+          "flags": [],
+          "startedAt": "2026-09-23T10:00:00.000Z",
+          "finishedAt": "2026-09-23T10:00:00.000Z",
+          "elapsedMs": 3000,
+          "timeoutReason": null,
+          "error": null,
+          "steps": [
+            {
+              "id": "tests/checkout.test.yaml:step:1",
+              "index": 1,
+              "kind": "verify",
+              "operation": "verify",
+              "phase": "steps",
+              "sentence": "verify the cart shows 1 item",
+              "detail": "",
+              "sourceStack": [
+                {
+                  "file": "tests/checkout.test.yaml",
+                  "line": 3,
+                  "col": 5
+                }
+              ],
+              "state": "completed",
+              "verdict": "passed",
+              "flags": [],
+              "elapsedMs": 100,
+              "page": {
+                "status": "available",
+                "observationId": "tests/checkout.test.yaml:step:1:observation:2",
+                "url": "https://shop.test/checkout",
+                "title": "Checkout"
+              },
+              "locator": null,
+              "judgement": {
+                "holds": 0.92,
+                "contradicted": 0.08,
+                "threshold": 0.75,
+                "band": 0.15,
+                "contradictionCutoff": 0.5,
+                "judgedExcerpt": null
+              },
+              "observations": [
+                {
+                  "id": "tests/checkout.test.yaml:step:1:observation:1",
+                  "ordinal": 1,
+                  "elapsedMs": 20,
+                  "outcome": "retried",
+                  "reason": "stale_observation",
+                  "timeoutReason": null
+                },
+                {
+                  "id": "tests/checkout.test.yaml:step:1:observation:2",
+                  "ordinal": 2,
+                  "elapsedMs": 60,
+                  "outcome": "accepted",
+                  "reason": null,
+                  "timeoutReason": null
+                }
+              ],
+              "calls": [],
+              "error": null,
+              "evidence": {
+                "status": "omitted",
+                "reason": "passed"
+              },
+              "replayFrame": null,
+              "targetBox": null
+            },
+            {
+              "id": "tests/checkout.test.yaml:step:2",
+              "index": 2,
+              "kind": "action",
+              "operation": "click",
+              "phase": "steps",
+              "sentence": "click the Checkout button",
+              "detail": "The target was ambiguous.",
+              "sourceStack": [
+                {
+                  "file": "tests/checkout.test.yaml",
+                  "line": 4,
+                  "col": 5
+                }
+              ],
+              "state": "completed",
+              "verdict": "failed",
+              "flags": [],
+              "elapsedMs": 200,
+              "page": {
+                "status": "available",
+                "observationId": "tests/checkout.test.yaml:step:2:observation:2",
+                "url": "https://shop.test/checkout",
+                "title": "Checkout"
+              },
+              "locator": {
+                "confidence": 0.48,
+                "source": "model",
+                "options": [
+                  {
+                    "label": "Checkout",
+                    "role": "button",
+                    "probability": 0.48
+                  },
+                  {
+                    "label": "(no match)",
+                    "role": "",
+                    "probability": 0.32
+                  },
+                  {
+                    "label": "Checkout another order",
+                    "role": "link",
+                    "probability": 0.2
+                  }
+                ],
+                "cache": {
+                  "outcome": "miss",
+                  "reason": "validation_changed",
+                  "fallbackCalledModel": true,
+                  "targetChanged": true
+                }
+              },
+              "judgement": null,
+              "observations": [
+                {
+                  "id": "tests/checkout.test.yaml:step:2:observation:1",
+                  "ordinal": 1,
+                  "elapsedMs": 20,
+                  "outcome": "retried",
+                  "reason": "stale_observation",
+                  "timeoutReason": null
+                },
+                {
+                  "id": "tests/checkout.test.yaml:step:2:observation:2",
+                  "ordinal": 2,
+                  "elapsedMs": 60,
+                  "outcome": "accepted",
+                  "reason": null,
+                  "timeoutReason": null
+                }
+              ],
+              "calls": [],
+              "error": {
+                "code": "ambiguous",
+                "message": "Could not choose the button.",
+                "callLog": [
+                  "waiting for getByRole('button', { name: 'Checkout' })",
+                  "element is visible, enabled and stable"
+                ]
+              },
+              "evidence": {
+                "status": "captured",
+                "path": "evidence/a1-000000000000/000000000000000000000002.jpg",
+                "mediaType": "image/jpeg"
+              },
+              "replayFrame": null,
+              "targetBox": null
+            }
+          ],
+          "calls": [],
+          "problems": [
+            {
+              "id": "run-mixed:attempt:3.1:problem:1",
+              "ordinal": 1,
+              "origin": "step",
+              "outcome": "failed",
+              "phase": "steps",
+              "sourceStack": [
+                {
+                  "file": "tests/checkout.test.yaml",
+                  "line": 4,
+                  "col": 5
+                }
+              ],
+              "stepId": "tests/checkout.test.yaml:step:2",
+              "error": {
+                "code": "ambiguous",
+                "message": "Could not choose the button.",
+                "callLog": [
+                  "waiting for getByRole('button', { name: 'Checkout' })",
+                  "element is visible, enabled and stable"
+                ]
+              }
+            }
+          ],
+          "primaryProblemId": "run-mixed:attempt:3.1:problem:1"
+        }
+      ]
+    }
+  ],
+  "discoveryProblems": [],
+  "error": null
+}

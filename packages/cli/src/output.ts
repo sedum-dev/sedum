@@ -12,6 +12,7 @@ export interface RunArtifactPaths {
   readonly resultPath: string;
   readonly htmlPath?: string | undefined;
   readonly markdownPath?: string | undefined;
+  readonly junitPath?: string | undefined;
   readonly reporterPath?: string;
   readonly authoritative: boolean;
 }
@@ -153,6 +154,7 @@ export function renderRunSummary(
     if (artifacts.htmlPath) lines.push(`html ${artifacts.htmlPath}`);
     if (artifacts.markdownPath)
       lines.push(`markdown ${artifacts.markdownPath}`);
+    if (artifacts.junitPath) lines.push(`junit ${artifacts.junitPath}`);
     if (artifacts.reporterPath)
       lines.push(`reporter ${artifacts.reporterPath}`);
   } else {

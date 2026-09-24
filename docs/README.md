@@ -4,6 +4,8 @@ See [TypeSafe provider](provider-typesafe.md) for provider configuration, data s
 
 See [CLI commands](cli.md) for `sedum validate` and `sedum list`, including offline validation, exit codes, and the `list --json` shape.
 
+See [running in CI](ci.md) for JUnit output, job summaries, and GitHub Actions, GitLab and Jenkins examples.
+
 See [assertion engine](assertion-engine.md) for `verify` / `measure` results, verdict policy, observation errors, and current page limits.
 
 See [local locator cache](locator-cache.md) for development and CI defaults, privacy, and clearing the cache.

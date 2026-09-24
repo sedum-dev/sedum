@@ -196,13 +196,9 @@ describe("live progress writer", () => {
   it("writes report.md from the final result when markdown is on", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "sedum-markdown-"));
     try {
-      const writer = await ProgressWriter.create(
-        root,
-        "run-md",
-        undefined,
-        true,
-        true,
-      );
+      const writer = await ProgressWriter.create(root, "run-md", undefined, {
+        markdown: true,
+      });
       const recorder = new RunRecorder(async () => {}, "run-md");
       await recorder.start();
       await recorder.finish({ code: "missing_key", message: "No key." });

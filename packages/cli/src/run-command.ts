@@ -26,6 +26,7 @@ import {
 } from "./diagnostics.js";
 import { ProgressWriter, ProgressWriterError } from "./progress-writer.js";
 import { openLocatorCache } from "./locator-cache-store.js";
+import { junitEvidenceDirectory } from "./evidence-root.js";
 import type { RunArtifactPaths } from "./output.js";
 import {
   loadProjectConfig,
@@ -46,6 +47,8 @@ export interface RunCommandOptions {
   readonly outputDir?: string;
   readonly reporterDir?: string;
   readonly reporters?: readonly string[];
+  /** SED-13 strict gate; JUnit records it so the file matches the exit. */
+  readonly strict?: boolean;
   readonly headed?: boolean;
   readonly slowMoMs?: number;
   readonly retries?: number;
@@ -82,6 +85,15 @@ export interface RunCommandExecution {
 
 class ReporterOutputError extends Error {}
 
+const SUPPORTED_REPORTERS: readonly string[] = [
+  "terminal",
+  "json",
+  "list",
+  "steps",
+  "markdown",
+  "junit",
+];
+
 function safeDiscoveryText(
   value: string,
   config: ResolvedProjectConfig,
@@ -102,7 +114,11 @@ function safeDiscoveryText(
 function terminalOutputFailure(
   source: RunResult,
   diagnostic: CliDiagnostic,
+  keepExisting = false,
 ): RunResult {
+  // A run that already ended with its own error keeps it primary.
+  if (keepExisting && source.error !== null && source.state !== "running")
+    return source;
   const at = new Date().toISOString();
   return validateRunResult({
     ...source,
@@ -114,51 +130,185 @@ function terminalOutputFailure(
   });
 }
 
-interface FinalReportWrite {
-  readonly result: RunResult;
-  readonly diagnostic: CliDiagnostic | null;
-  readonly reportsAvailable: boolean;
+/** Which files the selected reporters ask for, beyond the terminal. */
+interface ReportSelection {
+  /** The JSON copy under the reporter directory. */
+  readonly json: boolean;
+  readonly markdown: boolean;
+  readonly junit: boolean;
 }
 
-/** The rendered report files this writer produces, for the run summary. */
-function reportArtifacts(writer: ProgressWriter): {
-  htmlPath: string;
-  markdownPath?: string;
-} {
+function reportSelection(options: RunCommandOptions): ReportSelection {
+  const reporters = options.reporters ?? [];
   return {
-    htmlPath: writer.htmlPath,
-    ...(writer.includeMarkdown ? { markdownPath: writer.markdownPath } : {}),
+    json: Boolean(options.reporterDir) || reporters.includes("json"),
+    markdown: reporters.includes("markdown"),
+    junit: reporters.includes("junit"),
   };
 }
 
-function withoutReports(artifacts: RunArtifactPaths): RunArtifactPaths {
-  return { ...artifacts, htmlPath: undefined, markdownPath: undefined };
+/**
+ * The reporter-directory writer: the JSON copy and `junit.xml`. When the
+ * reporter directory is the output directory, JUnit goes to the canonical
+ * writer and the canonical `result.json` is the JSON report.
+ */
+async function openReportCopy(
+  root: string,
+  runId: string,
+  canonical: ProgressWriter,
+  outputDir: string,
+  reporterDir: string,
+  selection: ReportSelection,
+  strict: boolean,
+): Promise<ProgressWriter | undefined> {
+  const junit = selection.junit
+    ? {
+        strict,
+        evidenceDirectory: await junitEvidenceDirectory(
+          canonical.directory,
+          root,
+          process.env,
+        ),
+      }
+    : null;
+  if (path.resolve(reporterDir) === path.resolve(outputDir)) {
+    if (junit) canonical.includeJunit(junit);
+    return undefined;
+  }
+  if (!selection.json && !junit) return undefined;
+  return ProgressWriter.create(root, runId, reporterDir, {
+    json: selection.json,
+    html: false,
+    junit,
+  });
 }
 
-async function finishCanonical(
-  writer: ProgressWriter,
+interface RunFinish {
+  readonly result: RunResult;
+  readonly diagnostic: CliDiagnostic | null;
+  readonly reportsAvailable: boolean;
+  readonly copyAvailable: boolean;
+}
+
+function reportFormat(target: string): string {
+  const name = path.basename(target);
+  return name === "report.html"
+    ? "HTML"
+    : name === "report.md"
+      ? "Markdown"
+      : "JUnit";
+}
+
+/**
+ * Write every run file from one final result, in an order where no file can
+ * claim a result the others contradict:
+ *
+ * 1. The reporter-directory JSON copy. A failure is recorded in the result
+ *    (`output_error`) before any canonical file exists, and the copy
+ *    directory is not touched again.
+ * 2. The canonical `result.json`, then its reports.
+ * 3. The reporter-directory `junit.xml`.
+ *
+ * When a rendered report fails, every rendered report is removed and the JSON
+ * is rewritten with `reporter_output_error` (an earlier run error stays
+ * primary). Only a failed canonical `result.json` escapes to the caller.
+ */
+async function finishRun(
+  canonical: ProgressWriter,
+  copy: ProgressWriter | undefined,
   result: RunResult,
-): Promise<FinalReportWrite> {
+  recordCopyFailure: (diagnostic: CliDiagnostic) => Promise<RunResult>,
+): Promise<RunFinish> {
+  let current = result;
+  let diagnostic: CliDiagnostic | null = null;
+  let copyAvailable = copy !== undefined;
+  if (copy?.includesJson) {
+    try {
+      await copy.finish(current, { reports: false });
+    } catch {
+      diagnostic = outputDiagnostic(copy.resultPath);
+      copyAvailable = false;
+      await copy.invalidate().catch(() => undefined);
+      current = await recordCopyFailure(diagnostic);
+    }
+  }
   try {
-    await writer.finish(result);
-    return { result, diagnostic: null, reportsAvailable: true };
+    await canonical.finish(current);
+    if (copy && copyAvailable && copy.includesJunit)
+      await copy.finish(current, { json: false });
+    return {
+      result: current,
+      diagnostic,
+      reportsAvailable: true,
+      copyAvailable,
+    };
   } catch (error) {
     if (
       !(error instanceof ProgressWriterError) ||
-      (error.path !== writer.htmlPath && error.path !== writer.markdownPath)
+      !(
+        canonical.isReport(error.path) ||
+        (copy && copyAvailable && copy.isReport(error.path))
+      )
     )
       throw error;
-    const format = error.path === writer.htmlPath ? "HTML" : "Markdown";
-    const diagnostic: CliDiagnostic = {
+    const failure: CliDiagnostic = {
       code: "reporter_output_error",
-      message: `The ${format} report could not be written to ${error.path}.`,
+      message: `The ${reportFormat(error.path)} report could not be written to ${error.path}.`,
       fix: "Check the run output directory and rerun the command.",
     };
-    const failed = terminalOutputFailure(result, diagnostic);
-    await writer.removeReports();
-    await writer.finish(failed, false, false);
-    return { result: failed, diagnostic, reportsAvailable: false };
+    const failed = terminalOutputFailure(current, failure, true);
+    await canonical.removeReports();
+    if (copy && copyAvailable)
+      try {
+        await copy.removeReports();
+        if (copy.includesJson) await copy.finish(failed, { reports: false });
+      } catch {
+        // A broken copy directory never costs the canonical output.
+        copyAvailable = false;
+        await copy.invalidate().catch(() => undefined);
+      }
+    await canonical.finish(failed, { reports: false });
+    return {
+      result: failed,
+      diagnostic: failure,
+      reportsAvailable: false,
+      copyAvailable,
+    };
   }
+}
+
+/** The files a finished run can point to, leaving out any that failed. */
+function finishedArtifacts(
+  canonical: ProgressWriter,
+  copy: ProgressWriter | undefined,
+  selection: ReportSelection,
+  finished: RunFinish,
+): RunArtifactPaths {
+  const junit = canonical.includesJunit
+    ? canonical
+    : copy?.includesJunit && finished.copyAvailable
+      ? copy
+      : undefined;
+  const json = copy?.includesJson
+    ? finished.copyAvailable
+      ? copy
+      : undefined
+    : canonical;
+  return {
+    progressPath: canonical.progressPath,
+    resultPath: canonical.resultPath,
+    ...(finished.reportsAvailable
+      ? {
+          htmlPath: canonical.htmlPath,
+          ...(canonical.includeMarkdown
+            ? { markdownPath: canonical.markdownPath }
+            : {}),
+          ...(junit ? { junitPath: junit.junitPath } : {}),
+        }
+      : {}),
+    ...(selection.json && json ? { reporterPath: json.resultPath } : {}),
+    authoritative: true,
+  };
 }
 
 async function resultWithoutSink(
@@ -171,26 +321,29 @@ async function resultWithoutSink(
   return recorder.snapshot;
 }
 
-async function configuredOperationalFailure(
-  config: ResolvedProjectConfig,
+/**
+ * A run that ends before executing anything still leaves every requested
+ * file, so CI finds a `junit.xml` whose run suite carries the error.
+ */
+async function preExecutionFailure(
+  root: string,
   runId: string,
+  outputDir: string | undefined,
+  reporterDir: string,
+  selection: ReportSelection,
+  strict: boolean,
   diagnostic: CliDiagnostic,
   commit: () => void,
-  includeMarkdown: boolean,
-  discoveryProblems: NonNullable<RunResult["discoveryProblems"]> = [],
 ): Promise<RunCommandExecution> {
+  const base = outputDir ?? path.join(root, ".sedum", "runs");
+  const intended = path.join(base, runId);
   let writer: ProgressWriter;
   try {
-    writer = await ProgressWriter.create(
-      config.projectRoot,
-      runId,
-      config.outputDir,
-      true,
-      includeMarkdown,
-    );
+    writer = await ProgressWriter.create(root, runId, base, {
+      markdown: selection.markdown,
+    });
   } catch {
     commit();
-    const intended = path.join(config.outputDir, runId);
     return {
       result: await resultWithoutSink(runId, diagnostic),
       artifacts: {
@@ -201,30 +354,52 @@ async function configuredOperationalFailure(
       diagnostic,
     };
   }
+  const copy = await openReportCopy(
+    root,
+    runId,
+    writer,
+    base,
+    reporterDir,
+    selection,
+    strict,
+  ).catch(() => undefined);
   const recorder = new RunRecorder((snapshot) => writer.write(snapshot), runId);
-  await recorder.start();
-  if (discoveryProblems.length)
-    await recorder.addDiscoveryProblems(discoveryProblems);
-  commit();
-  await recorder.finish(canonicalDiagnosticError(diagnostic));
-  const finished = await finishCanonical(writer, recorder.snapshot);
-  return {
-    result: finished.result,
-    artifacts: {
-      progressPath: writer.progressPath,
-      resultPath: writer.resultPath,
-      ...(finished.reportsAvailable ? reportArtifacts(writer) : {}),
-      authoritative: true,
-    },
-    diagnostic: finished.diagnostic ?? diagnostic,
-  };
+  try {
+    await recorder.start();
+    commit();
+    await recorder.finish(canonicalDiagnosticError(diagnostic));
+    const finished = await finishRun(
+      writer,
+      copy,
+      recorder.snapshot,
+      async () => recorder.snapshot,
+    );
+    return {
+      result: finished.result,
+      artifacts: finishedArtifacts(writer, copy, selection, finished),
+      diagnostic: finished.diagnostic ?? diagnostic,
+    };
+  } catch {
+    commit();
+    await writer.invalidate();
+    await copy?.invalidate();
+    return {
+      result: await resultWithoutSink(runId, diagnostic),
+      artifacts: {
+        progressPath: writer.progressPath,
+        resultPath: writer.resultPath,
+        authoritative: false,
+      },
+      diagnostic,
+    };
+  }
 }
 
 export async function executeRunCommand(
   options: RunCommandOptions,
 ): Promise<RunCommandExecution> {
   const invocationRoot = process.cwd();
-  const includeMarkdown = Boolean(options.reporters?.includes("markdown"));
+  const reportFiles = reportSelection(options);
   const runId = randomUUID();
   let committed = false;
   const commit = () => {
@@ -287,62 +462,37 @@ export async function executeRunCommand(
       error instanceof ProjectConfigError && error.diagnostics[0]?.file
         ? path.dirname(error.diagnostics[0].file)
         : invocationRoot;
-    const intended = path.join(fallbackRoot, ".sedum", "runs", runId);
-    try {
-      const fallback = await ProgressWriter.create(
-        fallbackRoot,
-        runId,
-        undefined,
-        true,
-        includeMarkdown,
-      );
-      const recorder = new RunRecorder(
-        (snapshot) => fallback.write(snapshot),
-        runId,
-      );
-      await recorder.start();
-      commit();
-      await recorder.finish(canonicalDiagnosticError(diagnostic));
-      const finished = await finishCanonical(fallback, recorder.snapshot);
-      return {
-        result: finished.result,
-        artifacts: {
-          progressPath: fallback.progressPath,
-          resultPath: fallback.resultPath,
-          ...(finished.reportsAvailable ? reportArtifacts(fallback) : {}),
-          authoritative: true,
-        },
-        diagnostic: finished.diagnostic ?? diagnostic,
-      };
-    } catch {
-      commit();
-      return {
-        result: await resultWithoutSink(runId, diagnostic),
-        artifacts: {
-          progressPath: path.join(intended, "progress.json"),
-          resultPath: path.join(intended, "result.json"),
-          authoritative: false,
-        },
-        diagnostic,
-      };
-    }
+    return preExecutionFailure(
+      fallbackRoot,
+      runId,
+      undefined,
+      options.reporterDir
+        ? path.resolve(fallbackRoot, options.reporterDir)
+        : path.join(fallbackRoot, ".sedum", "reports"),
+      reportFiles,
+      options.strict ?? false,
+      diagnostic,
+      commit,
+    );
   }
 
   const unavailable = (options.reporters ?? []).find(
-    (reporter) =>
-      !["terminal", "json", "list", "steps", "markdown"].includes(reporter),
+    (reporter) => !SUPPORTED_REPORTERS.includes(reporter),
   );
   if (unavailable)
-    return configuredOperationalFailure(
-      config,
+    return preExecutionFailure(
+      config.projectRoot,
       runId,
+      config.outputDir,
+      config.reporterDir,
+      reportFiles,
+      options.strict ?? false,
       {
         code: "unsupported_reporter",
         message: `Reporter ${JSON.stringify(unavailable)} is not available in this build.`,
-        fix: "Use --reporter list, steps, terminal, json, or markdown.",
+        fix: "Use --reporter list, steps, terminal, json, markdown, or junit.",
       },
       commit,
-      includeMarkdown,
     );
   const controller = new AbortController();
   let timedOut = false;
@@ -367,8 +517,7 @@ export async function executeRunCommand(
         config.projectRoot,
         runId,
         config.outputDir,
-        true,
-        includeMarkdown,
+        { markdown: reportFiles.markdown },
       );
     } catch {
       commit();
@@ -384,10 +533,12 @@ export async function executeRunCommand(
         diagnostic,
       };
     }
-    const artifacts: RunArtifactPaths = {
+    // Paths the live reporters may name; the finished run reports its own.
+    let artifacts: RunArtifactPaths = {
       progressPath: writer.progressPath,
       resultPath: writer.resultPath,
-      ...reportArtifacts(writer),
+      htmlPath: writer.htmlPath,
+      ...(reportFiles.markdown ? { markdownPath: writer.markdownPath } : {}),
       authoritative: true,
     };
     let reporterFailed = false;
@@ -405,6 +556,13 @@ export async function executeRunCommand(
         }
       }
     }, runId);
+    const recordCopyFailure = async (
+      diagnostic: CliDiagnostic,
+    ): Promise<RunResult> => {
+      if (recorder.snapshot.error === null)
+        await recorder.finish(canonicalDiagnosticError(diagnostic));
+      return recorder.snapshot;
+    };
     const onReporterFailure = async (): Promise<RunCommandExecution> => {
       const diagnostic: CliDiagnostic = {
         code: "reporter_output_error",
@@ -413,14 +571,20 @@ export async function executeRunCommand(
       };
       const result = terminalOutputFailure(recorder.snapshot, diagnostic);
       try {
-        await reportWriter?.finish(result);
-        const finished = await finishCanonical(writer, result);
-        if (finished.diagnostic) await reportWriter?.finish(finished.result);
+        const finished = await finishRun(
+          writer,
+          reportWriter,
+          result,
+          async () => result,
+        );
         return {
           result: finished.result,
-          artifacts: finished.reportsAvailable
-            ? artifacts
-            : withoutReports(artifacts),
+          artifacts: finishedArtifacts(
+            writer,
+            reportWriter,
+            reportFiles,
+            finished,
+          ),
           diagnostic: finished.diagnostic ?? diagnostic,
           reporterFailed: true,
         };
@@ -451,86 +615,62 @@ export async function executeRunCommand(
         diagnostic,
       };
     }
-    const requestedJsonReport =
-      Boolean(options.reporterDir) ||
-      Boolean(options.reporters?.includes("json"));
-    const reporterUsesCanonicalDirectory =
-      requestedJsonReport &&
-      path.resolve(config.reporterDir) === path.resolve(config.outputDir);
-    if (requestedJsonReport && !reporterUsesCanonicalDirectory) {
-      try {
-        reportWriter = await ProgressWriter.create(
-          config.projectRoot,
-          runId,
-          config.reporterDir,
-          false,
-        );
-      } catch {
-        const diagnostic = outputDiagnostic(
-          path.join(config.reporterDir, runId, "result.json"),
-        );
-        commit();
-        await recorder.finish(canonicalDiagnosticError(diagnostic));
-        const finished = await finishCanonical(writer, recorder.snapshot);
-        return {
-          result: finished.result,
-          artifacts: finished.reportsAvailable
-            ? artifacts
-            : withoutReports(artifacts),
-          diagnostic: finished.diagnostic ?? diagnostic,
-        };
-      }
-    }
-    const reportedArtifacts: RunArtifactPaths = requestedJsonReport
-      ? {
-          ...artifacts,
-          reporterPath: reportWriter?.resultPath ?? writer.resultPath,
-        }
-      : artifacts;
-    const finishArtifacts = async (): Promise<
-      FinalReportWrite & { reporterAvailable: boolean }
-    > => {
-      let reporterAvailable = true;
-      let reporterDiagnostic: CliDiagnostic | null = null;
-      if (reportWriter) {
-        try {
-          await reportWriter.finish(recorder.snapshot);
-        } catch {
-          reporterDiagnostic = outputDiagnostic(reportWriter.resultPath);
-          reporterAvailable = false;
-          await reportWriter.invalidate();
-          if (recorder.snapshot.error === null)
-            await recorder.finish(canonicalDiagnosticError(reporterDiagnostic));
-        }
-      }
-      const finished = await finishCanonical(writer, recorder.snapshot);
-      if (finished.diagnostic && reportWriter && reporterAvailable) {
-        try {
-          await reportWriter.finish(finished.result);
-        } catch {
-          reporterAvailable = false;
-          await reportWriter.invalidate();
-        }
-      }
+    try {
+      reportWriter = await openReportCopy(
+        config.projectRoot,
+        runId,
+        writer,
+        config.outputDir,
+        config.reporterDir,
+        reportFiles,
+        options.strict ?? false,
+      );
+    } catch {
+      const diagnostic = outputDiagnostic(
+        path.join(config.reporterDir, runId, "result.json"),
+      );
+      commit();
+      await recorder.finish(canonicalDiagnosticError(diagnostic));
+      const finished = await finishRun(
+        writer,
+        undefined,
+        recorder.snapshot,
+        async () => recorder.snapshot,
+      );
       return {
-        ...finished,
-        diagnostic: finished.diagnostic ?? reporterDiagnostic,
-        reporterAvailable,
+        result: finished.result,
+        artifacts: finishedArtifacts(writer, undefined, reportFiles, {
+          ...finished,
+          copyAvailable: false,
+        }),
+        diagnostic: finished.diagnostic ?? diagnostic,
       };
-    };
+    }
+    const junitWriter = writer.includesJunit
+      ? writer
+      : reportWriter?.includesJunit
+        ? reportWriter
+        : undefined;
+    if (junitWriter)
+      artifacts = { ...artifacts, junitPath: junitWriter.junitPath };
     const terminalExecution = async (
       diagnostic: CliDiagnostic | null,
     ): Promise<RunCommandExecution> => {
       try {
-        const finished = await finishArtifacts();
-        const availableArtifacts = finished.reporterAvailable
-          ? reportedArtifacts
-          : artifacts;
+        const finished = await finishRun(
+          writer,
+          reportWriter,
+          recorder.snapshot,
+          recordCopyFailure,
+        );
         return {
           result: finished.result,
-          artifacts: finished.reportsAvailable
-            ? availableArtifacts
-            : withoutReports(availableArtifacts),
+          artifacts: finishedArtifacts(
+            writer,
+            reportWriter,
+            reportFiles,
+            finished,
+          ),
           diagnostic: finished.diagnostic ?? diagnostic,
           reporterFailed,
           onReporterFailure,

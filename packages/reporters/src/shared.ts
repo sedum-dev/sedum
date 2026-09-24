@@ -1,4 +1,9 @@
-import type { ResultAttempt, ResultStep, ResultTest } from "@sedum-dev/core";
+import type {
+  ResultAttempt,
+  ResultStep,
+  ResultTest,
+  RunResult,
+} from "@sedum-dev/core";
 
 /** How a test reads in a report, from most to least urgent. */
 export type TestStatus = "failed" | "incomplete" | "flagged" | "passed";
@@ -25,6 +30,27 @@ export function testStatusLabel(test: ResultTest): string {
  */
 export function testOrder(test: ResultTest): number {
   return { failed: 0, incomplete: 1, flagged: 2, passed: 3 }[testStatus(test)];
+}
+
+/**
+ * Whether a run produced a verdict CI can trust. When it did not, SED-13's
+ * exit is 3 whatever the tests said; the JUnit run testcase uses the same rule.
+ */
+export function runIsTrustworthy(result: RunResult): boolean {
+  return (
+    result.state === "completed" &&
+    result.error === null &&
+    result.verdict !== null &&
+    result.totals.executedTests > 0
+  );
+}
+
+export function stepStatus(step: ResultStep): string {
+  if (step.state === "error" || step.state === "interrupted") return step.state;
+  if (step.verdict === "failed") return "failed";
+  if (step.state === "running") return "running";
+  if (step.flags.length) return "passed, flagged";
+  return step.verdict ?? "measured";
 }
 
 /** The steps every reporter calls out: failures, errors, interruptions, flags. */
