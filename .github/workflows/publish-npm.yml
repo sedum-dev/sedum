@@ -107,5 +107,16 @@ jobs:
           mkdir clean-install
           cd clean-install
           npm init -y
-          npm install --ignore-scripts "sedum-cli@${{ needs.preflight.outputs.version }}"
+          for attempt in {1..12}; do
+            if npm install --ignore-scripts --prefer-online "sedum-cli@${{ needs.preflight.outputs.version }}" > install.log 2>&1; then
+              cat install.log
+              break
+            fi
+            cat install.log
+            if ! grep -q 'npm error code E404' install.log || [ "$attempt" -eq 12 ]; then
+              exit 1
+            fi
+            echo "Published package metadata is not yet available; retrying in 10 seconds ($attempt/12)"
+            sleep 10
+          done
           npx --no-install sedum --version
