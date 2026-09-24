@@ -2,6 +2,8 @@
 
 These pages describe how to write, configure, and run Sedum tests.
 
+- [Plain-English browser tests](plain-english-tests.md): the basics of e2e tests written in plain English, and where Sedum fits.
+- [Probabilistic testing](probabilistic-testing.md): how scores become verdicts, flags, and exit codes, and how to tune thresholds.
 - [Test file format](format.md): the `*.test.yaml` and `*.module.yaml` format, data, placeholders, modules, and hooks.
 - [Project configuration](configuration.md): `sedum.config.yaml`, named environments, `.env` loading, test discovery, and precedence.
 - [CLI commands](cli.md): `sedum init`, `doctor`, `run`, `validate`, `list`, and `browsers install`, with options, output, and exit codes.

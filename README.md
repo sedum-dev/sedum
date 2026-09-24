@@ -56,11 +56,15 @@ The speed row is five runs each with every cache off, on one laptop. See
 
 - **Probabilities, not guesses.** Every claim is scored against a threshold you
   set, and checked for contradicting evidence. A marginal pass is flagged, not
-  silently green.
+  silently green. See
+  [probabilistic testing](docs/probabilistic-testing.md).
 - **No black box.** Prompts, scoring, and caching are in this repo. You can see
   exactly what goes to the model and what comes back.
 - **Built for coding agents.** A failing run can write a `report.md` that you
   hand to Claude Code, Cursor, or another agent to fix.
+
+New to AI browser tests? Start with
+[plain-English browser tests](docs/plain-english-tests.md).
 
 ## Get started
 
