@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 import { resultTotals, type RunResult } from "@sedum-dev/core";
 import { describe, expect, it } from "vitest";
 import { validateXML } from "xmllint-wasm";
-import { neutralizeMarkers, renderJunit } from "./junit.js";
+import {
+  isEvidenceDirectory,
+  neutralizeMarkers,
+  renderJunit,
+} from "./junit.js";
 import { fixtures, unexecutedTest } from "./test-fixtures.js";
 
 const fixtureDirectory = new URL("../test-fixtures/", import.meta.url);
@@ -639,11 +643,16 @@ describe("JUnit reporter", () => {
       ".sedum\\runs",
       ".sedum/[runs]",
       ".sedum/a|b",
-    ])
+    ]) {
+      expect(isEvidenceDirectory(evidenceDirectory), evidenceDirectory).toBe(
+        false,
+      );
       expect(
         () => renderJunit(result, { strict: false, evidenceDirectory }),
         evidenceDirectory,
       ).toThrow(/relative POSIX path/u);
+    }
+    expect(isEvidenceDirectory(".sedum/runs/run-1")).toBe(true);
   });
 
   it("matches the checked-in golden samples the CI summary job renders", async () => {

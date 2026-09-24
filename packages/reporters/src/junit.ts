@@ -528,20 +528,21 @@ function discoverySuite(result: RunResult): Suite | null {
   };
 }
 
-function checkEvidenceDirectory(value: string | null): void {
-  if (value === null) return;
-  if (
-    !value ||
-    value.startsWith("/") ||
-    /^[A-Za-z]:/u.test(value) ||
-    [...value].some(
+/**
+ * Whether `value` can name the run directory in attachment lines: a relative
+ * POSIX path with no `..`, empty segment, drive prefix, backslash, marker
+ * characters or controls. The CLI uses the same rule to choose one.
+ */
+export function isEvidenceDirectory(value: string): boolean {
+  return (
+    value.length > 0 &&
+    !value.startsWith("/") &&
+    !/^[A-Za-z]:/u.test(value) &&
+    ![...value].some(
       (char) => "\\[]|".includes(char) || char.charCodeAt(0) < 0x20,
-    ) ||
-    value.split("/").some((segment) => segment === ".." || segment === "")
-  )
-    throw new Error(
-      "JUnit evidence directory must be a relative POSIX path without '..'",
-    );
+    ) &&
+    !value.split("/").some((segment) => segment === ".." || segment === "")
+  );
 }
 
 /** JUnit XML for one validated run; the same input always gives the same bytes. */
@@ -550,7 +551,13 @@ export function renderJunit(
   options: JunitReportOptions,
 ): string {
   const result = validateRunResult(input);
-  checkEvidenceDirectory(options.evidenceDirectory);
+  if (
+    options.evidenceDirectory !== null &&
+    !isEvidenceDirectory(options.evidenceDirectory)
+  )
+    throw new Error(
+      "JUnit evidence directory must be a relative POSIX path without '..'",
+    );
   const discovery = discoverySuite(result);
   const suites = [
     runSuite(result, options.strict),

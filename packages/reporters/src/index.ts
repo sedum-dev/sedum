@@ -30,5 +30,5 @@ export {
   testStatusLabel,
 } from "./shared.js";
 export type { TestStatus } from "./shared.js";
-export { renderJunit } from "./junit.js";
+export { isEvidenceDirectory, renderJunit } from "./junit.js";
 export type { JunitReportOptions } from "./junit.js";

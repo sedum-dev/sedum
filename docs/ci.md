@@ -60,8 +60,12 @@ per test and the Jenkins JUnit Attachments plugin shows all of them. Upload
 the run directory with the XML so the paths resolve.
 
 The path is relative to the CI checkout: Sedum uses the first of
-`CI_PROJECT_DIR` (GitLab), `WORKSPACE` (Jenkins) or `GITHUB_WORKSPACE` that
-contains the run, and otherwise the project root. In a monorepo with
+`CI_PROJECT_DIR` (when `GITLAB_CI=true`), `WORKSPACE` (when `JENKINS_URL` is
+set) or `GITHUB_WORKSPACE` (when `GITHUB_ACTIONS=true`) that contains the run,
+and otherwise the project root. Each variable counts only inside its own CI,
+so a stray `WORKSPACE` elsewhere cannot put local directory names in the
+report. If the run directory's path contains a character that would break an
+attachment line (such as `[`, `|` or a backslash), no frames are attached. In a monorepo with
 `sedum.config.yaml` in `apps/web`, paths start with
 `apps/web/.sedum/runs/`. Only the path is derived from these variables; their
 values are never written to the report. Frames can contain private page

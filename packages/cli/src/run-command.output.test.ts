@@ -853,6 +853,7 @@ describe("run output failure contract", () => {
         >;
       });
       vi.stubEnv("CI_PROJECT_DIR", root!);
+      vi.stubEnv("GITLAB_CI", "true");
       vi.stubEnv("WORKSPACE", "");
       vi.stubEnv("GITHUB_WORKSPACE", "");
       try {
