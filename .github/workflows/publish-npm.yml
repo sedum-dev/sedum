@@ -1,14 +1,10 @@
-name: Publish npm
+name: Publish npm alpha
 
 on:
   workflow_dispatch:
     inputs:
       candidate_run_id:
         description: Successful release candidate run ID
-        required: true
-        type: string
-      uat_run_id:
-        description: Successful trusted UAT run ID
         required: true
         type: string
 
@@ -33,15 +29,13 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Verify current candidate and trusted UAT
+      - name: Verify current alpha candidate
         id: guard
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UAT_READ_TOKEN: ${{ secrets.UAT_READ_TOKEN }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
-          UAT_RUN_ID: ${{ inputs.uat_run_id }}
         run: |
-          node scripts/release/verify-uat.mjs > release-evidence.json
+          node scripts/release/verify-alpha-candidate.mjs > release-evidence.json
           jq -r '"manifest_sha256=" + .manifestSha256, "source_commit=" + .sourceCommit, "version=" + .version' release-evidence.json >> "$GITHUB_OUTPUT"
           cat release-evidence.json
 
@@ -61,13 +55,11 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Verify UAT again after release approval
+      - name: Verify candidate again after release approval
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          UAT_READ_TOKEN: ${{ secrets.UAT_READ_TOKEN }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
-          UAT_RUN_ID: ${{ inputs.uat_run_id }}
-        run: node scripts/release/verify-uat.mjs
+        run: node scripts/release/verify-alpha-candidate.mjs
       - name: Download approved candidate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

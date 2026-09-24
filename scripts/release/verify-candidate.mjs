@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { packages, assert } from "./packages.mjs";
@@ -44,6 +45,55 @@ export async function verifyCandidate(directory, expectedSha256) {
       createHash("sha256").update(bytes).digest("hex") === entry.sha256,
       `Hash mismatch for ${entry.name}`,
     );
+    const packed = JSON.parse(
+      execFileSync(
+        "tar",
+        ["-xOzf", path.join(directory, entry.filename), "package/package.json"],
+        {
+          encoding: "utf8",
+        },
+      ),
+    );
+    assert(
+      packed.name === entry.name &&
+        packed.version === entry.version &&
+        !packed.private,
+      `Packed metadata mismatch for ${entry.name}`,
+    );
+    assert(
+      packed.repository === "https://github.com/sedum-dev/sedum",
+      `Packed repository mismatch for ${entry.name}`,
+    );
+    for (const [dependency, range] of Object.entries(
+      packed.dependencies ?? {},
+    )) {
+      if (dependency.startsWith("@sedum-dev/"))
+        assert(
+          range === entry.version,
+          `Packed ${entry.name} has stale ${dependency}`,
+        );
+      assert(
+        !range.startsWith("workspace:"),
+        `Packed ${entry.name} contains a workspace dependency`,
+      );
+    }
+    if (entry.name === "sedum-cli") {
+      assert(
+        packed.bin?.sedum === "./dist/cli.js",
+        "Packed CLI binary is missing",
+      );
+      const files = execFileSync(
+        "tar",
+        ["-tzf", path.join(directory, entry.filename)],
+        {
+          encoding: "utf8",
+        },
+      );
+      assert(
+        files.split("\n").includes("package/dist/cli.js"),
+        "Packed CLI entry point is missing",
+      );
+    }
   }
   return { manifest, manifestSha256 };
 }
