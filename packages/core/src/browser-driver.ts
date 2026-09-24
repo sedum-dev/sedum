@@ -314,7 +314,18 @@ class PlaywrightPage implements BrowserPage {
   }
 
   async captureFrame(): Promise<Uint8Array> {
-    return this.page.screenshot({ type: "jpeg", quality: 60, scale: "css" });
+    // Playwright hides the caret by default by writing inline styles onto every
+    // field and restoring them afterwards. Those are real DOM mutations: they
+    // bump the page revision, so every frame on a form looked stale and the
+    // target captured for replay could no longer be filled. A frame must only
+    // observe the page, never change it.
+    return this.page.screenshot({
+      type: "jpeg",
+      quality: 60,
+      scale: "css",
+      caret: "initial",
+      animations: "allow",
+    });
   }
 
   get closed(): boolean {

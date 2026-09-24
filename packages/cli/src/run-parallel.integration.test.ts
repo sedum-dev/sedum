@@ -51,6 +51,35 @@ function overlaps(result: RunResult): boolean {
   );
 }
 
+/** Every captured frame is on disk, unique, and in its own attempt's folder. */
+async function expectIsolatedFrames(
+  output: Awaited<ReturnType<typeof executeRunCommand>>,
+): Promise<void> {
+  const directory = path.dirname(output.artifacts.resultPath);
+  const paths = new Set<string>();
+  const folderOwners = new Map<string, string>();
+  let replayFrames = 0;
+  for (const attempt of output.result.tests.flatMap((test) => test.attempts)) {
+    for (const step of attempt.steps) {
+      if (step.operation === "type")
+        expect(step.replayFrame?.status).toBe("captured");
+      for (const frame of [step.replayFrame, step.evidence]) {
+        if (frame?.status !== "captured") continue;
+        if (frame === step.replayFrame) replayFrames++;
+        expect(paths.has(frame.path)).toBe(false);
+        paths.add(frame.path);
+        const folder = path.dirname(frame.path);
+        expect(folderOwners.get(folder) ?? attempt.id).toBe(attempt.id);
+        folderOwners.set(folder, attempt.id);
+        expect(
+          (await readFile(path.join(directory, frame.path))).length,
+        ).toBeGreaterThan(0);
+      }
+    }
+  }
+  expect(replayFrames).toBeGreaterThan(0);
+}
+
 describe.skipIf(!browserIntegration)(
   "parallel runs against the fixture site",
   () => {
@@ -109,10 +138,7 @@ describe.skipIf(!browserIntegration)(
       executeRunCommand({
         paths: names,
         browser: "chromium",
-        // `--replay` is off: on main it already makes `type` steps fail as stale
-        // (a pre-existing bug outside this change). Evidence isolation under
-        // parallel lanes is covered by run-command.parallel.test.ts.
-        replay: false,
+        replay: true,
         evidence: true,
         sensitiveOrigins: [],
         locatorCacheDisabled: true,
@@ -134,6 +160,7 @@ describe.skipIf(!browserIntegration)(
         expect(output.diagnostic).toBeNull();
         expect(output.result.verdict).toBe("passed");
         expect(output.result.tests.map((test) => test.file)).toEqual(names);
+        await expectIsolatedFrames(output);
       }
       expect(runExitCode(parallel.result, false)).toBe(
         runExitCode(serial.result, false),
@@ -156,6 +183,7 @@ describe.skipIf(!browserIntegration)(
           count: 3,
           globalSelectedTests: 20,
         });
+        await expectIsolatedFrames(output);
         seen.push(...output.result.tests.map((test) => test.file));
       }
       expect(new Set(seen).size).toBe(seen.length);
