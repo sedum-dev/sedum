@@ -23,9 +23,12 @@ export type {
 export { renderMarkdown } from "./markdown.js";
 export {
   needsAttention,
+  runIsTrustworthy,
   score,
   testOrder,
   testStatus,
   testStatusLabel,
 } from "./shared.js";
 export type { TestStatus } from "./shared.js";
+export { renderJunit } from "./junit.js";
+export type { JunitReportOptions } from "./junit.js";

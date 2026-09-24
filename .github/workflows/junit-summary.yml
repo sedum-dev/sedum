@@ -1,0 +1,54 @@
+name: JUnit summary
+
+# Shows the JUnit reporter's output in a GitHub Actions job summary (SED-41),
+# rendered by the built reporter from the golden mixed and clean runs.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - packages/reporters/src/junit*.ts
+      - packages/reporters/src/shared.ts
+      - packages/reporters/test-fixtures/golden/**
+      - scripts/junit-sample.mjs
+      - .github/workflows/junit-summary.yml
+
+permissions:
+  contents: read
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Render JUnit samples
+        run: node scripts/junit-sample.mjs junit-sample
+      # annotate_only needs no checks: write and works on fork PRs.
+      - name: Summary (default)
+        uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6.5.0
+        with:
+          report_paths: junit-sample/default/*.junit.xml
+          check_name: Sedum JUnit (default)
+          annotate_only: true
+          job_summary: true
+          detailed_summary: true
+          include_passed: true
+          fail_on_failure: false
+      - name: Summary (--strict)
+        uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6.5.0
+        with:
+          report_paths: junit-sample/strict/*.junit.xml
+          check_name: Sedum JUnit (--strict)
+          annotate_only: true
+          job_summary: true
+          detailed_summary: true
+          include_passed: true
+          fail_on_failure: false

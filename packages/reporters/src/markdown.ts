@@ -14,6 +14,7 @@ import {
   selectedAttempt,
   shellArg,
   sourceStack,
+  stepStatus,
   testOrder,
   testStatus,
   testStatusLabel,
@@ -59,14 +60,6 @@ function fence(text: string): string {
   );
   const ticks = "`".repeat(Math.max(3, longest + 1));
   return ticks + "text\n" + text.replace(/\s+$/u, "") + "\n" + ticks;
-}
-
-function stepStatus(step: ResultStep): string {
-  if (step.state === "error" || step.state === "interrupted") return step.state;
-  if (step.verdict === "failed") return "failed";
-  if (step.state === "running") return "running";
-  if (step.flags.length) return "passed, flagged";
-  return step.verdict ?? "measured";
 }
 
 function flags(values: readonly string[]): string {
