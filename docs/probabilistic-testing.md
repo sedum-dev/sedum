@@ -81,9 +81,9 @@ second, and retry the third.
 - **"Not sure" is its own answer.** A normal test reports "the product broke"
   and "the test could not tell" the same way. Sedum keeps them apart, so people
   look at real failures first.
-- **You can see a check getting weaker.** Every run records the scores. A claim
-  that slides from 0.97 to 0.81 to 0.64 is telling you something before it
-  fails. A yes or no answer throws that away.
+- **Flakiness shows up before it breaks the build.** A yes or no test goes
+  green, green, red, green, and you learn nothing until it fails. A score moves
+  first. See [catching flakiness early](#catching-flakiness-early).
 - **Cheap is safe.** A fast, inexpensive model is only trustworthy if it says
   when it is unsure. Scores let Sedum accept confident answers and flag the
   rest, which is what makes it safe to ask a model on every step of every run.
@@ -93,6 +93,55 @@ second, and retry the third.
 - **Bad tests show up.** A high contradicted score usually means the sentence
   is ambiguous, or the page is. The fix is often to rewrite the step, and the
   report tells you which step.
+
+## Catching flakiness early
+
+A flaky test is one that passes and fails on the same code. With yes or no
+checks, flakiness is noise: you see a red build, rerun it, get green, and move
+on. Nothing tells you whether it will happen again, or which step is to blame.
+
+A score is a continuous signal. Consider one claim across five runs:
+
+| Run | Holds score | Verdict                |
+| --- | ----------- | ---------------------- |
+| 1   | 0.97        | pass                   |
+| 2   | 0.95        | pass                   |
+| 3   | 0.81        | pass                   |
+| 4   | 0.68        | pass, `low_confidence` |
+| 5   | 0.52        | fail                   |
+
+A yes or no test shows four passes and then a surprise. The scores show the
+check getting weaker from run 3, and the flag in run 4 says so before anything
+fails. Common causes are a page that renders slowly or differently, a change in
+the product that the claim no longer quite describes, or a claim that was vague
+from the start.
+
+Scores also tell you what kind of flaky a step is:
+
+- **A score that jumps around a threshold** means the claim is borderline on
+  this page. Make the claim more specific, or check that the page really shows
+  the same thing every time.
+- **A score that is steady but low** means the claim never fitted the page
+  well. Rewrite it.
+- **A high contradicted score** means the page shows evidence for and against
+  the claim. Either the claim is ambiguous or the page is.
+
+Every run keeps its scores in `.sedum/runs/<run-id>/result.json`. To see how
+each claim scored across your recent runs:
+
+```sh
+for f in .sedum/runs/*/result.json; do
+  jq -r '.startedAt as $t
+    | .tests[].attempts[].steps[]
+    | select(.kind == "verify" and .judgement != null)
+    | [$t, .sentence, .judgement.holds] | @tsv' "$f"
+done | sort -t "$(printf '\t')" -k2,2 -k1,1
+```
+
+Retries work better with scores too. `--retries` reruns a failed test from a
+fresh browser and keeps every attempt in the result. Instead of rerunning until
+green, you can compare the attempts' scores and see whether the failure was
+borderline or clear.
 
 ## Tuning thresholds
 
