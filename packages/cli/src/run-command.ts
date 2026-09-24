@@ -1,6 +1,7 @@
 import {
   FileClassificationCache,
   PlaywrightBrowserDriver,
+  ReusableBrowserDriver,
   RunRecorder,
   runFlow,
   safeText,
@@ -8,9 +9,14 @@ import {
   type RunResult,
   type BrowserKind,
 } from "@sedum-dev/core";
-import { TypeSafeAdapter } from "@sedum-dev/provider-typesafe";
+import {
+  DEFAULT_PROVIDER_CONCURRENCY,
+  ProviderGate,
+  TypeSafeAdapter,
+} from "@sedum-dev/provider-typesafe";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { availableParallelism } from "node:os";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   canonicalDiagnosticError,
   flowDiagnostic,
@@ -28,6 +34,8 @@ import {
   type ResolvedProjectConfig,
 } from "./config.js";
 import { discoverRunTests, type RunFilters } from "./run-selection.js";
+import { planLanes, runPool, type ParallelRequest } from "./run-pool.js";
+import { shardProblems, shardTests, type ShardSpec } from "./run-shard.js";
 
 export interface RunCommandOptions {
   readonly file?: string;
@@ -45,6 +53,14 @@ export interface RunCommandOptions {
   readonly slowMoMs?: number;
   readonly retries?: number;
   readonly timeoutMinutes?: number;
+  /** `--parallel`; defaults to one lane. */
+  readonly parallel?: ParallelRequest;
+  /** `--shard-index`/`--shard-count`, validated by the caller. */
+  readonly shard?: ShardSpec;
+  /** `--provider-concurrency`; defaults to min(4, lanes x 2). */
+  readonly providerConcurrency?: number;
+  /** Injected for tests; defaults to `os.availableParallelism()`. */
+  readonly availableParallelism?: number;
   readonly replay: boolean;
   readonly evidence: boolean;
   readonly sensitiveOrigins: readonly string[];
@@ -674,6 +690,7 @@ export async function executeRunCommand(
       }
     };
     let files: readonly string[];
+    let globalSelectedTests = 0;
     let discoveryProblems: NonNullable<RunResult["discoveryProblems"]> = [];
     try {
       const selection = await discoverRunTests(
@@ -681,9 +698,11 @@ export async function executeRunCommand(
         options.paths ?? (options.file ? [options.file] : []),
         options.filters,
       );
-      files = selection.tests.map((test) =>
-        path.join(config.projectRoot, test.file),
-      );
+      globalSelectedTests = selection.tests.length;
+      const selected = options.shard
+        ? shardTests(selection.tests, options.shard)
+        : selection.tests;
+      files = selected.map((test) => path.join(config.projectRoot, test.file));
       discoveryProblems = [
         ...selection.problems,
         ...selection.invalid.flatMap((entry) =>
@@ -697,6 +716,9 @@ export async function executeRunCommand(
           })),
         ),
       ];
+      // Each bad file is reported by exactly one shard.
+      if (options.shard)
+        discoveryProblems = shardProblems(discoveryProblems, options.shard);
     } catch {
       const error = new ProjectConfigError([
         {
@@ -735,6 +757,19 @@ export async function executeRunCommand(
       );
       return terminalExecution(diagnostic);
     }
+    if (files.length === 0 && options.shard && globalSelectedTests > 0) {
+      const { index, count } = options.shard;
+      const diagnostic: CliDiagnostic = {
+        code: "empty_shard",
+        message: `Shard ${index}/${count} has no tests; the selection has ${globalSelectedTests} test${globalSelectedTests === 1 ? "" : "s"}.`,
+        fix: `Use --shard-count ${globalSelectedTests} or fewer.`,
+      };
+      if (discoveryProblems.length)
+        await recorder.addDiscoveryProblems(discoveryProblems);
+      commit();
+      await recorder.finish(canonicalDiagnosticError(diagnostic));
+      return terminalExecution(diagnostic);
+    }
     if (files.length === 0) {
       const error = new ProjectConfigError([
         {
@@ -758,13 +793,27 @@ export async function executeRunCommand(
     }
 
     try {
-      await recorder.selectTests(files.length);
+      const lanes = planLanes(
+        options.parallel ?? 1,
+        options.availableParallelism ?? availableParallelism(),
+        files.length,
+      );
+      const providerConcurrency =
+        options.providerConcurrency ??
+        Math.min(DEFAULT_PROVIDER_CONCURRENCY, lanes * 2);
+      await recorder.selectTests(files.length, {
+        parallel: { requested: options.parallel ?? 1, lanes },
+        shard: options.shard ? { ...options.shard, globalSelectedTests } : null,
+        providerConcurrency,
+      });
       if (discoveryProblems.length)
         await recorder.addDiscoveryProblems(discoveryProblems);
       if (signal.aborted) throw new Error("canceled");
-      const provider = new TypeSafeAdapter(
-        config.apiKey ? { apiKey: config.apiKey } : {},
-      );
+      const gate = new ProviderGate({ concurrency: providerConcurrency });
+      const provider = new TypeSafeAdapter({
+        ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+        gate,
+      });
       const cache = await FileClassificationCache.load(
         path.join(config.projectRoot, ".sedum", "classifications.json"),
         "jev-latest",
@@ -775,51 +824,82 @@ export async function executeRunCommand(
         env: process.env,
       });
       let operational: ReturnType<typeof flowDiagnostic> | null = null;
-      const browser = new PlaywrightBrowserDriver();
-      for (const file of files) {
-        for (let attempt = 0; attempt <= (options.retries ?? 0); attempt++) {
-          if (attempt > 0) await recorder.startAttempt();
-          const result = await runFlow(file, {
-            repoRoot: config.projectRoot,
-            browser,
-            provider,
-            classificationCache: cache,
-            locatorCache,
-            env: config.variables,
-            browserKind: config.browser,
-            viewport: config.viewport,
-            verifyPolicy: config.thresholds,
-            ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-            ...(options.urlOverride
-              ? { urlOverride: options.urlOverride }
-              : {}),
-            ...(options.headed ? { headless: false } : {}),
-            ...(options.headed ? { headedOverlay: true } : {}),
-            ...(options.slowMoMs !== undefined
-              ? { slowMoMs: options.slowMoMs }
-              : {}),
-            signal,
-            report: {
-              recorder,
-              privacy: {
-                secretValues: [],
-                sensitiveOrigins: options.sensitiveOrigins,
-              },
-              evidenceEnabled: options.evidence,
-              replay: options.replay,
-              saveFrame: (attempt, frameId, bytes) =>
-                writer.saveFrame(attempt, frameId, bytes),
-            },
-          });
-          if (reporterFailed) throw new ReporterOutputError();
-          if (signal.aborted) break;
-          if (result.status === "could_not_run") {
-            operational = flowDiagnostic(result);
-            break;
-          }
-          if (result.status === "passed") break;
-        }
-        if (operational || signal.aborted) break;
+      const driver = new PlaywrightBrowserDriver();
+      const browsers = Array.from(
+        { length: lanes },
+        () => new ReusableBrowserDriver(driver),
+      );
+      try {
+        await runPool({
+          items: files,
+          lanes,
+          signal,
+          run: async (file, lane, ordinal) => {
+            const browser = browsers[lane]!;
+            for (
+              let attempt = 0;
+              attempt <= (options.retries ?? 0);
+              attempt++
+            ) {
+              if (attempt > 0)
+                await recorder.testAt(ordinal)?.startAttempt(lane);
+              const result = await runFlow(file, {
+                repoRoot: config.projectRoot,
+                browser,
+                provider,
+                classificationCache: cache,
+                locatorCache,
+                // Per-attempt values let tests keep backend data apart, like
+                // Playwright's TEST_PARALLEL_INDEX. They are env-derived, so
+                // they stay opaque in model input and reports.
+                env: {
+                  ...config.variables,
+                  SEDUM_PARALLEL_INDEX: String(lane),
+                  SEDUM_SHARD_INDEX: String(options.shard?.index ?? 1),
+                  SEDUM_ATTEMPT_KEY: randomBytes(6).toString("hex"),
+                },
+                browserKind: config.browser,
+                viewport: config.viewport,
+                verifyPolicy: config.thresholds,
+                ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+                ...(options.urlOverride
+                  ? { urlOverride: options.urlOverride }
+                  : {}),
+                ...(options.headed ? { headless: false } : {}),
+                ...(options.headed ? { headedOverlay: true } : {}),
+                ...(options.slowMoMs !== undefined
+                  ? { slowMoMs: options.slowMoMs }
+                  : {}),
+                signal,
+                report: {
+                  recorder,
+                  slot: { ordinal, lane },
+                  privacy: {
+                    secretValues: [],
+                    sensitiveOrigins: options.sensitiveOrigins,
+                  },
+                  evidenceEnabled: options.evidence,
+                  replay: options.replay,
+                  saveFrame: (attempt, frameId, bytes) =>
+                    writer.saveFrame(attempt, frameId, bytes),
+                },
+              });
+              if (reporterFailed) throw new ReporterOutputError();
+              if (signal.aborted) return "stop";
+              if (result.status === "could_not_run") {
+                // Replace the lane's browser, as Playwright replaces a worker.
+                await browser.recycle();
+                operational ??= flowDiagnostic(result);
+                return "stop";
+              }
+              if (result.status === "passed") break;
+            }
+            return "continue";
+          },
+        });
+      } finally {
+        gate.close();
+        await Promise.all(browsers.map((browser) => browser.recycle()));
       }
       if (signal.aborted) {
         const diagnostic: CliDiagnostic = timedOut

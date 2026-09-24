@@ -31,7 +31,16 @@ import {
   validateCall,
   validateChoice,
   validateNoul,
+  type CallMeta,
 } from "./validation.js";
+import {
+  GateWaitExceeded,
+  ProviderGate,
+  RATE_LIMIT_BUDGET_MS,
+  backoffDelay,
+  cooldownDelay,
+  parseRetryAfter,
+} from "./gate.js";
 
 const BASE_URL = "https://api.typesafe.ai";
 const MAX_ATTEMPTS = 3;
@@ -46,6 +55,15 @@ export interface TypeSafeAdapterOptions {
   readonly deadlineMs?: number;
   readonly attemptTimeoutMs?: number;
   readonly backoffInitialMs?: number;
+  /**
+   * Admission shared by every lane of a run: a concurrency cap plus one 429
+   * cooldown. Adapters built without one get a private gate.
+   */
+  readonly gate?: ProviderGate;
+  /** Injected for deterministic jitter in tests. */
+  readonly random?: () => number;
+  /** Injected clock for deterministic wait accounting in tests. */
+  readonly now?: () => number;
 }
 
 function positiveDuration(value: number, label: string): number {
@@ -72,10 +90,10 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+/** Retryable failures other than 429, which waits on the shared cooldown instead. */
 function retryable(error: unknown): boolean {
   return (
-    (error instanceof APIError &&
-      (error.status === 429 || error.status === 529)) ||
+    (error instanceof APIError && error.status === 529) ||
     error instanceof APIConnectionError
   );
 }
@@ -143,6 +161,9 @@ export class TypeSafeAdapter
   private readonly deadlineMs: number;
   private readonly attemptTimeoutMs: number;
   private readonly backoffInitialMs: number;
+  private readonly gate: ProviderGate;
+  private readonly random: () => number;
+  private readonly now: () => number;
 
   constructor(options: TypeSafeAdapterOptions = {}) {
     const key = options.apiKey ?? process.env.TYPESAFE_API_KEY;
@@ -163,6 +184,9 @@ export class TypeSafeAdapter
       options.backoffInitialMs ?? DEFAULT_BACKOFF_MS,
       "Retry backoff",
     );
+    this.now = options.now ?? Date.now;
+    this.random = options.random ?? Math.random;
+    this.gate = options.gate ?? new ProviderGate({ now: this.now });
     this.client = new TypeSafeClient({
       apiKey: key.trim(),
       baseURL: BASE_URL,
@@ -174,63 +198,151 @@ export class TypeSafeAdapter
     });
   }
 
-  private async ask(request: SystemOneRequest, options?: ProviderCallOptions) {
-    const controller = new AbortController();
-    const callerAbort = () => controller.abort();
-    if (options?.signal?.aborted) controller.abort();
-    options?.signal?.addEventListener("abort", callerAbort, { once: true });
-    const started = performance.now();
-    const timer = setTimeout(() => controller.abort(), this.deadlineMs);
-    let attempts = 0;
-    try {
-      for (;;) {
-        if (controller.signal.aborted)
-          throw new ProviderError(
-            "timeout",
-            "Provider call exceeded its deadline or was canceled.",
-            attempts,
-          );
-        attempts++;
-        const remaining = Math.max(
-          1,
-          Math.floor(this.deadlineMs - (performance.now() - started)),
+  /**
+   * Send one logical call. The call's deadline and `MAX_ATTEMPTS` cover only
+   * active request time and non-429 failures, measured from admission. Time
+   * waiting for a slot or a shared cooldown is bounded by the caller's signal
+   * (the run deadline or an interrupt) and, after the first 429, by
+   * `RATE_LIMIT_BUDGET_MS`.
+   */
+  private async ask(
+    request: SystemOneRequest,
+    options?: ProviderCallOptions,
+  ): Promise<{ response: unknown; meta: CallMeta }> {
+    const signal = options?.signal;
+    let requests = 0;
+    let failures = 0;
+    let rateLimits = 0;
+    let activeMs = 0;
+    let queueWaitMs = 0;
+    let rateLimitWaitMs = 0;
+    let firstRateLimitAt: number | null = null;
+    let afterRateLimit = false;
+    const canceled = () =>
+      new ProviderError(
+        "timeout",
+        "Provider call exceeded its deadline or was canceled.",
+        requests,
+      );
+    for (;;) {
+      if (signal?.aborted) throw canceled();
+      const remaining = this.deadlineMs - activeMs;
+      if (remaining <= 0) throw canceled();
+      const budgetLeft =
+        firstRateLimitAt === null
+          ? undefined
+          : RATE_LIMIT_BUDGET_MS - (this.now() - firstRateLimitAt);
+      if (budgetLeft !== undefined && budgetLeft <= 0)
+        throw new ProviderError(
+          "rate-limited",
+          "TypeSafe kept rate limiting requests for five minutes.",
+          requests,
         );
-        try {
-          const response = await this.client.systemOne(request, {
-            signal: controller.signal,
-            timeout: Math.min(this.attemptTimeoutMs, remaining),
-            retry: { maxRetries: 0 },
-          });
-          return { response: response as unknown, attempts };
-        } catch (error) {
-          if (controller.signal.aborted)
-            throw new ProviderError(
-              "timeout",
-              "Provider call exceeded its deadline or was canceled.",
-              attempts,
-            );
-          if (!retryable(error)) throw safeError(error, attempts);
-          if (attempts >= MAX_ATTEMPTS)
-            throw new ProviderError(
-              "retry-exhausted",
-              "TypeSafe did not succeed after three attempts.",
-              attempts,
-            );
-          const delay = this.backoffInitialMs * 2 ** (attempts - 1);
-          try {
-            await sleep(delay, controller.signal);
-          } catch {
-            throw new ProviderError(
-              "timeout",
-              "Provider call exceeded its deadline or was canceled.",
-              attempts,
-            );
-          }
-        }
+      let admitted: Awaited<
+        ReturnType<
+          typeof this.gate.run<
+            | { readonly ok: true; readonly response: unknown }
+            | { readonly ok: false; readonly error: unknown }
+          >
+        >
+      >;
+      try {
+        admitted = await this.gate.run(
+          async () => {
+            requests++;
+            const started = this.now();
+            try {
+              const response = await this.client.systemOne(request, {
+                ...(signal ? { signal } : {}),
+                timeout: Math.max(
+                  1,
+                  Math.floor(Math.min(this.attemptTimeoutMs, remaining)),
+                ),
+                retry: { maxRetries: 0 },
+              });
+              return { ok: true as const, response: response as unknown };
+            } catch (error) {
+              // Start the shared cooldown before this slot is released, so no
+              // queued request slips out between the 429 and the pause.
+              if (
+                error instanceof APIError &&
+                error.status === 429 &&
+                !signal?.aborted
+              ) {
+                rateLimits++;
+                this.gate.cooldown(
+                  this.now() +
+                    cooldownDelay(
+                      parseRetryAfter(error.headers, this.now()),
+                      rateLimits,
+                      this.backoffInitialMs,
+                      this.random(),
+                    ),
+                );
+              }
+              return { ok: false as const, error };
+            } finally {
+              activeMs += Math.max(0, this.now() - started);
+            }
+          },
+          {
+            ...(signal ? { signal } : {}),
+            ...(budgetLeft === undefined ? {} : { maxWaitMs: budgetLeft }),
+          },
+        );
+      } catch (error) {
+        if (error instanceof GateWaitExceeded)
+          throw new ProviderError(
+            "rate-limited",
+            "TypeSafe kept rate limiting requests for five minutes.",
+            requests,
+          );
+        throw canceled();
       }
-    } finally {
-      clearTimeout(timer);
-      options?.signal?.removeEventListener("abort", callerAbort);
+      if (afterRateLimit) rateLimitWaitMs += admitted.waitedMs;
+      else queueWaitMs += admitted.waitedMs;
+      const outcome = admitted.value;
+      if (outcome.ok) {
+        this.gate.succeeded();
+        return {
+          response: outcome.response,
+          meta: {
+            attempts: requests,
+            billableAttempts: requests - rateLimits,
+            rateLimited: rateLimits > 0,
+            rateLimitWaitMs,
+            queueWaitMs,
+          },
+        };
+      }
+      const error = outcome.error;
+      if (signal?.aborted) throw canceled();
+      if (error instanceof APIError && error.status === 429) {
+        firstRateLimitAt ??= this.now();
+        afterRateLimit = true;
+        continue;
+      }
+      afterRateLimit = false;
+      if (!retryable(error)) throw safeError(error, requests);
+      failures++;
+      if (failures >= MAX_ATTEMPTS)
+        throw new ProviderError(
+          "retry-exhausted",
+          "TypeSafe did not succeed after three attempts.",
+          requests,
+        );
+      const delay = backoffDelay(
+        failures,
+        this.backoffInitialMs,
+        this.random(),
+      );
+      if (delay >= this.deadlineMs - activeMs) throw canceled();
+      try {
+        await sleep(delay, signal ?? new AbortController().signal);
+      } catch {
+        throw canceled();
+      }
+      activeMs += delay;
     }
   }
 
@@ -240,8 +352,9 @@ export class TypeSafeAdapter
     options?: ProviderCallOptions,
   ): Promise<ResolverDecision> {
     const built = buildResolverRequest(sentence, candidates);
-    const { response, attempts } = await this.ask(built.request, options);
-    const call = validateCall(response, attempts);
+    const { response, meta } = await this.ask(built.request, options);
+    const call = validateCall(response, meta);
+    const attempts = call.attempts;
     let answer: ReturnType<typeof validateChoice>;
     try {
       answer = validateChoice(answersOf(response).target, built.optionIds);
@@ -265,8 +378,9 @@ export class TypeSafeAdapter
     options?: ProviderCallOptions,
   ): Promise<JudgeDecision> {
     const request = buildJudgeRequest(claim, pageDigest);
-    const { response, attempts } = await this.ask(request, options);
-    const call = validateCall(response, attempts);
+    const { response, meta } = await this.ask(request, options);
+    const call = validateCall(response, meta);
+    const attempts = call.attempts;
     let holds: number;
     let contradicted: number;
     try {
@@ -294,8 +408,8 @@ export class TypeSafeAdapter
       let receiptRecorded = false;
       try {
         const asked = await this.ask(chunk.request, options);
-        attempts = asked.attempts;
-        const call = validateCall(asked.response, attempts);
+        attempts = asked.meta.attempts;
+        const call = validateCall(asked.response, asked.meta);
         calls.push(call);
         receiptRecorded = true;
         const replyAnswers = answersOf(asked.response);
@@ -337,4 +451,10 @@ export class TypeSafeAdapter
 export type TypeSafeResolver = Resolver;
 export type TypeSafeJudge = Judge;
 export { probeTypeSafeApiKey } from "./doctor.js";
+export {
+  ProviderGate,
+  DEFAULT_PROVIDER_CONCURRENCY,
+  MAX_PROVIDER_CONCURRENCY,
+  RATE_LIMIT_BUDGET_MS,
+} from "./gate.js";
 export type { AuthProbeResult } from "./doctor.js";

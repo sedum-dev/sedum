@@ -211,4 +211,208 @@ describe("terminal reporters", () => {
       "rerun sedum run 'tests/partial.test.yaml'",
     );
   });
+
+  it("prints whole per-test blocks with a counter when tests run in parallel lanes", async () => {
+    const snapshots: RunResult[] = [];
+    const recorder = new RunRecorder(async (value) => {
+      snapshots.push(structuredClone(value));
+    }, "parallel");
+    await recorder.start();
+    await recorder.selectTests(2, {
+      parallel: { requested: 2, lanes: 2 },
+      shard: null,
+      providerConcurrency: 4,
+    });
+    const a = await recorder.beginTest({
+      id: "a",
+      file: "a.test.yaml",
+      ordinal: 0,
+      lane: 0,
+    });
+    const b = await recorder.beginTest({
+      id: "b",
+      file: "b.test.yaml",
+      ordinal: 1,
+      lane: 1,
+    });
+    const make = (id: string, index: number): ResultStep => ({
+      ...step(),
+      id,
+      index,
+      flags: [],
+      sentence: `sentence ${id}`,
+      sourceStack: [{ file: `${id[0]}.test.yaml`, line: index, col: 1 }],
+    });
+    await a.addStep(make("a1", 1));
+    await b.addStep(make("b1", 1));
+    await a.addStep(make("a2", 2));
+    await b.finishTest("passed");
+    await a.finishTest("passed");
+    await recorder.finish();
+    const parallel = { ...context, parallel: { lanes: 2, total: 2 } };
+    const render = (name: "list" | "steps") => {
+      const lifecycle = new ReporterLifecycle();
+      const reporter = createTerminalReporter(name);
+      return snapshots
+        .flatMap((snapshot) => lifecycle.feed(snapshot))
+        .map((event) => reporter.onEvent(event, parallel))
+        .join("");
+    };
+    expect(render("list")).toBe(
+      "progress /tmp/run/progress.json\n[1/2] test PASSED b.test.yaml\n[2/2] test PASSED a.test.yaml\n",
+    );
+    expect(render("steps")).toBe(
+      [
+        "progress /tmp/run/progress.json",
+        "b.test.yaml:1 PASSED steps step 1: sentence b1",
+        "a.test.yaml:1 PASSED steps step 1: sentence a1",
+        "a.test.yaml:2 PASSED steps step 2: sentence a2",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("flushes buffered steps of a test that never completed when the run ends", async () => {
+    const snapshots: RunResult[] = [];
+    const recorder = new RunRecorder(async (value) => {
+      snapshots.push(structuredClone(value));
+    }, "cut-short");
+    await recorder.start();
+    const a = await recorder.beginTest({
+      id: "a",
+      file: "a.test.yaml",
+      ordinal: 0,
+    });
+    await a.addStep({ ...step(), flags: [], id: "a1" });
+    // The lifecycle reports the unfinished test only as runCompleted.
+    const lifecycle = new ReporterLifecycle();
+    const reporter = createTerminalReporter("steps");
+    const parallel = { ...context, parallel: { lanes: 2, total: 1 } };
+    const events = snapshots.flatMap((snapshot) => lifecycle.feed(snapshot));
+    const buffered = events
+      .map((event) => reporter.onEvent(event, parallel))
+      .join("");
+    expect(buffered).toBe("progress /tmp/run/progress.json\n");
+    const flushed = reporter.onEvent(
+      { type: "runCompleted", result: recorder.snapshot },
+      parallel,
+    );
+    expect(flushed).toContain("a.test.yaml:12 PASSED steps step 1");
+  });
+
+  it("prints only the final outcome of a test that fails and then passes on retry", async () => {
+    const snapshots: RunResult[] = [];
+    const recorder = new RunRecorder(async (value) => {
+      snapshots.push(structuredClone(value));
+    }, "retried");
+    await recorder.start();
+    await recorder.selectTests(2, {
+      parallel: { requested: 2, lanes: 2 },
+      shard: null,
+      providerConcurrency: 4,
+    });
+    const flaky = await recorder.beginTest({
+      id: "flaky",
+      file: "flaky.test.yaml",
+      ordinal: 0,
+      lane: 0,
+    });
+    const steady = await recorder.beginTest({
+      id: "steady",
+      file: "steady.test.yaml",
+      ordinal: 1,
+      lane: 1,
+    });
+    await flaky.addStep({
+      ...step(),
+      id: "f1",
+      flags: [],
+      verdict: "failed",
+      sourceStack: [{ file: "flaky.test.yaml", line: 1, col: 1 }],
+    });
+    await flaky.finishTest("failed");
+    await flaky.startAttempt(0);
+    await steady.addStep({
+      ...step(),
+      id: "s1",
+      flags: [],
+      sourceStack: [{ file: "steady.test.yaml", line: 1, col: 1 }],
+    });
+    await steady.finishTest("passed");
+    await flaky.addStep({
+      ...step(),
+      id: "f2",
+      flags: [],
+      sourceStack: [{ file: "flaky.test.yaml", line: 1, col: 1 }],
+    });
+    await flaky.finishTest("passed");
+    await recorder.finish();
+    const parallel = {
+      ...context,
+      parallel: { lanes: 2, total: 2, retries: 1 },
+    };
+    const render = (
+      name: "list" | "steps",
+      input: ReporterContext = parallel,
+    ) => {
+      const lifecycle = new ReporterLifecycle();
+      const reporter = createTerminalReporter(name);
+      return snapshots
+        .flatMap((snapshot) => lifecycle.feed(snapshot))
+        .map((event) => reporter.onEvent(event, input))
+        .join("");
+    };
+    expect(render("list")).toBe(
+      "progress /tmp/run/progress.json\n[1/2] test PASSED steady.test.yaml\n[2/2] test PASSED flaky.test.yaml (2 attempts)\n",
+    );
+    const steps = render("steps");
+    expect(steps.indexOf("steady.test.yaml:1")).toBeLessThan(
+      steps.indexOf("flaky.test.yaml:1 FAILED"),
+    );
+    expect(steps).toMatch(
+      /flaky.test.yaml:1 FAILED[^\n]*\nflaky.test.yaml:1 PASSED/u,
+    );
+    // Serial output now shows the retry's outcome too.
+    expect(render("list", context)).toContain("test PASSED flaky.test.yaml");
+    // Without a retry budget the failure is final at once.
+    const noRetry = {
+      ...context,
+      parallel: { lanes: 2, total: 2, retries: 0 },
+    };
+    expect(render("list", noRetry)).toContain(
+      "[1/2] test FAILED flaky.test.yaml",
+    );
+  });
+
+  it("prints a deferred failure at the end when the run stops before its retry", async () => {
+    const snapshots: RunResult[] = [];
+    const recorder = new RunRecorder(async (value) => {
+      snapshots.push(structuredClone(value));
+    }, "stopped");
+    await recorder.start();
+    const test = await recorder.beginTest({
+      id: "a",
+      file: "a.test.yaml",
+      ordinal: 0,
+    });
+    await test.addStep({ ...step(), id: "a1", flags: [], verdict: "failed" });
+    await test.finishTest("failed");
+    await recorder.finish(
+      { code: "canceled", message: "The run was interrupted." },
+      "interrupted",
+    );
+    const lifecycle = new ReporterLifecycle();
+    const reporter = createTerminalReporter("list");
+    const parallel = {
+      ...context,
+      parallel: { lanes: 2, total: 1, retries: 2 },
+    };
+    const output = snapshots
+      .flatMap((snapshot) => lifecycle.feed(snapshot))
+      .map((event) => reporter.onEvent(event, parallel))
+      .join("");
+    expect(output).toBe(
+      "progress /tmp/run/progress.json\n[1/1] test FAILED a.test.yaml\n",
+    );
+  });
 });

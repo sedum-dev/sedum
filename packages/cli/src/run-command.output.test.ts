@@ -15,6 +15,10 @@ import { runFlow, validateRunResult, type ResultStep } from "@sedum-dev/core";
 
 vi.mock("@sedum-dev/provider-typesafe", () => ({
   TypeSafeAdapter: class {},
+  ProviderGate: class {
+    close() {}
+  },
+  DEFAULT_PROVIDER_CONCURRENCY: 4,
 }));
 
 vi.mock("@sedum-dev/core", async (importOriginal) => {

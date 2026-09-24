@@ -34,6 +34,15 @@ destination.
 
 The model has ordered tests, whole-test attempts, steps, and observation attempts. Only the selected terminal attempt contributes to final test/step outcome counts; all attempts contribute to model usage and cost. Unknown actual cost is `null`, not zero. Each model call carries its model ID, tokens, rate provenance, and actual cost when known. SED-33 populates the whole-test attempt slots; SED-65 owns bounded observation retries inside a step. SED-14 can populate the explicit locator cache event slot; no cache hit is inferred from an absence of model calls.
 
+`execution`, when present, records how the run was scheduled:
+
+- `parallel.requested` is the `--parallel` value, a number or `"auto"`.
+- `parallel.lanes` is the lane count actually used.
+- `shard` is `{ index, count, globalSelectedTests }` or null.
+- `providerConcurrency` is the provider request cap.
+
+For a shard, `selectedTestCount` counts only that shard's tests. `tests` stays in selection order when lanes finish out of order, and each attempt records its zero-based `lane`. A model call that waited on a shared 429 pause has `rateLimited: true` and `rateLimitWaitMs`; `queueWaitMs` is the time it waited for a provider slot. A 429 response is not billed, so it does not make the call's cost unknown. The locator cache reason `conflict` means another lane held the entry's lock; the step kept its model result.
+
 For directory runs, `selectedTestCount` and `totals.selectedTests` include tests selected before execution, including those not reached after an interruption. `discoveryProblems` names malformed or unreadable candidate files with safe relative paths and fixes; valid selected files may still execute, but a run with discovery problems is incomplete and exits 3. Whole-test retries create distinct attempts. Classification calls made for a retry belong to that attempt's `calls`; step calls remain on their steps. Usage and cost totals include both kinds of call from every attempt.
 
 Markdown, HTML and JUnit reporters (SED-41/42/43) consume this same result: verdicts and flags, source positions, safe details, exact scores and thresholds, ranked candidates including `(no match)`, page URL/title tied to an accepted observation, evidence status/path, timings, and usage/cost are all present. `--replay` adds a referenced frame per executed step and a normalized target rectangle where available; the HTML reporter packages captured frames into a self-contained `report.html`. The markdown reporter writes `report.md` beside the result and links non-pass frames by the same relative `path`. Goal-authoring and self-healing views in the PoC are outside 0.1 scope; the PoC's `DIVERGED` status is not a canonical verdict.

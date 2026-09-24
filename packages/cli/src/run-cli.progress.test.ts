@@ -10,6 +10,10 @@ vi.mock("@sedum-dev/provider-typesafe", () => ({
       throw new Error("No provider key");
     }
   },
+  ProviderGate: class {
+    close() {}
+  },
+  DEFAULT_PROVIDER_CONCURRENCY: 4,
 }));
 
 import { runCli } from "./run-cli.js";

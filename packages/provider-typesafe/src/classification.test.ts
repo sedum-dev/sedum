@@ -163,7 +163,7 @@ describe("classification TypeSafe boundary", () => {
       requests++;
       if (requests > 1)
         return new Response(JSON.stringify({ error: "upstream unavailable" }), {
-          status: 429,
+          status: 529,
           headers: { "content-type": "application/json" },
         });
       return new Response(JSON.stringify(reply(first.keys)), {

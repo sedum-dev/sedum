@@ -50,6 +50,12 @@ export interface ProviderCall {
   readonly successfulResponseCostUsd: number | null;
   /** Null when failed attempts may have consumed unreported tokens. */
   readonly totalCostUsd: number | null;
+  /** True when a 429 made this call wait for a shared provider cooldown. */
+  readonly rateLimited?: boolean;
+  /** Milliseconds spent in shared rate-limit cooldowns. */
+  readonly rateLimitWaitMs?: number;
+  /** Milliseconds spent waiting for a provider concurrency slot. */
+  readonly queueWaitMs?: number;
 }
 
 export interface ResolverDecision {
@@ -91,7 +97,8 @@ export type ProviderErrorCode =
   | "invalid-response"
   | "timeout"
   | "connection"
-  | "retry-exhausted";
+  | "retry-exhausted"
+  | "rate-limited";
 
 export class ProviderError extends Error {
   readonly failedCall?: ProviderCall;

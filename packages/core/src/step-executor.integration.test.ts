@@ -6,7 +6,7 @@ import {
   type BrowserPage,
   type BrowserSession,
 } from "./browser-driver.js";
-import { collectCandidates } from "./page-bridge.js";
+import { collectCandidates, pageVersion } from "./page-bridge.js";
 import type { CandidatePage } from "./page-protocol.js";
 import {
   executeStep,
@@ -193,6 +193,50 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       );
       const select = await collectCandidates(page, "fill");
       expect(select.candidates).toHaveLength(0);
+      await context.close();
+    });
+
+    it("captures a replay frame at aim time without making the target stale", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(
+        `document.querySelector('#app').innerHTML = '<input aria-label="Username"><textarea aria-label="Notes"></textarea><div contenteditable aria-label="Bio"></div><button onclick="window.clicks=(window.clicks||0)+1">Save</button>'`,
+      );
+      let frames = 0;
+      const beforeAction = async () => {
+        const before = await pageVersion(page);
+        await page.captureFrame!();
+        expect(await pageVersion(page)).toEqual(before);
+        frames++;
+      };
+      const fill = await collectCandidates(page, "fill");
+      const typed = await executeStep(
+        page,
+        { op: "type", target: target(fill), value: new RuntimeValue("ada") },
+        { beforeAction },
+      );
+      expect(typed.outcome).toBe("acted");
+      expect(
+        await page.evaluate<string>("document.querySelector('input').value"),
+      ).toBe("ada");
+
+      const click = await collectCandidates(page, "click");
+      const save = click.candidates.find((item) => item.name === "Save")!;
+      const clicked = await executeStep(
+        page,
+        {
+          op: "click",
+          target: new ResolvedStepTarget({
+            ref: save.ref,
+            version: click.version,
+            tag: save.tag,
+            name: save.name,
+          }),
+        },
+        { beforeAction },
+      );
+      expect(clicked.outcome).toBe("no_route_change");
+      expect(await page.evaluate<number>("window.clicks")).toBe(1);
+      expect(frames).toBe(2);
       await context.close();
     });
 

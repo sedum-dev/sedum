@@ -62,6 +62,10 @@ class FakePage extends EventEmitter {
   });
   readonly waitForLoadState = vi.fn(async () => undefined);
   readonly innerText = vi.fn(async () => "fixture page");
+  readonly screenshot = vi.fn(async (options: unknown) => {
+    void options;
+    return Buffer.from("frame");
+  });
   readonly keyboard = { press: vi.fn(async () => undefined) };
   readonly mouse = { wheel: vi.fn(async () => undefined) };
   readonly cdp = {
@@ -206,6 +210,27 @@ describe("PlaywrightBrowserDriver", () => {
     ]);
     expect(browser.context.page.target.click).toHaveBeenCalledOnce();
     expect(browser.context.page.cdp.detach).toHaveBeenCalledOnce();
+    await session.close();
+  });
+
+  it("captures a frame without writing to the page", async () => {
+    const browser = new FakeBrowser();
+    launch.mockResolvedValue(browser);
+    const session = await new PlaywrightBrowserDriver().launch({
+      browser: "chromium",
+    });
+    const context = await session.newContext();
+    const page = await context.newPage();
+    await expect(page.captureFrame?.()).resolves.toEqual(Buffer.from("frame"));
+    // Playwright's default caret hiding writes inline styles onto every field,
+    // which bumps the page revision and makes the located target stale.
+    expect(browser.context.page.screenshot).toHaveBeenCalledWith({
+      type: "jpeg",
+      quality: 60,
+      scale: "css",
+      caret: "initial",
+      animations: "allow",
+    });
     await session.close();
   });
 

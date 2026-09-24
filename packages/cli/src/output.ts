@@ -58,6 +58,47 @@ export function clearProgress(capabilities: OutputCapabilities): string {
   return capabilities.stdoutIsTTY ? "\r\u001b[2K" : "";
 }
 
+/** Parallel, shard, provider-wait, and cache-conflict facts; empty for a plain serial run. */
+function executionLines(value: RunResult): string[] {
+  const lines: string[] = [];
+  const execution = value.execution;
+  if (execution && (execution.parallel.lanes > 1 || execution.shard)) {
+    const shard = execution.shard
+      ? `, shard ${execution.shard.index}/${execution.shard.count} of ${execution.shard.globalSelectedTests} selected`
+      : "";
+    lines.push(
+      `lanes ${execution.parallel.lanes}, provider concurrency ${execution.providerConcurrency}${shard}`,
+    );
+  }
+  const calls = [
+    ...value.setupCalls,
+    ...value.tests.flatMap((test) =>
+      test.attempts.flatMap((attempt) => [
+        ...(attempt.calls ?? []),
+        ...attempt.steps.flatMap((step) => step.calls),
+      ]),
+    ),
+  ];
+  const limited = calls.filter((call) => call.rateLimited).length;
+  const waitMs = calls.reduce(
+    (sum, call) => sum + (call.rateLimitWaitMs ?? 0),
+    0,
+  );
+  if (limited > 0)
+    lines.push(
+      `provider rate limited ${limited} call(s), waited ${(waitMs / 1000).toFixed(1)}s in shared cooldowns`,
+    );
+  const conflicts = value.tests
+    .flatMap((test) => test.attempts)
+    .flatMap((attempt) => attempt.steps)
+    .filter((step) => step.locator?.cache?.reason === "conflict").length;
+  if (conflicts > 0)
+    lines.push(
+      `cache ${conflicts} locator cache write conflict(s); the model result was used`,
+    );
+  return lines;
+}
+
 export function renderRunSummary(
   result: RunResult,
   capabilities: OutputCapabilities,
@@ -106,6 +147,7 @@ export function renderRunSummary(
   lines.push(
     `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}`,
   );
+  lines.push(...executionLines(value));
   if (artifacts.authoritative) {
     lines.push(`progress ${artifacts.progressPath}`);
     lines.push(`result ${artifacts.resultPath}`);
