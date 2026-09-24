@@ -1,0 +1,87 @@
+name: Release candidate
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == 'sedum-dev/sedum'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.release.outputs.release }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - id: release
+        run: node scripts/release/needs-candidate.mjs
+      - if: steps.release.outputs.release == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.release.outputs.release == 'true'
+        run: pnpm build
+      - if: steps.release.outputs.release == 'true'
+        env:
+          SOURCE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/release/candidate.mjs
+      - if: steps.release.outputs.release == 'true'
+        run: node scripts/release/verify-candidate.mjs release-candidate
+      - if: steps.release.outputs.release == 'true'
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-candidate
+          path: release-candidate/
+          if-no-files-found: error
+          retention-days: 60
+          compression-level: 0
+      - name: Record candidate identifiers
+        if: steps.release.outputs.release == 'true'
+        run: |
+          echo '### npm release candidate' >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: ${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Build run ID: $GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact ID: ${{ steps.artifact.outputs.artifact-id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact digest: ${{ steps.artifact.outputs.artifact-digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Manifest SHA-256: $(node scripts/release/verify-candidate.mjs release-candidate)" >> "$GITHUB_STEP_SUMMARY"
+
+  install:
+    needs: pack
+    if: needs.pack.outputs.release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-candidate
+          path: candidate
+      - name: Clean install of exact candidate tarballs
+        shell: bash
+        run: |
+          mkdir clean-install
+          cd clean-install
+          npm init -y
+          npm install --ignore-scripts ../candidate/*.tgz
+          expected=$(node -p "require('../candidate/manifest.json').packages[0].version")
+          actual=$(npx --no-install sedum --version)
+          test "$actual" = "$expected"

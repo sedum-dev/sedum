@@ -1,7 +1,10 @@
 {
   "name": "@sedum-dev/core",
   "version": "0.0.0",
-  "private": true,
+  "repository": "https://github.com/sedum-dev/sedum",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "engines": {
     "node": ">=20.19.0"
