@@ -1,0 +1,119 @@
+name: Publish npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful release candidate run ID
+        required: true
+        type: string
+      uat_run_id:
+        description: Successful trusted UAT run ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      manifest_sha256: ${{ steps.guard.outputs.manifest_sha256 }}
+      source_commit: ${{ steps.guard.outputs.source_commit }}
+      version: ${{ steps.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify current candidate and trusted UAT
+        id: guard
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UAT_READ_TOKEN: ${{ secrets.UAT_READ_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          UAT_RUN_ID: ${{ inputs.uat_run_id }}
+        run: |
+          node scripts/release/verify-uat.mjs > release-evidence.json
+          jq -r '"manifest_sha256=" + .manifestSha256, "source_commit=" + .sourceCommit, "version=" + .version' release-evidence.json >> "$GITHUB_OUTPUT"
+          cat release-evidence.json
+
+  publish:
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.source_commit }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify UAT again after release approval
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UAT_READ_TOKEN: ${{ secrets.UAT_READ_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          UAT_RUN_ID: ${{ inputs.uat_run_id }}
+        run: node scripts/release/verify-uat.mjs
+      - name: Download approved candidate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "${{ inputs.candidate_run_id }}" --repo sedum-dev/sedum --name npm-candidate --dir release-candidate
+      - name: Verify downloaded tarballs
+        run: node scripts/release/verify-candidate.mjs release-candidate "${{ needs.preflight.outputs.manifest_sha256 }}"
+      - name: Configure first-publish token when supplied
+        env:
+          BOOTSTRAP_NPM_TOKEN: ${{ secrets.BOOTSTRAP_NPM_TOKEN }}
+        run: |
+          if [ -n "$BOOTSTRAP_NPM_TOKEN" ]; then
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$BOOTSTRAP_NPM_TOKEN" > "$RUNNER_TEMP/npmrc"
+            echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npmrc" >> "$GITHUB_ENV"
+          fi
+      - name: Publish the approved tarballs with provenance
+        env:
+          MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
+        run: node scripts/release/publish.mjs
+      - name: Verify registry bytes and integrity
+        env:
+          MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
+        run: node scripts/release/verify-published.mjs
+      - name: Create GitHub release from Changesets changelogs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/release/notes.mjs "${{ needs.preflight.outputs.version }}"
+          gh release create "sedum-cli@${{ needs.preflight.outputs.version }}" --target "${{ needs.preflight.outputs.source_commit }}" --title "Sedum ${{ needs.preflight.outputs.version }}" --notes-file release-notes.md --prerelease
+
+  install:
+    needs: [preflight, publish]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Clean public install and CLI smoke test
+        shell: bash
+        run: |
+          mkdir clean-install
+          cd clean-install
+          npm init -y
+          npm install --ignore-scripts "sedum-cli@${{ needs.preflight.outputs.version }}"
+          npx --no-install sedum --version

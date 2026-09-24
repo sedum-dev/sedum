@@ -16,7 +16,8 @@
     "format:check": "prettier --check .",
     "fixtures:verify": "node scripts/verify-replies.mjs",
     "fixtures:record": "node scripts/record-replies.mjs",
-    "changeset": "changeset"
+    "changeset": "changeset",
+    "version-packages": "changeset version && pnpm install --lockfile-only"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1",

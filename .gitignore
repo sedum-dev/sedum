@@ -6,3 +6,6 @@ coverage/
 .env
 *.tsbuildinfo
 .DS_Store
+release-candidate/
+release-notes.md
+release-evidence.json
