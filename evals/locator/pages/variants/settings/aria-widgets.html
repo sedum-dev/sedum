@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Account settings</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem 1.25rem;
+        background: #1d2330;
+      }
+      .logo {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #39414f;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+      main {
+        max-width: 720px;
+        margin: 1.5rem auto;
+        display: block;
+      }
+      [role="tablist"] {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #d0d4dc;
+      }
+      [role="tab"] {
+        padding: 0.6rem 1rem;
+        cursor: pointer;
+      }
+      [role="tab"][aria-selected="true"] {
+        border-bottom: 2px solid #3060d0;
+        font-weight: 600;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dde1e8;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1rem 0;
+      }
+      .card-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0 0 0.75rem;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f1f4;
+      }
+      [role="switch"] {
+        width: 40px;
+        height: 22px;
+        border-radius: 11px;
+        background: #c5cad3;
+        position: relative;
+        cursor: pointer;
+      }
+      [role="switch"]::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      [role="switch"][aria-checked="true"] {
+        background: #3060d0;
+      }
+      [role="switch"][aria-checked="true"]::after {
+        left: 20px;
+      }
+      .combo {
+        position: relative;
+        min-width: 140px;
+      }
+      [role="combobox"] {
+        border: 1px solid #8a909c;
+        border-radius: 3px;
+        padding: 0.3rem 0.5rem;
+        background: #fff;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+      }
+      [role="listbox"] {
+        position: absolute;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #8a909c;
+        z-index: 2;
+      }
+      [role="option"] {
+        padding: 0.3rem 0.5rem;
+        cursor: pointer;
+      }
+      [role="option"][aria-selected="true"] {
+        background: #e8eefc;
+      }
+      .actions {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+      }
+      .btn-primary {
+        background: #3060d0;
+        color: #fff;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+      }
+      .link {
+        color: #3060d0;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .danger {
+        border-color: #e0a0a0;
+      }
+      .btn-danger {
+        display: inline-block;
+        color: #b02020;
+        background: #fff;
+        border: 1px solid #b02020;
+        border-radius: 6px;
+        padding: 0.4rem 0.9rem;
+        cursor: pointer;
+      }
+      [tabindex]:focus-visible {
+        outline: 2px solid #3060d0;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header" role="banner">
+      <div
+        class="logo"
+        role="link"
+        tabindex="0"
+        data-href="/"
+        data-eval-gold="logo"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M4 20V4l16 16V4"
+            stroke="currentColor"
+            stroke-width="3"
+            fill="none"
+          />
+        </svg>
+        <span>Northwind</span>
+      </div>
+      <div
+        class="icon-btn"
+        role="button"
+        tabindex="0"
+        aria-label="Account menu"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        data-eval-gold="account-menu"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" fill="currentColor" />
+          <path d="M4 21c0-4 4-6 8-6s8 2 8 6z" fill="currentColor" />
+        </svg>
+      </div>
+    </div>
+    <main>
+      <div
+        role="heading"
+        aria-level="1"
+        class="card-title"
+        style="font-size: 2em; margin: 0.67em 0"
+      >
+        Account settings
+      </div>
+      <div role="tablist" aria-label="Settings sections">
+        <div
+          role="tab"
+          id="tab-profile"
+          tabindex="-1"
+          aria-selected="false"
+          aria-controls="panel"
+          data-eval-gold="tab-profile"
+        >
+          Profile
+        </div>
+        <div
+          role="tab"
+          id="tab-notifications"
+          tabindex="0"
+          aria-selected="true"
+          aria-controls="panel"
+          data-eval-gold="tab-notifications"
+        >
+          Notifications
+        </div>
+        <div
+          role="tab"
+          id="tab-security"
+          tabindex="-1"
+          aria-selected="false"
+          aria-controls="panel"
+          data-eval-gold="tab-security"
+        >
+          Security
+        </div>
+      </div>
+
+      <div
+        id="panel"
+        role="tabpanel"
+        aria-labelledby="tab-notifications"
+        class="card"
+      >
+        <div role="heading" aria-level="2" class="card-title">
+          Notifications
+        </div>
+        <div class="row">
+          <span id="lbl-email">Email alerts</span>
+          <div
+            role="switch"
+            tabindex="0"
+            aria-checked="true"
+            aria-labelledby="lbl-email"
+            data-eval-gold="sw-email"
+          ></div>
+        </div>
+        <div class="row">
+          <span id="lbl-push">Push notifications</span>
+          <div
+            role="switch"
+            tabindex="0"
+            aria-checked="false"
+            aria-labelledby="lbl-push"
+            data-eval-gold="sw-push"
+          ></div>
+        </div>
+        <div class="row">
+          <span id="lbl-digest">Weekly digest</span>
+          <div
+            role="switch"
+            tabindex="0"
+            aria-checked="true"
+            aria-labelledby="lbl-digest"
+            data-eval-gold="sw-digest"
+          ></div>
+        </div>
+        <div class="row">
+          <span id="lbl-day">Digest day</span>
+          <div class="combo">
+            <div
+              role="combobox"
+              tabindex="0"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              aria-controls="day-list"
+              aria-labelledby="lbl-day"
+              data-eval-gold="digest-day"
+            >
+              <span id="day-value">Monday</span
+              ><span aria-hidden="true">▾</span>
+            </div>
+            <div role="listbox" id="day-list" aria-labelledby="lbl-day" hidden>
+              <div role="option" aria-selected="true">Monday</div>
+              <div role="option" aria-selected="false">Tuesday</div>
+              <div role="option" aria-selected="false">Wednesday</div>
+              <div role="option" aria-selected="false">Thursday</div>
+              <div role="option" aria-selected="false">Friday</div>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <div
+            class="btn-primary"
+            role="button"
+            tabindex="0"
+            data-eval-gold="save"
+          >
+            Save changes
+          </div>
+          <div
+            class="link"
+            role="link"
+            tabindex="0"
+            data-href="/settings"
+            data-eval-gold="cancel"
+          >
+            Cancel
+          </div>
+        </div>
+      </div>
+
+      <div class="card danger" role="region" aria-labelledby="h-danger">
+        <div role="heading" aria-level="2" class="card-title" id="h-danger">
+          Danger zone
+        </div>
+        <p>Deactivating hides your profile until you sign in again.</p>
+        <div
+          class="btn-danger"
+          role="button"
+          tabindex="0"
+          data-eval-gold="deactivate"
+        >
+          Deactivate account
+        </div>
+        <p>Deleting your account removes all your data permanently.</p>
+        <div
+          class="btn-danger"
+          role="button"
+          tabindex="0"
+          data-eval-gold="delete-account"
+        >
+          Delete account
+        </div>
+      </div>
+    </main>
+    <script>
+      // Keyboard activation for every custom control.
+      document.addEventListener("keydown", (event) => {
+        const target = event.target.closest(
+          "[role=button],[role=link],[role=switch],[role=tab],[role=combobox],[role=option]",
+        );
+        if (!target || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        target.click();
+      });
+      for (const link of document.querySelectorAll("[role=link][data-href]"))
+        link.addEventListener(
+          "click",
+          () => (location.href = link.dataset.href),
+        );
+      for (const sw of document.querySelectorAll("[role=switch]"))
+        sw.addEventListener("click", () =>
+          sw.setAttribute(
+            "aria-checked",
+            String(sw.getAttribute("aria-checked") !== "true"),
+          ),
+        );
+      const tabs = document.querySelectorAll("[role=tab]");
+      for (const tab of tabs)
+        tab.addEventListener("click", () => {
+          for (const other of tabs) {
+            other.setAttribute("aria-selected", String(other === tab));
+            other.tabIndex = other === tab ? 0 : -1;
+          }
+        });
+      const combo = document.querySelector("[role=combobox]");
+      const list = document.getElementById("day-list");
+      combo.addEventListener("click", () => {
+        list.hidden = !list.hidden;
+        combo.setAttribute("aria-expanded", String(!list.hidden));
+      });
+      for (const option of list.querySelectorAll("[role=option]"))
+        option.addEventListener("click", () => {
+          for (const other of list.querySelectorAll("[role=option]"))
+            other.setAttribute("aria-selected", String(other === option));
+          document.getElementById("day-value").textContent = option.textContent;
+          list.hidden = true;
+          combo.setAttribute("aria-expanded", "false");
+        });
+    </script>
+  </body>
+</html>

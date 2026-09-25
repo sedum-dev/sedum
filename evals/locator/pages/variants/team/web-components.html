@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Team members</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      main {
+        max-width: 860px;
+        margin: 1.5rem auto;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      .toolbar ui-text-field {
+        margin-right: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #dde1e8;
+      }
+      th,
+      td {
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #eef0f3;
+      }
+      th {
+        font-weight: 600;
+        background: #fafbfc;
+      }
+      .col-check {
+        width: 110px;
+      }
+      .row-actions {
+        display: flex;
+        gap: 0.4rem;
+        justify-content: flex-end;
+        align-items: center;
+      }
+      .pager {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Team members</h1>
+      <div class="toolbar">
+        <ui-text-field
+          type="search"
+          placeholder="Search members"
+          data-eval-gold="search"
+        ></ui-text-field>
+        <ui-button variant="secondary" disabled data-eval-gold="remove-selected"
+          >Remove selected</ui-button
+        >
+        <ui-button variant="primary" data-eval-gold="invite"
+          >Invite member</ui-button
+        >
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th class="col-check">
+              <ui-checkbox data-eval-gold="select-all">Select all</ui-checkbox>
+            </th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <ui-checkbox
+                label="Select Ada Lovelace"
+                data-eval-gold="select-ada"
+              ></ui-checkbox>
+            </td>
+            <td>Ada Lovelace</td>
+            <td>ada@example.com</td>
+            <td>Owner</td>
+            <td>
+              <div class="row-actions">
+                <ui-button variant="small" data-eval-gold="edit-ada"
+                  >Edit</ui-button
+                >
+                <ui-icon-button
+                  icon="more"
+                  label="More actions for Ada Lovelace"
+                  data-eval-gold="more-ada"
+                ></ui-icon-button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <ui-checkbox
+                label="Select Grace Hopper"
+                data-eval-gold="select-grace"
+              ></ui-checkbox>
+            </td>
+            <td>Grace Hopper</td>
+            <td>grace@example.com</td>
+            <td>Admin</td>
+            <td>
+              <div class="row-actions">
+                <ui-button variant="small" data-eval-gold="edit-grace"
+                  >Edit</ui-button
+                >
+                <ui-icon-button
+                  icon="more"
+                  label="More actions for Grace Hopper"
+                  data-eval-gold="more-grace"
+                ></ui-icon-button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <ui-checkbox
+                label="Select Alan Turing"
+                data-eval-gold="select-alan"
+              ></ui-checkbox>
+            </td>
+            <td>Alan Turing</td>
+            <td>alan@example.com</td>
+            <td>Member</td>
+            <td>
+              <div class="row-actions">
+                <ui-button variant="small" data-eval-gold="edit-alan"
+                  >Edit</ui-button
+                >
+                <ui-icon-button
+                  icon="more"
+                  label="More actions for Alan Turing"
+                  data-eval-gold="more-alan"
+                ></ui-icon-button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <ui-checkbox
+                label="Select Katherine Johnson"
+                data-eval-gold="select-katherine"
+              ></ui-checkbox>
+            </td>
+            <td>Katherine Johnson</td>
+            <td>katherine@example.com</td>
+            <td>Member</td>
+            <td>
+              <div class="row-actions">
+                <ui-button variant="small" data-eval-gold="edit-katherine"
+                  >Edit</ui-button
+                >
+                <ui-icon-button
+                  icon="more"
+                  label="More actions for Katherine Johnson"
+                  data-eval-gold="more-katherine"
+                ></ui-icon-button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <nav class="pager" aria-label="Pagination">
+        <ui-link href="?page=1" data-eval-gold="prev">Previous</ui-link>
+        <span>Page 2 of 3</span>
+        <ui-link href="?page=3" data-eval-gold="next">Next</ui-link>
+      </nav>
+    </main>
+    <script>
+      // A small design-system bundle. Each host forwards its test hook
+      // (data-eval-gold) to the real control inside its open shadow root,
+      // the way component libraries forward data-testid.
+      function forwardHook(host, inner) {
+        const hook = host.getAttribute("data-eval-gold");
+        if (!hook) return;
+        host.removeAttribute("data-eval-gold");
+        inner.setAttribute("data-eval-gold", hook);
+      }
+      const ICONS = {
+        more: '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>',
+      };
+      const escape = (text) =>
+        String(text ?? "").replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+
+      class UiElement extends HTMLElement {
+        connectedCallback() {
+          if (this.shadowRoot) return;
+          const root = this.attachShadow({ mode: "open" });
+          root.innerHTML = this.render();
+          this.control = root.querySelector("[part~=control]");
+          forwardHook(this, this.control);
+        }
+      }
+
+      customElements.define(
+        "ui-button",
+        class extends UiElement {
+          render() {
+            const variant = this.getAttribute("variant") ?? "secondary";
+            return `<style>
+              :host { display: inline-block; }
+              button { font: inherit; cursor: pointer; border-radius: 6px; padding: .45rem .9rem; background: #fff; border: 1px solid #b8bec9; }
+              .primary { background: #3060d0; color: #fff; border: 0; }
+              .small { border-radius: 4px; padding: .2rem .7rem; }
+              button:disabled { color: #9aa0ab; border-color: #dde1e8; cursor: default; }
+            </style><button part="control" type="button" class="${variant}"${this.hasAttribute("disabled") ? " disabled" : ""}><slot></slot></button>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-icon-button",
+        class extends UiElement {
+          render() {
+            return `<style>
+              button { width: 30px; height: 30px; border: 0; border-radius: 50%; background: none; display: grid; place-items: center; cursor: pointer; }
+              button:hover { background: #eef0f3; }
+            </style><button part="control" type="button" aria-haspopup="menu" aria-label="${escape(this.getAttribute("label"))}">${ICONS[this.getAttribute("icon")] ?? ""}</button>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-checkbox",
+        class extends UiElement {
+          render() {
+            const label = this.getAttribute("label");
+            return `<style>
+              label { display: inline-flex; gap: .25rem; align-items: center; cursor: pointer; }
+            </style><label><input part="control" type="checkbox"${label ? ` aria-label="${escape(label)}"` : ""}><slot></slot></label>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-text-field",
+        class extends UiElement {
+          render() {
+            return `<style>
+              input { font: inherit; padding: .4rem .6rem; border: 1px solid #b8bec9; border-radius: 6px; width: 260px; box-sizing: content-box; }
+            </style><input part="control" type="${escape(this.getAttribute("type") ?? "text")}" placeholder="${escape(this.getAttribute("placeholder"))}">`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-link",
+        class extends UiElement {
+          render() {
+            return `<style>a { color: #3060d0; }</style><a part="control" href="${escape(this.getAttribute("href"))}"><slot></slot></a>`;
+          }
+        },
+      );
+
+      // Row selection wiring. "change" is not composed, so listen on the inner inputs.
+      const rowBoxes = [...document.querySelectorAll("tbody ui-checkbox")];
+      const selectAll = document.querySelector("thead ui-checkbox");
+      const removeSelected = document.querySelector(
+        "ui-button[variant=secondary]",
+      );
+      function sync() {
+        removeSelected.control.disabled = !rowBoxes.some(
+          (box) => box.control.checked,
+        );
+      }
+      rowBoxes.forEach((box) => box.control.addEventListener("change", sync));
+      selectAll.control.addEventListener("change", () => {
+        rowBoxes.forEach(
+          (box) => (box.control.checked = selectAll.control.checked),
+        );
+        sync();
+      });
+    </script>
+  </body>
+</html>

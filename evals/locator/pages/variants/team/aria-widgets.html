@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Team members</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      main {
+        max-width: 860px;
+        margin: 1.5rem auto;
+        display: block;
+      }
+      .title {
+        font-size: 2em;
+        font-weight: 700;
+        margin: 0.67em 0;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      .search {
+        font: inherit;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #b8bec9;
+        border-radius: 6px;
+        width: 260px;
+        margin-right: auto;
+      }
+      [role="button"] {
+        cursor: pointer;
+      }
+      .btn {
+        border-radius: 6px;
+        padding: 0.45rem 0.9rem;
+      }
+      .btn-primary {
+        background: #3060d0;
+        color: #fff;
+      }
+      .btn-secondary {
+        background: #fff;
+        border: 1px solid #b8bec9;
+      }
+      [aria-disabled="true"] {
+        color: #9aa0ab;
+        border-color: #dde1e8;
+        cursor: default;
+      }
+      [role="grid"] {
+        display: grid;
+        grid-template-columns: 110px 1.2fr 1.6fr 0.8fr 120px;
+        background: #fff;
+        border: 1px solid #dde1e8;
+      }
+      [role="row"] {
+        display: contents;
+      }
+      [role="gridcell"],
+      [role="columnheader"] {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #eef0f3;
+        display: flex;
+        align-items: center;
+      }
+      [role="columnheader"] {
+        font-weight: 600;
+        white-space: nowrap;
+        background: #fafbfc;
+      }
+      [role="checkbox"] {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #767676;
+        border-radius: 2px;
+        background: #fff;
+        cursor: pointer;
+        margin: 3px 4px;
+      }
+      [role="checkbox"][aria-checked="true"] {
+        background: #3060d0;
+        border-color: #3060d0;
+      }
+      .row-actions {
+        justify-content: flex-end;
+        gap: 0.4rem;
+      }
+      .edit {
+        background: #fff;
+        border: 1px solid #b8bec9;
+        border-radius: 4px;
+        padding: 0.2rem 0.7rem;
+      }
+      .kebab {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+      }
+      .kebab:hover {
+        background: #eef0f3;
+      }
+      .pager {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 0.75rem;
+      }
+      [role="link"] {
+        color: #3060d0;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      [tabindex]:focus-visible {
+        outline: 2px solid #3060d0;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="title" role="heading" aria-level="1">Team members</div>
+      <div class="toolbar" role="toolbar" aria-label="Member actions">
+        <input
+          class="search"
+          type="text"
+          role="searchbox"
+          aria-label="Search members"
+          placeholder="Search members"
+          data-eval-gold="search"
+        />
+        <div
+          class="btn btn-secondary"
+          role="button"
+          tabindex="0"
+          aria-disabled="true"
+          data-eval-gold="remove-selected"
+        >
+          Remove selected
+        </div>
+        <div
+          class="btn btn-primary"
+          role="button"
+          tabindex="0"
+          data-eval-gold="invite"
+        >
+          Invite member
+        </div>
+      </div>
+      <div role="grid" aria-label="Team members" aria-rowcount="5">
+        <div role="row">
+          <div role="columnheader">
+            <div
+              role="checkbox"
+              tabindex="0"
+              aria-checked="false"
+              aria-labelledby="select-all-label"
+              data-eval-gold="select-all"
+            ></div>
+            <span id="select-all-label">Select all</span>
+          </div>
+          <div role="columnheader">Name</div>
+          <div role="columnheader">Email</div>
+          <div role="columnheader">Role</div>
+          <div role="columnheader" aria-label="Actions"></div>
+        </div>
+
+        <div role="row">
+          <div role="gridcell">
+            <div
+              role="checkbox"
+              tabindex="-1"
+              aria-checked="false"
+              aria-label="Select Ada Lovelace"
+              data-eval-gold="select-ada"
+            ></div>
+          </div>
+          <div role="gridcell">Ada Lovelace</div>
+          <div role="gridcell">ada@example.com</div>
+          <div role="gridcell">Owner</div>
+          <div role="gridcell" class="row-actions">
+            <div
+              class="edit"
+              role="button"
+              tabindex="-1"
+              data-eval-gold="edit-ada"
+            >
+              Edit
+            </div>
+            <div
+              class="kebab"
+              role="button"
+              tabindex="-1"
+              aria-haspopup="menu"
+              aria-label="More actions for Ada Lovelace"
+              data-eval-gold="more-ada"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div role="row">
+          <div role="gridcell">
+            <div
+              role="checkbox"
+              tabindex="-1"
+              aria-checked="false"
+              aria-label="Select Grace Hopper"
+              data-eval-gold="select-grace"
+            ></div>
+          </div>
+          <div role="gridcell">Grace Hopper</div>
+          <div role="gridcell">grace@example.com</div>
+          <div role="gridcell">Admin</div>
+          <div role="gridcell" class="row-actions">
+            <div
+              class="edit"
+              role="button"
+              tabindex="-1"
+              data-eval-gold="edit-grace"
+            >
+              Edit
+            </div>
+            <div
+              class="kebab"
+              role="button"
+              tabindex="-1"
+              aria-haspopup="menu"
+              aria-label="More actions for Grace Hopper"
+              data-eval-gold="more-grace"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div role="row">
+          <div role="gridcell">
+            <div
+              role="checkbox"
+              tabindex="-1"
+              aria-checked="false"
+              aria-label="Select Alan Turing"
+              data-eval-gold="select-alan"
+            ></div>
+          </div>
+          <div role="gridcell">Alan Turing</div>
+          <div role="gridcell">alan@example.com</div>
+          <div role="gridcell">Member</div>
+          <div role="gridcell" class="row-actions">
+            <div
+              class="edit"
+              role="button"
+              tabindex="-1"
+              data-eval-gold="edit-alan"
+            >
+              Edit
+            </div>
+            <div
+              class="kebab"
+              role="button"
+              tabindex="-1"
+              aria-haspopup="menu"
+              aria-label="More actions for Alan Turing"
+              data-eval-gold="more-alan"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div role="row">
+          <div role="gridcell">
+            <div
+              role="checkbox"
+              tabindex="-1"
+              aria-checked="false"
+              aria-label="Select Katherine Johnson"
+              data-eval-gold="select-katherine"
+            ></div>
+          </div>
+          <div role="gridcell">Katherine Johnson</div>
+          <div role="gridcell">katherine@example.com</div>
+          <div role="gridcell">Member</div>
+          <div role="gridcell" class="row-actions">
+            <div
+              class="edit"
+              role="button"
+              tabindex="-1"
+              data-eval-gold="edit-katherine"
+            >
+              Edit
+            </div>
+            <div
+              class="kebab"
+              role="button"
+              tabindex="-1"
+              aria-haspopup="menu"
+              aria-label="More actions for Katherine Johnson"
+              data-eval-gold="more-katherine"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pager" role="navigation" aria-label="Pagination">
+        <div role="link" tabindex="0" data-href="?page=1" data-eval-gold="prev">
+          Previous
+        </div>
+        <span>Page 2 of 3</span>
+        <div role="link" tabindex="0" data-href="?page=3" data-eval-gold="next">
+          Next
+        </div>
+      </div>
+    </main>
+    <script>
+      document.addEventListener("keydown", (event) => {
+        const target = event.target.closest(
+          "[role=button],[role=link],[role=checkbox]",
+        );
+        if (!target || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        target.click();
+      });
+      for (const link of document.querySelectorAll("[role=link][data-href]"))
+        link.addEventListener(
+          "click",
+          () => (location.href = link.dataset.href),
+        );
+      const selectAll = document.querySelector("[data-eval-gold=select-all]");
+      const rows = [
+        ...document.querySelectorAll("[role=gridcell] [role=checkbox]"),
+      ];
+      const remove = document.querySelector("[data-eval-gold=remove-selected]");
+      const sync = () =>
+        remove.setAttribute(
+          "aria-disabled",
+          String(!rows.some((c) => c.getAttribute("aria-checked") === "true")),
+        );
+      const toggle = (box, on) =>
+        box.setAttribute(
+          "aria-checked",
+          String(on ?? box.getAttribute("aria-checked") !== "true"),
+        );
+      for (const box of rows)
+        box.addEventListener("click", () => {
+          toggle(box);
+          sync();
+        });
+      selectAll.addEventListener("click", () => {
+        toggle(selectAll);
+        const on = selectAll.getAttribute("aria-checked") === "true";
+        rows.forEach((box) => toggle(box, on));
+        sync();
+      });
+    </script>
+  </body>
+</html>
