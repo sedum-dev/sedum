@@ -1,0 +1,110 @@
+{
+  "page": "cookie-banner.html",
+  "cases": [
+    {
+      "id": "cookie-accept-all",
+      "op": "click",
+      "sentence": "click Accept all",
+      "gold": ["cookie-accept"],
+      "tags": ["exact-label", "overlay"]
+    },
+    {
+      "id": "cookie-accept-paraphrase",
+      "op": "click",
+      "sentence": "click the button to accept cookies",
+      "gold": ["cookie-accept"],
+      "tags": ["paraphrase", "overlay", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-reject-all",
+      "op": "click",
+      "sentence": "click Reject all in the cookie banner",
+      "gold": ["cookie-reject"],
+      "tags": ["exact-label", "overlay", "region"]
+    },
+    {
+      "id": "cookie-manage-preferences",
+      "op": "click",
+      "sentence": "click Manage preferences on the cookie consent bar",
+      "gold": ["cookie-manage"],
+      "tags": ["overlay", "region", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-policy-link",
+      "op": "click",
+      "sentence": "click the Cookie policy link in the banner",
+      "gold": ["cookie-policy"],
+      "tags": ["overlay", "exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-footer-settings",
+      "op": "click",
+      "sentence": "click Cookie settings in the footer",
+      "gold": ["footer-cookie-settings"],
+      "tags": ["region", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-accept-invitation",
+      "op": "click",
+      "sentence": "click Accept invitation",
+      "gold": ["accept-invite"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-rsvp-groundbreaking",
+      "op": "click",
+      "sentence": "click the button to RSVP yes to the groundbreaking event",
+      "gold": ["accept-invite"],
+      "tags": ["paraphrase", "container"]
+    },
+    {
+      "id": "cookie-manage-subscription",
+      "op": "click",
+      "sentence": "click Manage subscription",
+      "gold": ["manage-subscription"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-newsletter-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the newsletter email field",
+      "gold": ["newsletter-email"],
+      "tags": ["container", "paraphrase"]
+    },
+    {
+      "id": "cookie-newsletter-signup",
+      "op": "click",
+      "sentence": "click Sign up",
+      "gold": ["newsletter-signup"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-accept-unscoped",
+      "op": "click",
+      "sentence": "click Accept",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "near-duplicate-name", "overlay"]
+    },
+    {
+      "id": "cookie-manage-unscoped",
+      "op": "click",
+      "sentence": "click Manage",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "near-duplicate-name"]
+    },
+    {
+      "id": "cookie-close-absent",
+      "op": "click",
+      "sentence": "click the X to close the cookie banner",
+      "gold": "none",
+      "tags": ["absent", "overlay", "icon"]
+    },
+    {
+      "id": "cookie-necessary-only-absent",
+      "op": "click",
+      "sentence": "click Accept necessary cookies only",
+      "gold": "none",
+      "tags": ["absent", "overlay", "near-duplicate-name"]
+    }
+  ]
+}

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pricing - Relay Analytics</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header,
+      footer {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+        align-items: center;
+      }
+      header nav {
+        flex: 1;
+        display: flex;
+        gap: 1rem;
+      }
+      main {
+        padding: 1rem;
+        max-width: 1000px;
+        margin: auto;
+      }
+      .billing {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: center;
+      }
+      .plans {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin: 1.5rem 0;
+      }
+      .plans article {
+        border: 1px solid #aaa;
+        padding: 1rem;
+      }
+      .plans article.featured {
+        border: 2px solid #335;
+      }
+      .price {
+        font-size: 1.8rem;
+      }
+      .faq button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 0.5rem;
+        background: none;
+        border: 0;
+        border-top: 1px solid #ccc;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Relay Analytics</a>
+      <nav>
+        <a href="/product">Product</a>
+        <a href="/customers">Customers</a>
+        <a href="/pricing" aria-current="page">Pricing</a>
+        <a href="/docs">Docs</a>
+      </nav>
+      <a href="/login" data-eval-gold="login">Log in</a>
+      <a href="/contact-sales" data-eval-gold="header-contact-sales"
+        >Contact sales</a
+      >
+    </header>
+    <main>
+      <h1>Simple pricing that scales with you</h1>
+      <div class="billing">
+        <span id="billing-label">Billing period:</span>
+        <span>Monthly</span>
+        <button
+          role="switch"
+          aria-checked="false"
+          aria-label="Yearly billing"
+          data-eval-gold="yearly-switch"
+        >
+          <span aria-hidden="true">&#9679;&mdash;</span>
+        </button>
+        <span>Yearly (save 20%)</span>
+      </div>
+      <div class="plans">
+        <article aria-labelledby="starter-h">
+          <h2 id="starter-h">Starter</h2>
+          <p class="price">$0<small>/month</small></p>
+          <p>For individuals getting started.</p>
+          <ul>
+            <li>1 project</li>
+            <li>10k events / month</li>
+            <li>7-day history</li>
+          </ul>
+          <a href="/signup?plan=starter" data-eval-gold="starter-cta"
+            >Start free trial</a
+          >
+          <a href="#compare" data-eval-gold="starter-features"
+            >See all features</a
+          >
+        </article>
+        <article class="featured" aria-labelledby="pro-h">
+          <p><strong>Most popular</strong></p>
+          <h2 id="pro-h">Pro</h2>
+          <p class="price">$49<small>/month</small></p>
+          <p>For growing teams.</p>
+          <ul>
+            <li>Unlimited projects</li>
+            <li>1M events / month</li>
+            <li>1-year history</li>
+          </ul>
+          <a href="/signup?plan=pro" data-eval-gold="pro-cta"
+            >Start free trial</a
+          >
+          <a href="#compare" data-eval-gold="pro-features">See all features</a>
+        </article>
+        <article aria-labelledby="ent-h">
+          <h2 id="ent-h">Enterprise</h2>
+          <p class="price">Custom</p>
+          <p>For organizations with advanced needs.</p>
+          <ul>
+            <li>SSO &amp; SCIM</li>
+            <li>Unlimited events</li>
+            <li>Dedicated support</li>
+          </ul>
+          <a href="/contact-sales?plan=enterprise" data-eval-gold="ent-cta"
+            >Contact sales</a
+          >
+          <a href="#compare" data-eval-gold="ent-features">See all features</a>
+        </article>
+      </div>
+      <p id="compare">
+        <a href="/compare" data-eval-gold="compare-plans"
+          >Compare plans in detail</a
+        >
+      </p>
+      <section class="faq" aria-labelledby="faq-h">
+        <h2 id="faq-h">Frequently asked questions</h2>
+        <h3>
+          <button aria-expanded="false" data-eval-gold="faq-trial">
+            How long is the free trial?
+          </button>
+        </h3>
+        <h3>
+          <button aria-expanded="false" data-eval-gold="faq-cancel">
+            Can I cancel at any time?
+          </button>
+        </h3>
+        <h3>
+          <button aria-expanded="false" data-eval-gold="faq-switch">
+            Can I switch plans later?
+          </button>
+        </h3>
+        <h3>
+          <button aria-expanded="false" data-eval-gold="faq-payment">
+            What payment methods do you accept?
+          </button>
+        </h3>
+        <h3>
+          <button aria-expanded="false" data-eval-gold="faq-discount">
+            Do you offer discounts for nonprofits?
+          </button>
+        </h3>
+      </section>
+    </main>
+    <footer>
+      <a href="/security">Security</a>
+      <a href="/status">Status</a>
+      <a href="/terms">Terms</a>
+      <a href="/privacy">Privacy</a>
+    </footer>
+    <script>
+      for (const button of document.querySelectorAll(".faq button"))
+        button.addEventListener("click", () =>
+          button.setAttribute(
+            "aria-expanded",
+            String(button.getAttribute("aria-expanded") !== "true"),
+          ),
+        );
+      const toggle = document.querySelector('[role="switch"]');
+      toggle.addEventListener("click", () =>
+        toggle.setAttribute(
+          "aria-checked",
+          String(toggle.getAttribute("aria-checked") !== "true"),
+        ),
+      );
+    </script>
+  </body>
+</html>

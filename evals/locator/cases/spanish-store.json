@@ -1,0 +1,117 @@
+{
+  "page": "spanish-store.html",
+  "cases": [
+    {
+      "id": "es-add-mate-imperial-en",
+      "op": "click",
+      "sentence": "click the Add to cart button for the Mate Imperial",
+      "gold": ["add-mate-imperial"],
+      "tags": ["non-english", "repeated-group", "container", "paraphrase"]
+    },
+    {
+      "id": "es-add-yerba-organica",
+      "op": "click",
+      "sentence": "click Agregar al carrito para Yerba Orgánica 1 kg",
+      "gold": ["add-yerba-organica"],
+      "tags": ["non-english", "repeated-group", "container"]
+    },
+    {
+      "id": "es-add-cheapest-yerba-en",
+      "op": "click",
+      "sentence": "click Add to cart for the cheapest yerba",
+      "gold": ["add-yerba-suave"],
+      "tags": ["non-english", "repeated-group", "numeric", "indirect"]
+    },
+    {
+      "id": "es-add-sin-stock",
+      "op": "click",
+      "sentence": "click Agregar al carrito para el Mate de vidrio forrado",
+      "gold": ["add-mate-vidrio"],
+      "tags": ["non-english", "repeated-group", "container", "disabled"]
+    },
+    {
+      "id": "es-add-unscoped",
+      "op": "click",
+      "sentence": "click Agregar al carrito",
+      "gold": "ambiguous",
+      "tags": ["non-english", "repeated-group", "underspecified"]
+    },
+    {
+      "id": "es-login-en",
+      "op": "click",
+      "sentence": "click the Log in link",
+      "gold": ["login"],
+      "tags": ["non-english", "paraphrase"]
+    },
+    {
+      "id": "es-login",
+      "op": "click",
+      "sentence": "click Iniciar sesión",
+      "gold": ["login"],
+      "tags": ["non-english", "exact-label"]
+    },
+    {
+      "id": "es-search-en",
+      "op": "fill",
+      "sentence": "type {{query}} in the product search field",
+      "gold": ["search"],
+      "tags": ["non-english", "placeholder-name", "paraphrase"]
+    },
+    {
+      "id": "es-view-cart-en",
+      "op": "click",
+      "sentence": "click View cart",
+      "gold": ["view-cart"],
+      "tags": ["non-english", "paraphrase"]
+    },
+    {
+      "id": "es-checkout-en",
+      "op": "click",
+      "sentence": "click the Checkout button",
+      "gold": ["checkout"],
+      "tags": ["non-english", "paraphrase"]
+    },
+    {
+      "id": "es-finalizar-compra",
+      "op": "click",
+      "sentence": "click Finalizar compra",
+      "gold": ["checkout"],
+      "tags": ["non-english", "exact-label"]
+    },
+    {
+      "id": "es-category-thermos-en",
+      "op": "click",
+      "sentence": "click the Thermoses category",
+      "gold": ["cat-termos"],
+      "tags": ["non-english", "paraphrase", "region"]
+    },
+    {
+      "id": "es-remove-bombilla-en",
+      "op": "click",
+      "sentence": "click the X to remove the bombilla from the cart",
+      "gold": ["remove-bombilla"],
+      "tags": ["non-english", "icon", "aria-label", "container"]
+    },
+    {
+      "id": "es-add-absent-en",
+      "op": "click",
+      "sentence": "click Add to cart for the Yerba Mate Cocido",
+      "gold": "none",
+      "tags": ["non-english", "repeated-group", "absent"]
+    },
+    {
+      "id": "es-mercado-pago-absent",
+      "op": "click",
+      "sentence": "click Pagar con Mercado Pago",
+      "gold": "none",
+      "tags": ["non-english", "absent"]
+    },
+    {
+      "id": "es-codigo-postal-absent",
+      "op": "fill",
+      "sentence": "type {{zip}} in the Código postal field",
+      "gold": "none",
+      "tags": ["non-english", "absent", "near-duplicate-name"]
+    }
+  ]
+}

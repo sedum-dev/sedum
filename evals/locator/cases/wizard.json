@@ -1,0 +1,117 @@
+{
+  "page": "wizard.html",
+  "cases": [
+    {
+      "id": "wizard-company-name",
+      "op": "fill",
+      "sentence": "type {{company}} in the Company name field",
+      "gold": ["company-name"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "wizard-website",
+      "op": "fill",
+      "sentence": "type {{url}} in the company URL field",
+      "gold": ["website"],
+      "tags": ["paraphrase", "placeholder-name"]
+    },
+    {
+      "id": "wizard-company-size",
+      "op": "click",
+      "sentence": "click the number of employees dropdown",
+      "gold": ["company-size"],
+      "tags": ["select", "paraphrase"]
+    },
+    {
+      "id": "wizard-industry",
+      "op": "click",
+      "sentence": "click the Industry select",
+      "gold": ["industry"],
+      "tags": ["select", "exact-label"]
+    },
+    {
+      "id": "wizard-next",
+      "op": "click",
+      "sentence": "click Next",
+      "gold": ["next"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wizard-continue-paraphrase",
+      "op": "click",
+      "sentence": "click Continue",
+      "gold": ["next"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "wizard-skip",
+      "op": "click",
+      "sentence": "skip this step",
+      "gold": ["skip"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "wizard-dropdown-unscoped",
+      "op": "click",
+      "sentence": "click the dropdown",
+      "gold": "ambiguous",
+      "tags": ["select", "underspecified"]
+    },
+    {
+      "id": "wizard-step-account",
+      "op": "click",
+      "sentence": "go back to the Account step in the progress bar",
+      "gold": ["step-account"],
+      "tags": ["stepper", "region"]
+    },
+    {
+      "id": "wizard-step-first",
+      "op": "click",
+      "sentence": "click the first step",
+      "gold": ["step-account"],
+      "tags": ["stepper", "ordinal"]
+    },
+    {
+      "id": "wizard-step-review",
+      "op": "click",
+      "sentence": "click the Review step",
+      "gold": ["step-review"],
+      "tags": ["stepper", "disabled", "exact-label"]
+    },
+    {
+      "id": "wizard-save-draft",
+      "op": "click",
+      "sentence": "save my progress as a draft",
+      "gold": ["save-draft"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "wizard-help-chat",
+      "op": "click",
+      "sentence": "click the chat bubble in the bottom right corner",
+      "gold": ["help-chat"],
+      "tags": ["icon", "aria-label", "title-name", "region"]
+    },
+    {
+      "id": "wizard-step-billing-absent",
+      "op": "click",
+      "sentence": "click the Billing step",
+      "gold": "none",
+      "tags": ["stepper", "absent"]
+    },
+    {
+      "id": "wizard-vat-absent",
+      "op": "fill",
+      "sentence": "type {{vat}} in the VAT number field",
+      "gold": "none",
+      "tags": ["absent", "form-section"]
+    },
+    {
+      "id": "wizard-finish-absent",
+      "op": "click",
+      "sentence": "click Finish setup",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

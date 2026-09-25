@@ -1,0 +1,117 @@
+{
+  "page": "admin-dashboard.html",
+  "cases": [
+    {
+      "id": "admin-bell",
+      "op": "click",
+      "sentence": "click the bell icon",
+      "gold": ["notifications"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "admin-crumb-users-absent",
+      "op": "click",
+      "sentence": "click Users in the breadcrumbs",
+      "gold": "none",
+      "tags": ["breadcrumb", "absent", "duplicate-name"]
+    },
+    {
+      "id": "admin-avatar",
+      "op": "click",
+      "sentence": "click my avatar in the top bar",
+      "gold": ["account-menu"],
+      "tags": ["icon", "aria-label", "region", "paraphrase"]
+    },
+    {
+      "id": "admin-roles",
+      "op": "click",
+      "sentence": "click Roles under Users in the sidebar",
+      "gold": ["side-roles"],
+      "tags": ["region", "container", "exact-label"]
+    },
+    {
+      "id": "admin-reports-sidebar",
+      "op": "click",
+      "sentence": "click the Reports link in the sidebar",
+      "gold": ["side-reports"],
+      "tags": ["region", "near-duplicate-name"]
+    },
+    {
+      "id": "admin-crumb-analytics",
+      "op": "click",
+      "sentence": "click Analytics in the breadcrumbs",
+      "gold": ["crumb-analytics"],
+      "tags": ["breadcrumb", "duplicate-name", "region"]
+    },
+    {
+      "id": "admin-analytics-sidebar",
+      "op": "click",
+      "sentence": "collapse the Analytics section in the sidebar",
+      "gold": ["side-analytics"],
+      "tags": ["accordion", "duplicate-name", "region", "state"]
+    },
+    {
+      "id": "admin-home-unscoped",
+      "op": "click",
+      "sentence": "click Home",
+      "gold": ["side-home", "crumb-home"],
+      "tags": ["duplicate-name", "breadcrumb"]
+    },
+    {
+      "id": "admin-report-churn",
+      "op": "click",
+      "sentence": "click View report on the Churn card",
+      "gold": ["report-churn"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "admin-report-second",
+      "op": "click",
+      "sentence": "click the second View report link",
+      "gold": ["report-active"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "admin-report-unscoped",
+      "op": "click",
+      "sentence": "click View report",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "admin-export",
+      "op": "click",
+      "sentence": "download the data as CSV",
+      "gold": ["export-csv"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "admin-date-range",
+      "op": "click",
+      "sentence": "click the date range dropdown",
+      "gold": ["date-range"],
+      "tags": ["select", "exact-label"]
+    },
+    {
+      "id": "admin-export-pdf-absent",
+      "op": "click",
+      "sentence": "click Export PDF",
+      "gold": "none",
+      "tags": ["absent", "near-duplicate-name"]
+    },
+    {
+      "id": "admin-report-conversion-absent",
+      "op": "click",
+      "sentence": "click View report on the Conversion rate card",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    },
+    {
+      "id": "admin-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box at the top",
+      "gold": ["search"],
+      "tags": ["aria-label", "region"]
+    }
+  ]
+}

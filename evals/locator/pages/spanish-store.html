@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Almacén del Sur - Yerba mate y accesorios</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header,
+      footer {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+        align-items: center;
+      }
+      header form {
+        flex: 1;
+        display: flex;
+        gap: 0.25rem;
+      }
+      header input {
+        flex: 1;
+      }
+      nav.categories {
+        display: flex;
+        gap: 1rem;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid #ccc;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr 260px;
+        gap: 1.5rem;
+        padding: 1rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+      article {
+        border: 1px solid #aaa;
+        padding: 0.75rem;
+      }
+      aside {
+        border: 1px solid #bbb;
+        padding: 0.75rem;
+        background: #fafafa;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Almacén del Sur</a>
+      <form role="search">
+        <input
+          type="search"
+          name="q"
+          placeholder="Buscar productos"
+          data-eval-gold="search"
+        />
+        <button type="submit" data-eval-gold="search-submit">Buscar</button>
+      </form>
+      <a href="/login" data-eval-gold="login">Iniciar sesión</a>
+      <a href="/registro" data-eval-gold="register">Crear cuenta</a>
+      <a href="/carrito" data-eval-gold="view-cart">Ver carrito (2)</a>
+    </header>
+    <nav class="categories" aria-label="Categorías">
+      <a href="/c/yerbas" data-eval-gold="cat-yerbas">Yerbas</a>
+      <a href="/c/mates" data-eval-gold="cat-mates">Mates</a>
+      <a href="/c/bombillas" data-eval-gold="cat-bombillas">Bombillas</a>
+      <a href="/c/termos" data-eval-gold="cat-termos">Termos</a>
+      <a href="/c/ofertas" data-eval-gold="cat-ofertas">Ofertas</a>
+    </nav>
+    <div class="layout">
+      <main>
+        <h1>Productos destacados</h1>
+        <label
+          >Ordenar por
+          <select name="orden" data-eval-gold="sort">
+            <option>Más vendidos</option>
+            <option>Precio: menor a mayor</option>
+            <option>Precio: mayor a menor</option>
+          </select></label
+        >
+        <div class="grid">
+          <article>
+            <h3>Yerba Orgánica 1 kg</h3>
+            <p>$8.900</p>
+            <button data-eval-gold="add-yerba-organica">
+              Agregar al carrito
+            </button>
+          </article>
+          <article>
+            <h3>Yerba Suave 500 g</h3>
+            <p>$4.200</p>
+            <button data-eval-gold="add-yerba-suave">Agregar al carrito</button>
+          </article>
+          <article>
+            <h3>Mate Imperial de calabaza</h3>
+            <p>$32.500</p>
+            <button data-eval-gold="add-mate-imperial">
+              Agregar al carrito
+            </button>
+          </article>
+          <article>
+            <h3>Bombilla de alpaca</h3>
+            <p>$6.750</p>
+            <button data-eval-gold="add-bombilla">Agregar al carrito</button>
+          </article>
+          <article>
+            <h3>Termo acero 1 L</h3>
+            <p>$27.000</p>
+            <button data-eval-gold="add-termo">Agregar al carrito</button>
+          </article>
+          <article>
+            <h3>Mate de vidrio forrado</h3>
+            <p>$5.300</p>
+            <p><em>Sin stock</em></p>
+            <button disabled data-eval-gold="add-mate-vidrio">
+              Agregar al carrito
+            </button>
+          </article>
+        </div>
+        <p><button data-eval-gold="load-more">Ver más productos</button></p>
+      </main>
+      <aside aria-label="Tu carrito">
+        <h2>Tu carrito</h2>
+        <ul>
+          <li>
+            Yerba Suave 500 g &times; 1
+            <button
+              aria-label="Quitar Yerba Suave 500 g"
+              data-eval-gold="remove-suave"
+            >
+              &times;
+            </button>
+          </li>
+          <li>
+            Bombilla de alpaca &times; 1
+            <button
+              aria-label="Quitar Bombilla de alpaca"
+              data-eval-gold="remove-bombilla"
+            >
+              &times;
+            </button>
+          </li>
+        </ul>
+        <p>Total: $10.950</p>
+        <label
+          >Código de descuento <input name="cupon" data-eval-gold="coupon"
+        /></label>
+        <button data-eval-gold="coupon-apply">Aplicar</button>
+        <p>
+          <button data-eval-gold="checkout">Finalizar compra</button>
+        </p>
+        <a href="/" data-eval-gold="keep-shopping">Seguir comprando</a>
+      </aside>
+    </div>
+    <footer>
+      <a href="/ayuda">Ayuda</a>
+      <a href="/envios">Envíos</a>
+      <a href="/devoluciones">Cambios y devoluciones</a>
+      <a href="/contacto">Contacto</a>
+    </footer>
+  </body>
+</html>

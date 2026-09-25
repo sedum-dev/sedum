@@ -44,7 +44,10 @@ rather than in a selector or run-local ref, so they survive extractor changes.
 - `op` is the locator operation: `click`, `fill`, or `read`.
 - `gold` is a list of acceptable ids, `"none"` when the target is not on the
   page, or `"ambiguous"` when a person could not tell which element is meant.
-  Giving up is correct only for the last two.
+  Giving up is correct only for the last two. List several ids when either
+  click is equally correct, such as two Home links to the same address.
+  A sentence that precisely names a disabled control has that control as its
+  gold: finding it is the locator's job, and refusing it is the action's.
 - `tags` name the difficulty, so results break down by failure type.
 
 Write sentences the way a test author would, including paraphrases, ordinals,

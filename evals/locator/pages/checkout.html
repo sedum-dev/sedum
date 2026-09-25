@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout - Northwind Goods</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header,
+      footer {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+        align-items: center;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 1.5rem;
+        padding: 1rem;
+      }
+      fieldset {
+        margin-bottom: 1rem;
+        border: 1px solid #bbb;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+      }
+      label {
+        display: block;
+        margin: 0.35rem 0;
+      }
+      aside {
+        border: 1px solid #bbb;
+        padding: 0.75rem;
+        background: #fafafa;
+      }
+      aside dl {
+        display: grid;
+        grid-template-columns: 1fr auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Northwind Goods</a>
+      <nav>
+        <a href="/shop">Shop</a>
+        <a href="/help">Help</a>
+      </nav>
+      <a href="/account">Account</a>
+      <a href="/cart">Cart (3)</a>
+    </header>
+    <div class="layout">
+      <main>
+        <h1>Checkout</h1>
+        <a href="/cart" data-eval-gold="back-to-cart">&larr; Back to cart</a>
+        <form>
+          <fieldset>
+            <legend>Contact</legend>
+            <label
+              >Email <input type="email" name="email" data-eval-gold="email"
+            /></label>
+            <label
+              >Phone <input type="tel" name="phone" data-eval-gold="phone"
+            /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Shipping address</legend>
+            <div class="row">
+              <label
+                >First name
+                <input name="ship-first" data-eval-gold="ship-first"
+              /></label>
+              <label
+                >Last name <input name="ship-last" data-eval-gold="ship-last"
+              /></label>
+            </div>
+            <label
+              >Street address
+              <input name="ship-street" data-eval-gold="ship-street"
+            /></label>
+            <label
+              >Apartment, suite, etc. (optional) <input name="ship-apt"
+            /></label>
+            <div class="row">
+              <label
+                >City <input name="ship-city" data-eval-gold="ship-city"
+              /></label>
+              <label
+                >Postal code
+                <input name="ship-postal" data-eval-gold="ship-postal"
+              /></label>
+            </div>
+            <label
+              >Country
+              <select name="ship-country" data-eval-gold="ship-country">
+                <option>United States</option>
+                <option>Canada</option>
+                <option>Mexico</option>
+              </select></label
+            >
+          </fieldset>
+          <label
+            ><input
+              type="checkbox"
+              name="billing-same"
+              data-eval-gold="billing-same"
+            />
+            Billing same as shipping</label
+          >
+          <fieldset>
+            <legend>Billing address</legend>
+            <div class="row">
+              <label
+                >First name
+                <input name="bill-first" data-eval-gold="bill-first"
+              /></label>
+              <label
+                >Last name <input name="bill-last" data-eval-gold="bill-last"
+              /></label>
+            </div>
+            <label
+              >Street address
+              <input name="bill-street" data-eval-gold="bill-street"
+            /></label>
+            <label
+              >Apartment, suite, etc. (optional) <input name="bill-apt"
+            /></label>
+            <div class="row">
+              <label
+                >City <input name="bill-city" data-eval-gold="bill-city"
+              /></label>
+              <label
+                >Postal code
+                <input name="bill-postal" data-eval-gold="bill-postal"
+              /></label>
+            </div>
+            <label
+              >Country
+              <select name="bill-country" data-eval-gold="bill-country">
+                <option>United States</option>
+                <option>Canada</option>
+                <option>Mexico</option>
+              </select></label
+            >
+          </fieldset>
+          <fieldset>
+            <legend>Shipping method</legend>
+            <label
+              ><input
+                type="radio"
+                name="method"
+                value="standard"
+                checked
+                data-eval-gold="ship-standard"
+              />
+              Standard (5&ndash;7 business days) &mdash; $4.99</label
+            >
+            <label
+              ><input
+                type="radio"
+                name="method"
+                value="express"
+                data-eval-gold="ship-express"
+              />
+              Express (2&ndash;3 business days) &mdash; $14.99</label
+            >
+            <label
+              ><input
+                type="radio"
+                name="method"
+                value="overnight"
+                data-eval-gold="ship-overnight"
+              />
+              Overnight &mdash; $29.99</label
+            >
+          </fieldset>
+          <fieldset>
+            <legend>Payment</legend>
+            <label
+              >Card number
+              <input
+                name="card"
+                inputmode="numeric"
+                data-eval-gold="card-number"
+            /></label>
+            <div class="row">
+              <label
+                >Expiry (MM/YY) <input name="expiry" data-eval-gold="expiry"
+              /></label>
+              <label>CVC <input name="cvc" data-eval-gold="cvc" /></label>
+            </div>
+            <label>Name on card <input name="card-name" /></label>
+          </fieldset>
+          <label
+            ><input type="checkbox" name="terms" data-eval-gold="terms" /> I
+            agree to the <a href="/terms">Terms of service</a></label
+          >
+          <label
+            ><input type="checkbox" name="news" data-eval-gold="news" /> Email
+            me about new products and offers</label
+          >
+          <p>
+            <button type="submit" data-eval-gold="place-order">
+              Place order
+            </button>
+          </p>
+        </form>
+      </main>
+      <aside aria-label="Order summary">
+        <h2>Order summary</h2>
+        <ul>
+          <li>Linen Throw Pillow &times; 2 &mdash; $58.00</li>
+          <li>Ceramic Planter &times; 1 &mdash; $32.00</li>
+        </ul>
+        <a href="/cart" data-eval-gold="edit-cart">Edit cart</a>
+        <label
+          >Promo code
+          <input name="promo" data-eval-gold="promo" />
+        </label>
+        <button type="button" data-eval-gold="promo-apply">Apply</button>
+        <dl>
+          <dt>Subtotal</dt>
+          <dd>$90.00</dd>
+          <dt>Shipping</dt>
+          <dd>$4.99</dd>
+          <dt>Tax</dt>
+          <dd>$7.20</dd>
+          <dt>Total</dt>
+          <dd>$102.19</dd>
+        </dl>
+      </aside>
+    </div>
+    <footer>
+      <a href="/privacy">Privacy policy</a>
+      <a href="/terms">Terms</a>
+      <a href="/returns">Returns &amp; refunds</a>
+      <a href="/contact">Contact us</a>
+    </footer>
+  </body>
+</html>
