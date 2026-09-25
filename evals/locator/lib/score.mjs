@@ -120,6 +120,13 @@ export function summarize(results) {
       if (!byTag.has(tag)) byTag.set(tag, []);
       byTag.get(tag).push(item);
     }
+  const byVariant = new Map();
+  for (const item of results)
+    if (item.case.variant) {
+      if (!byVariant.has(item.case.variant))
+        byVariant.set(item.case.variant, []);
+      byVariant.get(item.case.variant).push(item);
+    }
   const stages = {};
   for (const item of results)
     if (item.score.stage)
@@ -165,6 +172,26 @@ export function summarize(results) {
             wrong: count(items, "wrong_action"),
           },
         ]),
+    ),
+    variants: Object.fromEntries(
+      [...byVariant.entries()].map(([variant, items]) => {
+        const answerableItems = items.filter((item) =>
+          Array.isArray(item.case.gold),
+        );
+        return [
+          variant,
+          {
+            cases: items.length,
+            successRate: rate(
+              count(answerableItems, "correct"),
+              answerableItems.length,
+            ),
+            wrong: count(items, "wrong_action"),
+            recall: items.filter((item) => item.score.stage === "recall")
+              .length,
+          },
+        ];
+      }),
     ),
     usage,
   };

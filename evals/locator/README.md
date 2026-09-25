@@ -50,6 +50,35 @@ rather than in a selector or run-local ref, so they survive extractor changes.
   gold: finding it is the locator's job, and refusing it is the action's.
 - `tags` name the difficulty, so results break down by failure type.
 
+### Coding variants
+
+A suite can name `variants` instead of `page`: the same interface coded in
+several styles, such as semantic HTML, clickable `div`s with no roles, ARIA
+widgets, framework-rendered markup, names that are only visual, and web
+components. Every case runs once per variant with the same sentence and gold
+ids (reported as `<id>@<variant>`), so a difference between variants comes
+from the markup alone. Each gold id must be marked once in every variant.
+
+```json
+{
+  "variants": {
+    "semantic": "variants/signup/semantic.html",
+    "div-soup": "variants/signup/div-soup.html"
+  },
+  "cases": [
+    {
+      "id": "v-signup-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the Email field",
+      "gold": ["email"],
+      "tags": ["exact-label"]
+    }
+  ]
+}
+```
+
+Use `--variant <name>` to run one style.
+
 Write sentences the way a test author would, including paraphrases, ordinals,
 and scoping to a row or region. Include negatives: an eval without `none` and
 `ambiguous` cases cannot measure wrong actions.

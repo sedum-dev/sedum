@@ -13,6 +13,20 @@ export function goldIds(html) {
   return counts;
 }
 
+/**
+ * A suite names one `page`, or `variants` mapping a coding-style name to a
+ * page. Variants render the same interface, so every case runs once per
+ * variant with the same sentence and gold ids.
+ */
+function suitePages(suite) {
+  if (suite.variants && typeof suite.variants === "object")
+    return Object.entries(suite.variants).map(([variant, page]) => ({
+      variant,
+      page,
+    }));
+  return [{ variant: null, page: suite.page }];
+}
+
 /** Load every suite and report problems that would make a case meaningless. */
 export function loadSuites(root) {
   const dir = join(root, "cases");
@@ -30,17 +44,20 @@ export function loadSuites(root) {
       problems.push(`${where}: invalid JSON (${error.message})`);
       continue;
     }
-    const pagePath = join(root, "pages", suite.page ?? "");
-    if (!suite.page || !existsSync(pagePath)) {
-      problems.push(`${where}: page ${suite.page} does not exist`);
-      continue;
+    const pages = [];
+    for (const { variant, page } of suitePages(suite)) {
+      const pagePath = join(root, "pages", page ?? "");
+      if (!page || !existsSync(pagePath)) {
+        problems.push(`${where}: page ${page} does not exist`);
+        continue;
+      }
+      const ids = goldIds(readFileSync(pagePath, "utf8"));
+      for (const [id, count] of ids)
+        if (count > 1)
+          problems.push(`pages/${page}: gold id ${id} appears ${count} times`);
+      pages.push({ variant, page, ids });
     }
-    const ids = goldIds(readFileSync(pagePath, "utf8"));
-    for (const [id, count] of ids)
-      if (count > 1)
-        problems.push(
-          `pages/${suite.page}: gold id ${id} appears ${count} times`,
-        );
+    if (pages.length === 0) continue;
     for (const testCase of suite.cases ?? []) {
       const label = `${where} ${testCase.id ?? "(no id)"}`;
       if (!testCase.id || seen.has(testCase.id))
@@ -55,14 +72,18 @@ export function loadSuites(root) {
       if (Array.isArray(testCase.gold)) {
         if (testCase.gold.length === 0)
           problems.push(`${label}: gold list is empty`);
-        for (const id of testCase.gold)
-          if (!ids.has(id))
-            problems.push(
-              `${label}: gold ${id} is not marked in ${suite.page}`,
-            );
+        for (const { page, ids } of pages)
+          for (const id of testCase.gold)
+            if (!ids.has(id))
+              problems.push(`${label}: gold ${id} is not marked in ${page}`);
       } else if (testCase.gold !== "none" && testCase.gold !== "ambiguous")
         problems.push(`${label}: gold must be ids, "none", or "ambiguous"`);
-      cases.push({ ...testCase, page: suite.page });
+      for (const { variant, page } of pages)
+        cases.push(
+          variant === null
+            ? { ...testCase, page }
+            : { ...testCase, id: `${testCase.id}@${variant}`, page, variant },
+        );
     }
   }
   return { cases, problems };

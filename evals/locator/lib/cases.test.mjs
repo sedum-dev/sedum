@@ -75,3 +75,48 @@ describe("loadSuites", () => {
     expect(text).toMatch(/gold must be ids/);
   });
 });
+
+describe("loadSuites with coding variants", () => {
+  let root;
+  afterEach(() => root && rmSync(root, { recursive: true, force: true }));
+
+  it("expands each case once per variant and checks labels in every page", () => {
+    root = mkdtempSync(join(tmpdir(), "locator-variants-"));
+    mkdirSync(join(root, "pages", "ui"), { recursive: true });
+    mkdirSync(join(root, "cases"));
+    writeFileSync(
+      join(root, "pages", "ui", "semantic.html"),
+      `<button data-eval-gold="save">Save</button>`,
+    );
+    writeFileSync(
+      join(root, "pages", "ui", "div-soup.html"),
+      `<div onclick="save()">Save</div>`,
+    );
+    writeFileSync(
+      join(root, "cases", "ui.json"),
+      JSON.stringify({
+        variants: {
+          semantic: "ui/semantic.html",
+          "div-soup": "ui/div-soup.html",
+        },
+        cases: [
+          {
+            id: "ui-save",
+            op: "click",
+            sentence: "click Save",
+            gold: ["save"],
+            tags: ["exact-label"],
+          },
+        ],
+      }),
+    );
+    const { cases, problems } = loadSuites(root);
+    expect(cases.map((c) => [c.id, c.variant, c.page])).toEqual([
+      ["ui-save@semantic", "semantic", "ui/semantic.html"],
+      ["ui-save@div-soup", "div-soup", "ui/div-soup.html"],
+    ]);
+    expect(problems).toEqual([
+      "cases/ui.json ui-save: gold save is not marked in ui/div-soup.html",
+    ]);
+  });
+});
