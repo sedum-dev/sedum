@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Account settings</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      .css-a1b2c3 {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem 1.25rem;
+        background: #1d2330;
+      }
+      .css-9kd2lm {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        color: #fff;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .MuiIconButton-root {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 0;
+        background: #39414f;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        position: relative;
+      }
+      .MuiTouchRipple-root {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .MuiContainer-root {
+        max-width: 720px;
+        margin: 1.5rem auto;
+      }
+      .MuiTypography-h4 {
+        font-size: 2em;
+        font-weight: 700;
+        margin: 0.67em 0;
+      }
+      .MuiTabs-flexContainer {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #d0d4dc;
+      }
+      .MuiTab-root {
+        font: inherit;
+        border: 0;
+        background: none;
+        padding: 0.6rem 1rem;
+        cursor: pointer;
+        position: relative;
+      }
+      .MuiTab-root.Mui-selected {
+        border-bottom: 2px solid #3060d0;
+        font-weight: 600;
+      }
+      .MuiPaper-root {
+        background: #fff;
+        border: 1px solid #dde1e8;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1rem 0;
+      }
+      .MuiTypography-h6 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0 0 0.75rem;
+      }
+      .css-row-8h3k {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f1f4;
+      }
+      .MuiSwitch-root {
+        width: 40px;
+        height: 22px;
+        position: relative;
+        display: inline-block;
+      }
+      .MuiSwitch-track {
+        position: absolute;
+        inset: 0;
+        border-radius: 11px;
+        background: #c5cad3;
+      }
+      .MuiSwitch-switchBase {
+        position: absolute;
+        z-index: 1;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+      }
+      .MuiSwitch-thumb {
+        display: block;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      .MuiSwitch-root.Mui-checked .MuiSwitch-track {
+        background: #3060d0;
+      }
+      .MuiSwitch-root.Mui-checked .MuiSwitch-switchBase {
+        left: 20px;
+      }
+      /* The real input covers the whole switch but is transparent. */
+      .MuiSwitch-input {
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 300%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 1;
+      }
+      .MuiSelect-root {
+        position: relative;
+        min-width: 140px;
+      }
+      .MuiSelect-select {
+        border: 1px solid #8a909c;
+        border-radius: 3px;
+        padding: 0.3rem 0.5rem;
+        background: #fff;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+      }
+      .MuiSelect-nativeInput {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        opacity: 0;
+        pointer-events: none;
+        box-sizing: border-box;
+      }
+      .css-actions-2k1l {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+      }
+      .MuiButton-root {
+        font: inherit;
+        border-radius: 6px;
+        cursor: pointer;
+        position: relative;
+      }
+      .MuiButton-containedPrimary {
+        background: #3060d0;
+        color: #fff;
+        border: 0;
+        padding: 0.5rem 1rem;
+      }
+      .MuiButton-outlinedError {
+        color: #b02020;
+        background: #fff;
+        border: 1px solid #b02020;
+        padding: 0.4rem 0.9rem;
+      }
+      .MuiLink-root {
+        color: #3060d0;
+      }
+      .css-danger-0p9o {
+        border-color: #e0a0a0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // A stand-in for a client-rendered React + component-library bundle:
+      // the shell, the form and the danger zone mount in separate commits, and
+      // one label's htmlFor only lands when the form hydrates.
+      const root = document.getElementById("root");
+      const ICON_PERSON =
+        '<svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" data-testid="AccountCircleIcon"><circle cx="12" cy="8" r="4" fill="currentColor"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6z" fill="currentColor"></path></svg>';
+      const ICON_LOGO =
+        '<svg class="MuiSvgIcon-root" aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V4l16 16V4" stroke="currentColor" stroke-width="3" fill="none"></path></svg>';
+      const tabs = [
+        {
+          label: "Profile",
+          selected: false,
+          testProps: 'data-eval-gold="tab-profile"',
+        },
+        {
+          label: "Notifications",
+          selected: true,
+          testProps: 'data-eval-gold="tab-notifications"',
+        },
+        {
+          label: "Security",
+          selected: false,
+          testProps: 'data-eval-gold="tab-security"',
+        },
+      ];
+      const switches = [
+        {
+          id: ":r3:",
+          label: "Email alerts",
+          checked: true,
+          testProps: 'data-eval-gold="sw-email"',
+        },
+        {
+          id: ":r4:",
+          label: "Push notifications",
+          checked: false,
+          testProps: 'data-eval-gold="sw-push"',
+          deferLabel: true,
+        },
+        {
+          id: ":r5:",
+          label: "Weekly digest",
+          checked: true,
+          testProps: 'data-eval-gold="sw-digest"',
+        },
+      ];
+      const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+      const ripple = '<span class="MuiTouchRipple-root css-w0pj6f"></span>';
+
+      function Switch(item) {
+        return `
+          <div class="css-row-8h3k MuiStack-root">
+            <div class="css-1d3bbye MuiFormControl-root">
+              <label class="MuiFormLabel-root css-u4p24i" id="${item.id}-label"${item.deferLabel ? "" : ` for="${item.id}"`}>${item.label}</label>
+            </div>
+            <div class="css-j204z7">
+              <span class="MuiSwitch-root css-julti5-MuiSwitch-root${item.checked ? " Mui-checked" : ""}">
+                <span class="MuiSwitch-switchBase MuiButtonBase-root css-1nr2wod">
+                  <input id="${item.id}" class="MuiSwitch-input PrivateSwitchBase-input css-1m9pwf3" type="checkbox" role="switch"${item.checked ? " checked" : ""} ${item.testProps}>
+                  <span class="MuiSwitch-thumb css-jsexje-MuiSwitch-thumb"></span>
+                </span>
+                <span class="MuiSwitch-track css-1yjjitx-MuiSwitch-track"></span>
+              </span>
+            </div>
+          </div>`;
+      }
+
+      // Commit 1: app shell, header and tabs.
+      setTimeout(() => {
+        root.innerHTML = `
+          <div class="css-0 App">
+            <header class="MuiPaper-root-app css-a1b2c3 MuiAppBar-root">
+              <div class="MuiToolbar-root css-1q2w3e" style="display:contents">
+                <a class="css-9kd2lm MuiLink-root-brand" href="/" data-eval-gold="logo">${ICON_LOGO}<span class="MuiTypography-root css-1ai9q2">Northwind</span></a>
+                <div class="css-k008qs">
+                  <button class="MuiButtonBase-root MuiIconButton-root css-1yxmbwk" type="button" aria-label="Account menu" aria-haspopup="true" data-eval-gold="account-menu">${ICON_PERSON}${ripple}</button>
+                </div>
+              </div>
+            </header>
+            <div class="MuiContainer-root css-1oqqzyl-MuiContainer-root">
+              <div class="css-mhc70k">
+                <h1 class="MuiTypography-root MuiTypography-h4 css-1xvinid">Account settings</h1>
+              </div>
+              <div class="MuiTabs-root css-1ujnqem-MuiTabs-root">
+                <div class="MuiTabs-scroller MuiTabs-fixed css-jpln7h-MuiTabs-scroller">
+                  <div class="MuiTabs-flexContainer css-heg063-MuiTabs-flexContainer" role="tablist" aria-label="Settings sections">
+                    ${tabs
+                      .map(
+                        (tab, index) =>
+                          `<button class="MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5${tab.selected ? " Mui-selected" : ""}" tabindex="${tab.selected ? 0 : -1}" type="button" role="tab" aria-selected="${tab.selected}" id="simple-tab-${index}" aria-controls="simple-tabpanel-${index}" ${tab.testProps}>${tab.label}${ripple}</button>`,
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              </div>
+              <div id="slot-panel" class="css-1x5jdmq"></div>
+              <div id="slot-danger" class="css-1x5jdmq"></div>
+            </div>
+          </div>`;
+      }, 60);
+
+      // Commit 2: the notifications form (switches and the select).
+      setTimeout(() => {
+        document.getElementById("slot-panel").innerHTML = `
+          <div role="tabpanel" id="simple-tabpanel-1" aria-labelledby="simple-tab-1" class="css-19kzrtu">
+            <div class="MuiPaper-root MuiPaper-elevation1 css-aoeo82">
+              <h2 class="MuiTypography-root MuiTypography-h6 css-ow70v6">Notifications</h2>
+              <div class="MuiStack-root css-j7qwjs">
+                ${switches.map(Switch).join("")}
+                <div class="css-row-8h3k MuiStack-root">
+                  <div class="css-1d3bbye"><label class="MuiFormLabel-root MuiInputLabel-root css-u4p24i" id=":r6:-label">Digest day</label></div>
+                  <div class="MuiFormControl-root css-q8hpuo-MuiFormControl-root">
+                    <div class="MuiInputBase-root MuiOutlinedInput-root MuiSelect-root css-3dzjca">
+                      <div tabindex="0" role="combobox" aria-controls=":r7:" aria-expanded="false" aria-haspopup="listbox" aria-labelledby=":r6:-label :r6:" id=":r6:" class="MuiSelect-select MuiSelect-outlined MuiInputBase-input css-qiwgdb" data-eval-gold="digest-day"><span>${days[0]}</span><span aria-hidden="true">▾</span></div>
+                      <input aria-invalid="false" name="digestDay" aria-hidden="true" tabindex="-1" class="MuiSelect-nativeInput css-1k3x8v3" value="${days[0]}">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div id="slot-actions"></div>
+            </div>
+          </div>`;
+      }, 260);
+
+      // Commit 3: form actions and the danger zone (lazy chunk).
+      setTimeout(() => {
+        document.getElementById("slot-actions").innerHTML = `
+          <div class="css-actions-2k1l MuiStack-root">
+            <button class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary css-sghohy" type="submit" data-eval-gold="save"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Save changes</span></span>${ripple}</button>
+            <a class="MuiTypography-root MuiLink-root MuiLink-underlineAlways css-1dyfi4f" href="/settings" data-eval-gold="cancel">Cancel</a>
+          </div>`;
+        document.getElementById("slot-danger").innerHTML = `
+          <div class="MuiPaper-root css-danger-0p9o">
+            <h2 class="MuiTypography-root MuiTypography-h6 css-ow70v6">Danger zone</h2>
+            <p class="MuiTypography-root MuiTypography-body2 css-1xs4k2">Deactivating hides your profile until you sign in again.</p>
+            <div class="css-15lzf3"><button class="MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedError css-1rtnrqa" type="button" data-eval-gold="deactivate"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Deactivate account</span></span>${ripple}</button></div>
+            <p class="MuiTypography-root MuiTypography-body2 css-1xs4k2">Deleting your account removes all your data permanently.</p>
+            <div class="css-15lzf3"><button class="MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-outlinedError css-1rtnrqa" type="button" data-eval-gold="delete-account"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Delete account</span></span>${ripple}</button></div>
+          </div>`;
+      }, 480);
+
+      // Commit 4: hydration attaches handlers and the late label association.
+      setTimeout(() => {
+        for (const item of switches) {
+          const input = document.getElementById(item.id);
+          if (item.deferLabel)
+            document.getElementById(`${item.id}-label`).htmlFor = item.id;
+          input.addEventListener("change", () =>
+            input
+              .closest(".MuiSwitch-root")
+              .classList.toggle("Mui-checked", input.checked),
+          );
+        }
+        for (const tab of document.querySelectorAll("[role=tab]"))
+          tab.addEventListener("click", () => {
+            for (const other of document.querySelectorAll("[role=tab]")) {
+              other.classList.toggle("Mui-selected", other === tab);
+              other.setAttribute("aria-selected", String(other === tab));
+            }
+          });
+      }, 700);
+    </script>
+  </body>
+</html>

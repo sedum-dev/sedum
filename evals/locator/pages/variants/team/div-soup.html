@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Team members</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      .page {
+        max-width: 860px;
+        margin: 1.5rem auto;
+      }
+      .title {
+        font-size: 2em;
+        font-weight: 700;
+        margin: 0.67em 0;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      .search {
+        font: inherit;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #b8bec9;
+        border-radius: 6px;
+        width: 260px;
+        margin-right: auto;
+      }
+      .btn {
+        border-radius: 6px;
+        padding: 0.45rem 0.9rem;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: #3060d0;
+        color: #fff;
+      }
+      .btn-secondary {
+        background: #fff;
+        border: 1px solid #b8bec9;
+      }
+      .btn.is-disabled {
+        color: #9aa0ab;
+        border-color: #dde1e8;
+        cursor: default;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 110px 1.2fr 1.6fr 0.8fr 120px;
+        background: #fff;
+        border: 1px solid #dde1e8;
+      }
+      .cell {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #eef0f3;
+        display: flex;
+        align-items: center;
+      }
+      .head {
+        font-weight: 600;
+        white-space: nowrap;
+        background: #fafbfc;
+      }
+      .check {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #767676;
+        border-radius: 2px;
+        background: #fff;
+        cursor: pointer;
+        margin: 3px 4px 3px 4px;
+      }
+      .check.checked {
+        background: #3060d0;
+        border-color: #3060d0;
+      }
+      .row-actions {
+        justify-content: flex-end;
+        gap: 0.4rem;
+      }
+      .edit {
+        background: #fff;
+        border: 1px solid #b8bec9;
+        border-radius: 4px;
+        padding: 0.2rem 0.7rem;
+        cursor: pointer;
+      }
+      .kebab {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+      .kebab:hover {
+        background: #eef0f3;
+      }
+      .pager {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 0.75rem;
+      }
+      .pager-link {
+        color: #3060d0;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="title">Team members</div>
+      <div class="toolbar">
+        <input
+          class="search"
+          placeholder="Search members"
+          data-eval-gold="search"
+        />
+        <div
+          class="btn btn-secondary is-disabled"
+          data-eval-gold="remove-selected"
+        >
+          Remove selected
+        </div>
+        <div class="btn btn-primary js-invite" data-eval-gold="invite">
+          Invite member
+        </div>
+      </div>
+      <div class="grid">
+        <div class="cell head">
+          <div class="check js-all" data-eval-gold="select-all"></div>
+          <span>Select all</span>
+        </div>
+        <div class="cell head">Name</div>
+        <div class="cell head">Email</div>
+        <div class="cell head">Role</div>
+        <div class="cell head"></div>
+
+        <div class="cell">
+          <div class="check" data-eval-gold="select-ada"></div>
+        </div>
+        <div class="cell">Ada Lovelace</div>
+        <div class="cell">ada@example.com</div>
+        <div class="cell">Owner</div>
+        <div class="cell row-actions">
+          <div class="edit" data-eval-gold="edit-ada">Edit</div>
+          <div class="kebab" data-eval-gold="more-ada">
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="cell">
+          <div class="check" data-eval-gold="select-grace"></div>
+        </div>
+        <div class="cell">Grace Hopper</div>
+        <div class="cell">grace@example.com</div>
+        <div class="cell">Admin</div>
+        <div class="cell row-actions">
+          <div class="edit" data-eval-gold="edit-grace">Edit</div>
+          <div class="kebab" data-eval-gold="more-grace">
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="cell">
+          <div class="check" data-eval-gold="select-alan"></div>
+        </div>
+        <div class="cell">Alan Turing</div>
+        <div class="cell">alan@example.com</div>
+        <div class="cell">Member</div>
+        <div class="cell row-actions">
+          <div class="edit" data-eval-gold="edit-alan">Edit</div>
+          <div class="kebab" data-eval-gold="more-alan">
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="cell">
+          <div class="check" data-eval-gold="select-katherine"></div>
+        </div>
+        <div class="cell">Katherine Johnson</div>
+        <div class="cell">katherine@example.com</div>
+        <div class="cell">Member</div>
+        <div class="cell row-actions">
+          <div class="edit" data-eval-gold="edit-katherine">Edit</div>
+          <div class="kebab" data-eval-gold="more-katherine">
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="pager">
+        <div class="pager-link js-prev" data-eval-gold="prev">Previous</div>
+        <span>Page 2 of 3</span>
+        <div class="pager-link js-next" data-eval-gold="next">Next</div>
+      </div>
+    </div>
+    <script>
+      const rowChecks = [...document.querySelectorAll(".check:not(.js-all)")];
+      const removeSelected = document.querySelector(".btn-secondary");
+      function sync() {
+        removeSelected.classList.toggle(
+          "is-disabled",
+          !rowChecks.some((c) => c.classList.contains("checked")),
+        );
+      }
+      for (const check of rowChecks)
+        check.addEventListener("click", () => {
+          check.classList.toggle("checked");
+          sync();
+        });
+      document.querySelector(".js-all").addEventListener("click", (event) => {
+        const on = event.currentTarget.classList.toggle("checked");
+        rowChecks.forEach((c) => c.classList.toggle("checked", on));
+        sync();
+      });
+      removeSelected.addEventListener("click", () => {
+        if (!removeSelected.classList.contains("is-disabled"))
+          console.log("remove");
+      });
+      document
+        .querySelector(".js-invite")
+        .addEventListener("click", () => console.log("invite"));
+      for (const edit of document.querySelectorAll(".edit"))
+        edit.addEventListener("click", () => console.log("edit"));
+      for (const kebab of document.querySelectorAll(".kebab"))
+        kebab.addEventListener("click", () => console.log("menu"));
+      document
+        .querySelector(".js-prev")
+        .addEventListener("click", () => (location.href = "?page=1"));
+      document
+        .querySelector(".js-next")
+        .addEventListener("click", () => (location.href = "?page=3"));
+    </script>
+  </body>
+</html>

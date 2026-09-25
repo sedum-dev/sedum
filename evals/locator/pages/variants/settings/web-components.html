@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Account settings</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem 1.25rem;
+        background: #1d2330;
+      }
+      main {
+        max-width: 720px;
+        margin: 1.5rem auto;
+      }
+      .tablist {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #d0d4dc;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dde1e8;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1rem 0;
+      }
+      .card h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.75rem;
+      }
+      .actions {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+      }
+      .danger {
+        border-color: #e0a0a0;
+      }
+      ui-switch,
+      ui-select {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <ui-link href="/" variant="brand" data-eval-gold="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M4 20V4l16 16V4"
+            stroke="currentColor"
+            stroke-width="3"
+            fill="none"
+          />
+        </svg>
+        Northwind
+      </ui-link>
+      <ui-icon-button
+        icon="person"
+        label="Account menu"
+        data-eval-gold="account-menu"
+      ></ui-icon-button>
+    </header>
+    <main>
+      <h1>Account settings</h1>
+      <div class="tablist" role="tablist" aria-label="Settings sections">
+        <ui-tab data-eval-gold="tab-profile">Profile</ui-tab>
+        <ui-tab selected data-eval-gold="tab-notifications"
+          >Notifications</ui-tab
+        >
+        <ui-tab data-eval-gold="tab-security">Security</ui-tab>
+      </div>
+
+      <section class="card">
+        <h2>Notifications</h2>
+        <ui-switch checked data-eval-gold="sw-email">Email alerts</ui-switch>
+        <ui-switch data-eval-gold="sw-push">Push notifications</ui-switch>
+        <ui-switch checked data-eval-gold="sw-digest">Weekly digest</ui-switch>
+        <ui-select
+          label="Digest day"
+          options="Monday,Tuesday,Wednesday,Thursday,Friday"
+          value="Monday"
+          data-eval-gold="digest-day"
+        ></ui-select>
+        <div class="actions">
+          <ui-button variant="primary" data-eval-gold="save"
+            >Save changes</ui-button
+          >
+          <ui-link href="/settings" data-eval-gold="cancel">Cancel</ui-link>
+        </div>
+      </section>
+
+      <section class="card danger">
+        <h2>Danger zone</h2>
+        <p>Deactivating hides your profile until you sign in again.</p>
+        <ui-button variant="danger" data-eval-gold="deactivate"
+          >Deactivate account</ui-button
+        >
+        <p>Deleting your account removes all your data permanently.</p>
+        <ui-button variant="danger" data-eval-gold="delete-account"
+          >Delete account</ui-button
+        >
+      </section>
+    </main>
+    <script>
+      // A small design-system bundle. Each host forwards its test hook
+      // (data-eval-gold) to the real control inside its open shadow root,
+      // the way component libraries forward data-testid.
+      function forwardHook(host, inner) {
+        const hook = host.getAttribute("data-eval-gold");
+        if (!hook) return;
+        host.removeAttribute("data-eval-gold");
+        inner.setAttribute("data-eval-gold", hook);
+      }
+      const ICONS = {
+        person:
+          '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6z" fill="currentColor"></path></svg>',
+      };
+      const escape = (text) =>
+        String(text).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+
+      class UiElement extends HTMLElement {
+        connectedCallback() {
+          if (this.shadowRoot) return;
+          const root = this.attachShadow({ mode: "open" });
+          root.innerHTML = this.render();
+          forwardHook(this, root.querySelector("[part~=control]"));
+          this.setup?.(root);
+        }
+      }
+
+      customElements.define(
+        "ui-button",
+        class extends UiElement {
+          render() {
+            const danger = this.getAttribute("variant") === "danger";
+            return `<style>
+              :host { display: inline-block; }
+              button { font: inherit; border-radius: 6px; cursor: pointer; }
+              .primary { background: #3060d0; color: #fff; border: 0; padding: .5rem 1rem; }
+              .danger { color: #b02020; background: #fff; border: 1px solid #b02020; padding: .4rem .9rem; }
+            </style><button part="control" type="button" class="${danger ? "danger" : "primary"}"><slot></slot></button>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-link",
+        class extends UiElement {
+          render() {
+            const brand = this.getAttribute("variant") === "brand";
+            return `<style>
+              :host { display: inline-block; }
+              a { color: #3060d0; }
+              a.brand { color: #fff; font-weight: 700; text-decoration: none; display: flex; gap: .5rem; align-items: center; }
+            </style><a part="control" href="${escape(this.getAttribute("href"))}" class="${brand ? "brand" : ""}"><slot></slot></a>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-icon-button",
+        class extends UiElement {
+          render() {
+            return `<style>
+              button { width: 36px; height: 36px; border-radius: 50%; border: 0; background: #39414f; color: #fff; display: grid; place-items: center; cursor: pointer; }
+            </style><button part="control" type="button" aria-haspopup="menu" aria-label="${escape(this.getAttribute("label"))}">${ICONS[this.getAttribute("icon")] ?? ""}</button>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-tab",
+        class extends UiElement {
+          render() {
+            const selected = this.hasAttribute("selected");
+            return `<style>
+              button { font: inherit; border: 0; background: none; padding: .6rem 1rem; cursor: pointer; }
+              button[aria-selected=true] { border-bottom: 2px solid #3060d0; font-weight: 600; }
+            </style><button part="control" type="button" role="tab" aria-selected="${selected}" tabindex="${selected ? 0 : -1}"><slot></slot></button>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-switch",
+        class extends UiElement {
+          render() {
+            return `<style>
+              label { display: flex; justify-content: space-between; align-items: center; padding: .5rem 0; border-bottom: 1px solid #f0f1f4; }
+              input { appearance: none; width: 40px; height: 22px; border-radius: 11px; background: #c5cad3; position: relative; margin: 0; cursor: pointer; }
+              input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+              input:checked { background: #3060d0; }
+              input:checked::after { left: 20px; }
+            </style><label><span><slot></slot></span><input part="control" type="checkbox" role="switch"${this.hasAttribute("checked") ? " checked" : ""}></label>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "ui-select",
+        class extends UiElement {
+          render() {
+            const value = this.getAttribute("value");
+            const options = (this.getAttribute("options") ?? "")
+              .split(",")
+              .map(
+                (option) =>
+                  `<option${option === value ? " selected" : ""}>${escape(option)}</option>`,
+              )
+              .join("");
+            return `<style>
+              .row { display: flex; justify-content: space-between; align-items: center; padding: .5rem 0; border-bottom: 1px solid #f0f1f4; }
+              select { font: inherit; padding: .3rem .5rem; min-width: 140px; }
+            </style><div class="row"><label for="control">${escape(this.getAttribute("label"))}</label><select part="control" id="control">${options}</select></div>`;
+          }
+        },
+      );
+    </script>
+  </body>
+</html>

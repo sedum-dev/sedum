@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Team members</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      .MuiContainer-root {
+        max-width: 860px;
+        margin: 1.5rem auto;
+      }
+      .MuiTypography-h4 {
+        font-size: 2em;
+        font-weight: 700;
+        margin: 0.67em 0;
+      }
+      .MuiToolbar-root {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.75rem;
+      }
+      .MuiTextField-root {
+        position: relative;
+        width: 260px;
+        margin-right: auto;
+      }
+      .MuiInputLabel-root {
+        position: absolute;
+        left: 0.65rem;
+        top: 0.45rem;
+        color: #757575;
+        pointer-events: none;
+      }
+      .MuiInputBase-input {
+        font: inherit;
+        box-sizing: border-box;
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #b8bec9;
+        border-radius: 6px;
+      }
+      .MuiButton-root {
+        font: inherit;
+        border-radius: 6px;
+        padding: 0.45rem 0.9rem;
+        cursor: pointer;
+        position: relative;
+      }
+      .MuiButton-contained {
+        background: #3060d0;
+        color: #fff;
+        border: 0;
+      }
+      .MuiButton-outlined {
+        background: #fff;
+        border: 1px solid #b8bec9;
+      }
+      .MuiButton-root.Mui-disabled {
+        color: #9aa0ab;
+        border-color: #dde1e8;
+        cursor: default;
+      }
+      .MuiButton-sizeSmall {
+        padding: 0.2rem 0.7rem;
+        border-radius: 4px;
+      }
+      .MuiButton-text {
+        border: 0;
+        background: none;
+        color: #3060d0;
+        text-decoration: underline;
+        padding: 0;
+      }
+      .MuiTouchRipple-root {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .MuiTable-root {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #dde1e8;
+      }
+      .MuiTableCell-root {
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #eef0f3;
+      }
+      .MuiTableCell-head {
+        font-weight: 600;
+        background: #fafbfc;
+      }
+      .MuiTableCell-paddingCheckbox {
+        width: 110px;
+      }
+      .MuiCheckbox-root {
+        position: relative;
+        display: inline-flex;
+        vertical-align: middle;
+        width: 20px;
+        height: 20px;
+        align-items: center;
+        justify-content: center;
+      }
+      .PrivateSwitchBase-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+        z-index: 1;
+      }
+      .css-row-actions {
+        display: flex;
+        gap: 0.4rem;
+        justify-content: flex-end;
+      }
+      .MuiIconButton-root {
+        width: 30px;
+        height: 30px;
+        border: 0;
+        border-radius: 50%;
+        background: none;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        position: relative;
+      }
+      .MuiIconButton-root:hover {
+        background: #eef0f3;
+      }
+      .MuiPagination-root {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Stand-in for a client-rendered React + MUI bundle. The page mounts
+      // in commits, and the search field's label association lands only when
+      // the field hydrates.
+      const root = document.getElementById("root");
+      const members = [
+        {
+          name: "Ada Lovelace",
+          email: "ada@example.com",
+          role: "Owner",
+          testProps: {
+            select: 'data-eval-gold="select-ada"',
+            edit: 'data-eval-gold="edit-ada"',
+            more: 'data-eval-gold="more-ada"',
+          },
+        },
+        {
+          name: "Grace Hopper",
+          email: "grace@example.com",
+          role: "Admin",
+          testProps: {
+            select: 'data-eval-gold="select-grace"',
+            edit: 'data-eval-gold="edit-grace"',
+            more: 'data-eval-gold="more-grace"',
+          },
+        },
+        {
+          name: "Alan Turing",
+          email: "alan@example.com",
+          role: "Member",
+          testProps: {
+            select: 'data-eval-gold="select-alan"',
+            edit: 'data-eval-gold="edit-alan"',
+            more: 'data-eval-gold="more-alan"',
+          },
+        },
+        {
+          name: "Katherine Johnson",
+          email: "katherine@example.com",
+          role: "Member",
+          testProps: {
+            select: 'data-eval-gold="select-katherine"',
+            edit: 'data-eval-gold="edit-katherine"',
+            more: 'data-eval-gold="more-katherine"',
+          },
+        },
+      ];
+      const ripple = '<span class="MuiTouchRipple-root css-w0pj6f"></span>';
+      const BOX =
+        '<svg class="MuiSvgIcon-root css-i4bv87-MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" data-testid="CheckBoxOutlineBlankIcon"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"></path></svg>';
+      const MORE =
+        '<svg class="MuiSvgIcon-root css-i4bv87-MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" data-testid="MoreVertIcon"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>';
+
+      function Checkbox(props) {
+        return `<span class="MuiButtonBase-root MuiCheckbox-root MuiCheckbox-colorPrimary PrivateSwitchBase-root css-12wnr2w-MuiButtonBase-root-MuiCheckbox-root"><input class="PrivateSwitchBase-input css-1m9pwf3" type="checkbox" ${props}>${BOX}${ripple}</span>`;
+      }
+
+      function Row(member, index) {
+        const labelId = `enhanced-table-checkbox-${index}`;
+        return `
+          <tr class="MuiTableRow-root MuiTableRow-hover css-1gqug66" tabindex="-1">
+            <td class="MuiTableCell-root MuiTableCell-body MuiTableCell-paddingCheckbox css-1qvvaww">
+              <div class="css-0">${Checkbox(`aria-labelledby="${labelId}" ${member.testProps.select}`)}</div>
+            </td>
+            <th class="MuiTableCell-root MuiTableCell-body css-q34dxg" id="${labelId}" scope="row"><div class="css-1lh6sg0"><span class="MuiTypography-root css-9l3uo3">${member.name}</span></div></th>
+            <td class="MuiTableCell-root MuiTableCell-body css-q34dxg"><div class="css-1lh6sg0"><span class="MuiTypography-root css-9l3uo3">${member.email}</span></div></td>
+            <td class="MuiTableCell-root MuiTableCell-body css-q34dxg"><div class="css-1lh6sg0"><span class="MuiChip-label css-9iedg7">${member.role}</span></div></td>
+            <td class="MuiTableCell-root MuiTableCell-body MuiTableCell-alignRight css-1ex1afd">
+              <div class="css-row-actions MuiStack-root">
+                <button class="MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeSmall css-1rtnrqa" type="button" ${member.testProps.edit}><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Edit</span></span>${ripple}</button>
+                <button class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeSmall css-1j7qk7u" type="button" aria-label="More actions for ${member.name}" aria-haspopup="true" ${member.testProps.more}>${MORE}${ripple}</button>
+              </div>
+            </td>
+          </tr>`;
+      }
+
+      // Commit 1: shell, heading and toolbar.
+      setTimeout(() => {
+        root.innerHTML = `
+          <div class="css-0 App">
+            <div class="MuiContainer-root MuiContainer-maxWidthMd css-1oqqzyl-MuiContainer-root">
+              <div class="css-mhc70k"><h1 class="MuiTypography-root MuiTypography-h4 css-1xvinid">Team members</h1></div>
+              <div class="MuiToolbar-root MuiToolbar-gutters css-1q2w3e">
+                <div class="MuiFormControl-root MuiTextField-root css-1u3bzj6-MuiFormControl-root-MuiTextField-root">
+                  <label class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl css-1jy569b" data-shrink="false" id=":r1:-label">Search members</label>
+                  <div class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-formControl css-md26zr">
+                    <input aria-invalid="false" id=":r1:" type="search" class="MuiInputBase-input MuiOutlinedInput-input css-1x5jdmq" value="" data-eval-gold="search">
+                  </div>
+                </div>
+                <div class="css-1xhj18k">
+                  <button class="MuiButtonBase-root MuiButton-root MuiButton-outlined Mui-disabled css-1rtnrqa" tabindex="-1" type="button" disabled data-eval-gold="remove-selected"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Remove selected</span></span></button>
+                </div>
+                <div class="css-1xhj18k">
+                  <button class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary css-sghohy" type="button" data-eval-gold="invite"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Invite member</span></span>${ripple}</button>
+                </div>
+              </div>
+              <div id="slot-table" class="MuiPaper-root css-11xur9t"></div>
+              <div id="slot-pagination" class="css-0"></div>
+            </div>
+          </div>`;
+      }, 60);
+
+      // Commit 2: the table, once the members query resolves.
+      setTimeout(() => {
+        document.getElementById("slot-table").innerHTML = `
+          <div class="MuiTableContainer-root css-rorn0c-MuiTableContainer-root">
+            <table class="MuiTable-root css-1owb465" aria-labelledby="tableTitle">
+              <thead class="MuiTableHead-root css-1wbz3t9">
+                <tr class="MuiTableRow-root MuiTableRow-head css-1gqug66">
+                  <th class="MuiTableCell-root MuiTableCell-head MuiTableCell-paddingCheckbox css-1bbh4bm" scope="col">
+                    <div class="css-0">${Checkbox('aria-label="Select all" data-eval-gold="select-all"')}<span class="MuiTypography-root css-1q2w3e"> Select all</span></div>
+                  </th>
+                  <th class="MuiTableCell-root MuiTableCell-head css-1ygcj2i" scope="col">Name</th>
+                  <th class="MuiTableCell-root MuiTableCell-head css-1ygcj2i" scope="col">Email</th>
+                  <th class="MuiTableCell-root MuiTableCell-head css-1ygcj2i" scope="col">Role</th>
+                  <th class="MuiTableCell-root MuiTableCell-head css-1ygcj2i" scope="col"></th>
+                </tr>
+              </thead>
+              <tbody class="MuiTableBody-root css-1xnox0e">${members.map(Row).join("")}</tbody>
+            </table>
+          </div>`;
+      }, 260);
+
+      // Commit 3: pagination.
+      setTimeout(() => {
+        document.getElementById("slot-pagination").innerHTML = `
+          <nav aria-label="pagination navigation" class="MuiPagination-root css-1w6bx6o">
+            <button class="MuiButtonBase-root MuiButton-root MuiButton-text css-1ujsas3" type="button" data-eval-gold="prev"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Previous</span></span></button>
+            <p class="MuiTypography-root MuiTypography-body2 css-1chpzqh" style="margin:0">Page 2 of 3</p>
+            <button class="MuiButtonBase-root MuiButton-root MuiButton-text css-1ujsas3" type="button" data-eval-gold="next"><span class="MuiButton-label css-1pr9x1"><span class="css-7k2n1">Next</span></span></button>
+          </nav>`;
+      }, 480);
+
+      // Commit 4: hydration wires handlers and the search label.
+      setTimeout(() => {
+        const search = document.getElementById(":r1:");
+        const label = document.getElementById(":r1:-label");
+        label.htmlFor = ":r1:";
+        search.addEventListener("input", () => {
+          label.style.visibility = search.value ? "hidden" : "visible";
+        });
+        const rows = [
+          ...document.querySelectorAll("tbody .PrivateSwitchBase-input"),
+        ];
+        const remove = document.querySelector(
+          ".MuiButton-outlined.Mui-disabled",
+        );
+        const sync = () => {
+          const any = rows.some((input) => input.checked);
+          remove.disabled = !any;
+          remove.classList.toggle("Mui-disabled", !any);
+        };
+        rows.forEach((input) => input.addEventListener("change", sync));
+        document
+          .querySelector("thead .PrivateSwitchBase-input")
+          .addEventListener("change", (event) => {
+            rows.forEach((input) => (input.checked = event.target.checked));
+            sync();
+          });
+      }, 700);
+    </script>
+  </body>
+</html>

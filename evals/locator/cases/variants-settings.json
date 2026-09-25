@@ -1,0 +1,110 @@
+{
+  "variants": {
+    "semantic": "variants/settings/semantic.html",
+    "div-soup": "variants/settings/div-soup.html",
+    "aria-widgets": "variants/settings/aria-widgets.html",
+    "framework-rendered": "variants/settings/framework-rendered.html",
+    "visual-only-names": "variants/settings/visual-only-names.html",
+    "web-components": "variants/settings/web-components.html"
+  },
+  "cases": [
+    {
+      "id": "v-settings-tab-security",
+      "op": "click",
+      "sentence": "click the Security tab",
+      "gold": ["tab-security"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "v-settings-tab-profile",
+      "op": "click",
+      "sentence": "open the profile section",
+      "gold": ["tab-profile"],
+      "tags": ["tab", "paraphrase"]
+    },
+    {
+      "id": "v-settings-push-on",
+      "op": "click",
+      "sentence": "turn on push notifications",
+      "gold": ["sw-push"],
+      "tags": ["switch", "paraphrase"]
+    },
+    {
+      "id": "v-settings-email-alerts",
+      "op": "click",
+      "sentence": "click the Email alerts switch",
+      "gold": ["sw-email"],
+      "tags": ["switch", "exact-label"]
+    },
+    {
+      "id": "v-settings-digest-day",
+      "op": "click",
+      "sentence": "click the Digest day dropdown",
+      "gold": ["digest-day"],
+      "tags": ["select", "exact-label"]
+    },
+    {
+      "id": "v-settings-save",
+      "op": "click",
+      "sentence": "click Save changes",
+      "gold": ["save"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-settings-cancel",
+      "op": "click",
+      "sentence": "click the Cancel link",
+      "gold": ["cancel"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-settings-delete-account",
+      "op": "click",
+      "sentence": "click Delete account",
+      "gold": ["delete-account"],
+      "tags": ["exact-label", "substring-trap"]
+    },
+    {
+      "id": "v-settings-deactivate",
+      "op": "click",
+      "sentence": "click the button to temporarily disable my account",
+      "gold": ["deactivate"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "v-settings-account-menu",
+      "op": "click",
+      "sentence": "click the account menu icon in the header",
+      "gold": ["account-menu"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "v-settings-logo",
+      "op": "click",
+      "sentence": "click the Northwind logo",
+      "gold": ["logo"],
+      "tags": ["icon", "exact-label"]
+    },
+    {
+      "id": "v-settings-2fa-absent",
+      "op": "click",
+      "sentence": "click the Two-factor authentication switch",
+      "gold": "none",
+      "tags": ["switch", "absent"]
+    },
+    {
+      "id": "v-settings-billing-absent",
+      "op": "click",
+      "sentence": "click the Billing tab",
+      "gold": "none",
+      "tags": ["tab", "absent"]
+    },
+    {
+      "id": "v-settings-switch-unscoped",
+      "op": "click",
+      "sentence": "click the switch",
+      "gold": "ambiguous",
+      "tags": ["switch", "underspecified"]
+    }
+  ]
+}

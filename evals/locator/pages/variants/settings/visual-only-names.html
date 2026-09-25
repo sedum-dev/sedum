@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Account settings</title>
+    <style>
+      /* Icon font stand-in: glyphs come from CSS, not from the DOM. */
+      .ico::before {
+        font-size: 18px;
+        line-height: 1;
+      }
+      .ico-user::before {
+        content: "\1F464\FE0E";
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f5f6f8;
+        color: #1d2330;
+      }
+      .site-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem 1.25rem;
+        background: #1d2330;
+      }
+      .site-header--mobile {
+        display: none;
+      }
+      @media (max-width: 640px) {
+        .site-header--desktop {
+          display: none;
+        }
+        .site-header--mobile {
+          display: flex;
+        }
+      }
+      .logo {
+        display: flex;
+        align-items: center;
+        color: #fff;
+        text-decoration: none;
+      }
+      .logo text {
+        font: 700 15px system-ui;
+        fill: #fff;
+      }
+      .icon-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 0;
+        background: #39414f;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+      main {
+        max-width: 720px;
+        margin: 1.5rem auto;
+      }
+      .tabs {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #d0d4dc;
+      }
+      .tab {
+        font: inherit;
+        border: 0;
+        background: none;
+        padding: 0.6rem 1rem;
+        cursor: pointer;
+      }
+      .tab.is-active {
+        border-bottom: 2px solid #3060d0;
+        font-weight: 600;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #dde1e8;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin: 1rem 0;
+      }
+      .card h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.75rem;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f1f4;
+      }
+      .switch {
+        appearance: none;
+        width: 40px;
+        height: 22px;
+        border-radius: 11px;
+        background: #c5cad3;
+        position: relative;
+        margin: 0;
+        cursor: pointer;
+      }
+      .switch::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      .switch:checked {
+        background: #3060d0;
+      }
+      .switch:checked::after {
+        left: 20px;
+      }
+      select {
+        font: inherit;
+        padding: 0.3rem 0.5rem;
+        min-width: 140px;
+      }
+      .actions {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        margin-top: 1rem;
+      }
+      .primary {
+        font: inherit;
+        background: #3060d0;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+      }
+      .actions a {
+        color: #3060d0;
+      }
+      .danger {
+        border-color: #e0a0a0;
+      }
+      .danger button {
+        font: inherit;
+        color: #b02020;
+        background: #fff;
+        border: 1px solid #b02020;
+        border-radius: 6px;
+        padding: 0.4rem 0.9rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Desktop header (visible at this width). -->
+    <header class="site-header site-header--desktop">
+      <a href="/" class="logo" data-eval-gold="logo">
+        <svg width="120" height="24" viewBox="0 0 120 24" role="img">
+          <title>Northwind</title>
+          <path
+            d="M3 21V3l16 16V3"
+            stroke="currentColor"
+            stroke-width="3"
+            fill="none"
+          />
+          <text x="30" y="17" aria-hidden="true">Northwind</text>
+        </svg>
+      </a>
+      <button
+        type="button"
+        class="icon-btn ico ico-user"
+        data-eval-gold="account-menu"
+      ></button>
+    </header>
+    <!-- Mobile header: the same controls, hidden above 640px. -->
+    <header class="site-header site-header--mobile">
+      <a href="/" class="logo">
+        <svg width="120" height="24" viewBox="0 0 120 24" aria-hidden="true">
+          <path
+            d="M3 21V3l16 16V3"
+            stroke="currentColor"
+            stroke-width="3"
+            fill="none"
+          />
+          <text x="30" y="17">Northwind</text>
+        </svg>
+        <span class="sr-only">Northwind home</span>
+      </a>
+      <button type="button" class="icon-btn" aria-label="Account menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" fill="currentColor" />
+          <path d="M4 21c0-4 4-6 8-6s8 2 8 6z" fill="currentColor" />
+        </svg>
+      </button>
+    </header>
+    <main>
+      <h1>Account settings</h1>
+      <div class="tabs">
+        <button type="button" class="tab" data-eval-gold="tab-profile">
+          Profile
+        </button>
+        <button
+          type="button"
+          class="tab is-active"
+          data-eval-gold="tab-notifications"
+        >
+          Notifications
+        </button>
+        <button type="button" class="tab" data-eval-gold="tab-security">
+          Security
+        </button>
+      </div>
+
+      <form class="card" action="/settings/notifications" method="post">
+        <h2>Notifications</h2>
+        <div class="row">
+          <span>Email alerts</span>
+          <input
+            type="checkbox"
+            class="switch"
+            name="email_alerts"
+            checked
+            data-eval-gold="sw-email"
+          />
+        </div>
+        <div class="row">
+          <span>Push notifications</span>
+          <input
+            type="checkbox"
+            class="switch"
+            name="push"
+            data-eval-gold="sw-push"
+          />
+        </div>
+        <div class="row">
+          <span>Weekly digest</span>
+          <input
+            type="checkbox"
+            class="switch"
+            name="digest"
+            checked
+            data-eval-gold="sw-digest"
+          />
+        </div>
+        <div class="row">
+          <span>Digest day</span>
+          <select name="digest_day" data-eval-gold="digest-day">
+            <option selected>Monday</option>
+            <option>Tuesday</option>
+            <option>Wednesday</option>
+            <option>Thursday</option>
+            <option>Friday</option>
+          </select>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary" data-eval-gold="save">
+            Save changes
+          </button>
+          <a href="/settings" data-eval-gold="cancel">Cancel</a>
+        </div>
+      </form>
+
+      <section class="card danger">
+        <h2>Danger zone</h2>
+        <p>Deactivating hides your profile until you sign in again.</p>
+        <button type="button" data-eval-gold="deactivate">
+          Deactivate account
+        </button>
+        <p>Deleting your account removes all your data permanently.</p>
+        <button type="button" data-eval-gold="delete-account">
+          Delete account
+        </button>
+      </section>
+    </main>
+  </body>
+</html>

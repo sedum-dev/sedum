@@ -1,0 +1,110 @@
+{
+  "variants": {
+    "semantic": "variants/team/semantic.html",
+    "div-soup": "variants/team/div-soup.html",
+    "aria-widgets": "variants/team/aria-widgets.html",
+    "framework-rendered": "variants/team/framework-rendered.html",
+    "visual-only-names": "variants/team/visual-only-names.html",
+    "web-components": "variants/team/web-components.html"
+  },
+  "cases": [
+    {
+      "id": "v-team-edit-grace",
+      "op": "click",
+      "sentence": "click Edit for Grace Hopper",
+      "gold": ["edit-grace"],
+      "tags": ["repeated-group", "table-row"]
+    },
+    {
+      "id": "v-team-more-alan",
+      "op": "click",
+      "sentence": "click the three-dots menu for Alan Turing",
+      "gold": ["more-alan"],
+      "tags": ["icon", "repeated-group", "table-row"]
+    },
+    {
+      "id": "v-team-more-owner",
+      "op": "click",
+      "sentence": "open the more actions menu for the owner",
+      "gold": ["more-ada"],
+      "tags": ["icon", "repeated-group", "table-row", "indirect"]
+    },
+    {
+      "id": "v-team-select-alan-email",
+      "op": "click",
+      "sentence": "click the checkbox for alan@example.com",
+      "gold": ["select-alan"],
+      "tags": ["checkbox", "repeated-group", "table-row"]
+    },
+    {
+      "id": "v-team-select-all",
+      "op": "click",
+      "sentence": "click the Select all checkbox",
+      "gold": ["select-all"],
+      "tags": ["checkbox", "exact-label"]
+    },
+    {
+      "id": "v-team-invite",
+      "op": "click",
+      "sentence": "click Invite member",
+      "gold": ["invite"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-team-invite-paraphrase",
+      "op": "click",
+      "sentence": "click the button to add a new teammate",
+      "gold": ["invite"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "v-team-remove-selected",
+      "op": "click",
+      "sentence": "click Remove selected",
+      "gold": ["remove-selected"],
+      "tags": ["exact-label", "disabled"]
+    },
+    {
+      "id": "v-team-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search members field",
+      "gold": ["search"],
+      "tags": ["placeholder-name"]
+    },
+    {
+      "id": "v-team-next",
+      "op": "click",
+      "sentence": "go to the next page",
+      "gold": ["next"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "v-team-previous",
+      "op": "click",
+      "sentence": "click Previous",
+      "gold": ["prev"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-team-edit-unscoped",
+      "op": "click",
+      "sentence": "click Edit",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "v-team-edit-absent",
+      "op": "click",
+      "sentence": "click Edit for Linus Torvalds",
+      "gold": "none",
+      "tags": ["repeated-group", "table-row", "absent"]
+    },
+    {
+      "id": "v-team-export-absent",
+      "op": "click",
+      "sentence": "click the Export CSV button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}
