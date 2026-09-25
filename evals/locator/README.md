@@ -10,10 +10,13 @@ corepack pnpm eval:locator                       # key-free lexical baseline
 corepack pnpm eval:locator --resolver typesafe   # TypeSafe; needs TYPESAFE_API_KEY
 corepack pnpm eval:locator --resolver typesafe --offline   # replay recorded replies only
 corepack pnpm eval:locator --tag ordinal -v      # one tag, with ranked candidates
+corepack pnpm eval:locator --validate            # check cases and labels only
 ```
 
-Each run prints a summary and writes full results to `results/` (ignored by
-Git).
+Every run first validates the cases: each gold id must be marked exactly once
+in its page, case ids must be unique, and each case needs an operation,
+sentence, and tag. Each run prints a summary and writes full results to
+`results/` (ignored by Git).
 
 ## Cases
 
