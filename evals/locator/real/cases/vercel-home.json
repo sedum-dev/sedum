@@ -15,7 +15,8 @@
     "onboard-agent": "button[aria-label=\"Onboard your agent\"]",
     "docs-footer": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > nav > div > div:nth-of-type(8) > ul > li:nth-of-type(1) > a",
     "github-footer": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > nav > div > div:nth-of-type(12) > ul > li:nth-of-type(1) > a",
-    "theme-dark": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > div > div > fieldset > span:nth-of-type(3) > label"
+    "theme-dark": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > div > div > fieldset > span:nth-of-type(3) > label",
+    "theme-dark-radio": "input[aria-label=\"dark\"][type=\"radio\"]"
   },
   "cases": [
     {
@@ -99,7 +100,7 @@
       "id": "vc-theme-dark",
       "op": "click",
       "sentence": "switch the display theme to dark",
-      "gold": ["theme-dark"],
+      "gold": ["theme-dark", "theme-dark-radio"],
       "tags": ["radio", "icon", "footer", "invisible-to-sedum"]
     },
     {

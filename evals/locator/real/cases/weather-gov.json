@@ -13,7 +13,9 @@
     "flood-warning": "#wwaleft > ul > li:nth-of-type(6) > a",
     "forecast": "#topnav > li:nth-of-type(2) > div:nth-of-type(1) > a",
     "nws-banner": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(1)",
-    "noaa-logo": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(3)"
+    "noaa-logo": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(3)",
+    "noaa-footer-link": "#footer_legal_info > p > a:nth-of-type(2)",
+    "nws-footer-link": "#footer_legal_info > p > a:nth-of-type(3)"
   },
   "cases": [
     {
@@ -90,14 +92,14 @@
       "id": "wg-noaa-logo",
       "op": "click",
       "sentence": "click the NOAA logo",
-      "gold": ["noaa-logo"],
+      "gold": ["noaa-logo", "noaa-footer-link"],
       "tags": ["icon", "title-name", "invisible-to-sedum"]
     },
     {
       "id": "wg-nws-banner",
       "op": "click",
       "sentence": "click the National Weather Service banner at the top of the page",
-      "gold": ["nws-banner"],
+      "gold": ["nws-banner", "nws-footer-link"],
       "tags": ["icon", "region", "invisible-to-sedum"]
     },
     {
