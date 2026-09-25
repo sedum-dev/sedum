@@ -1,0 +1,125 @@
+{
+  "site": "shopify-home",
+  "targets": {
+    "logo": "html > body > div:nth-of-type(2) > header > nav > div > div > a",
+    "pricing": "#bk-nav-level1-items > li:nth-of-type(3) > a",
+    "login": "html > body > div:nth-of-type(2) > header > nav > ul:nth-of-type(2) > li:nth-of-type(1) > a",
+    "start-header": "html > body > div:nth-of-type(2) > header > nav > ul:nth-of-type(2) > li:nth-of-type(2) > a",
+    "start-hero": "#main > section:nth-of-type(1) > div > div:nth-of-type(2) > div > div > div:nth-of-type(1) > a",
+    "why-video": "#main > section:nth-of-type(1) > div > div:nth-of-type(2) > div > div > div:nth-of-type(2) > button",
+    "tab-online": "#ab-section-tab-1",
+    "glossier": "#ab-section-content-0 > div:nth-of-type(3) > span > div > a",
+    "pick-plan": "#main > section:nth-of-type(5) > div > div:nth-of-type(3) > a",
+    "play-testimonial": "button[aria-label=\"Play testimonial video\"]",
+    "help-center": "html > body > div:nth-of-type(2) > footer > ul > li:nth-of-type(4) > ul > li:nth-of-type(1) > a",
+    "region": "button[aria-label=\"Region Navigation. Current: USA\"]",
+    "instagram": "a[aria-label=\"External source: Instagram (Opens in a new window)\"]"
+  },
+  "cases": [
+    {
+      "id": "shpf-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "shpf-start-free",
+      "op": "click",
+      "sentence": "click Start for free",
+      "gold": ["start-header", "start-hero"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "shpf-pricing",
+      "op": "click",
+      "sentence": "click Pricing in the top navigation",
+      "gold": ["pricing"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "shpf-logo",
+      "op": "click",
+      "sentence": "click the Shopify logo",
+      "gold": ["logo"],
+      "tags": ["icon", "invisible-to-sedum"]
+    },
+    {
+      "id": "shpf-why-video",
+      "op": "click",
+      "sentence": "click Why we build Shopify",
+      "gold": ["why-video"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "shpf-tab-online",
+      "op": "click",
+      "sentence": "select the Online and in person tab",
+      "gold": ["tab-online"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "shpf-glossier",
+      "op": "click",
+      "sentence": "click the glossier.com store link",
+      "gold": ["glossier"],
+      "tags": ["exact-label", "repeated-group", "invisible-to-sedum"]
+    },
+    {
+      "id": "shpf-pick-plan",
+      "op": "click",
+      "sentence": "click the link to compare plans",
+      "gold": ["pick-plan"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "shpf-play-testimonial",
+      "op": "click",
+      "sentence": "play the testimonial video",
+      "gold": ["play-testimonial"],
+      "tags": ["aria-label", "paraphrase"]
+    },
+    {
+      "id": "shpf-play-ambiguous",
+      "op": "click",
+      "sentence": "click the play button",
+      "gold": "ambiguous",
+      "tags": ["icon", "underspecified"]
+    },
+    {
+      "id": "shpf-help-center",
+      "op": "click",
+      "sentence": "click Shopify Help Center in the footer",
+      "gold": ["help-center"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "shpf-region",
+      "op": "click",
+      "sentence": "open the region selector in the footer",
+      "gold": ["region"],
+      "tags": ["aria-label", "footer", "paraphrase"]
+    },
+    {
+      "id": "shpf-instagram",
+      "op": "click",
+      "sentence": "click the Instagram icon in the footer",
+      "gold": ["instagram"],
+      "tags": ["icon", "aria-label", "footer"]
+    },
+    {
+      "id": "shpf-search-absent",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box",
+      "gold": "none",
+      "tags": ["absent", "search"]
+    },
+    {
+      "id": "shpf-contact-sales-absent",
+      "op": "click",
+      "sentence": "click Contact sales in the header",
+      "gold": "none",
+      "tags": ["absent", "region"]
+    }
+  ]
+}

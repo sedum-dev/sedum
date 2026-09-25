@@ -1,0 +1,124 @@
+{
+  "site": "linear-home",
+  "targets": {
+    "logo": "a[aria-label=\"Navigate to home\"]",
+    "product": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div > header > nav > div > ul > li:nth-of-type(2) > ul:nth-of-type(1) > li:nth-of-type(1) > button",
+    "pricing-header": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div > header > nav > div > ul > li:nth-of-type(2) > ul:nth-of-type(1) > li:nth-of-type(4) > a",
+    "login": "#header-tooltip-login > a",
+    "signup": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div > header > nav > div > ul > li:nth-of-type(2) > ul:nth-of-type(2) > li:nth-of-type(4) > a",
+    "learn-more-intake": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > main > div:nth-of-type(2) > section:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div > a",
+    "add-issue-first": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > main > div:nth-of-type(2) > section:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > button:nth-of-type(1)",
+    "priority-inbox": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > main > div:nth-of-type(2) > div:nth-of-type(27) > div:nth-of-type(3) > div:nth-of-type(4) > a",
+    "changelog-view-all": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > main > div:nth-of-type(2) > div:nth-of-type(27) > div:nth-of-type(5) > a",
+    "contact-sales": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > main > div:nth-of-type(2) > section:nth-of-type(6) > div > a:nth-of-type(2)",
+    "pricing-footer": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > footer > div > div > div:nth-of-type(2) > ul > li:nth-of-type(5) > a",
+    "docs-footer": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > footer > div > div > div:nth-of-type(5) > ul > li:nth-of-type(3) > a"
+  },
+  "cases": [
+    {
+      "id": "lin-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "lin-signup",
+      "op": "click",
+      "sentence": "click the Sign up button in the header",
+      "gold": ["signup"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "lin-logo",
+      "op": "click",
+      "sentence": "click the Linear logo",
+      "gold": ["logo"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "lin-product-menu",
+      "op": "click",
+      "sentence": "open the Product dropdown",
+      "gold": ["product"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "lin-pricing",
+      "op": "click",
+      "sentence": "click Pricing",
+      "gold": ["pricing-header", "pricing-footer"],
+      "tags": ["exact-label", "duplicate-name", "nav"]
+    },
+    {
+      "id": "lin-learn-more",
+      "op": "click",
+      "sentence": "click Learn more",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "lin-learn-more-intake",
+      "op": "click",
+      "sentence": "click Learn more in the Intake and integrations section",
+      "gold": ["learn-more-intake"],
+      "tags": ["container", "duplicate-name"]
+    },
+    {
+      "id": "lin-add-issue",
+      "op": "click",
+      "sentence": "click Add issue",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "icon"]
+    },
+    {
+      "id": "lin-add-issue-first",
+      "op": "click",
+      "sentence": "click the first + add issue button on the board",
+      "gold": ["add-issue-first"],
+      "tags": ["ordinal", "icon", "repeated-group", "aria-label"]
+    },
+    {
+      "id": "lin-changelog-all",
+      "op": "click",
+      "sentence": "click View all in the changelog section",
+      "gold": ["changelog-view-all"],
+      "tags": ["exact-label", "container"]
+    },
+    {
+      "id": "lin-priority-inbox",
+      "op": "click",
+      "sentence": "open the Priority inbox changelog entry",
+      "gold": ["priority-inbox"],
+      "tags": ["repeated-group", "exact-label"]
+    },
+    {
+      "id": "lin-contact-sales",
+      "op": "click",
+      "sentence": "click Contact sales",
+      "gold": ["contact-sales"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "lin-docs-footer",
+      "op": "click",
+      "sentence": "click Documentation in the footer",
+      "gold": ["docs-footer"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "lin-email-absent",
+      "op": "fill",
+      "sentence": "type {{email}} in the work email field",
+      "gold": "none",
+      "tags": ["absent", "form-field"]
+    },
+    {
+      "id": "lin-language-absent",
+      "op": "click",
+      "sentence": "click the language selector",
+      "gold": "none",
+      "tags": ["absent", "select"]
+    }
+  ]
+}

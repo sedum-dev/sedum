@@ -1,0 +1,109 @@
+{
+  "site": "rust-lang",
+  "targets": {
+    "logo": "html > body > nav > div:nth-of-type(1) > a",
+    "install": "html > body > nav > ul > li:nth-of-type(1) > a",
+    "playground": "html > body > nav > ul > li:nth-of-type(3) > a",
+    "language-nav": "#language-nav",
+    "language-footer": "#language-footer",
+    "get-started": "html > body > main > header > div > div:nth-of-type(2) > a",
+    "version": "html > body > main > header > div > div:nth-of-type(2) > p > a",
+    "web-apps": "html > body > main > section:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > a",
+    "read-book": "#read-rust > a",
+    "github": "html > body > footer > div > div:nth-of-type(1) > div:nth-of-type(3) > div > a:nth-of-type(4)",
+    "file-issue": "html > body > footer > div > div:nth-of-type(2) > p:nth-of-type(1) > a"
+  },
+  "cases": [
+    {
+      "id": "rust-get-started",
+      "op": "click",
+      "sentence": "click Get Started",
+      "gold": ["get-started"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "rust-install",
+      "op": "click",
+      "sentence": "click Install in the top navigation",
+      "gold": ["install"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "rust-playground",
+      "op": "click",
+      "sentence": "open the Rust playground",
+      "gold": ["playground"],
+      "tags": ["paraphrase", "nav"]
+    },
+    {
+      "id": "rust-version",
+      "op": "click",
+      "sentence": "click the current version link under Get Started",
+      "gold": ["version"],
+      "tags": ["indirect"]
+    },
+    {
+      "id": "rust-language-nav",
+      "op": "click",
+      "sentence": "click the language dropdown in the header",
+      "gold": ["language-nav"],
+      "tags": ["select", "region", "duplicate-name"]
+    },
+    {
+      "id": "rust-language-unscoped",
+      "op": "click",
+      "sentence": "click the English (en-US) language selector",
+      "gold": ["language-nav", "language-footer"],
+      "tags": ["select", "duplicate-name"]
+    },
+    {
+      "id": "rust-logo",
+      "op": "click",
+      "sentence": "click the Rust logo in the top left",
+      "gold": ["logo"],
+      "tags": ["icon", "invisible-to-sedum"]
+    },
+    {
+      "id": "rust-web-apps",
+      "op": "click",
+      "sentence": "click Writing Web Apps",
+      "gold": ["web-apps"],
+      "tags": ["exact-label", "repeated-group"]
+    },
+    {
+      "id": "rust-read-book",
+      "op": "click",
+      "sentence": "click Read the Book",
+      "gold": ["read-book"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "rust-github",
+      "op": "click",
+      "sentence": "click the GitHub icon in the footer",
+      "gold": ["github"],
+      "tags": ["icon", "footer", "title-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "rust-file-issue",
+      "op": "click",
+      "sentence": "click the link to report a problem with the website",
+      "gold": ["file-issue"],
+      "tags": ["paraphrase", "footer"]
+    },
+    {
+      "id": "rust-search-absent",
+      "op": "fill",
+      "sentence": "type {{query}} in the search field",
+      "gold": "none",
+      "tags": ["absent", "search"]
+    },
+    {
+      "id": "rust-download-absent",
+      "op": "click",
+      "sentence": "click the Download for Windows button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

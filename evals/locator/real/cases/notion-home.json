@@ -1,0 +1,130 @@
+{
+  "site": "notion-home",
+  "targets": {
+    "logo": "html > body > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > nav > div > div:nth-of-type(1) > a",
+    "ai": "#ai > button",
+    "pricing": "html > body > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > nav > div > div:nth-of-type(2) > a:nth-of-type(1)",
+    "pricing-footer": "#site-footer > div > div > nav > ul:nth-of-type(1) > li:nth-of-type(5) > a",
+    "demo-header": "html > body > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > nav > div > div:nth-of-type(2) > a:nth-of-type(2)",
+    "demo-hero": "html > body > div:nth-of-type(1) > div > div > main > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) > header > div > a:nth-of-type(2)",
+    "demo-bottom": "#_R_bm_ > div:nth-of-type(2) > div > a:nth-of-type(2)",
+    "demo-footer": "#site-footer > div > div > nav > ul:nth-of-type(1) > li:nth-of-type(6) > a",
+    "login": "html > body > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > nav > div > div:nth-of-type(3) > span:nth-of-type(1) > a",
+    "free-header": "html > body > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > nav > div > div:nth-of-type(3) > span:nth-of-type(2) > a",
+    "free-hero": "html > body > div:nth-of-type(1) > div > div > main > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(4) > header > div > a:nth-of-type(1)",
+    "free-bottom": "#_R_bm_ > div:nth-of-type(2) > div > a:nth-of-type(1)",
+    "play": "html > body > div:nth-of-type(1) > div > div > main > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(5) > div > div:nth-of-type(1) > button",
+    "openai": "a[aria-label=\"OpenAI\"]",
+    "ramp-logo": "a[aria-label=\"Ramp\"]",
+    "ramp-story": "a[aria-label=\"Read the Ramp customer story\"]",
+    "tryit-3": "html > body > div:nth-of-type(1) > div > div > main > div:nth-of-type(2) > div > div:nth-of-type(2) > article:nth-of-type(3) > div > a",
+    "language": "#site-footer > div > div > div:nth-of-type(2) > button"
+  },
+  "cases": [
+    {
+      "id": "no-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "no-get-free",
+      "op": "click",
+      "sentence": "click Get Notion free",
+      "gold": ["free-header", "free-hero", "free-bottom"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "no-demo",
+      "op": "click",
+      "sentence": "book a demo",
+      "gold": ["demo-header", "demo-hero", "demo-bottom", "demo-footer"],
+      "tags": ["paraphrase", "duplicate-name"]
+    },
+    {
+      "id": "no-ai-menu",
+      "op": "click",
+      "sentence": "open the AI menu in the top navigation",
+      "gold": ["ai"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "no-pricing",
+      "op": "click",
+      "sentence": "click Pricing",
+      "gold": ["pricing", "pricing-footer"],
+      "tags": ["exact-label", "duplicate-name", "nav"]
+    },
+    {
+      "id": "no-logo",
+      "op": "click",
+      "sentence": "click the Notion logo in the top left",
+      "gold": ["logo"],
+      "tags": ["icon", "region"]
+    },
+    {
+      "id": "no-openai",
+      "op": "click",
+      "sentence": "click the OpenAI logo in the customer strip",
+      "gold": ["openai"],
+      "tags": ["icon", "aria-label", "repeated-group"]
+    },
+    {
+      "id": "no-play",
+      "op": "click",
+      "sentence": "click Play on the product video",
+      "gold": ["play"],
+      "tags": ["exact-label", "icon"]
+    },
+    {
+      "id": "no-tryit",
+      "op": "click",
+      "sentence": "click Try it",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "no-tryit-third",
+      "op": "click",
+      "sentence": "click the third Try it link",
+      "gold": ["tryit-3"],
+      "tags": ["ordinal", "repeated-group"]
+    },
+    {
+      "id": "no-ramp-story",
+      "op": "click",
+      "sentence": "open the Ramp customer story",
+      "gold": ["ramp-story", "ramp-logo"],
+      "tags": ["aria-label", "paraphrase"]
+    },
+    {
+      "id": "no-language",
+      "op": "click",
+      "sentence": "click the English (US) language button in the footer",
+      "gold": ["language"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "no-enterprise-header-absent",
+      "op": "click",
+      "sentence": "click Enterprise in the header navigation",
+      "gold": "none",
+      "tags": ["absent", "region", "nav"]
+    },
+    {
+      "id": "no-google-absent",
+      "op": "click",
+      "sentence": "click Continue with Google",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "no-email-absent",
+      "op": "fill",
+      "sentence": "type {{email}} in the email field",
+      "gold": "none",
+      "tags": ["absent", "form-field"]
+    }
+  ]
+}
