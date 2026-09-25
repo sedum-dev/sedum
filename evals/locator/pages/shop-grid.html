@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Outfitters shop</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header,
+      footer {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+        align-items: center;
+      }
+      main {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+      }
+      article {
+        border: 1px solid #aaa;
+        padding: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Outfitters</a>
+      <input
+        type="search"
+        placeholder="Search products"
+        data-eval-gold="search"
+      />
+      <label
+        >Sort by
+        <select>
+          <option>Featured</option>
+          <option>Price: low to high</option>
+        </select></label
+      >
+      <a href="/cart" data-eval-gold="cart">Cart (0)</a>
+    </header>
+    <main>
+      <article>
+        <h3>Canvas Backpack</h3>
+        <p>$29.99</p>
+        <p>Water-resistant 20 L pack.</p>
+        <button data-eval-gold="add-backpack">Add to cart</button>
+      </article>
+      <article>
+        <h3>Trail Light</h3>
+        <p>$9.99</p>
+        <p>USB rechargeable headlamp.</p>
+        <button data-eval-gold="add-light">Add to cart</button>
+      </article>
+      <article>
+        <h3>Merino Beanie</h3>
+        <p>$24.00</p>
+        <p>Soft wool hat.</p>
+        <button data-eval-gold="add-beanie">Add to cart</button>
+      </article>
+      <article>
+        <h3>Steel Bottle</h3>
+        <p>$19.00</p>
+        <p>Keeps drinks cold for 24 hours.</p>
+        <button data-eval-gold="add-bottle">Add to cart</button>
+      </article>
+      <article>
+        <h3>Rain Shell</h3>
+        <p>$89.00</p>
+        <p>Packable waterproof jacket.</p>
+        <button data-eval-gold="add-shell">Add to cart</button>
+      </article>
+      <article>
+        <h3>Camp Mug</h3>
+        <p>$12.00</p>
+        <p>Enamel mug, 350 ml.</p>
+        <button data-eval-gold="add-mug">Add to cart</button>
+      </article>
+    </main>
+    <p style="padding: 0 1rem">
+      <button data-eval-gold="load-more">Load more</button>
+    </p>
+    <footer>
+      <a href="/help">Help</a><a href="/returns">Returns</a
+      ><a href="/about">About us</a>
+    </footer>
+  </body>
+</html>

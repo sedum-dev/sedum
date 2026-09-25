@@ -1,0 +1,47 @@
+{
+  "page": "user-table.html",
+  "cases": [
+    {
+      "id": "table-edit-grace",
+      "op": "click",
+      "sentence": "click Edit for Grace Hopper",
+      "gold": ["edit-grace"],
+      "tags": ["repeated-group", "table-row"]
+    },
+    {
+      "id": "table-remove-alan-email",
+      "op": "click",
+      "sentence": "click Remove in the row for alan@example.com",
+      "gold": ["remove-alan"],
+      "tags": ["repeated-group", "table-row"]
+    },
+    {
+      "id": "table-remove-owner",
+      "op": "click",
+      "sentence": "click Remove for the owner",
+      "gold": ["remove-ada"],
+      "tags": ["repeated-group", "table-row", "indirect"]
+    },
+    {
+      "id": "table-edit-unscoped",
+      "op": "click",
+      "sentence": "click the Edit button",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "table-invite",
+      "op": "click",
+      "sentence": "click Invite member",
+      "gold": ["invite"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "table-remove-absent",
+      "op": "click",
+      "sentence": "click Remove for Linus Torvalds",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    }
+  ]
+}
