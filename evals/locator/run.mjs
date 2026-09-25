@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, normalize, resolve } from "node:path";
 import { URL, fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -10,6 +10,7 @@ import {
   quietPage,
   resolveTarget,
 } from "../../packages/core/dist/index.js";
+import { loadSuites } from "./lib/cases.mjs";
 import { cachedResolver, lexicalResolver } from "./lib/resolvers.mjs";
 import { scoreCase, summarize } from "./lib/score.mjs";
 
@@ -22,23 +23,21 @@ const { values: args } = parseArgs({
     offline: { type: "boolean", default: false },
     verbose: { type: "boolean", short: "v", default: false },
     out: { type: "string" },
+    validate: { type: "boolean", default: false },
   },
 });
 
 function loadCases() {
-  const dir = join(root, "cases");
-  return readdirSync(dir)
-    .filter((file) => file.endsWith(".json"))
-    .sort()
-    .flatMap((file) => {
-      const suite = JSON.parse(readFileSync(join(dir, file), "utf8"));
-      return suite.cases.map((testCase) => ({ ...testCase, page: suite.page }));
-    })
-    .filter(
-      (testCase) =>
-        (!args.case || testCase.id.includes(args.case)) &&
-        (!args.tag || testCase.tags?.includes(args.tag)),
-    );
+  const { cases, problems } = loadSuites(root);
+  if (problems.length) {
+    console.error(["Invalid eval cases:", ...problems].join("\n  "));
+    process.exit(1);
+  }
+  return cases.filter(
+    (testCase) =>
+      (!args.case || testCase.id.includes(args.case)) &&
+      (!args.tag || testCase.tags?.includes(args.tag)),
+  );
 }
 
 async function makeResolver() {
@@ -223,6 +222,10 @@ function report(summary, results) {
 }
 
 const cases = loadCases();
+if (args.validate) {
+  console.log(`${cases.length} cases are valid.`);
+  process.exit(0);
+}
 if (cases.length === 0) throw new Error("No cases match the filters.");
 const { resolver, cache } = await makeResolver();
 const { server, base } = await serve(join(root, "pages"));
