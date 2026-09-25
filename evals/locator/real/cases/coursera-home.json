@@ -1,0 +1,133 @@
+{
+  "site": "coursera-home",
+  "targets": {
+    "search": "#search-autocomplete-input",
+    "login": "#rendered-content > div > span > div > nav > div:nth-of-type(2) > div > div > div > div:nth-of-type(3) > div:nth-of-type(1) > a",
+    "join": "#rendered-content > div > span > div > nav > div:nth-of-type(2) > div > div > div > div:nth-of-type(3) > div:nth-of-type(2) > a",
+    "explore": "button[data-testid=\"megamenu-explore-button\"]",
+    "py_popular": "#rendered-content > div > div:nth-of-type(3) > div > main > div > section:nth-of-type(1) > div > div > div > div > div > div > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(3) > div > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(1) > a",
+    "gda_1": "#rendered-content > div > div:nth-of-type(3) > div > main > div > section:nth-of-type(1) > div > div > div > div > div > div > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(1) > div > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(1) > a",
+    "gda_2": "a[aria-label=\"Google Data Analytics, offered by Google, PROFESSIONAL CERTIFICATE\"]",
+    "gda_3": "#rendered-content > div > div:nth-of-type(3) > div > main > div > section:nth-of-type(8) > div > div > div > div > div > div > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(3) > div > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(1) > a",
+    "tab_analyst": "button[aria-label=\"Data Analyst\"]",
+    "trial": "#cta-3R4mlvjWLj5qNwiOVsHVcv",
+    "next": "#rendered-content > div > div:nth-of-type(3) > div > main > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > div > div > div > button:nth-of-type(2)",
+    "faq_free": "#cds-react-aria-\\:R18qralalafqd4q\\:-accordion-header",
+    "learn_more": "#cta-6Suw4v4d83Fmfnayo7ykXQ",
+    "enroll": "#rendered-content > div > div:nth-of-type(3) > div > main > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(1) > div > div:nth-of-type(2) > div > div > div:nth-of-type(1) > div:nth-of-type(3) > a"
+  },
+  "cases": [
+    {
+      "id": "co-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the What do you want to learn? box",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "co-login",
+      "op": "click",
+      "sentence": "click Log In",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "co-join",
+      "op": "click",
+      "sentence": "click Join for Free",
+      "gold": ["join"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "co-explore",
+      "op": "click",
+      "sentence": "open the Explore menu",
+      "gold": ["explore"],
+      "tags": ["nav", "paraphrase"]
+    },
+    {
+      "id": "co-python-popular",
+      "op": "click",
+      "sentence": "open Python for Everybody under Most popular",
+      "gold": ["py_popular"],
+      "tags": ["container", "repeated-group", "duplicate-name"]
+    },
+    {
+      "id": "co-google-data-analytics",
+      "op": "click",
+      "sentence": "click Google Data Analytics",
+      "gold": ["gda_1", "gda_2", "gda_3"],
+      "tags": ["duplicate-name"]
+    },
+    {
+      "id": "co-data-analyst-tab",
+      "op": "click",
+      "sentence": "select the Data Analyst tab",
+      "gold": ["tab_analyst"],
+      "tags": ["tab", "near-duplicate-name"]
+    },
+    {
+      "id": "co-free-trial",
+      "op": "click",
+      "sentence": "click Start 7-day free trial",
+      "gold": ["trial"],
+      "tags": ["exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "co-carousel-next",
+      "op": "click",
+      "sentence": "click the next arrow on the hero carousel",
+      "gold": ["next"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "co-enroll-microsoft",
+      "op": "click",
+      "sentence": "click Enroll now on the Microsoft banner",
+      "gold": ["enroll"],
+      "tags": ["container", "exact-label"]
+    },
+    {
+      "id": "co-faq-free",
+      "op": "click",
+      "sentence": "expand the FAQ Does Coursera offer free online courses?",
+      "gold": ["faq_free"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "co-learner-outcomes-learn-more",
+      "op": "click",
+      "sentence": "click Learn more below the learner outcomes",
+      "gold": ["learn_more"],
+      "tags": ["indirect", "exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "co-business-ambiguous",
+      "op": "click",
+      "sentence": "click Try Coursera for Business",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "co-explore-programs",
+      "op": "click",
+      "sentence": "click Explore programs",
+      "gold": "ambiguous",
+      "tags": ["near-duplicate-name", "underspecified"]
+    },
+    {
+      "id": "co-google-signin-absent",
+      "op": "click",
+      "sentence": "click Continue with Google",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "co-apple-absent",
+      "op": "click",
+      "sentence": "click Sign up with Apple",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "site": "ikea-home",
+  "targets": {
+    "search": "#ikea-search-input",
+    "camera": "#search-box-visual-search-icon",
+    "login": "html > body > div:nth-of-type(1) > header > div:nth-of-type(3) > div > nav > ul > li:nth-of-type(2) > div > a",
+    "bag": "html > body > div:nth-of-type(1) > header > div:nth-of-type(3) > div > nav > ul > li:nth-of-type(4) > div > a",
+    "deals_nav": "#section-deals",
+    "deals_pill": "html > body > main > article > div > div > div > section:nth-of-type(1) > div > div > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > a",
+    "add_bowl": "button[aria-label=\"Add \\\"VITABBORRE Bowl\\\" to cart\"]",
+    "add_morabo": "button[aria-label=\"Add \\\"MORABO Sectional, 5-seat corner\\\" to cart\"]",
+    "terms_btn": "html > body > main > article > div > div > div > section:nth-of-type(4) > div > div > div > div:nth-of-type(2) > div:nth-of-type(2)",
+    "terms_text": "html > body > main > article > div > div > div > section:nth-of-type(4) > div > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1)",
+    "holiday_arrow": "html > body > main > article > div > div > div > section:nth-of-type(5) > div > div > div > div > div:nth-of-type(1) > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > button",
+    "tab_family": "button[data-testid=\"hri-deals-pill-family_price\"]",
+    "cookie_ok": "#onetrust-accept-btn-handler"
+  },
+  "cases": [
+    {
+      "id": "ikh-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the What are you looking for? field",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "ikh-cookie-ok",
+      "op": "click",
+      "sentence": "accept cookies by clicking Ok",
+      "gold": ["cookie_ok"],
+      "tags": ["cookie-banner", "exact-label"]
+    },
+    {
+      "id": "ikh-bag-icon",
+      "op": "click",
+      "sentence": "click the shopping bag icon in the header",
+      "gold": ["bag"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ikh-login",
+      "op": "click",
+      "sentence": "open the log in or sign up menu from the person icon",
+      "gold": ["login"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "ikh-visual-search",
+      "op": "click",
+      "sentence": "click the camera icon in the search bar",
+      "gold": ["camera"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ikh-deals",
+      "op": "click",
+      "sentence": "click Deals",
+      "gold": ["deals_nav", "deals_pill"],
+      "tags": ["duplicate-name"]
+    },
+    {
+      "id": "ikh-add-bowl",
+      "op": "click",
+      "sentence": "click Add to cart for the VITABBORRE bowl",
+      "gold": ["add_bowl"],
+      "tags": ["repeated-group", "container", "aria-label"]
+    },
+    {
+      "id": "ikh-add-sectional",
+      "op": "click",
+      "sentence": "add the MORABO sectional to the cart",
+      "gold": ["add_morabo"],
+      "tags": ["repeated-group", "container", "paraphrase"]
+    },
+    {
+      "id": "ikh-add-unscoped",
+      "op": "click",
+      "sentence": "click the Add to cart button",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "ikh-family-tab",
+      "op": "click",
+      "sentence": "select the IKEA Family offers tab in the deals section",
+      "gold": ["tab_family"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "ikh-terms-sektion",
+      "op": "click",
+      "sentence": "click See full Terms and Conditions under the SEKTION kitchen offer",
+      "gold": ["terms_btn", "terms_text"],
+      "tags": ["container", "near-duplicate-name"]
+    },
+    {
+      "id": "ikh-holiday-arrow",
+      "op": "click",
+      "sentence": "click the arrow button in the Holiday hosting card",
+      "gold": ["holiday_arrow"],
+      "tags": ["icon", "container", "invisible-to-sedum"]
+    },
+    {
+      "id": "ikh-chat-absent",
+      "op": "click",
+      "sentence": "click the Chat with us button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "ikh-add-kallax-absent",
+      "op": "click",
+      "sentence": "click Add to cart for the KALLAX shelving unit",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    },
+    {
+      "id": "ikh-add-dresser",
+      "op": "click",
+      "sentence": "click Add to cart for the FÅGELFJÄLLET dresser",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "near-duplicate-name", "underspecified"]
+    }
+  ]
+}

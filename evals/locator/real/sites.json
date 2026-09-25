@@ -103,11 +103,6 @@
     "category": "retail"
   },
   {
-    "id": "target-home",
-    "url": "https://www.target.com/",
-    "category": "retail"
-  },
-  {
     "id": "apple-iphone",
     "url": "https://www.apple.com/iphone/",
     "category": "retail"

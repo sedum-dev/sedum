@@ -1,0 +1,132 @@
+{
+  "site": "craigslist-ny",
+  "targets": {
+    "search": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div > input",
+    "post_ad": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > a",
+    "post_icon": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div > div:nth-of-type(2) > a:nth-of-type(2)",
+    "apts": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div > div > a:nth-of-type(1)",
+    "re_jobs": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(1) > div > div > a:nth-of-type(19)",
+    "fg_sale": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div > div:nth-of-type(2) > a:nth-of-type(1)",
+    "housing_forum": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(3) > div > div:nth-of-type(2) > a:nth-of-type(7)",
+    "legal_services": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > div > div:nth-of-type(2) > a:nth-of-type(2)",
+    "computer_gigs": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(2) > div > div:nth-of-type(1) > a:nth-of-type(1)",
+    "brooklyn": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div > div:nth-of-type(1) > div > button:nth-of-type(2)",
+    "boston": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(2) > div > a:nth-of-type(7)",
+    "cal_15": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(3) > div > table > tbody > tr:nth-of-type(5) > td:nth-of-type(5)",
+    "faves": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div > div:nth-of-type(2) > a:nth-of-type(1)"
+  },
+  "cases": [
+    {
+      "id": "cl-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search craigslist box",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "cl-post-ad",
+      "op": "click",
+      "sentence": "click post an ad",
+      "gold": ["post_ad", "post_icon"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "cl-apts",
+      "op": "click",
+      "sentence": "click apartments under housing",
+      "gold": ["apts"],
+      "tags": ["region", "paraphrase"]
+    },
+    {
+      "id": "cl-real-estate-jobs",
+      "op": "click",
+      "sentence": "click real estate under jobs",
+      "gold": ["re_jobs"],
+      "tags": ["region", "duplicate-name", "substring-trap"]
+    },
+    {
+      "id": "cl-real-estate-unscoped",
+      "op": "click",
+      "sentence": "click real estate",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "cl-farm-garden-sale",
+      "op": "click",
+      "sentence": "click farm + garden in the for sale section",
+      "gold": ["fg_sale"],
+      "tags": ["region", "duplicate-name"]
+    },
+    {
+      "id": "cl-housing-forum",
+      "op": "click",
+      "sentence": "click the housing forum under discussion forums",
+      "gold": ["housing_forum"],
+      "tags": ["region", "duplicate-name"]
+    },
+    {
+      "id": "cl-legal-services",
+      "op": "click",
+      "sentence": "click legal under services",
+      "gold": ["legal_services"],
+      "tags": ["region", "duplicate-name", "substring-trap"]
+    },
+    {
+      "id": "cl-computer-gigs",
+      "op": "click",
+      "sentence": "click computer in the gigs section",
+      "gold": ["computer_gigs"],
+      "tags": ["region", "duplicate-name"]
+    },
+    {
+      "id": "cl-brooklyn",
+      "op": "click",
+      "sentence": "switch to Brooklyn",
+      "gold": ["brooklyn"],
+      "tags": ["indirect", "paraphrase"]
+    },
+    {
+      "id": "cl-boston",
+      "op": "click",
+      "sentence": "click boston in the nearby cl list",
+      "gold": ["boston"],
+      "tags": ["region", "exact-label"]
+    },
+    {
+      "id": "cl-calendar-15",
+      "op": "click",
+      "sentence": "click 15 in the event calendar",
+      "gold": ["cal_15"],
+      "tags": ["table-row", "region", "numeric", "date", "invisible-to-sedum"]
+    },
+    {
+      "id": "cl-faves",
+      "op": "click",
+      "sentence": "click the faves star",
+      "gold": ["faves"],
+      "tags": ["icon", "exact-label"]
+    },
+    {
+      "id": "cl-bikes",
+      "op": "click",
+      "sentence": "click bikes",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "cl-jobs-under-sale-absent",
+      "op": "click",
+      "sentence": "click jobs under for sale",
+      "gold": "none",
+      "tags": ["absent", "region"]
+    },
+    {
+      "id": "cl-missed-housing-absent",
+      "op": "click",
+      "sentence": "click missed connections under housing",
+      "gold": "none",
+      "tags": ["absent", "region"]
+    }
+  ]
+}
