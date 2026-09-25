@@ -1,0 +1,124 @@
+{
+  "site": "lanacion",
+  "targets": {
+    "login": "#btningresar",
+    "subscribe": "#btnsuscribite",
+    "secciones": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(7) > div:nth-of-type(2) > div:nth-of-type(4) > header > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > button",
+    "search-icon": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(7) > div:nth-of-type(2) > div:nth-of-type(4) > header > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > div > div > div:nth-of-type(1) > button",
+    "bell": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(7) > div:nth-of-type(2) > div:nth-of-type(4) > header > div:nth-of-type(1) > div > div > div > div:nth-of-type(3) > div > button",
+    "logo": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(7) > div:nth-of-type(2) > div:nth-of-type(4) > header > div:nth-of-type(1) > div > div > div > div:nth-of-type(2) > a",
+    "dolar-blue": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(7) > div:nth-of-type(2) > div:nth-of-type(4) > header > div:nth-of-type(3) > div > div > div:nth-of-type(1) > div > ul > li:nth-of-type(2) > a",
+    "deportes-section": "#tema_08 > div > div > div:nth-of-type(1) > a",
+    "deportes-footer": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(8) > footer > div:nth-of-type(1) > div:nth-of-type(1) > ul > li:nth-of-type(7) > a",
+    "trend-milei": "#f0fpQYwDkNR62xq > section > div > div > div:nth-of-type(2) > nav > ul > li:nth-of-type(1) > a",
+    "colapinto-f1": "#tema_01 > div > div > div:nth-of-type(6) > article > a",
+    "ayuda": "#fusion-app > div:nth-of-type(9) > div:nth-of-type(8) > footer > div:nth-of-type(1) > div:nth-of-type(4) > ul > li:nth-of-type(2) > a"
+  },
+  "cases": [
+    {
+      "id": "ln-login",
+      "op": "click",
+      "sentence": "click INICIAR SESIÓN",
+      "gold": ["login"],
+      "tags": ["exact-label", "non-english"]
+    },
+    {
+      "id": "ln-subscribe-header",
+      "op": "click",
+      "sentence": "click the yellow subscribe button in the header",
+      "gold": ["subscribe"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "ln-secciones",
+      "op": "click",
+      "sentence": "click SECCIONES",
+      "gold": ["secciones"],
+      "tags": ["exact-label", "non-english"]
+    },
+    {
+      "id": "ln-search-icon",
+      "op": "click",
+      "sentence": "click the search icon",
+      "gold": ["search-icon"],
+      "tags": ["icon", "search", "non-english"]
+    },
+    {
+      "id": "ln-bell",
+      "op": "click",
+      "sentence": "click the notifications bell",
+      "gold": ["bell"],
+      "tags": ["icon", "non-english"]
+    },
+    {
+      "id": "ln-logo",
+      "op": "click",
+      "sentence": "click the LA NACION logo in the header",
+      "gold": ["logo"],
+      "tags": ["icon", "region", "non-english"]
+    },
+    {
+      "id": "ln-dolar-blue",
+      "op": "click",
+      "sentence": "click Dólar blue",
+      "gold": ["dolar-blue"],
+      "tags": ["exact-label", "non-english"]
+    },
+    {
+      "id": "ln-deportes",
+      "op": "click",
+      "sentence": "go to the Deportes section",
+      "gold": ["deportes-section", "deportes-footer"],
+      "tags": ["duplicate-name", "non-english"]
+    },
+    {
+      "id": "ln-trend-milei",
+      "op": "click",
+      "sentence": "click Javier Milei in the trending topics bar",
+      "gold": ["trend-milei"],
+      "tags": ["region", "near-duplicate-name", "non-english"]
+    },
+    {
+      "id": "ln-colapinto",
+      "op": "click",
+      "sentence": "open the story about Colapinto starting 9th in Azerbaijan",
+      "gold": ["colapinto-f1"],
+      "tags": ["paraphrase", "repeated-group", "non-english"]
+    },
+    {
+      "id": "ln-ayuda",
+      "op": "click",
+      "sentence": "click Ayuda in the footer",
+      "gold": ["ayuda"],
+      "tags": ["exact-label", "footer", "non-english"]
+    },
+    {
+      "id": "ln-dolar-unscoped",
+      "op": "click",
+      "sentence": "click the Dólar link",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "near-duplicate-name", "non-english"]
+    },
+    {
+      "id": "ln-suscribite-unscoped",
+      "op": "click",
+      "sentence": "click SUSCRIBITE",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "substring-trap", "non-english"]
+    },
+    {
+      "id": "ln-crear-cuenta-absent",
+      "op": "click",
+      "sentence": "click Crear cuenta",
+      "gold": "none",
+      "tags": ["absent", "non-english"]
+    },
+    {
+      "id": "ln-search-field-absent",
+      "op": "fill",
+      "sentence": "type {{query}} in the search field",
+      "gold": "none",
+      "tags": ["absent", "search", "non-english"]
+    }
+  ]
+}

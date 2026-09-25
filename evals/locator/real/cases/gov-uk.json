@@ -1,0 +1,126 @@
+{
+  "site": "gov-uk",
+  "targets": {
+    "accept-cookies": "#global-cookie-message > div > div:nth-of-type(2) > button:nth-of-type(1)",
+    "reject-cookies": "#global-cookie-message > div > div:nth-of-type(2) > button:nth-of-type(2)",
+    "logo": "#logo",
+    "menu": "#super-navigation-menu-toggle",
+    "search": "#search-main-699ca8f7",
+    "search-button": "#content > header > div > div:nth-of-type(2) > div > form > div > div > div > div:nth-of-type(2) > button",
+    "childcare-popular": "#content > section > div > div > div > ul > li:nth-of-type(5) > div > span:nth-of-type(2) > a",
+    "childcare-services": "#content > div > div:nth-of-type(2) > div > div:nth-of-type(2) > section > ul > li:nth-of-type(7) > a",
+    "benefits-footer": "html > body > footer > div > div:nth-of-type(1) > div:nth-of-type(1) > ul > li:nth-of-type(1) > a",
+    "mot": "#content > div > div:nth-of-type(2) > div > div:nth-of-type(2) > section > ul > li:nth-of-type(2) > a",
+    "not-useful": "html > body > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > button",
+    "uc-account": "#content > section > div > div > div > ul > li:nth-of-type(3) > div > span:nth-of-type(2) > a",
+    "hmrc-popular": "#content > section > div > div > div > ul > li:nth-of-type(1) > div > span:nth-of-type(2) > a",
+    "hmrc-services": "#content > div > div:nth-of-type(2) > div > div:nth-of-type(2) > section > ul > li:nth-of-type(1) > a"
+  },
+  "cases": [
+    {
+      "id": "gu-accept-cookies",
+      "op": "click",
+      "sentence": "click Accept additional cookies",
+      "gold": ["accept-cookies"],
+      "tags": ["exact-label", "cookie-banner"]
+    },
+    {
+      "id": "gu-reject-cookies",
+      "op": "click",
+      "sentence": "reject the cookies",
+      "gold": ["reject-cookies"],
+      "tags": ["paraphrase", "cookie-banner"]
+    },
+    {
+      "id": "gu-logo",
+      "op": "click",
+      "sentence": "click the GOV.UK logo",
+      "gold": ["logo"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "gu-menu",
+      "op": "click",
+      "sentence": "open the Menu",
+      "gold": ["menu"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "gu-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search field",
+      "gold": ["search"],
+      "tags": ["search", "form-field"]
+    },
+    {
+      "id": "gu-search-button",
+      "op": "click",
+      "sentence": "click the magnifying glass button next to the search box",
+      "gold": ["search-button"],
+      "tags": ["icon", "search", "indirect"]
+    },
+    {
+      "id": "gu-childcare",
+      "op": "click",
+      "sentence": "click Childcare account: sign in",
+      "gold": ["childcare-popular", "childcare-services"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "gu-benefits-footer",
+      "op": "click",
+      "sentence": "click Benefits in the footer",
+      "gold": ["benefits-footer"],
+      "tags": ["footer", "duplicate-name"]
+    },
+    {
+      "id": "gu-mot",
+      "op": "click",
+      "sentence": "check the MOT history of a vehicle",
+      "gold": ["mot"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "gu-not-useful",
+      "op": "click",
+      "sentence": "click No to say this page is not useful",
+      "gold": ["not-useful"],
+      "tags": ["aria-label"]
+    },
+    {
+      "id": "gu-uc-account",
+      "op": "click",
+      "sentence": "click Universal Credit account: sign in",
+      "gold": ["uc-account"],
+      "tags": ["exact-label", "substring-trap"]
+    },
+    {
+      "id": "gu-hmrc",
+      "op": "click",
+      "sentence": "sign in to HMRC",
+      "gold": ["hmrc-popular", "hmrc-services"],
+      "tags": ["paraphrase", "near-duplicate-name"]
+    },
+    {
+      "id": "gu-state-pension-unscoped",
+      "op": "click",
+      "sentence": "click the Check your State Pension link",
+      "gold": "ambiguous",
+      "tags": ["near-duplicate-name", "underspecified"]
+    },
+    {
+      "id": "gu-header-signin-absent",
+      "op": "click",
+      "sentence": "click the Sign in button in the header",
+      "gold": "none",
+      "tags": ["absent", "region"]
+    },
+    {
+      "id": "gu-logout-absent",
+      "op": "click",
+      "sentence": "click Sign out",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

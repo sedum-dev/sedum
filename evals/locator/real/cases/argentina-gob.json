@@ -1,0 +1,124 @@
+{
+  "site": "argentina-gob",
+  "targets": {
+    "search": "#edit-keys-new-home",
+    "buscar": "#edit-submit-new-home",
+    "mi-argentina": "#btn-mi-argentina",
+    "logo": "#navbar-brand",
+    "dni": "#block-system-main > div:nth-of-type(3) > div > div > div > ul > li:nth-of-type(8) > a",
+    "licencia": "#block-system-main > div:nth-of-type(3) > div > div > div > ul > li:nth-of-type(9) > a",
+    "feriados": "#block-system-main > div:nth-of-type(3) > div > div > div > ul > li:nth-of-type(2) > a",
+    "anses": "#block-system-main > div:nth-of-type(3) > div > div > div > ul > li:nth-of-type(1) > a",
+    "documentacion": "#block-system-main > section > div > div > div:nth-of-type(5) > div > div > div:nth-of-type(1) > a",
+    "transporte": "#block-system-main > section > div > div > div:nth-of-type(5) > div > div > div:nth-of-type(3) > a",
+    "emergencias": "#block-system-main > section > div > div > div:nth-of-type(7) > div > div > ul > li:nth-of-type(3) > a",
+    "terminos": "#block-menu-menu-footer-3 > ul > li:nth-of-type(2) > a"
+  },
+  "cases": [
+    {
+      "id": "ag-search",
+      "op": "fill",
+      "sentence": "type {{tramite}} in the Buscar trámites field",
+      "gold": ["search"],
+      "tags": ["search", "aria-label", "non-english"]
+    },
+    {
+      "id": "ag-buscar",
+      "op": "click",
+      "sentence": "click Buscar",
+      "gold": ["buscar"],
+      "tags": ["exact-label", "icon", "non-english"]
+    },
+    {
+      "id": "ag-mi-argentina",
+      "op": "click",
+      "sentence": "click the Mi Argentina login button",
+      "gold": ["mi-argentina"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "ag-logo",
+      "op": "click",
+      "sentence": "click the Argentina.gob.ar logo",
+      "gold": ["logo"],
+      "tags": ["icon", "aria-label", "non-english"]
+    },
+    {
+      "id": "ag-dni",
+      "op": "click",
+      "sentence": "click Sacá o renová el DNI",
+      "gold": ["dni"],
+      "tags": ["exact-label", "non-english"]
+    },
+    {
+      "id": "ag-licencia",
+      "op": "click",
+      "sentence": "click the link to get a driver's license",
+      "gold": ["licencia"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "ag-feriados",
+      "op": "click",
+      "sentence": "check the upcoming public holidays",
+      "gold": ["feriados"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "ag-anses",
+      "op": "click",
+      "sentence": "click Consultá cuándo cobrás en ANSES",
+      "gold": ["anses"],
+      "tags": ["exact-label", "near-duplicate-name", "non-english"]
+    },
+    {
+      "id": "ag-documentacion",
+      "op": "click",
+      "sentence": "open the Documentación card under Temas y servicios",
+      "gold": ["documentacion"],
+      "tags": ["container", "region", "non-english"]
+    },
+    {
+      "id": "ag-transporte",
+      "op": "click",
+      "sentence": "open the transport topic",
+      "gold": ["transporte"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "ag-emergencias",
+      "op": "click",
+      "sentence": "click Emergencias",
+      "gold": ["emergencias"],
+      "tags": ["exact-label", "non-english"]
+    },
+    {
+      "id": "ag-terminos",
+      "op": "click",
+      "sentence": "click Terms and conditions in the footer",
+      "gold": ["terminos"],
+      "tags": ["paraphrase", "footer", "non-english"]
+    },
+    {
+      "id": "ag-consulta-unscoped",
+      "op": "click",
+      "sentence": "click Consultá",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "near-duplicate-name", "non-english"]
+    },
+    {
+      "id": "ag-saca-unscoped",
+      "op": "click",
+      "sentence": "click the Sacá link",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "near-duplicate-name", "non-english"]
+    },
+    {
+      "id": "ag-english-absent",
+      "op": "click",
+      "sentence": "click the English version link",
+      "gold": "none",
+      "tags": ["absent", "non-english"]
+    }
+  ]
+}

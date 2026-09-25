@@ -1,0 +1,126 @@
+{
+  "site": "goodreads-book",
+  "targets": {
+    "search": "input[name=\"q\"]",
+    "search-button": "button[aria-label=\"Search\"]",
+    "want-to-read": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > button",
+    "shelf-menu": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > button",
+    "kindle": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > div > div:nth-of-type(1) > button",
+    "rate-4-top": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > span > button:nth-of-type(4)",
+    "rate-4-reviews": "#ReviewsSection > article > div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(1) > span > button:nth-of-type(4)",
+    "author-header": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > h3 > div > span:nth-of-type(1) > a:nth-of-type(1)",
+    "author-about": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(8) > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > h4 > a",
+    "follow-author": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(8) > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > div > div > span:nth-of-type(1) > div > button",
+    "fantasy": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(5) > ul > span:nth-of-type(1) > span:nth-of-type(2) > a",
+    "ratings-summary": "html > body > div:nth-of-type(1) > div:nth-of-type(2) > main > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > a",
+    "write-review": "#ReviewsSection > article > div:nth-of-type(3) > div:nth-of-type(2) > div > button",
+    "desc-more": "button[aria-label=\"Tap to show more book description\"]"
+  },
+  "cases": [
+    {
+      "id": "gr-search",
+      "op": "fill",
+      "sentence": "type {{title}} in the Search books field",
+      "gold": ["search"],
+      "tags": ["search", "placeholder-name"]
+    },
+    {
+      "id": "gr-search-button",
+      "op": "click",
+      "sentence": "click the magnifying glass search button",
+      "gold": ["search-button"],
+      "tags": ["icon", "search"]
+    },
+    {
+      "id": "gr-want-to-read",
+      "op": "click",
+      "sentence": "click Want to Read",
+      "gold": ["want-to-read"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "gr-shelf-menu",
+      "op": "click",
+      "sentence": "open the shelf dropdown next to Want to Read",
+      "gold": ["shelf-menu"],
+      "tags": ["icon", "indirect", "aria-label"]
+    },
+    {
+      "id": "gr-kindle",
+      "op": "click",
+      "sentence": "click the Kindle $11.99 button",
+      "gold": ["kindle"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "gr-rate-4",
+      "op": "click",
+      "sentence": "rate the book 4 stars",
+      "gold": ["rate-4-top", "rate-4-reviews"],
+      "tags": ["icon", "aria-label", "duplicate-name"]
+    },
+    {
+      "id": "gr-author",
+      "op": "click",
+      "sentence": "click the author name J.R.R. Tolkien",
+      "gold": ["author-header", "author-about"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "gr-follow-author",
+      "op": "click",
+      "sentence": "click Follow in the About the author section",
+      "gold": ["follow-author"],
+      "tags": ["region", "repeated-group"]
+    },
+    {
+      "id": "gr-genre-fantasy",
+      "op": "click",
+      "sentence": "click the Fantasy genre",
+      "gold": ["fantasy"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "gr-ratings",
+      "op": "click",
+      "sentence": "click the 4.30 average rating with the ratings and reviews count",
+      "gold": ["ratings-summary"],
+      "tags": ["indirect", "invisible-to-sedum"]
+    },
+    {
+      "id": "gr-write-review",
+      "op": "click",
+      "sentence": "click Write a Review",
+      "gold": ["write-review"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "gr-desc-more",
+      "op": "click",
+      "sentence": "click Show more under the book description",
+      "gold": ["desc-more"],
+      "tags": ["region", "aria-label"]
+    },
+    {
+      "id": "gr-more-unscoped",
+      "op": "click",
+      "sentence": "click ...more",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "gr-follow-unscoped",
+      "op": "click",
+      "sentence": "click Follow",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "gr-cart-absent",
+      "op": "click",
+      "sentence": "click the Add to cart button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

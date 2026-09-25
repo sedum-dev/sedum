@@ -1,0 +1,147 @@
+{
+  "site": "reddit-programming",
+  "targets": {
+    "search": "html > body > shreddit-app > reddit-header-large > reddit-header-action-items > header > nav > div:nth-of-type(2) > div > div > search-dynamic-id-cache-controller > reddit-search-large >>> #search-input >>> textarea[name=\"q\"]",
+    "remove-filter": "html > body > shreddit-app > reddit-header-large > reddit-header-action-items > header > nav > div:nth-of-type(2) > div > div > search-dynamic-id-cache-controller > reddit-search-large >>> #search-input-remove-filter >>> button",
+    "login": "#login-button",
+    "create-post": "button[data-testid=\"create-post\"]",
+    "join": "shreddit-subreddit-header-buttons[name=\"programming\"] >>> shreddit-join-button[name=\"programming\"] >>> button",
+    "sort": "#main-content > div:nth-of-type(1) > shreddit-async-loader > div > div > shreddit-sort-dropdown >>> button[aria-label=\"Sort by: Best\"]",
+    "upvote-1": "#t3_1wpuggf >>> div > rpl-action-bar > div > span > shreddit-vote-animations > span > button:nth-of-type(1)",
+    "share-1": "#t3_1wpuggf >>> div > rpl-action-bar > div > slot:nth-of-type(1) > shreddit-post-share-button >>> rpl-dropdown > button",
+    "comments-dns": "#t3_1w06vn1 >>> a[name=\"comments-action-button\"]",
+    "raytracer-overlay": "#t3_1wptfjd > a",
+    "raytracer-title": "#post-title-t3_1wptfjd",
+    "rule-blogspam": "#right-sidebar-contents > faceplate-partial > section > div > div:nth-of-type(2) > div:nth-of-type(2) > faceplate-expandable-section-helper:nth-of-type(11) > details > summary"
+  },
+  "cases": [
+    {
+      "id": "rd-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search in r/programming field",
+      "gold": ["search"],
+      "tags": ["search", "placeholder-name", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "rd-remove-filter",
+      "op": "click",
+      "sentence": "remove the r/programming filter from the search bar",
+      "gold": ["remove-filter"],
+      "tags": [
+        "paraphrase",
+        "icon",
+        "shadow-dom",
+        "search",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "rd-login",
+      "op": "click",
+      "sentence": "click Log In",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "rd-create-post",
+      "op": "click",
+      "sentence": "click Create Post",
+      "gold": ["create-post"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "rd-join",
+      "op": "click",
+      "sentence": "click the Join button next to r/programming",
+      "gold": ["join"],
+      "tags": ["exact-label", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "rd-sort",
+      "op": "click",
+      "sentence": "open the sort dropdown (currently Best)",
+      "gold": ["sort"],
+      "tags": ["combobox", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "rd-upvote-first",
+      "op": "click",
+      "sentence": "upvote the first post",
+      "gold": ["upvote-1"],
+      "tags": [
+        "icon",
+        "ordinal",
+        "repeated-group",
+        "shadow-dom",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "rd-share-1993",
+      "op": "click",
+      "sentence": "click Share on the post about a development tool first released in 1993",
+      "gold": ["share-1"],
+      "tags": [
+        "repeated-group",
+        "container",
+        "shadow-dom",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "rd-comments-dns",
+      "op": "click",
+      "sentence": "open the comments for the 1.1.1.1 DNS cache post",
+      "gold": ["comments-dns"],
+      "tags": [
+        "repeated-group",
+        "container",
+        "shadow-dom",
+        "paraphrase",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "rd-open-raytracer",
+      "op": "click",
+      "sentence": "open the post Writing a ray tracer in Brainfuck",
+      "gold": ["raytracer-overlay", "raytracer-title"],
+      "tags": ["exact-label", "repeated-group"]
+    },
+    {
+      "id": "rd-rule-blogspam",
+      "op": "click",
+      "sentence": "expand the No Blogspam rule in the sidebar",
+      "gold": ["rule-blogspam"],
+      "tags": ["region", "exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "rd-share-unscoped",
+      "op": "click",
+      "sentence": "click Share",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "rd-overflow-unscoped",
+      "op": "click",
+      "sentence": "click Open user actions",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "aria-label"]
+    },
+    {
+      "id": "rd-github-absent",
+      "op": "click",
+      "sentence": "click Continue with GitHub",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "rd-hot-absent",
+      "op": "click",
+      "sentence": "click the Hot tab",
+      "gold": "none",
+      "tags": ["absent", "tab"]
+    }
+  ]
+}
