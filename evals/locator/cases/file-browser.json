@@ -1,0 +1,117 @@
+{
+  "page": "file-browser.html",
+  "cases": [
+    {
+      "id": "repo-branch-selector",
+      "op": "click",
+      "sentence": "click the branch selector",
+      "gold": ["branch"],
+      "tags": ["paraphrase", "title-name"]
+    },
+    {
+      "id": "repo-branch-main",
+      "op": "click",
+      "sentence": "click the main button",
+      "gold": ["branch"],
+      "tags": ["aria-label", "exact-label"]
+    },
+    {
+      "id": "repo-go-to-file",
+      "op": "fill",
+      "sentence": "type {{path}} in the Go to file field",
+      "gold": ["go-to-file"],
+      "tags": ["placeholder-name", "exact-label"]
+    },
+    {
+      "id": "repo-branch-develop-absent",
+      "op": "click",
+      "sentence": "switch to the develop branch",
+      "gold": "none",
+      "tags": ["absent", "paraphrase"]
+    },
+    {
+      "id": "repo-crumb-src",
+      "op": "click",
+      "sentence": "click src in the breadcrumbs",
+      "gold": ["crumb-src"],
+      "tags": ["breadcrumb"]
+    },
+    {
+      "id": "repo-open-tabs",
+      "op": "click",
+      "sentence": "open the Tabs folder",
+      "gold": ["dir-tabs"],
+      "tags": ["table-row", "exact-label"]
+    },
+    {
+      "id": "repo-button-tsx",
+      "op": "click",
+      "sentence": "click Button.tsx",
+      "gold": ["file-button"],
+      "tags": ["substring-trap", "near-duplicate-name"]
+    },
+    {
+      "id": "repo-fix-lint-button-folder",
+      "op": "click",
+      "sentence": "click the fix lint commit message for the Button folder",
+      "gold": ["msg-button"],
+      "tags": ["duplicate-name", "table-row", "near-duplicate-name"]
+    },
+    {
+      "id": "repo-fix-lint-second",
+      "op": "click",
+      "sentence": "click the second fix lint link",
+      "gold": ["msg-tooltip"],
+      "tags": ["duplicate-name", "ordinal"]
+    },
+    {
+      "id": "repo-fix-lint-unscoped",
+      "op": "click",
+      "sentence": "click the fix lint commit",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "repo-readme-file",
+      "op": "click",
+      "sentence": "open README.md from the file list",
+      "gold": ["file-readme"],
+      "tags": ["table-row", "duplicate-name"]
+    },
+    {
+      "id": "repo-star",
+      "op": "click",
+      "sentence": "star this repository",
+      "gold": ["star"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "repo-fork-count",
+      "op": "click",
+      "sentence": "click the number of forks",
+      "gold": ["fork-count"],
+      "tags": ["numeric", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "repo-folder-3h",
+      "op": "click",
+      "sentence": "open the folder that was updated 3 hours ago",
+      "gold": ["dir-tabs"],
+      "tags": ["table-row", "indirect"]
+    },
+    {
+      "id": "repo-releases-absent",
+      "op": "click",
+      "sentence": "click the Releases link",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "repo-hooks-absent",
+      "op": "click",
+      "sentence": "open the hooks folder",
+      "gold": "none",
+      "tags": ["table-row", "absent"]
+    }
+  ]
+}

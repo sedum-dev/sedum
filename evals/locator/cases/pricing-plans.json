@@ -1,0 +1,117 @@
+{
+  "page": "pricing-plans.html",
+  "cases": [
+    {
+      "id": "pricing-pro-trial",
+      "op": "click",
+      "sentence": "click Start free trial for the Pro plan",
+      "gold": ["pro-cta"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "pricing-trial-by-price",
+      "op": "click",
+      "sentence": "click Start free trial on the plan that costs $49",
+      "gold": ["pro-cta"],
+      "tags": ["repeated-group", "container", "numeric", "indirect"]
+    },
+    {
+      "id": "pricing-free-plan-trial",
+      "op": "click",
+      "sentence": "click Start free trial on the $0 plan",
+      "gold": ["starter-cta"],
+      "tags": ["repeated-group", "container", "numeric"]
+    },
+    {
+      "id": "pricing-trial-unscoped",
+      "op": "click",
+      "sentence": "click Start free trial",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "pricing-header-contact-sales",
+      "op": "click",
+      "sentence": "click Contact sales in the header",
+      "gold": ["header-contact-sales"],
+      "tags": ["duplicate-name", "region"]
+    },
+    {
+      "id": "pricing-enterprise-contact-sales",
+      "op": "click",
+      "sentence": "click Contact sales for the Enterprise plan",
+      "gold": ["ent-cta"],
+      "tags": ["duplicate-name", "container"]
+    },
+    {
+      "id": "pricing-contact-sales-unscoped",
+      "op": "click",
+      "sentence": "click Contact sales",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "pricing-yearly-switch",
+      "op": "click",
+      "sentence": "click the Yearly billing toggle",
+      "gold": ["yearly-switch"],
+      "tags": ["switch", "aria-label"]
+    },
+    {
+      "id": "pricing-annual-paraphrase",
+      "op": "click",
+      "sentence": "click the switch to change to annual billing",
+      "gold": ["yearly-switch"],
+      "tags": ["switch", "paraphrase"]
+    },
+    {
+      "id": "pricing-faq-cancel",
+      "op": "click",
+      "sentence": "click Can I cancel at any time?",
+      "gold": ["faq-cancel"],
+      "tags": ["accordion", "exact-label"]
+    },
+    {
+      "id": "pricing-faq-payment",
+      "op": "click",
+      "sentence": "click the FAQ question about payment methods",
+      "gold": ["faq-payment"],
+      "tags": ["accordion", "paraphrase"]
+    },
+    {
+      "id": "pricing-faq-second",
+      "op": "click",
+      "sentence": "click the second FAQ question",
+      "gold": ["faq-cancel"],
+      "tags": ["accordion", "ordinal"]
+    },
+    {
+      "id": "pricing-features-most-popular",
+      "op": "click",
+      "sentence": "click See all features for the most popular plan",
+      "gold": ["pro-features"],
+      "tags": ["repeated-group", "container", "indirect"]
+    },
+    {
+      "id": "pricing-login",
+      "op": "click",
+      "sentence": "click the Log in link",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "pricing-business-absent",
+      "op": "click",
+      "sentence": "click Start free trial for the Business plan",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    },
+    {
+      "id": "pricing-faq-student-absent",
+      "op": "click",
+      "sentence": "click the FAQ question about student discounts",
+      "gold": "none",
+      "tags": ["accordion", "absent", "near-duplicate-name"]
+    }
+  ]
+}

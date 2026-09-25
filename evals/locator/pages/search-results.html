@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>"wireless headphones" - Voltmart search</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header,
+      footer {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+        align-items: center;
+      }
+      header form {
+        flex: 1;
+        display: flex;
+        gap: 0.25rem;
+      }
+      header input {
+        flex: 1;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 1.5rem;
+        padding: 1rem;
+      }
+      aside fieldset {
+        border: 0;
+        padding: 0;
+        margin-bottom: 1rem;
+      }
+      aside label {
+        display: block;
+        margin: 0.25rem 0;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      ol.results {
+        list-style: none;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+      ol.results li {
+        border: 1px solid #aaa;
+        padding: 0.75rem;
+      }
+      .sponsored {
+        background: #fff8e0;
+      }
+      .badge {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #775;
+      }
+      nav.pages {
+        display: flex;
+        gap: 0.25rem;
+      }
+      nav.pages [aria-current] {
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Voltmart</a>
+      <form role="search">
+        <input
+          type="search"
+          name="q"
+          aria-label="Search Voltmart"
+          value="wireless headphones"
+          data-eval-gold="search"
+        />
+        <button type="submit" data-eval-gold="search-submit">Search</button>
+      </form>
+      <a href="/deals">Deals</a>
+      <a href="/account">Sign in</a>
+      <a href="/cart">Cart</a>
+    </header>
+    <div class="layout">
+      <aside aria-label="Filters">
+        <h2>Filters</h2>
+        <fieldset>
+          <legend>Brand</legend>
+          <label
+            ><input type="checkbox" name="brand" data-eval-gold="brand-acme" />
+            Acme (12)</label
+          >
+          <label
+            ><input
+              type="checkbox"
+              name="brand"
+              data-eval-gold="brand-sonata"
+            />
+            Sonata (8)</label
+          >
+          <label
+            ><input type="checkbox" name="brand" data-eval-gold="brand-pulse" />
+            Pulse Audio (5)</label
+          >
+        </fieldset>
+        <fieldset>
+          <legend>Customer rating</legend>
+          <label
+            ><input type="checkbox" name="rating" data-eval-gold="rating-4" /> 4
+            stars &amp; up (19)</label
+          >
+          <label
+            ><input type="checkbox" name="rating" /> 3 stars &amp; up
+            (23)</label
+          >
+        </fieldset>
+        <fieldset>
+          <legend>Features</legend>
+          <label
+            ><input type="checkbox" name="feat" data-eval-gold="feat-anc" />
+            Noise cancelling (14)</label
+          >
+          <label
+            ><input type="checkbox" name="feat" /> Water resistant (6)</label
+          >
+        </fieldset>
+        <fieldset>
+          <legend>Price</legend>
+          <label
+            >Min price
+            <input
+              type="number"
+              name="min"
+              placeholder="$0"
+              data-eval-gold="price-min"
+          /></label>
+          <label
+            >Max price
+            <input
+              type="number"
+              name="max"
+              placeholder="$500"
+              data-eval-gold="price-max"
+          /></label>
+          <button type="button" data-eval-gold="price-go">Go</button>
+        </fieldset>
+        <button type="button" data-eval-gold="clear-filters">
+          Clear all filters
+        </button>
+      </aside>
+      <main>
+        <div class="toolbar">
+          <p>Showing 1&ndash;6 of 29 results for "wireless headphones"</p>
+          <label
+            >Sort by
+            <select name="sort" data-eval-gold="sort">
+              <option>Best match</option>
+              <option>Price: low to high</option>
+              <option>Price: high to low</option>
+              <option>Customer rating</option>
+              <option>Newest</option>
+            </select></label
+          >
+        </div>
+        <ol class="results">
+          <li class="sponsored">
+            <span class="badge">Sponsored</span>
+            <h3>
+              <a href="/p/pulse-air" data-eval-gold="title-pulse-air"
+                >Pulse Audio Air Wireless Earbuds</a
+              >
+            </h3>
+            <p>$39.99 &middot; 3.9 stars</p>
+            <label
+              ><input type="checkbox" data-eval-gold="compare-pulse-air" />
+              Compare</label
+            >
+          </li>
+          <li>
+            <h3>
+              <a href="/p/acme-q20" data-eval-gold="title-acme-q20"
+                >Acme Q20 Wireless Over-Ear Headphones</a
+              >
+            </h3>
+            <p>$59.99 &middot; 4.4 stars</p>
+            <label
+              ><input type="checkbox" data-eval-gold="compare-acme-q20" />
+              Compare</label
+            >
+          </li>
+          <li>
+            <h3>
+              <a href="/p/sonata-s7" data-eval-gold="title-sonata-s7"
+                >Sonata S7 Noise Cancelling Headphones</a
+              >
+            </h3>
+            <p>$249.00 &middot; 4.7 stars</p>
+            <label
+              ><input type="checkbox" data-eval-gold="compare-sonata-s7" />
+              Compare</label
+            >
+          </li>
+          <li>
+            <h3>
+              <a href="/p/acme-buds" data-eval-gold="title-acme-buds"
+                >Acme Buds Lite</a
+              >
+            </h3>
+            <p>$24.50 &middot; 4.0 stars</p>
+            <label
+              ><input type="checkbox" data-eval-gold="compare-acme-buds" />
+              Compare</label
+            >
+          </li>
+          <li>
+            <h3>
+              <a href="/p/pulse-pro" data-eval-gold="title-pulse-pro"
+                >Pulse Audio Pro ANC Headphones</a
+              >
+            </h3>
+            <p>$129.00 &middot; 4.5 stars</p>
+            <label
+              ><input type="checkbox" data-eval-gold="compare-pulse-pro" />
+              Compare</label
+            >
+          </li>
+          <li>
+            <h3>
+              <a href="/p/sonata-s3" data-eval-gold="title-sonata-s3"
+                >Sonata S3 Sport Earbuds</a
+              >
+            </h3>
+            <p>$79.00 &middot; 4.2 stars</p>
+            <label
+              ><input type="checkbox" data-eval-gold="compare-sonata-s3" />
+              Compare</label
+            >
+          </li>
+        </ol>
+        <nav class="pages" aria-label="Pagination">
+          <a
+            href="?page=0"
+            aria-label="Previous page"
+            data-eval-gold="page-prev"
+            >Previous</a
+          >
+          <a
+            href="?page=1"
+            aria-label="Page 1"
+            aria-current="page"
+            data-eval-gold="page-1"
+            >1</a
+          >
+          <a href="?page=2" aria-label="Page 2" data-eval-gold="page-2">2</a>
+          <a href="?page=3" aria-label="Page 3" data-eval-gold="page-3">3</a>
+          <a href="?page=4" aria-label="Page 4" data-eval-gold="page-4">4</a>
+          <a href="?page=5" aria-label="Page 5" data-eval-gold="page-5">5</a>
+          <a href="?page=2" aria-label="Next page" data-eval-gold="page-next"
+            >Next</a
+          >
+        </nav>
+      </main>
+    </div>
+    <footer>
+      <a href="/help">Help center</a>
+      <a href="/returns">Returns</a>
+      <a href="/stores">Store locator</a>
+    </footer>
+  </body>
+</html>

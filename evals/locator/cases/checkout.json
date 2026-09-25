@@ -1,0 +1,117 @@
+{
+  "page": "checkout.html",
+  "cases": [
+    {
+      "id": "checkout-billing-postal",
+      "op": "fill",
+      "sentence": "type {{zip}} in the Postal code field in the billing section",
+      "gold": ["bill-postal"],
+      "tags": ["duplicate-name", "container", "form-section"]
+    },
+    {
+      "id": "checkout-shipping-first-name",
+      "op": "fill",
+      "sentence": "type {{name}} in the shipping address First name field",
+      "gold": ["ship-first"],
+      "tags": ["duplicate-name", "container", "form-section"]
+    },
+    {
+      "id": "checkout-first-name-unscoped",
+      "op": "fill",
+      "sentence": "type {{name}} in the First name field",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "form-section"]
+    },
+    {
+      "id": "checkout-city-unscoped",
+      "op": "fill",
+      "sentence": "type {{city}} in the City field",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "form-section"]
+    },
+    {
+      "id": "checkout-cheapest-shipping",
+      "op": "click",
+      "sentence": "click the cheapest shipping option",
+      "gold": ["ship-standard"],
+      "tags": ["radio", "numeric", "indirect"]
+    },
+    {
+      "id": "checkout-express",
+      "op": "click",
+      "sentence": "click the Express shipping option",
+      "gold": ["ship-express"],
+      "tags": ["radio", "exact-label"]
+    },
+    {
+      "id": "checkout-overnight-by-price",
+      "op": "click",
+      "sentence": "click the $29.99 shipping method",
+      "gold": ["ship-overnight"],
+      "tags": ["radio", "numeric"]
+    },
+    {
+      "id": "checkout-billing-same",
+      "op": "click",
+      "sentence": "click the Billing same as shipping checkbox",
+      "gold": ["billing-same"],
+      "tags": ["checkbox", "exact-label"]
+    },
+    {
+      "id": "checkout-promo-paraphrase",
+      "op": "fill",
+      "sentence": "type {{code}} in the discount code field",
+      "gold": ["promo"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "checkout-promo-apply",
+      "op": "click",
+      "sentence": "click the Apply button next to the promo code",
+      "gold": ["promo-apply"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "checkout-place-order",
+      "op": "click",
+      "sentence": "click Place order",
+      "gold": ["place-order"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "checkout-accept-terms",
+      "op": "click",
+      "sentence": "click to accept the terms of service",
+      "gold": ["terms"],
+      "tags": ["checkbox", "paraphrase", "substring-trap"]
+    },
+    {
+      "id": "checkout-back-to-cart",
+      "op": "click",
+      "sentence": "click the Back to cart link",
+      "gold": ["back-to-cart"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "checkout-card-number",
+      "op": "fill",
+      "sentence": "type {{card}} in the card number field",
+      "gold": ["card-number"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "checkout-apple-pay-absent",
+      "op": "click",
+      "sentence": "click the Apple Pay button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "checkout-remove-item-absent",
+      "op": "click",
+      "sentence": "click Remove for the Ceramic Planter in the order summary",
+      "gold": "none",
+      "tags": ["absent", "container"]
+    }
+  ]
+}

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>acme/widgets: src/components at main</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        margin: 0;
+      }
+      header {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        background: #24292f;
+      }
+      header a {
+        color: #fff;
+      }
+      main {
+        max-width: 980px;
+        margin: 1rem auto;
+      }
+      .repo-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .repo-head .spacer {
+        flex: 1;
+      }
+      .btn-group {
+        display: inline-flex;
+      }
+      .btn-group button,
+      .btn-group a {
+        border: 1px solid #d0d7de;
+        padding: 0.25rem 0.6rem;
+        background: #f6f8fa;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 1rem 0;
+      }
+      .toolbar .spacer {
+        flex: 1;
+      }
+      nav[aria-label="Breadcrumbs"] ol {
+        display: inline-flex;
+        list-style: none;
+        padding: 0;
+        gap: 0.25rem;
+      }
+      nav[aria-label="Breadcrumbs"] li + li::before {
+        content: "/ ";
+      }
+      table {
+        width: 100%;
+        border: 1px solid #d0d7de;
+        border-collapse: collapse;
+      }
+      td {
+        padding: 0.4rem 0.75rem;
+        border-top: 1px solid #eaeef2;
+      }
+      td.time {
+        text-align: right;
+        color: #57606a;
+      }
+      article {
+        border: 1px solid #d0d7de;
+        margin-top: 1rem;
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/" aria-label="Homepage">◎</a>
+      <input
+        placeholder="Type / to search"
+        aria-label="Search or jump to…"
+        data-eval-gold="global-search"
+      />
+      <a href="/pulls">Pull requests</a>
+      <a href="/issues">Issues</a>
+    </header>
+    <main>
+      <div class="repo-head">
+        <h1>
+          <a href="/acme" data-eval-gold="owner">acme</a> /
+          <a href="/acme/widgets" data-eval-gold="repo">widgets</a>
+        </h1>
+        <span class="spacer"></span>
+        <div class="btn-group">
+          <button data-eval-gold="watch">Watch</button>
+          <a href="/acme/widgets/watchers" aria-label="14 users are watching"
+            >14</a
+          >
+        </div>
+        <div class="btn-group">
+          <button data-eval-gold="fork">Fork</button>
+          <a
+            href="/acme/widgets/forks"
+            aria-label="87 users forked this repository"
+            data-eval-gold="fork-count"
+            >87</a
+          >
+        </div>
+        <div class="btn-group">
+          <button data-eval-gold="star">Star</button>
+          <a
+            href="/acme/widgets/stargazers"
+            aria-label="1,203 users starred this repository"
+            data-eval-gold="star-count"
+            >1.2k</a
+          >
+        </div>
+      </div>
+      <nav aria-label="Repository">
+        <a href="/acme/widgets" aria-current="page">Code</a>
+        <a href="/acme/widgets/issues">Issues 23</a>
+        <a href="/acme/widgets/pulls">Pull requests 5</a>
+        <a href="/acme/widgets/actions">Actions</a>
+      </nav>
+      <div class="toolbar">
+        <button
+          aria-haspopup="menu"
+          aria-label="main branch"
+          title="Switch branches or tags"
+          data-eval-gold="branch"
+        >
+          ⑂ main ▾
+        </button>
+        <nav aria-label="Breadcrumbs">
+          <ol>
+            <li>
+              <a href="/acme/widgets" data-eval-gold="crumb-repo">widgets</a>
+            </li>
+            <li>
+              <a href="/acme/widgets/tree/main/src" data-eval-gold="crumb-src"
+                >src</a
+              >
+            </li>
+            <li><strong aria-current="page">components</strong></li>
+          </ol>
+        </nav>
+        <span class="spacer"></span>
+        <input
+          placeholder="Go to file"
+          aria-label="Go to file"
+          data-eval-gold="go-to-file"
+        />
+        <button aria-haspopup="menu" data-eval-gold="add-file">Add file</button>
+        <button aria-haspopup="menu" data-eval-gold="code">Code</button>
+      </div>
+      <table aria-label="Folders and files">
+        <tbody>
+          <tr>
+            <td colspan="3">
+              <a
+                href="/acme/widgets/commit/9f1c2e0"
+                data-eval-gold="latest-commit"
+                >Merge pull request #212 from acme/tabs-a11y</a
+              >
+              · 3 hours ago
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <a
+                href="/acme/widgets/tree/main/src"
+                aria-label="Parent directory"
+                >..</a
+              >
+            </td>
+            <td></td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>
+              📁 <a href="tree/Button" data-eval-gold="dir-button">Button</a>
+            </td>
+            <td><a href="/c/a11" data-eval-gold="msg-button">fix lint</a></td>
+            <td class="time">2 days ago</td>
+          </tr>
+          <tr>
+            <td>
+              📁 <a href="tree/Modal" data-eval-gold="dir-modal">Modal</a>
+            </td>
+            <td>
+              <a href="/c/b22" data-eval-gold="msg-modal"
+                >Trap focus inside the dialog</a
+              >
+            </td>
+            <td class="time">last week</td>
+          </tr>
+          <tr>
+            <td>📁 <a href="tree/Tabs" data-eval-gold="dir-tabs">Tabs</a></td>
+            <td>
+              <a href="/c/9f1" data-eval-gold="msg-tabs"
+                >Add keyboard navigation to tabs</a
+              >
+            </td>
+            <td class="time">3 hours ago</td>
+          </tr>
+          <tr>
+            <td>
+              📁 <a href="tree/Tooltip" data-eval-gold="dir-tooltip">Tooltip</a>
+            </td>
+            <td><a href="/c/a11b" data-eval-gold="msg-tooltip">fix lint</a></td>
+            <td class="time">2 days ago</td>
+          </tr>
+          <tr>
+            <td>
+              📄
+              <a href="blob/Button.test.tsx" data-eval-gold="file-button-test"
+                >Button.test.tsx</a
+              >
+            </td>
+            <td>
+              <a href="/c/c33" data-eval-gold="msg-button-test"
+                >Cover disabled state</a
+              >
+            </td>
+            <td class="time">5 days ago</td>
+          </tr>
+          <tr>
+            <td>
+              📄
+              <a href="blob/Button.tsx" data-eval-gold="file-button"
+                >Button.tsx</a
+              >
+            </td>
+            <td>
+              <a href="/c/a11c" data-eval-gold="msg-button-file">fix lint</a>
+            </td>
+            <td class="time">2 days ago</td>
+          </tr>
+          <tr>
+            <td>
+              📄 <a href="blob/Icon.tsx" data-eval-gold="file-icon">Icon.tsx</a>
+            </td>
+            <td>
+              <a href="/c/d44" data-eval-gold="msg-icon">Bump icon set to v3</a>
+            </td>
+            <td class="time">3 weeks ago</td>
+          </tr>
+          <tr>
+            <td>
+              📄
+              <a href="blob/index.ts" data-eval-gold="file-index">index.ts</a>
+            </td>
+            <td>
+              <a href="/c/e55" data-eval-gold="msg-index"
+                >Export Tabs from the package root</a
+              >
+            </td>
+            <td class="time">3 hours ago</td>
+          </tr>
+          <tr>
+            <td>
+              📄
+              <a href="blob/theme.css" data-eval-gold="file-theme">theme.css</a>
+            </td>
+            <td>
+              <a href="/c/f66" data-eval-gold="msg-theme">Dark mode tokens</a>
+            </td>
+            <td class="time">last month</td>
+          </tr>
+          <tr>
+            <td>
+              📄
+              <a href="blob/README.md" data-eval-gold="file-readme"
+                >README.md</a
+              >
+            </td>
+            <td>
+              <a href="/c/g77" data-eval-gold="msg-readme"
+                >Document component props</a
+              >
+            </td>
+            <td class="time">2 months ago</td>
+          </tr>
+          <tr>
+            <td>
+              📄
+              <a href="blob/utils.ts" data-eval-gold="file-utils">utils.ts</a>
+            </td>
+            <td>
+              <a href="/c/h88" data-eval-gold="msg-utils">Initial commit</a>
+            </td>
+            <td class="time">last year</td>
+          </tr>
+        </tbody>
+      </table>
+      <article aria-labelledby="readme-h">
+        <h2 id="readme-h">README.md</h2>
+        <h3>Components</h3>
+        <p>
+          Shared React components for Acme apps. See the
+          <a href="/acme/widgets/wiki" data-eval-gold="wiki">wiki</a> for usage.
+        </p>
+      </article>
+    </main>
+  </body>
+</html>

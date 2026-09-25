@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Harbor Crew Sweatshirt - Tidewater Apparel</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header,
+      footer {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+        align-items: center;
+      }
+      .product {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        padding: 1rem;
+      }
+      .gallery {
+        position: relative;
+        background: #ddd;
+        height: 360px;
+      }
+      .gallery button {
+        position: absolute;
+        top: 45%;
+      }
+      .gallery .prev {
+        left: 0.5rem;
+      }
+      .gallery .next {
+        right: 0.5rem;
+      }
+      .sizes button {
+        min-width: 3rem;
+      }
+      .sizes button:disabled {
+        text-decoration: line-through;
+      }
+      .qty {
+        display: flex;
+        gap: 0.25rem;
+        align-items: center;
+      }
+      .qty input {
+        width: 3rem;
+      }
+      section {
+        padding: 1rem;
+      }
+      .review {
+        border-top: 1px solid #ccc;
+        padding: 0.5rem 0;
+      }
+      .related {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+      .related article {
+        border: 1px solid #aaa;
+        padding: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Tidewater Apparel</a>
+      <nav>
+        <a href="/men">Men</a>
+        <a href="/women">Women</a>
+        <a href="/sale">Sale</a>
+      </nav>
+      <input type="search" placeholder="Search" aria-label="Search" />
+      <a href="/wishlist">Wishlist</a>
+      <a href="/cart">Cart (1)</a>
+    </header>
+    <nav aria-label="Breadcrumb" style="padding: 0.5rem 1rem">
+      <a href="/">Home</a> / <a href="/men">Men</a> /
+      <a href="/men/sweatshirts">Sweatshirts</a>
+    </nav>
+    <div class="product">
+      <div class="gallery" aria-label="Product images">
+        <button
+          class="prev"
+          aria-label="Previous image"
+          data-eval-gold="gallery-prev"
+        >
+          &#8249;
+        </button>
+        <button
+          class="next"
+          aria-label="Next image"
+          data-eval-gold="gallery-next"
+        >
+          &#8250;
+        </button>
+      </div>
+      <div>
+        <h1>Harbor Crew Sweatshirt</h1>
+        <p>$64.00 &middot; &#9733;&#9733;&#9733;&#9733;&#9734; (3 reviews)</p>
+        <button
+          aria-label="Add to wishlist"
+          aria-pressed="false"
+          data-eval-gold="wishlist"
+        >
+          &#9825;
+        </button>
+        <button aria-label="Share" title="Share">&#8599;</button>
+        <fieldset>
+          <legend>Color</legend>
+          <label
+            ><input
+              type="radio"
+              name="color"
+              value="navy"
+              checked
+              data-eval-gold="color-navy"
+            />
+            Navy</label
+          >
+          <label
+            ><input
+              type="radio"
+              name="color"
+              value="heather"
+              data-eval-gold="color-heather"
+            />
+            Heather grey</label
+          >
+          <label
+            ><input
+              type="radio"
+              name="color"
+              value="forest"
+              data-eval-gold="color-forest"
+            />
+            Forest green</label
+          >
+        </fieldset>
+        <div class="sizes" role="group" aria-label="Size">
+          <p>Size</p>
+          <button aria-pressed="false" data-eval-gold="size-s">S</button>
+          <button aria-pressed="true" data-eval-gold="size-m">M</button>
+          <button aria-pressed="false" data-eval-gold="size-l">L</button>
+          <button
+            aria-pressed="false"
+            disabled
+            title="Sold out"
+            data-eval-gold="size-xl"
+          >
+            XL
+          </button>
+          <a href="/size-guide" data-eval-gold="size-guide">Size guide</a>
+        </div>
+        <div class="qty">
+          <label for="qty">Quantity</label>
+          <button aria-label="Decrease quantity" data-eval-gold="qty-dec">
+            &minus;
+          </button>
+          <input
+            id="qty"
+            type="number"
+            min="1"
+            max="10"
+            value="1"
+            data-eval-gold="qty"
+          />
+          <button aria-label="Increase quantity" data-eval-gold="qty-inc">
+            +
+          </button>
+        </div>
+        <p>
+          <button data-eval-gold="add-to-cart">Add to cart</button>
+          <button data-eval-gold="buy-now">Buy now</button>
+        </p>
+        <details>
+          <summary>Materials &amp; care</summary>
+          <p>80% cotton, 20% recycled polyester. Machine wash cold.</p>
+        </details>
+      </div>
+    </div>
+    <section aria-labelledby="reviews-h">
+      <h2 id="reviews-h">Customer reviews</h2>
+      <button data-eval-gold="write-review">Write a review</button>
+      <div class="review">
+        <strong>Priya S.</strong> &middot; &#9733;&#9733;&#9733;&#9733;&#9733;
+        <p>Warm, soft and true to size.</p>
+        <button data-eval-gold="helpful-priya">Helpful (12)</button>
+        <button data-eval-gold="report-priya">Report</button>
+      </div>
+      <div class="review">
+        <strong>Marcus T.</strong> &middot; &#9733;&#9733;&#9733;&#9734;&#9734;
+        <p>Nice fabric, but the sleeves run long.</p>
+        <button data-eval-gold="helpful-marcus">Helpful (4)</button>
+        <button data-eval-gold="report-marcus">Report</button>
+      </div>
+      <div class="review">
+        <strong>Dana K.</strong> &middot; &#9733;&#9733;&#9733;&#9733;&#9734;
+        <p>Faded a little after a few washes.</p>
+        <button data-eval-gold="helpful-dana">Helpful (1)</button>
+        <button data-eval-gold="report-dana">Report</button>
+      </div>
+      <button>Show more reviews</button>
+    </section>
+    <section aria-labelledby="related-h">
+      <h2 id="related-h">You may also like</h2>
+      <div class="related">
+        <article>
+          <h3>Dockside Hoodie</h3>
+          <p>$72.00</p>
+          <button data-eval-gold="related-hoodie">Add to cart</button>
+        </article>
+        <article>
+          <h3>Pier Joggers</h3>
+          <p>$58.00</p>
+          <button data-eval-gold="related-joggers">Add to cart</button>
+        </article>
+        <article>
+          <h3>Anchor Beanie</h3>
+          <p>$22.00</p>
+          <button data-eval-gold="related-beanie">Add to cart</button>
+        </article>
+      </div>
+    </section>
+    <footer>
+      <a href="/shipping">Shipping</a>
+      <a href="/returns">Returns</a>
+      <a href="/contact">Contact</a>
+    </footer>
+  </body>
+</html>

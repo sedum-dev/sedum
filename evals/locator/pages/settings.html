@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Account settings</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f7f7f8;
+      }
+      header {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #222;
+        align-items: center;
+      }
+      header a {
+        color: #fff;
+      }
+      main {
+        max-width: 760px;
+        margin: 1rem auto;
+      }
+      [role="tablist"] {
+        display: flex;
+        gap: 0.25rem;
+        border-bottom: 1px solid #ccc;
+      }
+      [role="tab"] {
+        border: 0;
+        background: none;
+        padding: 0.5rem 1rem;
+      }
+      [role="tab"][aria-selected="true"] {
+        border-bottom: 2px solid #36c;
+        font-weight: 600;
+      }
+      section {
+        background: #fff;
+        border: 1px solid #ddd;
+        padding: 1rem;
+        margin: 1rem 0;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0.75rem;
+      }
+      .switch-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.4rem 0;
+      }
+      [role="switch"] {
+        width: 2.5rem;
+        height: 1.3rem;
+        border-radius: 1rem;
+        border: 1px solid #999;
+        background: #ddd;
+      }
+      [role="switch"][aria-checked="true"] {
+        background: #36c;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td,
+      th {
+        padding: 0.3rem 0.5rem;
+        text-align: left;
+        border-bottom: 1px solid #eee;
+      }
+      .danger {
+        border-color: #c33;
+      }
+      .danger button {
+        color: #c33;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Northwind</a>
+      <a href="/projects">Projects</a>
+      <a href="/settings" aria-current="page">Settings</a>
+      <a href="/logout">Sign out</a>
+    </header>
+    <main>
+      <h1>Account settings</h1>
+      <div role="tablist" aria-label="Settings sections">
+        <button
+          role="tab"
+          id="tab-profile"
+          aria-selected="true"
+          aria-controls="panel"
+          data-eval-gold="tab-profile"
+        >
+          Profile
+        </button>
+        <button
+          role="tab"
+          id="tab-notifications"
+          aria-selected="false"
+          tabindex="-1"
+          data-eval-gold="tab-notifications"
+        >
+          Notifications
+        </button>
+        <button
+          role="tab"
+          id="tab-security"
+          aria-selected="false"
+          tabindex="-1"
+          data-eval-gold="tab-security"
+        >
+          Security
+        </button>
+        <button
+          role="tab"
+          id="tab-billing"
+          aria-selected="false"
+          tabindex="-1"
+          data-eval-gold="tab-billing"
+        >
+          Billing
+        </button>
+      </div>
+
+      <div id="panel" role="tabpanel" aria-labelledby="tab-profile">
+        <section aria-labelledby="h-profile">
+          <h2 id="h-profile">Profile</h2>
+          <div class="field">
+            <label for="display-name">Display name</label>
+            <input
+              id="display-name"
+              value="Rosa Park"
+              data-eval-gold="display-name"
+            />
+          </div>
+          <div class="field">
+            <label for="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              value="rosa@northwind.test"
+              data-eval-gold="email"
+            />
+          </div>
+          <div class="field">
+            <label for="bio">Bio</label>
+            <textarea
+              id="bio"
+              placeholder="A few words about yourself"
+              data-eval-gold="bio"
+            ></textarea>
+          </div>
+          <div class="field">
+            <label for="timezone">Time zone</label>
+            <select id="timezone" data-eval-gold="timezone">
+              <option>UTC</option>
+              <option selected>Europe/Madrid</option>
+              <option>America/New_York</option>
+            </select>
+          </div>
+          <p>
+            <button disabled data-eval-gold="save">Save changes</button>
+            <a href="/settings" data-eval-gold="cancel">Cancel</a>
+          </p>
+        </section>
+
+        <section aria-labelledby="h-notif">
+          <h2 id="h-notif">Notification preferences</h2>
+          <div class="switch-row">
+            <span id="sw-email-label">Email notifications</span>
+            <button
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="sw-email-label"
+              data-eval-gold="sw-email"
+            ></button>
+          </div>
+          <div class="switch-row">
+            <span id="sw-push-label">Push notifications</span>
+            <button
+              role="switch"
+              aria-checked="false"
+              aria-labelledby="sw-push-label"
+              data-eval-gold="sw-push"
+            ></button>
+          </div>
+          <div class="switch-row">
+            <span id="sw-digest-label">Weekly digest</span>
+            <button
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="sw-digest-label"
+              data-eval-gold="sw-digest"
+            ></button>
+          </div>
+          <div class="switch-row">
+            <span id="sw-marketing-label">Product news and offers</span>
+            <button
+              role="switch"
+              aria-checked="false"
+              aria-labelledby="sw-marketing-label"
+              data-eval-gold="sw-marketing"
+            ></button>
+          </div>
+        </section>
+
+        <section aria-labelledby="h-keys">
+          <h2 id="h-keys">API keys</h2>
+          <p>
+            <button data-eval-gold="new-key">Generate new key</button>
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Last used</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>CI deploy</td>
+                <td><code>nw_live_••••4f2a</code></td>
+                <td>2 hours ago</td>
+                <td>
+                  <button data-eval-gold="copy-ci">Copy</button>
+                  <button data-eval-gold="revoke-ci">Revoke</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Local dev</td>
+                <td><code>nw_test_••••91bc</code></td>
+                <td>Yesterday</td>
+                <td>
+                  <button data-eval-gold="copy-local">Copy</button>
+                  <button data-eval-gold="revoke-local">Revoke</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Zapier integration</td>
+                <td><code>nw_live_••••0d77</code></td>
+                <td>Never</td>
+                <td>
+                  <button data-eval-gold="copy-zapier">Copy</button>
+                  <button data-eval-gold="revoke-zapier">Revoke</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <button data-eval-gold="delete-revoked">Delete revoked keys</button>
+          </p>
+        </section>
+
+        <section class="danger" aria-labelledby="h-danger">
+          <h2 id="h-danger">Danger zone</h2>
+          <p>Deactivating hides your profile until you sign in again.</p>
+          <button data-eval-gold="deactivate">Deactivate account</button>
+          <p>Deleting your account removes all projects permanently.</p>
+          <button data-eval-gold="delete-account">Delete account</button>
+        </section>
+      </div>
+    </main>
+    <script>
+      for (const sw of document.querySelectorAll('[role="switch"]'))
+        sw.addEventListener("click", () =>
+          sw.setAttribute(
+            "aria-checked",
+            String(sw.getAttribute("aria-checked") !== "true"),
+          ),
+        );
+    </script>
+  </body>
+</html>

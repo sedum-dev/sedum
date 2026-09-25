@@ -5,8 +5,8 @@
       "id": "mnav-home-unscoped",
       "op": "click",
       "sentence": "click Home",
-      "gold": "ambiguous",
-      "tags": ["duplicate-name", "underspecified"]
+      "gold": ["drawer-home", "tab-home"],
+      "tags": ["duplicate-name", "equivalent-targets"]
     },
     {
       "id": "mnav-home-tab",

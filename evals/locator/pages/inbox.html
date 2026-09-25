@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inbox (12) - Parcel Mail</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        margin: 0;
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        grid-template-rows: auto 1fr;
+        height: 100vh;
+      }
+      header {
+        grid-column: 1 / 3;
+        display: flex;
+        gap: 1rem;
+        padding: 0.5rem 1rem;
+        background: #eef;
+        align-items: center;
+      }
+      nav {
+        padding: 0.5rem;
+        border-right: 1px solid #ddd;
+      }
+      nav a {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.3rem 0.5rem;
+        text-decoration: none;
+        color: #222;
+      }
+      nav a[aria-current] {
+        background: #dde;
+        font-weight: 600;
+      }
+      .toolbar {
+        display: flex;
+        gap: 0.25rem;
+        padding: 0.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .toolbar button,
+      .star {
+        border: 0;
+        background: none;
+        font-size: 1.1rem;
+        cursor: pointer;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td {
+        padding: 0.4rem;
+        border-bottom: 1px solid #eee;
+      }
+      tr.unread td {
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Parcel Mail</strong>
+      <input
+        type="search"
+        placeholder="Search mail"
+        aria-label="Search mail"
+        data-eval-gold="search"
+      />
+      <button aria-label="Settings" title="Settings" data-eval-gold="settings">
+        ⚙
+      </button>
+      <button aria-label="Account: dana@parcel.test" data-eval-gold="account">
+        D
+      </button>
+    </header>
+    <nav aria-label="Folders">
+      <p>
+        <button data-eval-gold="compose">Compose</button>
+      </p>
+      <a href="#inbox" aria-current="page" data-eval-gold="folder-inbox"
+        ><span>Inbox</span><span>12</span></a
+      >
+      <a href="#starred" data-eval-gold="folder-starred">Starred</a>
+      <a href="#sent" data-eval-gold="folder-sent">Sent</a>
+      <a href="#drafts" data-eval-gold="folder-drafts"
+        ><span>Drafts</span><span>2</span></a
+      >
+      <a href="#spam" data-eval-gold="folder-spam">Spam</a>
+      <h4>Labels</h4>
+      <a href="#label-work" data-eval-gold="label-work">Work</a>
+      <a href="#label-travel" data-eval-gold="label-travel">Travel</a>
+    </nav>
+    <main>
+      <div class="toolbar" role="toolbar" aria-label="Message actions">
+        <input
+          type="checkbox"
+          aria-label="Select all messages"
+          data-eval-gold="select-all"
+        />
+        <button aria-label="Archive" title="Archive" data-eval-gold="archive">
+          🗄
+        </button>
+        <button aria-label="Delete" title="Delete" data-eval-gold="delete">
+          🗑
+        </button>
+        <button
+          aria-label="Mark as read"
+          title="Mark as read"
+          data-eval-gold="mark-read"
+        >
+          ✉
+        </button>
+        <button aria-label="Refresh" title="Refresh" data-eval-gold="refresh">
+          ⟳
+        </button>
+        <span style="margin-left: auto">1–8 of 214</span>
+        <button aria-label="Newer" disabled data-eval-gold="newer">‹</button>
+        <button aria-label="Older" data-eval-gold="older">›</button>
+      </div>
+      <table aria-label="Messages">
+        <tbody>
+          <tr class="unread">
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from GitHub"
+                data-eval-gold="sel-1"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-1">
+                ☆
+              </button>
+            </td>
+            <td>GitHub</td>
+            <td>
+              <a href="#m1" data-eval-gold="subj-1"
+                >[sedum] Pull request #482 was merged</a
+              >
+            </td>
+            <td>10:42 AM</td>
+          </tr>
+          <tr class="unread">
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from Maya Chen"
+                data-eval-gold="sel-2"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-2">
+                ☆
+              </button>
+            </td>
+            <td>Maya Chen</td>
+            <td>
+              <a href="#m2" data-eval-gold="subj-2">Lunch on Thursday?</a>
+            </td>
+            <td>9:15 AM</td>
+          </tr>
+          <tr class="unread">
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from Northwind Air"
+                data-eval-gold="sel-3"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-3">
+                ☆
+              </button>
+            </td>
+            <td>Northwind Air</td>
+            <td>
+              <a href="#m3" data-eval-gold="subj-3"
+                >Your boarding pass for flight NW 210</a
+              >
+            </td>
+            <td>Sep 24</td>
+          </tr>
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from Maya Chen"
+                data-eval-gold="sel-4"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-4">
+                ☆
+              </button>
+            </td>
+            <td>Maya Chen</td>
+            <td>
+              <a href="#m4" data-eval-gold="subj-4">Q3 budget draft</a>
+            </td>
+            <td>Sep 23</td>
+          </tr>
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from Billing Team"
+                data-eval-gold="sel-5"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-5">
+                ☆
+              </button>
+            </td>
+            <td>Billing Team</td>
+            <td>
+              <a href="#m5" data-eval-gold="subj-5">Invoice #10293 is ready</a>
+            </td>
+            <td>Sep 22</td>
+          </tr>
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from Leo Ortiz"
+                data-eval-gold="sel-6"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-6">
+                ☆
+              </button>
+            </td>
+            <td>Leo Ortiz</td>
+            <td>
+              <a href="#m6" data-eval-gold="subj-6">Re: Offsite agenda</a>
+            </td>
+            <td>Sep 21</td>
+          </tr>
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from GitHub"
+                data-eval-gold="sel-7"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-7">
+                ☆
+              </button>
+            </td>
+            <td>GitHub</td>
+            <td>
+              <a href="#m7" data-eval-gold="subj-7"
+                >[sedum] New issue: flaky locator test</a
+              >
+            </td>
+            <td>Sep 20</td>
+          </tr>
+          <tr>
+            <td>
+              <input
+                type="checkbox"
+                aria-label="Select message from Priya Nair"
+                data-eval-gold="sel-8"
+              />
+            </td>
+            <td>
+              <button class="star" aria-label="Star" data-eval-gold="star-8">
+                ☆
+              </button>
+            </td>
+            <td>Priya Nair</td>
+            <td>
+              <a href="#m8" data-eval-gold="subj-8">Photos from the offsite</a>
+            </td>
+            <td>Sep 19</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+  </body>
+</html>

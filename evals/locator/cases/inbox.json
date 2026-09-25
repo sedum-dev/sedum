@@ -1,0 +1,117 @@
+{
+  "page": "inbox.html",
+  "cases": [
+    {
+      "id": "inbox-compose",
+      "op": "click",
+      "sentence": "click Compose",
+      "gold": ["compose"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "inbox-new-message-paraphrase",
+      "op": "click",
+      "sentence": "click the button to write a new email",
+      "gold": ["compose"],
+      "tags": ["paraphrase", "indirect"]
+    },
+    {
+      "id": "inbox-folder-drafts",
+      "op": "click",
+      "sentence": "open the Drafts folder",
+      "gold": ["folder-drafts"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "inbox-trash-icon",
+      "op": "click",
+      "sentence": "click the trash can icon",
+      "gold": ["delete"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "inbox-archive",
+      "op": "click",
+      "sentence": "click the Archive button in the toolbar",
+      "gold": ["archive"],
+      "tags": ["icon", "aria-label", "region"]
+    },
+    {
+      "id": "inbox-mark-read",
+      "op": "click",
+      "sentence": "click Mark as read",
+      "gold": ["mark-read"],
+      "tags": ["icon", "aria-label", "exact-label"]
+    },
+    {
+      "id": "inbox-select-maya-budget",
+      "op": "click",
+      "sentence": "select the message from Maya Chen about the Q3 budget",
+      "gold": ["sel-4"],
+      "tags": ["checkbox", "table-row", "duplicate-name"]
+    },
+    {
+      "id": "inbox-select-maya-unscoped",
+      "op": "click",
+      "sentence": "check the box for the email from Maya Chen",
+      "gold": "ambiguous",
+      "tags": ["checkbox", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "inbox-star-boarding-pass",
+      "op": "click",
+      "sentence": "star the boarding pass email",
+      "gold": ["star-3"],
+      "tags": ["repeated-group", "table-row", "icon", "paraphrase"]
+    },
+    {
+      "id": "inbox-star-second",
+      "op": "click",
+      "sentence": "click the star on the second email",
+      "gold": ["star-2"],
+      "tags": ["repeated-group", "ordinal", "icon"]
+    },
+    {
+      "id": "inbox-open-invoice",
+      "op": "click",
+      "sentence": "open the invoice email",
+      "gold": ["subj-5"],
+      "tags": ["paraphrase", "table-row"]
+    },
+    {
+      "id": "inbox-open-last",
+      "op": "click",
+      "sentence": "click the subject of the last message in the list",
+      "gold": ["subj-8"],
+      "tags": ["ordinal", "table-row"]
+    },
+    {
+      "id": "inbox-open-github-issue",
+      "op": "click",
+      "sentence": "open the GitHub email about the flaky locator test",
+      "gold": ["subj-7"],
+      "tags": ["duplicate-name", "table-row"]
+    },
+    {
+      "id": "inbox-star-unscoped",
+      "op": "click",
+      "sentence": "click the Star button",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "icon"]
+    },
+    {
+      "id": "inbox-folder-trash-absent",
+      "op": "click",
+      "sentence": "open the Trash folder",
+      "gold": "none",
+      "tags": ["absent", "region"]
+    },
+    {
+      "id": "inbox-select-absent-sender",
+      "op": "click",
+      "sentence": "select the message from Tom Becker",
+      "gold": "none",
+      "tags": ["checkbox", "absent"]
+    }
+  ]
+}

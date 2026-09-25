@@ -1,0 +1,117 @@
+{
+  "page": "settings.html",
+  "cases": [
+    {
+      "id": "settings-tab-security",
+      "op": "click",
+      "sentence": "click the Security tab",
+      "gold": ["tab-security"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "settings-tab-billing-paraphrase",
+      "op": "click",
+      "sentence": "open the billing section",
+      "gold": ["tab-billing"],
+      "tags": ["tab", "paraphrase"]
+    },
+    {
+      "id": "settings-push-on",
+      "op": "click",
+      "sentence": "turn on push notifications",
+      "gold": ["sw-push"],
+      "tags": ["switch", "state", "paraphrase"]
+    },
+    {
+      "id": "settings-digest-off",
+      "op": "click",
+      "sentence": "click the toggle for the weekly digest email",
+      "gold": ["sw-digest"],
+      "tags": ["switch", "paraphrase"]
+    },
+    {
+      "id": "settings-email-notifications",
+      "op": "click",
+      "sentence": "click the Email notifications switch",
+      "gold": ["sw-email"],
+      "tags": ["switch", "exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "settings-2fa-absent",
+      "op": "click",
+      "sentence": "click the Two-factor authentication switch",
+      "gold": "none",
+      "tags": ["switch", "absent"]
+    },
+    {
+      "id": "settings-delete-unscoped",
+      "op": "click",
+      "sentence": "click the Delete button",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "substring-trap"]
+    },
+    {
+      "id": "settings-email-field",
+      "op": "fill",
+      "sentence": "type {{email}} in the email field",
+      "gold": ["email"],
+      "tags": ["paraphrase", "near-duplicate-name"]
+    },
+    {
+      "id": "settings-bio-placeholder",
+      "op": "fill",
+      "sentence": "type {{bio}} in the about yourself box",
+      "gold": ["bio"],
+      "tags": ["placeholder-name", "paraphrase"]
+    },
+    {
+      "id": "settings-save",
+      "op": "click",
+      "sentence": "click Save changes",
+      "gold": ["save"],
+      "tags": ["exact-label", "disabled"]
+    },
+    {
+      "id": "settings-revoke-local",
+      "op": "click",
+      "sentence": "click Revoke for the Local dev key",
+      "gold": ["revoke-local"],
+      "tags": ["repeated-group", "table-row"]
+    },
+    {
+      "id": "settings-revoke-ci-indirect",
+      "op": "click",
+      "sentence": "revoke the key that was used 2 hours ago",
+      "gold": ["revoke-ci"],
+      "tags": ["repeated-group", "table-row", "indirect"]
+    },
+    {
+      "id": "settings-revoke-unscoped",
+      "op": "click",
+      "sentence": "click the Revoke button",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "settings-delete-account",
+      "op": "click",
+      "sentence": "click Delete in the danger zone",
+      "gold": ["delete-account"],
+      "tags": ["region", "substring-trap"]
+    },
+    {
+      "id": "settings-deactivate-paraphrase",
+      "op": "click",
+      "sentence": "click the button to temporarily disable my account",
+      "gold": ["deactivate"],
+      "tags": ["paraphrase", "indirect"]
+    },
+    {
+      "id": "settings-revoke-absent",
+      "op": "click",
+      "sentence": "click Revoke for the Staging key",
+      "gold": "none",
+      "tags": ["repeated-group", "table-row", "absent"]
+    }
+  ]
+}
