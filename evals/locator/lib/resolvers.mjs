@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 const NO_COST_CALL = {
   requestedModel: "lexical",
@@ -135,6 +136,7 @@ export function cachedResolver(inner, file, { model, offline = false } = {}) {
       const sorted = Object.fromEntries(
         Object.entries(store).sort(([a], [b]) => a.localeCompare(b)),
       );
+      mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, JSON.stringify(sorted, null, 2) + "\n");
     },
   };
