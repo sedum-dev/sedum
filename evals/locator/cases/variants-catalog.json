@@ -1,0 +1,110 @@
+{
+  "variants": {
+    "semantic": "variants/catalog/semantic.html",
+    "div-soup": "variants/catalog/div-soup.html",
+    "aria-widgets": "variants/catalog/aria-widgets.html",
+    "framework-rendered": "variants/catalog/framework-rendered.html",
+    "visual-only-names": "variants/catalog/visual-only-names.html",
+    "web-components": "variants/catalog/web-components.html"
+  },
+  "cases": [
+    {
+      "id": "v-catalog-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search field",
+      "gold": ["search"],
+      "tags": ["placeholder-name"]
+    },
+    {
+      "id": "v-catalog-cart",
+      "op": "click",
+      "sentence": "click the cart link",
+      "gold": ["cart"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-catalog-sort",
+      "op": "click",
+      "sentence": "click the Sort by dropdown",
+      "gold": ["sort"],
+      "tags": ["select"]
+    },
+    {
+      "id": "v-catalog-filter-lights",
+      "op": "click",
+      "sentence": "check the Lights filter",
+      "gold": ["filter-lights"],
+      "tags": ["checkbox"]
+    },
+    {
+      "id": "v-catalog-filter-drinkware",
+      "op": "click",
+      "sentence": "tick Drinkware under Category",
+      "gold": ["filter-drinkware"],
+      "tags": ["checkbox", "container"]
+    },
+    {
+      "id": "v-catalog-add-light",
+      "op": "click",
+      "sentence": "click Add to cart for the Trail Light",
+      "gold": ["add-light"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "v-catalog-add-backpack",
+      "op": "click",
+      "sentence": "add the canvas backpack to my basket",
+      "gold": ["add-backpack"],
+      "tags": ["repeated-group", "container", "paraphrase"]
+    },
+    {
+      "id": "v-catalog-wish-mug",
+      "op": "click",
+      "sentence": "click the heart for the Camp Mug",
+      "gold": ["wish-mug"],
+      "tags": ["icon", "repeated-group", "container"]
+    },
+    {
+      "id": "v-catalog-wish-beanie",
+      "op": "click",
+      "sentence": "save the Merino Beanie to my wishlist",
+      "gold": ["wish-beanie"],
+      "tags": ["icon", "aria-label", "paraphrase", "repeated-group"]
+    },
+    {
+      "id": "v-catalog-load-more",
+      "op": "click",
+      "sentence": "click Load more",
+      "gold": ["load-more"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-catalog-add-unscoped",
+      "op": "click",
+      "sentence": "click Add to cart",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "v-catalog-add-socks-absent",
+      "op": "click",
+      "sentence": "click Add to cart for the Wool Socks",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    },
+    {
+      "id": "v-catalog-checkout-absent",
+      "op": "click",
+      "sentence": "click the Checkout button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "v-catalog-filter-shoes-absent",
+      "op": "click",
+      "sentence": "check the Shoes filter",
+      "gold": "none",
+      "tags": ["checkbox", "absent"]
+    }
+  ]
+}

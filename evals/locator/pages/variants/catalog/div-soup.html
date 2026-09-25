@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shop all · Outfitters</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #1d2330;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .search {
+        flex: 1;
+        display: flex;
+        max-width: 420px;
+      }
+      .search input {
+        flex: 1;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #bbb;
+        border-radius: 6px 0 0 6px;
+        font: inherit;
+      }
+      .search .go {
+        border: 1px solid #bbb;
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
+        background: #f4f4f4;
+        padding: 0 0.6rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+      }
+      .cart {
+        margin-left: auto;
+        color: #1d2330;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+      }
+      .filters {
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+      .filters .legend {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        padding: 0;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.35rem 0;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        position: relative;
+      }
+      .sort {
+        min-width: 170px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.75rem;
+        position: relative;
+      }
+      .card .name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+      }
+      .card .price {
+        margin: 0 0 0.25rem;
+        font-weight: 600;
+      }
+      .card .blurb {
+        margin: 0 0 0.75rem;
+        color: #555;
+      }
+      .heart {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: 0;
+        background: none;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #c0392b;
+      }
+      .add,
+      .more {
+        padding: 0.45rem 0.9rem;
+        border: 0;
+        border-radius: 6px;
+        background: #2f5bea;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        display: inline-block;
+      }
+      .more {
+        background: #fff;
+        color: #2f5bea;
+        border: 1px solid #2f5bea;
+      }
+      .more-row {
+        text-align: center;
+        margin: 1.25rem 0;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .checkbox {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #767676;
+        border-radius: 2px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .checkbox.checked {
+        background: #2f5bea;
+        border-color: #2f5bea;
+      }
+      .sort::after {
+        content: " ▾";
+        float: right;
+      }
+      .menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        min-width: 170px;
+        background: #fff;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+        z-index: 2;
+      }
+      .menu.closed {
+        display: none;
+      }
+      .opt {
+        padding: 0.4rem 0.6rem;
+        cursor: pointer;
+      }
+      .opt:hover,
+      .opt.selected {
+        background: #eef2ff;
+      }
+      .h1 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 0 0 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="brand" data-href="/">Outfitters</div>
+      <div class="search">
+        <input
+          class="js-search"
+          placeholder="Search products"
+          data-eval-gold="search"
+        />
+        <div class="go js-go">
+          <svg width="16" height="16" viewBox="0 0 16 16">
+            <circle
+              cx="7"
+              cy="7"
+              r="5"
+              fill="none"
+              stroke="#333"
+              stroke-width="2"
+            />
+            <path d="M11 11l4 4" stroke="#333" stroke-width="2" />
+          </svg>
+        </div>
+      </div>
+      <div class="cart" data-href="/cart" data-eval-gold="cart">Cart (0)</div>
+    </div>
+    <div class="layout">
+      <div>
+        <div class="filters">
+          <div class="legend">Category</div>
+          <div class="check" data-category="bags">
+            <div class="checkbox"></div>
+            <span>Bags</span>
+          </div>
+          <div class="check" data-category="lights">
+            <div class="checkbox" data-eval-gold="filter-lights"></div>
+            <span>Lights</span>
+          </div>
+          <div class="check" data-category="hats">
+            <div class="checkbox"></div>
+            <span>Hats</span>
+          </div>
+          <div class="check" data-category="drinkware">
+            <div class="checkbox" data-eval-gold="filter-drinkware"></div>
+            <span>Drinkware</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="toolbar">
+          <span>Sort by</span>
+          <div class="sort js-sort" data-eval-gold="sort">Featured</div>
+          <div class="menu closed js-menu">
+            <div class="opt selected" data-value="featured">Featured</div>
+            <div class="opt" data-value="price-asc">Price: low to high</div>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="card" data-product="backpack">
+            <div class="name">Canvas Backpack</div>
+            <div class="price">$29.99</div>
+            <div class="blurb">Water-resistant 20 L pack.</div>
+            <span class="heart">♡</span>
+            <div class="add" data-eval-gold="add-backpack">Add to cart</div>
+          </div>
+          <div class="card" data-product="light">
+            <div class="name">Trail Light</div>
+            <div class="price">$9.99</div>
+            <div class="blurb">USB rechargeable headlamp.</div>
+            <span class="heart">♡</span>
+            <div class="add" data-eval-gold="add-light">Add to cart</div>
+          </div>
+          <div class="card" data-product="beanie">
+            <div class="name">Merino Beanie</div>
+            <div class="price">$24.00</div>
+            <div class="blurb">Soft wool hat.</div>
+            <span class="heart" data-eval-gold="wish-beanie">♡</span>
+            <div class="add">Add to cart</div>
+          </div>
+          <div class="card" data-product="bottle">
+            <div class="name">Steel Bottle</div>
+            <div class="price">$19.00</div>
+            <div class="blurb">Keeps drinks cold for 24 hours.</div>
+            <span class="heart">♡</span>
+            <div class="add">Add to cart</div>
+          </div>
+          <div class="card" data-product="mug">
+            <div class="name">Camp Mug</div>
+            <div class="price">$12.00</div>
+            <div class="blurb">Enamel mug, 350 ml.</div>
+            <span class="heart" data-eval-gold="wish-mug">♡</span>
+            <div class="add">Add to cart</div>
+          </div>
+          <div class="card" data-product="tote">
+            <div class="name">Market Tote</div>
+            <div class="price">$15.00</div>
+            <div class="blurb">Heavy cotton shopping bag.</div>
+            <span class="heart">♡</span>
+            <div class="add">Add to cart</div>
+          </div>
+        </div>
+        <div class="more-row">
+          <div class="more js-more" data-eval-gold="load-more">Load more</div>
+        </div>
+      </div>
+    </div>
+    <script>
+      document.querySelectorAll("[data-href]").forEach((el) =>
+        el.addEventListener("click", () => {
+          location.href = el.dataset.href;
+        }),
+      );
+      document
+        .querySelectorAll(".checkbox")
+        .forEach((box) =>
+          box.addEventListener("click", () => box.classList.toggle("checked")),
+        );
+      const sort = document.querySelector(".js-sort");
+      const menu = document.querySelector(".js-menu");
+      sort.addEventListener("click", () => menu.classList.toggle("closed"));
+      menu.querySelectorAll(".opt").forEach((opt) =>
+        opt.addEventListener("click", () => {
+          menu
+            .querySelectorAll(".opt")
+            .forEach((o) => o.classList.remove("selected"));
+          opt.classList.add("selected");
+          sort.textContent = opt.textContent;
+          menu.classList.add("closed");
+        }),
+      );
+      let count = 0;
+      const cart = document.querySelector(".cart");
+      document.querySelectorAll(".add").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          cart.textContent = `Cart (${++count})`;
+        }),
+      );
+      document.querySelectorAll(".heart").forEach((heart) =>
+        heart.addEventListener("click", () => {
+          heart.textContent = heart.textContent === "♡" ? "♥" : "♡";
+        }),
+      );
+      document.querySelector(".js-go").addEventListener("click", () => {
+        location.href =
+          "/search?q=" +
+          encodeURIComponent(document.querySelector(".js-search").value);
+      });
+      document
+        .querySelector(".js-more")
+        .addEventListener("click", () => fetch("/products?page=2"));
+    </script>
+  </body>
+</html>

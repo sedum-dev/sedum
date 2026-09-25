@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shop all · Outfitters</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #1d2330;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .search {
+        flex: 1;
+        display: flex;
+        max-width: 420px;
+      }
+      .search input {
+        flex: 1;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #bbb;
+        border-radius: 6px 0 0 6px;
+        font: inherit;
+      }
+      .search .go {
+        border: 1px solid #bbb;
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
+        background: #f4f4f4;
+        padding: 0 0.6rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+      }
+      .cart {
+        margin-left: auto;
+        color: #1d2330;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+      }
+      .filters {
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+      .filters .legend {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        padding: 0;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.35rem 0;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        position: relative;
+      }
+      .sort {
+        min-width: 170px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.75rem;
+        position: relative;
+      }
+      .card .name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+      }
+      .card .price {
+        margin: 0 0 0.25rem;
+        font-weight: 600;
+      }
+      .card .blurb {
+        margin: 0 0 0.75rem;
+        color: #555;
+      }
+      .heart {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: 0;
+        background: none;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #c0392b;
+      }
+      .add,
+      .more {
+        padding: 0.45rem 0.9rem;
+        border: 0;
+        border-radius: 6px;
+        background: #2f5bea;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        display: inline-block;
+      }
+      .more {
+        background: #fff;
+        color: #2f5bea;
+        border: 1px solid #2f5bea;
+      }
+      .more-row {
+        text-align: center;
+        margin: 1.25rem 0;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .checkbox {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #767676;
+        border-radius: 2px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .checkbox.checked {
+        background: #2f5bea;
+        border-color: #2f5bea;
+      }
+      .sort::after {
+        content: " ▾";
+        float: right;
+      }
+      .menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        min-width: 170px;
+        background: #fff;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
+        z-index: 2;
+      }
+      .menu.closed {
+        display: none;
+      }
+      .opt {
+        padding: 0.4rem 0.6rem;
+        cursor: pointer;
+      }
+      .opt:hover,
+      .opt.selected {
+        background: #eef2ff;
+      }
+      .h1 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 0 0 0.75rem;
+      }
+      [role="button"]:focus-visible,
+      [role="checkbox"]:focus-visible,
+      [role="combobox"]:focus-visible,
+      [role="link"]:focus-visible {
+        outline: 2px solid #2f5bea;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top" role="banner">
+      <div class="brand" role="link" tabindex="0" data-href="/">Outfitters</div>
+      <div class="search" role="search">
+        <input
+          class="js-search"
+          aria-label="Search products"
+          placeholder="Search products"
+          data-eval-gold="search"
+        />
+        <div class="go js-go" role="button" tabindex="0" aria-label="Search">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <circle
+              cx="7"
+              cy="7"
+              r="5"
+              fill="none"
+              stroke="#333"
+              stroke-width="2"
+            />
+            <path d="M11 11l4 4" stroke="#333" stroke-width="2" />
+          </svg>
+        </div>
+      </div>
+      <div
+        class="cart"
+        role="link"
+        tabindex="0"
+        data-href="/cart"
+        data-eval-gold="cart"
+      >
+        Cart (0)
+      </div>
+    </div>
+    <div class="layout">
+      <div role="complementary">
+        <div class="filters" role="group" aria-labelledby="cat-legend">
+          <div class="legend" id="cat-legend">Category</div>
+          <div class="check">
+            <div
+              class="checkbox"
+              role="checkbox"
+              tabindex="0"
+              aria-checked="false"
+              aria-labelledby="cat-bags-label"
+            ></div>
+            <span id="cat-bags-label">Bags</span>
+          </div>
+          <div class="check">
+            <div
+              class="checkbox"
+              role="checkbox"
+              tabindex="0"
+              aria-checked="false"
+              aria-labelledby="cat-lights-label"
+              data-eval-gold="filter-lights"
+            ></div>
+            <span id="cat-lights-label">Lights</span>
+          </div>
+          <div class="check">
+            <div
+              class="checkbox"
+              role="checkbox"
+              tabindex="0"
+              aria-checked="false"
+              aria-labelledby="cat-hats-label"
+            ></div>
+            <span id="cat-hats-label">Hats</span>
+          </div>
+          <div class="check">
+            <div
+              class="checkbox"
+              role="checkbox"
+              tabindex="0"
+              aria-checked="false"
+              aria-labelledby="cat-drinkware-label"
+              data-eval-gold="filter-drinkware"
+            ></div>
+            <span id="cat-drinkware-label">Drinkware</span>
+          </div>
+        </div>
+      </div>
+      <div role="main">
+        <div class="toolbar">
+          <span id="sort-label">Sort by</span>
+          <div
+            class="sort js-sort"
+            role="combobox"
+            tabindex="0"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="sort-list"
+            aria-labelledby="sort-label"
+            data-eval-gold="sort"
+          >
+            Featured
+          </div>
+          <div
+            class="menu closed js-menu"
+            role="listbox"
+            id="sort-list"
+            aria-labelledby="sort-label"
+          >
+            <div
+              class="opt selected"
+              role="option"
+              id="sort-featured"
+              aria-selected="true"
+            >
+              Featured
+            </div>
+            <div
+              class="opt"
+              role="option"
+              id="sort-price"
+              aria-selected="false"
+            >
+              Price: low to high
+            </div>
+          </div>
+        </div>
+        <div class="grid" role="list" aria-label="Products">
+          <div role="listitem" class="card" aria-labelledby="p-backpack">
+            <div class="name" role="heading" aria-level="3" id="p-backpack">
+              Canvas Backpack
+            </div>
+            <div class="price">$29.99</div>
+            <div class="blurb">Water-resistant 20 L pack.</div>
+            <span
+              class="heart"
+              role="button"
+              tabindex="0"
+              aria-label="Add Canvas Backpack to wishlist"
+              aria-pressed="false"
+              >♡</span
+            >
+            <div
+              class="add"
+              role="button"
+              tabindex="0"
+              data-eval-gold="add-backpack"
+            >
+              Add to cart
+            </div>
+          </div>
+          <div role="listitem" class="card" aria-labelledby="p-light">
+            <div class="name" role="heading" aria-level="3" id="p-light">
+              Trail Light
+            </div>
+            <div class="price">$9.99</div>
+            <div class="blurb">USB rechargeable headlamp.</div>
+            <span
+              class="heart"
+              role="button"
+              tabindex="0"
+              aria-label="Add Trail Light to wishlist"
+              aria-pressed="false"
+              >♡</span
+            >
+            <div
+              class="add"
+              role="button"
+              tabindex="0"
+              data-eval-gold="add-light"
+            >
+              Add to cart
+            </div>
+          </div>
+          <div role="listitem" class="card" aria-labelledby="p-beanie">
+            <div class="name" role="heading" aria-level="3" id="p-beanie">
+              Merino Beanie
+            </div>
+            <div class="price">$24.00</div>
+            <div class="blurb">Soft wool hat.</div>
+            <span
+              class="heart"
+              role="button"
+              tabindex="0"
+              aria-label="Add Merino Beanie to wishlist"
+              aria-pressed="false"
+              data-eval-gold="wish-beanie"
+              >♡</span
+            >
+            <div class="add" role="button" tabindex="0">Add to cart</div>
+          </div>
+          <div role="listitem" class="card" aria-labelledby="p-bottle">
+            <div class="name" role="heading" aria-level="3" id="p-bottle">
+              Steel Bottle
+            </div>
+            <div class="price">$19.00</div>
+            <div class="blurb">Keeps drinks cold for 24 hours.</div>
+            <span
+              class="heart"
+              role="button"
+              tabindex="0"
+              aria-label="Add Steel Bottle to wishlist"
+              aria-pressed="false"
+              >♡</span
+            >
+            <div class="add" role="button" tabindex="0">Add to cart</div>
+          </div>
+          <div role="listitem" class="card" aria-labelledby="p-mug">
+            <div class="name" role="heading" aria-level="3" id="p-mug">
+              Camp Mug
+            </div>
+            <div class="price">$12.00</div>
+            <div class="blurb">Enamel mug, 350 ml.</div>
+            <span
+              class="heart"
+              role="button"
+              tabindex="0"
+              aria-label="Add Camp Mug to wishlist"
+              aria-pressed="false"
+              data-eval-gold="wish-mug"
+              >♡</span
+            >
+            <div class="add" role="button" tabindex="0">Add to cart</div>
+          </div>
+          <div role="listitem" class="card" aria-labelledby="p-tote">
+            <div class="name" role="heading" aria-level="3" id="p-tote">
+              Market Tote
+            </div>
+            <div class="price">$15.00</div>
+            <div class="blurb">Heavy cotton shopping bag.</div>
+            <span
+              class="heart"
+              role="button"
+              tabindex="0"
+              aria-label="Add Market Tote to wishlist"
+              aria-pressed="false"
+              >♡</span
+            >
+            <div class="add" role="button" tabindex="0">Add to cart</div>
+          </div>
+        </div>
+        <div class="more-row">
+          <div
+            class="more js-more"
+            role="button"
+            tabindex="0"
+            data-eval-gold="load-more"
+          >
+            Load more
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      function activate(el, handler) {
+        el.addEventListener("click", handler);
+        el.addEventListener("keydown", (event) => {
+          if (
+            event.key === "Enter" ||
+            (event.key === " " && el.getAttribute("role") !== "link")
+          ) {
+            event.preventDefault();
+            handler();
+          }
+        });
+      }
+      document.querySelectorAll("[data-href]").forEach((el) =>
+        activate(el, () => {
+          location.href = el.dataset.href;
+        }),
+      );
+      document.querySelectorAll('[role="checkbox"]').forEach((box) =>
+        activate(box, () => {
+          const checked = box.getAttribute("aria-checked") === "true";
+          box.setAttribute("aria-checked", String(!checked));
+          box.classList.toggle("checked", !checked);
+        }),
+      );
+      const sort = document.querySelector(".js-sort");
+      const menu = document.querySelector(".js-menu");
+      activate(sort, () => {
+        const open = menu.classList.toggle("closed") === false;
+        sort.setAttribute("aria-expanded", String(open));
+      });
+      menu.querySelectorAll('[role="option"]').forEach((opt) =>
+        activate(opt, () => {
+          menu.querySelectorAll('[role="option"]').forEach((o) => {
+            o.classList.remove("selected");
+            o.setAttribute("aria-selected", "false");
+          });
+          opt.classList.add("selected");
+          opt.setAttribute("aria-selected", "true");
+          sort.textContent = opt.textContent;
+          menu.classList.add("closed");
+          sort.setAttribute("aria-expanded", "false");
+        }),
+      );
+      let count = 0;
+      const cart = document.querySelector(".cart");
+      document.querySelectorAll(".add").forEach((btn) =>
+        activate(btn, () => {
+          cart.textContent = `Cart (${++count})`;
+        }),
+      );
+      document.querySelectorAll(".heart").forEach((heart) =>
+        activate(heart, () => {
+          const on = heart.getAttribute("aria-pressed") === "true";
+          heart.setAttribute("aria-pressed", String(!on));
+          heart.textContent = on ? "♡" : "♥";
+        }),
+      );
+      activate(document.querySelector(".js-go"), () => {
+        location.href =
+          "/search?q=" +
+          encodeURIComponent(document.querySelector(".js-search").value);
+      });
+      activate(document.querySelector(".js-more"), () =>
+        fetch("/products?page=2"),
+      );
+    </script>
+  </body>
+</html>

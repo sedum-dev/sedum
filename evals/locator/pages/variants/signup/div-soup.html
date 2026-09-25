@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create your account · Nimbus</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .top a {
+        color: #1d2330;
+        text-decoration: none;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-weight: 700;
+        font-size: 1.1rem;
+      }
+      main {
+        max-width: 400px;
+        margin: 2rem auto;
+      }
+      .google {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #bbb;
+        background: #fff;
+        border-radius: 6px;
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        font: inherit;
+        cursor: pointer;
+      }
+      .or {
+        text-align: center;
+        color: #777;
+        margin: 1rem 0;
+      }
+      .field {
+        margin: 0 0 0.9rem;
+      }
+      .field label {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+      }
+      .field input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        font: inherit;
+      }
+      .pw {
+        position: relative;
+      }
+      .eye {
+        position: absolute;
+        right: 0.3rem;
+        top: 0.25rem;
+        border: 0;
+        background: none;
+        font-size: 1.1rem;
+        cursor: pointer;
+      }
+      fieldset {
+        border: 0;
+        padding: 0;
+        margin: 0 0 1rem;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.4rem 0;
+      }
+      .primary {
+        width: 100%;
+        padding: 0.65rem;
+        background: #2f5bea;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .foot {
+        text-align: center;
+        margin-top: 1rem;
+      }
+      .lbl {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+      }
+      .checkbox {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #767676;
+        border-radius: 2px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .checkbox.checked {
+        background: #2f5bea;
+        border-color: #2f5bea;
+      }
+      .link {
+        color: #0645ad;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .top .link,
+      .brand {
+        color: #1d2330;
+        text-decoration: none;
+      }
+      .google,
+      .primary,
+      .eye {
+        text-align: center;
+        box-sizing: border-box;
+      }
+      .h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin: 0.67em 0;
+      }
+      .checks {
+        margin: 0 0 1rem;
+      }
+      .foot .link {
+        display: inline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="brand" data-href="/" data-eval-gold="logo">
+        <svg width="22" height="22" viewBox="0 0 22 22">
+          <circle cx="11" cy="11" r="10" fill="#2f5bea" /></svg
+        >Nimbus
+      </div>
+      <div class="link" data-href="/help" data-eval-gold="help">Help</div>
+    </div>
+    <div class="main-wrap">
+      <main>
+        <div class="h1">Create your account</div>
+        <div class="google" data-eval-gold="google">
+          <svg width="18" height="18" viewBox="0 0 18 18">
+            <circle cx="9" cy="9" r="8" fill="#ea4335" /></svg
+          >Continue with Google
+        </div>
+        <div class="or">or</div>
+        <div class="form">
+          <div class="field">
+            <span class="lbl">Full name</span>
+            <input class="js-name" autocomplete="off" data-eval-gold="name" />
+          </div>
+          <div class="field">
+            <span class="lbl">Email</span>
+            <input
+              class="js-email"
+              type="email"
+              autocomplete="off"
+              data-eval-gold="email"
+            />
+          </div>
+          <div class="field">
+            <span class="lbl">Confirm email</span>
+            <input
+              class="js-email2"
+              type="email"
+              autocomplete="off"
+              data-eval-gold="email2"
+            />
+          </div>
+          <div class="field">
+            <span class="lbl">Password</span>
+            <div class="pw">
+              <input
+                class="js-password"
+                type="password"
+                autocomplete="off"
+                data-eval-gold="password"
+              />
+              <span class="eye" data-eval-gold="show-password">👁</span>
+            </div>
+          </div>
+          <div class="checks">
+            <div class="check">
+              <div class="checkbox" data-eval-gold="terms"></div>
+              <span>I agree to the Terms</span>
+            </div>
+            <div class="check">
+              <div class="checkbox" data-eval-gold="news"></div>
+              <span>Send me product news</span>
+            </div>
+          </div>
+          <div class="primary" data-eval-gold="create">Create account</div>
+        </div>
+        <div class="foot">
+          Already have an account?
+          <span class="link" data-href="/login" data-eval-gold="login"
+            >Log in</span
+          >
+        </div>
+      </main>
+    </div>
+    <script>
+      document.querySelectorAll("[data-href]").forEach((el) => {
+        el.addEventListener("click", () => {
+          location.href = el.dataset.href;
+        });
+      });
+      document.querySelectorAll(".checkbox").forEach((box) => {
+        box.addEventListener("click", () => box.classList.toggle("checked"));
+      });
+      const pw = document.querySelector(".js-password");
+      document.querySelector(".eye").addEventListener("click", () => {
+        pw.type = pw.type === "password" ? "text" : "password";
+      });
+      document.querySelector(".google").addEventListener("click", () => {
+        location.href = "/auth/google";
+      });
+      document.querySelector(".primary").addEventListener("click", () => {
+        const agreed = document
+          .querySelector(".checkbox")
+          .classList.contains("checked");
+        if (!agreed) return;
+        fetch("/signup", { method: "POST" });
+      });
+    </script>
+  </body>
+</html>
