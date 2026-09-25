@@ -17,8 +17,8 @@ export function setupDiagnostic(error: unknown): CliDiagnostic {
   if (error instanceof ProviderError && error.code === "configuration")
     return {
       code: "missing_key",
-      message: "The TypeSafe provider is not configured.",
-      fix: "Set TYPESAFE_API_KEY and rerun the command.",
+      message: "The model provider is not configured.",
+      fix: "Set TYPESAFE_API_KEY for the configured endpoint, then rerun the command.",
     };
   if (error instanceof BrowserDriverError && error.code === "browser-missing")
     return {
@@ -152,7 +152,7 @@ export function flowDiagnostic(result: {
       fix:
         result.code === "provider_configuration" ||
         result.code === "provider_authentication"
-          ? "Check TYPESAFE_API_KEY and provider access, then rerun the test."
+          ? "Check the provider configuration and API access, then rerun the test."
           : "Check provider availability and the test input, then rerun the test.",
     };
   return {

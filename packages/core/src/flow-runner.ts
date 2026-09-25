@@ -247,7 +247,7 @@ function runtimeFailure(file: string, error: unknown): FlowRunResult {
       message: "The model provider could not complete the run safely.",
       fix:
         error.code === "configuration" || error.code === "authentication"
-          ? "Check TYPESAFE_API_KEY and provider access, then rerun the test."
+          ? "Check the configured provider API key and access, then rerun the test."
           : "Check provider availability and the test input, then rerun the test.",
     };
   }

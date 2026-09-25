@@ -10,9 +10,12 @@ classification cache at `.sedum/classifications.json` remains trackable.
 The generated test signs in to the public SauceDemo sample store at
 `https://www.saucedemo.com/` with `standard_user` and the public demo password
 `secret_sauce`. `.env.example` supplies `SAUCE_PASSWORD`; the user must supply
-their own `TYPESAFE_API_KEY`. Running the test calls the TypeSafe API and may
-incur a charge. The generated config selects Chromium. If no matching browser
-is installed, `init` prints `sedum browsers install chromium`; on Linux,
+their own provider key. Set `TYPESAFE_API_KEY` to use TypeSafe, or set
+`TYPESAFE_BASE_URL` alongside the compatible provider's `TYPESAFE_API_KEY`
+([details](configuration.md)). Running the test calls
+the configured provider and may incur a charge. The generated config selects
+Chromium. If no matching browser is installed, `init` prints
+`sedum browsers install chromium`; on Linux,
 `sedum browsers install chromium --with-deps` also installs system libraries.
 The command reports a missing key, previews the YAML test it creates, and
 prints a headed run command. It does not contact the provider or install a
@@ -32,13 +35,13 @@ variable is not already available.
 mkdir my-sedum-tests && cd my-sedum-tests
 sedum init
 cp .env.example .env  # only when .env does not already exist
-# Edit .env to set TYPESAFE_API_KEY. Install Chromium if init says it is missing.
+# Set TYPESAFE_API_KEY in .env, or configure a compatible provider. Install Chromium if needed.
 sedum run tests/example.test.yaml --headed
 ```
 
 ## `sedum doctor`
 
-`sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure: Node 20.19 or newer, valid config and `.env`, an installed browser, network and authenticated access to TypeSafe, and output directory write access. The authentication check sends one small request and may incur a provider charge. Doctor does not launch a browser or run tests.
+`sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure: Node 20.19 or newer, valid config and `.env`, an installed browser, network and authenticated access to the configured model provider, and output directory write access. The authentication check sends one small request and may incur a provider charge. Doctor does not launch a browser or run tests.
 
 `sedum doctor --json` writes one versioned JSON object, including when checks fail. Both output forms omit the API key and raw provider errors. The exit code is `0` when every check passes and `3` otherwise.
 
@@ -153,13 +156,13 @@ It reports every problem it finds in one run, not only the first, as `path:line:
 tests/checkout.test.yaml:9:5: error invalid_operand: Name one value, such as {{key}} or "{{user}}@example.com", and a field. Sentence: "type {{first}} then {{last}} in the name field".
   Fix: Use one value, address, key, or binding in the supported form.
 tests/checkout.test.yaml:11:5: not checked offline: Classification is unavailable offline for this sentence (cache: absent). Sentence: "add the cheapest item to the basket".
-  Fix: Rephrase with a supported verb, or run `sedum validate --online` with TYPESAFE_API_KEY set and commit .sedum/classifications.json.
+  Fix: Rephrase with a supported verb, or run `sedum validate --online` with a provider API key configured and commit .sedum/classifications.json.
 Checked 6 tests and 2 modules: 1 error, 1 sentence not checked offline.
 ```
 
 ### Offline by default
 
-Validation classifies sentences using built-in patterns and the committed `.sedum/classifications.json` only; see [step classification](classification.md). It does not read `TYPESAFE_API_KEY` or the project `.env`, does not resolve `$ENV` values (an unset variable is fine), and does not write any file. Because it never opens `.env`, a malformed or unreadable `.env` is reported by `sedum run` and `--online`, not by offline validation. A sentence it cannot classify this way is reported as **not checked offline** and fails the check. Sedum cannot confirm what that step will do, so it never reports it as valid.
+Validation classifies sentences using built-in patterns and the committed `.sedum/classifications.json` only; see [step classification](classification.md). It does not read provider credentials or the project `.env`, does not resolve `$ENV` values (an unset variable is fine), and does not write any file. Because it never opens `.env`, a malformed or unreadable `.env` is reported by `sedum run` and `--online`, not by offline validation. A sentence it cannot classify this way is reported as **not checked offline** and fails the check. Sedum cannot confirm what that step will do, so it never reports it as valid.
 
 To resolve such a sentence, either rephrase it with an obvious supported verb, or classify it once with the model:
 
@@ -168,7 +171,12 @@ TYPESAFE_API_KEY=... sedum validate --online
 git add .sedum/classifications.json
 ```
 
-`--online` takes the key from the process environment or the project-root `.env`, as `sedum run` does. It sends only the sentences the cache cannot answer. It writes accepted answers to `.sedum/classifications.json`; commit that file so CI can validate offline. If you ignore `.sedum/` for run output, keep the cache tracked:
+`--online` takes the key from the process environment or the project-root `.env`, as `sedum run` does. It sends only the sentences the cache cannot answer. It writes accepted answers to `.sedum/classifications.json`; commit that file so CI can validate offline.
+
+For a compatible provider, also set `TYPESAFE_BASE_URL` and optionally
+`TYPESAFE_DEFAULT_MODEL`; use that provider's key as `TYPESAFE_API_KEY`.
+
+If you ignore `.sedum/` for run output, keep the cache tracked:
 
 ```gitignore
 .sedum/*

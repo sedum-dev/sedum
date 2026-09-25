@@ -22,7 +22,7 @@ corepack pnpm fixtures:verify
 node packages/cli/dist/cli.js --version
 ```
 
-Run the Sauce Demo fixtures against the live site with `TYPESAFE_API_KEY` and `SAUCE_PASSWORD` set. The first should exit `0`; the deliberately false claim exits `1`:
+Run the Sauce Demo fixtures against the live site with `SAUCE_PASSWORD` and `TYPESAFE_API_KEY` set. To use a compatible provider, also set `TYPESAFE_BASE_URL` and, if needed, `TYPESAFE_DEFAULT_MODEL`. The first should exit `0`; the deliberately false claim exits `1`:
 
 ```sh
 node packages/cli/dist/cli.js run fixtures/saucedemo-login.test.yaml

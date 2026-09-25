@@ -812,11 +812,13 @@ export async function executeRunCommand(
       const gate = new ProviderGate({ concurrency: providerConcurrency });
       const provider = new TypeSafeAdapter({
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+        baseURL: config.providerBaseUrl,
+        model: config.providerModel,
         gate,
       });
       const cache = await FileClassificationCache.load(
         path.join(config.projectRoot, ".sedum", "classifications.json"),
-        "jev-latest",
+        config.providerModel,
       );
       const locatorCache = await openLocatorCache(config.projectRoot, {
         disabled: options.locatorCacheDisabled ?? false,

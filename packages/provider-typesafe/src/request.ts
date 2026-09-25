@@ -47,6 +47,7 @@ export interface ClassificationRequestChunk {
 
 function classificationRequest(
   items: readonly { index: number; sentence: string }[],
+  model: string,
 ): SystemOneRequest {
   const questions: Record<string, ReturnType<typeof choice>> = Object.create(
     null,
@@ -59,18 +60,19 @@ function classificationRequest(
       CLASSIFICATION_CRITERIA,
     );
   }
-  return { state: {}, questions, model: MODEL };
+  return { state: {}, questions, model };
 }
 
 /** Ordinary files use one request; long files split at the complete wire-body limit. */
 export function buildClassificationRequests(
   sentences: readonly string[],
+  model = MODEL,
 ): readonly ClassificationRequestChunk[] {
   const chunks: ClassificationRequestChunk[] = [];
   let current: { index: number; sentence: string }[] = [];
   const push = () => {
     if (!current.length) return;
-    const request = classificationRequest(current);
+    const request = classificationRequest(current, model);
     preflight(request);
     chunks.push({
       request,
@@ -84,7 +86,7 @@ export function buildClassificationRequests(
     if (!sentence.trim()) invalid("Classification sentence is empty.");
     const candidate = [...current, { index, sentence }];
     const bytes = Buffer.byteLength(
-      JSON.stringify(classificationRequest(candidate)),
+      JSON.stringify(classificationRequest(candidate, model)),
       "utf8",
     );
     if (
@@ -97,7 +99,7 @@ export function buildClassificationRequests(
     } else current = candidate;
     if (
       Buffer.byteLength(
-        JSON.stringify(classificationRequest(current)),
+        JSON.stringify(classificationRequest(current, model)),
         "utf8",
       ) > BODY_LIMIT_BYTES
     )
@@ -135,6 +137,7 @@ export interface ResolverRequest {
 export function buildResolverRequest(
   sentence: string,
   candidates: ResolverCandidates,
+  model = MODEL,
 ): ResolverRequest {
   checkText(sentence, SENTENCE_LIMIT, "Sentence");
   if (
@@ -225,13 +228,17 @@ export function buildResolverRequest(
         criteria,
       ),
     },
-    model: MODEL,
+    model,
   };
   preflight(request);
   return { request, optionIds: ids };
 }
 
-export function buildJudgeRequest(claim: string, pageDigest: JudgePageDigest) {
+export function buildJudgeRequest(
+  claim: string,
+  pageDigest: JudgePageDigest,
+  model = MODEL,
+) {
   checkText(claim, SENTENCE_LIMIT, "Claim");
   if (
     !pageDigest ||
@@ -259,7 +266,7 @@ export function buildJudgeRequest(claim: string, pageDigest: JudgePageDigest) {
         },
       ),
     },
-    model: MODEL,
+    model,
   };
   preflight(request);
   return request;

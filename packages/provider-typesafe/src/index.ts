@@ -50,6 +50,10 @@ const DEFAULT_BACKOFF_MS = 500;
 
 export interface TypeSafeAdapterOptions {
   readonly apiKey?: string;
+  /** Base URL of a TypeSafe System One-compatible service. */
+  readonly baseURL?: string;
+  /** Provider model name sent on every System One request. */
+  readonly model?: string;
   /** Explicit transport injection for recorded-reply tests. Production uses Node fetch pooling. */
   readonly fetch?: Fetch;
   readonly deadlineMs?: number;
@@ -158,6 +162,8 @@ export class TypeSafeAdapter
   implements Resolver, Judge, ClassificationProvider
 {
   private readonly client: TypeSafeClient;
+  private readonly model: string;
+  private readonly estimateJevCost: boolean;
   private readonly deadlineMs: number;
   private readonly attemptTimeoutMs: number;
   private readonly backoffInitialMs: number;
@@ -172,6 +178,37 @@ export class TypeSafeAdapter
         "configuration",
         "Set TYPESAFE_API_KEY to use the TypeSafe provider.",
       );
+    const baseURL =
+      options.baseURL ?? process.env.TYPESAFE_BASE_URL ?? BASE_URL;
+    const model = options.model ?? process.env.TYPESAFE_DEFAULT_MODEL ?? MODEL;
+    let parsedBaseURL: URL;
+    try {
+      parsedBaseURL = new URL(baseURL);
+    } catch {
+      throw new ProviderError(
+        "configuration",
+        "Provider base URL must be an absolute HTTPS URL.",
+      );
+    }
+    if (
+      parsedBaseURL.protocol !== "https:" ||
+      parsedBaseURL.username ||
+      parsedBaseURL.password ||
+      parsedBaseURL.search ||
+      parsedBaseURL.hash
+    )
+      throw new ProviderError(
+        "configuration",
+        "Provider base URL must be an absolute HTTPS URL without credentials, query, or fragment.",
+      );
+    if (typeof model !== "string" || !model.trim())
+      throw new ProviderError(
+        "configuration",
+        "Provider model must be a nonempty string.",
+      );
+    this.model = model.trim();
+    this.estimateJevCost =
+      parsedBaseURL.toString().replace(/\/$/u, "") === BASE_URL;
     this.deadlineMs = positiveDuration(
       options.deadlineMs ?? DEFAULT_DEADLINE_MS,
       "Provider deadline",
@@ -189,8 +226,8 @@ export class TypeSafeAdapter
     this.gate = options.gate ?? new ProviderGate({ now: this.now });
     this.client = new TypeSafeClient({
       apiKey: key.trim(),
-      baseURL: BASE_URL,
-      defaultModel: MODEL,
+      baseURL: parsedBaseURL.toString().replace(/\/$/u, ""),
+      defaultModel: this.model,
       logLevel: "off",
       timeout: this.attemptTimeoutMs,
       retry: { maxRetries: 0 },
@@ -351,9 +388,9 @@ export class TypeSafeAdapter
     candidates: ResolverCandidates,
     options?: ProviderCallOptions,
   ): Promise<ResolverDecision> {
-    const built = buildResolverRequest(sentence, candidates);
+    const built = buildResolverRequest(sentence, candidates, this.model);
     const { response, meta } = await this.ask(built.request, options);
-    const call = validateCall(response, meta);
+    const call = validateCall(response, meta, this.model, this.estimateJevCost);
     const attempts = call.attempts;
     let answer: ReturnType<typeof validateChoice>;
     try {
@@ -377,9 +414,9 @@ export class TypeSafeAdapter
     pageDigest: JudgePageDigest,
     options?: ProviderCallOptions,
   ): Promise<JudgeDecision> {
-    const request = buildJudgeRequest(claim, pageDigest);
+    const request = buildJudgeRequest(claim, pageDigest, this.model);
     const { response, meta } = await this.ask(request, options);
-    const call = validateCall(response, meta);
+    const call = validateCall(response, meta, this.model, this.estimateJevCost);
     const attempts = call.attempts;
     let holds: number;
     let contradicted: number;
@@ -400,7 +437,7 @@ export class TypeSafeAdapter
     readonly answers: readonly ModelClassification[];
     readonly calls: readonly ReturnType<typeof validateCall>[];
   }> {
-    const chunks = buildClassificationRequests(sentences);
+    const chunks = buildClassificationRequests(sentences, this.model);
     const answers: ModelClassification[] = Array(sentences.length);
     const calls: ReturnType<typeof validateCall>[] = [];
     for (const chunk of chunks) {
@@ -409,7 +446,12 @@ export class TypeSafeAdapter
       try {
         const asked = await this.ask(chunk.request, options);
         attempts = asked.meta.attempts;
-        const call = validateCall(asked.response, asked.meta);
+        const call = validateCall(
+          asked.response,
+          asked.meta,
+          this.model,
+          this.estimateJevCost,
+        );
         calls.push(call);
         receiptRecorded = true;
         const replyAnswers = answersOf(asked.response);

@@ -28,6 +28,34 @@ describe("TypeSafe doctor authentication probe", () => {
     expect(calls[0]).not.toContain("SECRET-KEY");
   });
 
+  it("probes an explicit compatible endpoint and model", async () => {
+    const fetch: Fetch = async (input, init) => {
+      expect(String(input)).toBe("https://gateway.example/api/v1/systemone");
+      expect(JSON.parse(String(init?.body)).model).toBe("gateway-jev");
+      return new Response(
+        JSON.stringify({
+          answers: {
+            ready: {
+              type: "choice",
+              choice: "ready",
+              probabilities: { ready: 1, other: 0 },
+            },
+          },
+          model: "gateway-jev-1",
+          usage: { input_tokens: 1, output_tokens: 0 },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    };
+    expect(
+      await probeTypeSafeApiKey("SECRET-KEY", {
+        fetch,
+        baseURL: "https://gateway.example/api",
+        model: "gateway-jev",
+      }),
+    ).toBe("accepted");
+  });
+
   it.each([401, 403])(
     "classifies HTTP %i as rejected without exposing the body",
     async (status) => {

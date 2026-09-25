@@ -15,13 +15,19 @@ export type AuthProbeResult =
 /** One small, bounded, potentially billable request. Never return an SDK error body. */
 export async function probeTypeSafeApiKey(
   apiKey: string,
-  options: { fetch?: Fetch; timeoutMs?: number } = {},
+  options: {
+    fetch?: Fetch;
+    timeoutMs?: number;
+    baseURL?: string;
+    model?: string;
+  } = {},
 ): Promise<AuthProbeResult> {
   const timeoutMs = options.timeoutMs ?? 5_000;
+  const model = options.model ?? MODEL;
   const client = new TypeSafeClient({
     apiKey,
-    baseURL: "https://api.typesafe.ai",
-    defaultModel: MODEL,
+    baseURL: options.baseURL ?? "https://api.typesafe.ai",
+    defaultModel: model,
     logLevel: "off",
     timeout: timeoutMs,
     retry: { maxRetries: 0 },
@@ -34,7 +40,7 @@ export async function probeTypeSafeApiKey(
         questions: {
           ready: choice("Select ready.", { ready: "Ready", other: "Other" }),
         },
-        model: MODEL,
+        model,
       },
       { timeout: timeoutMs, retry: { maxRetries: 0 } },
     );

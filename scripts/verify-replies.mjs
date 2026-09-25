@@ -4,6 +4,8 @@ import { fileURLToPath, URL } from "node:url";
 
 const env = { ...process.env, SEDUM_BROWSER_INTEGRATION: "1" };
 delete env.TYPESAFE_API_KEY;
+delete env.TYPESAFE_BASE_URL;
+delete env.TYPESAFE_DEFAULT_MODEL;
 delete env.SEDUM_RECORD_REPLIES;
 const vitest = fileURLToPath(
   new URL("../node_modules/vitest/vitest.mjs", import.meta.url),

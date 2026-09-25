@@ -44,6 +44,8 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     baseUrl: null,
     variables: {},
     apiKey: "SECRET-KEY",
+    providerBaseUrl: "https://api.typesafe.ai",
+    providerModel: "jev-latest",
   };
 }
 
