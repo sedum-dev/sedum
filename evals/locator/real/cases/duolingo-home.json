@@ -1,0 +1,54 @@
+{
+  "site": "duolingo-home",
+  "targets": {
+    "get-started-top": "a[data-test=\"get-started-top\"]",
+    "get-started-bottom": "#root > div:nth-of-type(1) > main > section:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > a",
+    "have-account": "button[data-test=\"have-account\"]",
+    "site-language": "#root > div:nth-of-type(1) > header > div:nth-of-type(1) > nav > div > button",
+    "course-spanish": "#root > div:nth-of-type(1) > header > div:nth-of-type(3) > nav > div > ul > li:nth-of-type(4) > a"
+  },
+  "cases": [
+    {
+      "id": "duo-get-started",
+      "op": "click",
+      "sentence": "click Get started",
+      "gold": ["get-started-top", "get-started-bottom"],
+      "tags": ["exact-label", "duplicate-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "duo-have-account",
+      "op": "click",
+      "sentence": "click I already have an account",
+      "gold": ["have-account"],
+      "tags": ["exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "duo-login-paraphrase",
+      "op": "click",
+      "sentence": "click the log in button",
+      "gold": ["have-account"],
+      "tags": ["paraphrase", "invisible-to-sedum"]
+    },
+    {
+      "id": "duo-site-language",
+      "op": "click",
+      "sentence": "open the site language menu",
+      "gold": ["site-language"],
+      "tags": ["paraphrase", "invisible-to-sedum"]
+    },
+    {
+      "id": "duo-spanish",
+      "op": "click",
+      "sentence": "click Spanish in the course bar",
+      "gold": ["course-spanish"],
+      "tags": ["exact-label", "region", "invisible-to-sedum"]
+    },
+    {
+      "id": "duo-google-absent",
+      "op": "click",
+      "sentence": "click Continue with Google",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

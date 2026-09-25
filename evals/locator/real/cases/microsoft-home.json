@@ -1,0 +1,125 @@
+{
+  "site": "microsoft-home",
+  "targets": {
+    "logo": "a[aria-label=\"Microsoft\"]",
+    "search": "button[aria-label=\"Search or ask a question\"]",
+    "cart": "a[aria-label=\"Cart\"]",
+    "all-microsoft": "html > body > div:nth-of-type(2) > div > div:nth-of-type(1) > uhf-header > header > div > uhf-actions > uhf-global-nav > uhf-global-nav-desktop > nav > uhf-dropdown > uhf-dropdown-desktop > button",
+    "explore-surface-button": "#action-ocd8b8",
+    "explore-surface-link": "a[aria-label=\"Explore more Surface.\"]",
+    "preorder-surface-pro": "a[aria-label=\"Pre-order Surface Pro.\"]",
+    "preorder-laptop-business": "a[aria-label=\"Pre-order Surface Laptop for Business.\"]",
+    "ask-ai": "input[aria-label=\"Ask a question—get help from AI\"]",
+    "no-thanks": "#storeassistantroot > div > div > div:nth-of-type(2) > div > button:nth-of-type(2)",
+    "carousel-next": "#carousel-ocd2bc >>> store-button[aria-label=\"Next slide\"] >>> button[aria-label=\"Next slide\"]",
+    "shop-xbox-a": "store-secondary-nav-item[aria-label=\"Shop XBOX\"] >>> store-link[aria-label=\"Shop XBOX\"] >>> a",
+    "shop-xbox-link": "store-secondary-nav-item[aria-label=\"Shop XBOX\"] >>> store-link[aria-label=\"Shop XBOX\"]"
+  },
+  "cases": [
+    {
+      "id": "ms-logo",
+      "op": "click",
+      "sentence": "click the Microsoft logo",
+      "gold": ["logo"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ms-search",
+      "op": "click",
+      "sentence": "click the magnifying glass icon in the header",
+      "gold": ["search"],
+      "tags": ["icon", "aria-label", "search"]
+    },
+    {
+      "id": "ms-cart",
+      "op": "click",
+      "sentence": "click the shopping cart icon",
+      "gold": ["cart"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ms-all-microsoft",
+      "op": "click",
+      "sentence": "open the All Microsoft menu",
+      "gold": ["all-microsoft"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "ms-explore-surface",
+      "op": "click",
+      "sentence": "click Explore Surface",
+      "gold": ["explore-surface-button", "explore-surface-link"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ms-preorder-pro",
+      "op": "click",
+      "sentence": "click Pre-order Surface Pro",
+      "gold": ["preorder-surface-pro"],
+      "tags": ["exact-label", "substring-trap", "repeated-group"]
+    },
+    {
+      "id": "ms-preorder-laptop-business",
+      "op": "click",
+      "sentence": "click the pre-order button in the Work anywhere section",
+      "gold": ["preorder-laptop-business"],
+      "tags": ["container", "repeated-group", "indirect"]
+    },
+    {
+      "id": "ms-ask-ai",
+      "op": "fill",
+      "sentence": "type {{question}} in the AI help box",
+      "gold": ["ask-ai"],
+      "tags": ["paraphrase", "form-field", "aria-label"]
+    },
+    {
+      "id": "ms-no-thanks",
+      "op": "click",
+      "sentence": "dismiss the Store Assistant popup with No thanks",
+      "gold": ["no-thanks"],
+      "tags": ["overlay", "exact-label"]
+    },
+    {
+      "id": "ms-carousel-next",
+      "op": "click",
+      "sentence": "click the next arrow on the Surface Mouse carousel",
+      "gold": ["carousel-next"],
+      "tags": ["icon", "container", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "ms-next-unscoped",
+      "op": "click",
+      "sentence": "click Next slide",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "shadow-dom"]
+    },
+    {
+      "id": "ms-shop-xbox",
+      "op": "click",
+      "sentence": "click Shop XBOX in the quick links row",
+      "gold": ["shop-xbox-a", "shop-xbox-link"],
+      "tags": ["exact-label", "region", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "ms-shop-now-unscoped",
+      "op": "click",
+      "sentence": "click Shop now",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "ms-cookies-absent",
+      "op": "click",
+      "sentence": "click Accept on the cookie banner",
+      "gold": "none",
+      "tags": ["absent", "cookie-banner"]
+    },
+    {
+      "id": "ms-edge-absent",
+      "op": "click",
+      "sentence": "click Microsoft Edge in the header",
+      "gold": "none",
+      "tags": ["absent", "nav"]
+    }
+  ]
+}
