@@ -1,0 +1,59 @@
+{
+  "site": "saucedemo-login",
+  "targets": {
+    "username": "#user-name",
+    "password": "#password",
+    "login": "#login-button"
+  },
+  "cases": [
+    {
+      "id": "sauce-username",
+      "op": "fill",
+      "sentence": "type {{username}} in the Username field",
+      "gold": ["username"],
+      "tags": ["placeholder-name", "form-field"]
+    },
+    {
+      "id": "sauce-password",
+      "op": "fill",
+      "sentence": "enter {{password}} into the password box",
+      "gold": ["password"],
+      "tags": ["placeholder-name", "paraphrase", "form-field"]
+    },
+    {
+      "id": "sauce-login",
+      "op": "click",
+      "sentence": "click the Login button",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "sauce-signin-paraphrase",
+      "op": "click",
+      "sentence": "click Sign in",
+      "gold": ["login"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "sauce-submit-form",
+      "op": "click",
+      "sentence": "submit the login form",
+      "gold": ["login"],
+      "tags": ["paraphrase", "indirect"]
+    },
+    {
+      "id": "sauce-forgot-absent",
+      "op": "click",
+      "sentence": "click the Forgot password? link",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "sauce-remember-absent",
+      "op": "click",
+      "sentence": "check Remember me",
+      "gold": "none",
+      "tags": ["absent", "checkbox"]
+    }
+  ]
+}

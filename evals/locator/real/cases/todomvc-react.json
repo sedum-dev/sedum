@@ -1,0 +1,91 @@
+{
+  "site": "todomvc-react",
+  "targets": {
+    "new-todo": "input[data-testid=\"text-input\"]",
+    "react-source": "html > body > aside > header > span > a:nth-of-type(1)",
+    "ts-demo": "html > body > aside > header > span > a:nth-of-type(2)",
+    "ts-source": "html > body > aside > header > span > a:nth-of-type(3)",
+    "quick-start": "html > body > aside > ul:nth-of-type(1) > li:nth-of-type(1) > a",
+    "stackoverflow": "html > body > aside > ul:nth-of-type(2) > li > a",
+    "footer-todomvc": "html > body > footer > p:nth-of-type(3) > a"
+  },
+  "cases": [
+    {
+      "id": "todomvc-new-todo",
+      "op": "fill",
+      "sentence": "type {{todo}} in the What needs to be done? field",
+      "gold": ["new-todo"],
+      "tags": ["placeholder-name", "form-field"]
+    },
+    {
+      "id": "todomvc-new-todo-paraphrase",
+      "op": "fill",
+      "sentence": "enter {{todo}} into the new todo input",
+      "gold": ["new-todo"],
+      "tags": ["aria-label", "paraphrase"]
+    },
+    {
+      "id": "todomvc-ts-source",
+      "op": "click",
+      "sentence": "click the Source link for TypeScript + React",
+      "gold": ["ts-source"],
+      "tags": ["container", "duplicate-name"]
+    },
+    {
+      "id": "todomvc-react-source",
+      "op": "click",
+      "sentence": "click the first Source link in the sidebar",
+      "gold": ["react-source"],
+      "tags": ["ordinal", "duplicate-name"]
+    },
+    {
+      "id": "todomvc-source-unscoped",
+      "op": "click",
+      "sentence": "click Source",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "todomvc-demo",
+      "op": "click",
+      "sentence": "click Demo",
+      "gold": ["ts-demo"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "todomvc-quick-start",
+      "op": "click",
+      "sentence": "click Quick Start under Official Resources",
+      "gold": ["quick-start"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "todomvc-stackoverflow",
+      "op": "click",
+      "sentence": "open the Stack Overflow community link",
+      "gold": ["stackoverflow"],
+      "tags": ["paraphrase", "region"]
+    },
+    {
+      "id": "todomvc-footer",
+      "op": "click",
+      "sentence": "click TodoMVC in the footer",
+      "gold": ["footer-todomvc"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "todomvc-clear-completed-absent",
+      "op": "click",
+      "sentence": "click Clear completed",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "todomvc-active-filter-absent",
+      "op": "click",
+      "sentence": "click the Active filter",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}
