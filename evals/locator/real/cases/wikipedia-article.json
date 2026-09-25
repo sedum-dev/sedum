@@ -6,7 +6,12 @@
     "talk": "#ca-talk > a",
     "history": "#ca-history > a",
     "login": "#pt-login-2 > a",
-    "babbage-first": "#mwGQ"
+    "babbage-first": "#mwGQ",
+    "toc-work-toggle": "#toc-Work > button",
+    "theme-dark": "#skin-client-pref-skin-theme-value-night",
+    "languages": "#p-lang-btn-checkbox",
+    "infobox-marylebone": "#mwAQ > table > tbody > tr:nth-of-type(4) > td > div > a",
+    "hide-contents": "button[aria-label=\"Hide Contents\"]"
   },
   "cases": [
     {
@@ -55,6 +60,62 @@
       "id": "wp-edit-absent",
       "op": "click",
       "sentence": "click the Print this page button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "wp-toc-expand-work",
+      "op": "click",
+      "sentence": "expand the Work subsection in the table of contents",
+      "gold": ["toc-work-toggle"],
+      "tags": ["aria-label", "paraphrase", "region"]
+    },
+    {
+      "id": "wp-theme-dark",
+      "op": "click",
+      "sentence": "select the Dark color option under Appearance",
+      "gold": ["theme-dark"],
+      "tags": ["radio", "region", "invisible-to-sedum"]
+    },
+    {
+      "id": "wp-languages",
+      "op": "click",
+      "sentence": "click the 112 languages button",
+      "gold": ["languages"],
+      "tags": ["exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "wp-lord-byron-unscoped",
+      "op": "click",
+      "sentence": "click the Lord Byron link",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "in-text-link"]
+    },
+    {
+      "id": "wp-infobox-marylebone",
+      "op": "click",
+      "sentence": "click Marylebone in the infobox",
+      "gold": ["infobox-marylebone"],
+      "tags": ["container", "in-text-link"]
+    },
+    {
+      "id": "wp-hide-contents",
+      "op": "click",
+      "sentence": "hide the Contents sidebar",
+      "gold": ["hide-contents"],
+      "tags": ["paraphrase", "region", "duplicate-name"]
+    },
+    {
+      "id": "wp-hide-unscoped",
+      "op": "click",
+      "sentence": "click the hide button",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "wp-pdf-absent",
+      "op": "click",
+      "sentence": "click the Download as PDF link",
       "gold": "none",
       "tags": ["absent"]
     }

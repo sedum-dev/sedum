@@ -1,0 +1,125 @@
+{
+  "site": "github-repo",
+  "targets": {
+    "star": "a[aria-label=\"You must be signed in to star a repository\"]",
+    "issues": "#issues-tab",
+    "goto-file": "input[aria-label=\"Go to file\"]",
+    "code-button": "#_R_3idahlik5_",
+    "code-tab": "#code-tab",
+    "branch": "#ref-picker-repos-header-ref-selector",
+    "readme-file": "#folder-row-18 > td:nth-of-type(2) > div > div > div > div > a",
+    "tests-commit": "#folder-row-7 > td:nth-of-type(3) > div > div > a:nth-of-type(1)",
+    "topic-firefox": "#repos-split-pane-content > div > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(2) > a:nth-of-type(7)",
+    "coc-tab": "#repos-split-pane-content > div > div > div > div:nth-of-type(1) > div > div > div:nth-of-type(3) > div:nth-of-type(2) > div > div:nth-of-type(1) > nav > ul > li:nth-of-type(3) > a",
+    "coc-sidebar": "#repos-split-pane-content > div > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(5) > a",
+    "search": "button[aria-label=\"Search or jump to, type / to search\"]",
+    "commit-avatar": "a[data-testid=\"avatar-icon-link\"]"
+  },
+  "cases": [
+    {
+      "id": "gh-star",
+      "op": "click",
+      "sentence": "star the repository",
+      "gold": ["star"],
+      "tags": ["paraphrase", "aria-label"]
+    },
+    {
+      "id": "gh-code-unscoped",
+      "op": "click",
+      "sentence": "click Code",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "gh-issues",
+      "op": "click",
+      "sentence": "open the Issues tab",
+      "gold": ["issues"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "gh-goto-file",
+      "op": "fill",
+      "sentence": "type {{filename}} in the Go to file box",
+      "gold": ["goto-file"],
+      "tags": ["placeholder-name", "combobox"]
+    },
+    {
+      "id": "gh-code-button",
+      "op": "click",
+      "sentence": "click the green Code button",
+      "gold": ["code-button"],
+      "tags": ["duplicate-name", "indirect"]
+    },
+    {
+      "id": "gh-code-tab",
+      "op": "click",
+      "sentence": "click the Code tab",
+      "gold": ["code-tab"],
+      "tags": ["tab", "duplicate-name"]
+    },
+    {
+      "id": "gh-branch",
+      "op": "click",
+      "sentence": "open the branch selector",
+      "gold": ["branch"],
+      "tags": ["paraphrase", "combobox"]
+    },
+    {
+      "id": "gh-readme-file",
+      "op": "click",
+      "sentence": "click README.md in the file list",
+      "gold": ["readme-file"],
+      "tags": ["table-row", "exact-label"]
+    },
+    {
+      "id": "gh-tests-commit",
+      "op": "click",
+      "sentence": "click the latest commit message for the tests folder",
+      "gold": ["tests-commit"],
+      "tags": ["table-row", "container", "duplicate-name"]
+    },
+    {
+      "id": "gh-topic-firefox",
+      "op": "click",
+      "sentence": "click the firefox topic",
+      "gold": ["topic-firefox"],
+      "tags": ["exact-label", "repeated-group"]
+    },
+    {
+      "id": "gh-code-of-conduct",
+      "op": "click",
+      "sentence": "click Code of conduct",
+      "gold": ["coc-tab", "coc-sidebar"],
+      "tags": ["duplicate-name", "near-duplicate-name"]
+    },
+    {
+      "id": "gh-search",
+      "op": "click",
+      "sentence": "click the search button in the header",
+      "gold": ["search"],
+      "tags": ["icon", "aria-label", "search"]
+    },
+    {
+      "id": "gh-commit-avatar",
+      "op": "click",
+      "sentence": "click the avatar of the latest commit author",
+      "gold": ["commit-avatar"],
+      "tags": ["icon", "indirect", "invisible-to-sedum"]
+    },
+    {
+      "id": "gh-wiki-absent",
+      "op": "click",
+      "sentence": "click the Wiki tab",
+      "gold": "none",
+      "tags": ["absent", "tab"]
+    },
+    {
+      "id": "gh-sponsor-absent",
+      "op": "click",
+      "sentence": "click the Sponsor button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

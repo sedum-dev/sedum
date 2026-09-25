@@ -1,0 +1,125 @@
+{
+  "site": "stripe-docs-checkout",
+  "targets": {
+    "search": "#react-aria-\\:R9cp4miq\\:",
+    "ask-ai": "a[data-testid=\"StripeAssistant--Header-AskAI\"]",
+    "tab-payments": "#root > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div > div:nth-of-type(2) > div > div > a",
+    "crumb-home": "#root > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div > div > div > nav > ol > li:nth-of-type(1) > a",
+    "copy-llm": "#content > div:nth-of-type(2) > div > button:nth-of-type(1)",
+    "markdown": "#content > div:nth-of-type(2) > div > button:nth-of-type(2)",
+    "side-overview-build": "#root > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(1) > div > div:nth-of-type(1) > div > div > div:nth-of-type(3) > div > div > ul > div:nth-of-type(1) > a",
+    "embedded-form-card": "#content > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(2) > p > a",
+    "embedded-form-col": "#content > div:nth-of-type(3) > div:nth-of-type(3) > div > table > thead > tr > th:nth-of-type(3) > a",
+    "sessions-embedded": "#content > div:nth-of-type(3) > div:nth-of-type(3) > div > table > tbody > tr:nth-of-type(1) > td:nth-of-type(3) > a",
+    "collapse-sidebar": "#root > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(1) > a",
+    "feedback-yes": "#root > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div > div > div > div > div > footer > div:nth-of-type(1) > div > div > div > div > div > a:nth-of-type(1)",
+    "language": "#react-aria-\\:Rklkmiq\\:"
+  },
+  "cases": [
+    {
+      "id": "st-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the docs search box",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "st-ask-ai",
+      "op": "click",
+      "sentence": "click Ask AI",
+      "gold": ["ask-ai"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "st-copy-code-absent",
+      "op": "click",
+      "sentence": "click the Copy button on the code sample",
+      "gold": "none",
+      "tags": ["absent", "icon"]
+    },
+    {
+      "id": "st-tab-payments",
+      "op": "click",
+      "sentence": "click the Payments tab in the top navigation",
+      "gold": ["tab-payments"],
+      "tags": ["tab", "region", "duplicate-name"]
+    },
+    {
+      "id": "st-crumb-home",
+      "op": "click",
+      "sentence": "click Home in the breadcrumb",
+      "gold": ["crumb-home"],
+      "tags": ["region", "nav"]
+    },
+    {
+      "id": "st-copy-llm",
+      "op": "click",
+      "sentence": "click Copy for LLM",
+      "gold": ["copy-llm"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "st-markdown",
+      "op": "click",
+      "sentence": "view this page as Markdown",
+      "gold": ["markdown"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "st-side-overview-build",
+      "op": "click",
+      "sentence": "click the Overview link under Build a payments page in the sidebar",
+      "gold": ["side-overview-build"],
+      "tags": ["container", "duplicate-name", "region"]
+    },
+    {
+      "id": "st-embedded-form",
+      "op": "click",
+      "sentence": "click Embedded form",
+      "gold": ["embedded-form-card", "embedded-form-col"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "st-sessions-embedded",
+      "op": "click",
+      "sentence": "click Checkout Sessions in the Embedded form column of the comparison table",
+      "gold": ["sessions-embedded"],
+      "tags": ["table-row", "container", "repeated-group"]
+    },
+    {
+      "id": "st-collapse-sidebar",
+      "op": "click",
+      "sentence": "collapse the sidebar",
+      "gold": ["collapse-sidebar"],
+      "tags": ["icon", "paraphrase", "invisible-to-sedum"]
+    },
+    {
+      "id": "st-feedback-yes",
+      "op": "click",
+      "sentence": "answer Yes to Was this page helpful?",
+      "gold": ["feedback-yes"],
+      "tags": ["exact-label", "indirect"]
+    },
+    {
+      "id": "st-language",
+      "op": "click",
+      "sentence": "change the language setting in the sidebar",
+      "gold": ["language"],
+      "tags": ["aria-label", "paraphrase"]
+    },
+    {
+      "id": "st-overview-unscoped",
+      "op": "click",
+      "sentence": "click Overview in the sidebar",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "region"]
+    },
+    {
+      "id": "st-pricing-absent",
+      "op": "click",
+      "sentence": "click the Pricing link in the header",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "site": "mdn-button",
+  "targets": {
+    "toc-attributes": "#content > aside > nav > ul > li:nth-of-type(2) > a",
+    "toc-examples": "#content > aside > nav > ul > li:nth-of-type(5) > a",
+    "theme": "html > body > header > div > mdn-color-theme >>> button[aria-label=\"Switch color theme\"]",
+    "breadcrumb-elements": "html > body > header > div > ol > li:nth-of-type(4) > a",
+    "nav-css": "html > body > header > nav > div:nth-of-type(3) > div:nth-of-type(1) > nav > div:nth-of-type(2) > mdn-dropdown > button",
+    "blog": "html > body > header > nav > div:nth-of-type(3) > div:nth-of-type(1) > nav > div:nth-of-type(9) > a",
+    "demo-reset": "interactive-example[name=\"HTML Demo: &lt;button&gt;\"] >>> #reset >>> button",
+    "demo-css-tab": "interactive-example[name=\"HTML Demo: &lt;button&gt;\"] >>> #css",
+    "sidebar-filter": "#main-sidebar > nav > div:nth-of-type(1) > mdn-sidebar-filter >>> #input",
+    "intro-form": "#content > div:nth-of-type(1) > section > p:nth-of-type(1) > a:nth-of-type(2)",
+    "github-page": "#content > div:nth-of-type(2) > section:nth-of-type(17) > div > div:nth-of-type(2) > a:nth-of-type(1)"
+  },
+  "cases": [
+    {
+      "id": "mdn-toc-attributes",
+      "op": "click",
+      "sentence": "click Attributes in the In this article sidebar",
+      "gold": ["toc-attributes"],
+      "tags": ["exact-label", "region", "duplicate-name"]
+    },
+    {
+      "id": "mdn-attributes-unscoped",
+      "op": "click",
+      "sentence": "click the Attributes link",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "mdn-toc-examples",
+      "op": "click",
+      "sentence": "jump to the Examples section using the page contents",
+      "gold": ["toc-examples"],
+      "tags": ["paraphrase", "region"]
+    },
+    {
+      "id": "mdn-theme",
+      "op": "click",
+      "sentence": "click the Theme button",
+      "gold": ["theme"],
+      "tags": ["exact-label", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "mdn-breadcrumb-elements",
+      "op": "click",
+      "sentence": "click Elements in the breadcrumb",
+      "gold": ["breadcrumb-elements"],
+      "tags": ["region", "duplicate-name", "nav"]
+    },
+    {
+      "id": "mdn-nav-css",
+      "op": "click",
+      "sentence": "open the CSS menu in the top navigation",
+      "gold": ["nav-css"],
+      "tags": ["region", "duplicate-name", "nav"]
+    },
+    {
+      "id": "mdn-blog",
+      "op": "click",
+      "sentence": "click Blog",
+      "gold": ["blog"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "mdn-demo-reset",
+      "op": "click",
+      "sentence": "click the Reset button in the Try it demo",
+      "gold": ["demo-reset"],
+      "tags": ["container", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "mdn-demo-css-tab",
+      "op": "click",
+      "sentence": "click the CSS tab in the HTML demo",
+      "gold": ["demo-css-tab"],
+      "tags": [
+        "tab",
+        "container",
+        "duplicate-name",
+        "shadow-dom",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "mdn-sidebar-filter",
+      "op": "fill",
+      "sentence": "type {{query}} in the sidebar Filter field",
+      "gold": ["sidebar-filter"],
+      "tags": ["placeholder-name", "region", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "mdn-intro-form",
+      "op": "click",
+      "sentence": "click the form link in the introduction",
+      "gold": ["intro-form"],
+      "tags": ["in-text-link", "container", "duplicate-name"]
+    },
+    {
+      "id": "mdn-github-page",
+      "op": "click",
+      "sentence": "click View this page on GitHub",
+      "gold": ["github-page"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "mdn-copy-unscoped",
+      "op": "click",
+      "sentence": "click the copy button on the code example",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "icon"]
+    },
+    {
+      "id": "mdn-print-absent",
+      "op": "click",
+      "sentence": "click the Print this page button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}
