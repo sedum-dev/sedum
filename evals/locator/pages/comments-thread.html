@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Discussion: Should we switch to a four-day week?</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0 auto;
+        max-width: 760px;
+        padding: 1rem;
+      }
+      .comment {
+        border-left: 3px solid #ddd;
+        padding: 0.5rem 0.75rem;
+        margin: 0.75rem 0;
+      }
+      .replies {
+        margin-left: 1.5rem;
+      }
+      .meta {
+        font-size: 13px;
+        color: #555;
+      }
+      .actions button {
+        background: none;
+        border: 0;
+        color: #246;
+        cursor: pointer;
+        padding: 0 0.4rem 0 0;
+      }
+      textarea {
+        width: 100%;
+        min-height: 5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/forum">Community forum</a> &rsaquo;
+      <a href="/forum/workplace">Workplace</a>
+    </header>
+    <h1>Should we switch to a four-day week?</h1>
+    <p class="meta">
+      Started by <a href="/u/kbrandt">Kara Brandt</a> &middot; 7 comments
+    </p>
+
+    <form class="new-comment" onsubmit="return false;">
+      <label for="new-comment">Add a comment</label>
+      <textarea
+        id="new-comment"
+        placeholder="Share your thoughts…"
+        data-eval-gold="new-comment"
+      ></textarea>
+      <button type="submit" data-eval-gold="post">Post comment</button>
+      <button type="button" data-eval-gold="cancel">Cancel</button>
+    </form>
+
+    <p>
+      <label
+        >Sort comments
+        <select data-eval-gold="sort">
+          <option>Top</option>
+          <option>Newest</option>
+        </select></label
+      >
+    </p>
+
+    <section aria-label="Comments">
+      <article class="comment" id="c1">
+        <p class="meta">
+          <a href="/u/mlopez" data-eval-gold="author-c1">Maria Lopez</a>
+          &middot;
+          <a href="#c1" data-eval-gold="time-c1">5 hours ago</a>
+        </p>
+        <p>
+          We tried it for a quarter last year. Output held steady and sick days
+          dropped noticeably.
+        </p>
+        <div class="actions">
+          <button data-eval-gold="reply-c1">Reply</button>
+          <button data-eval-gold="like-c1">Like (42)</button>
+          <button data-eval-gold="report-c1">Report</button>
+        </div>
+        <div class="replies">
+          <article class="comment" id="c2">
+            <p class="meta">
+              <a href="/u/dpatel" data-eval-gold="author-c2">Dev Patel</a>
+              &middot;
+              <a href="#c2" data-eval-gold="time-c2">4 hours ago</a>
+            </p>
+            <p>Did customer support coverage suffer on the fifth day?</p>
+            <div class="actions">
+              <button data-eval-gold="reply-c2">Reply</button>
+              <button data-eval-gold="like-c2">Like (8)</button>
+              <button data-eval-gold="report-c2">Report</button>
+            </div>
+          </article>
+          <article class="comment" id="c3">
+            <p class="meta">
+              <a href="/u/mlopez" data-eval-gold="author-c3">Maria Lopez</a>
+              &middot;
+              <a href="#c3" data-eval-gold="time-c3">4 hours ago</a>
+            </p>
+            <p>
+              @Dev Patel we staggered days off, so support was covered all week.
+            </p>
+            <div class="actions">
+              <button data-eval-gold="reply-c3">Reply</button>
+              <button data-eval-gold="like-c3">Like (15)</button>
+              <button data-eval-gold="report-c3">Report</button>
+            </div>
+          </article>
+          <button data-eval-gold="load-more">Load more replies (6)</button>
+        </div>
+      </article>
+
+      <article class="comment" id="c4">
+        <p class="meta">
+          <a href="/u/soneil" data-eval-gold="author-c4">Sam O'Neil</a>
+          &middot;
+          <a href="#c4" data-eval-gold="time-c4">3 hours ago</a>
+        </p>
+        <p>
+          Sounds great for office roles, but what about the warehouse shifts?
+        </p>
+        <div class="actions">
+          <button data-eval-gold="reply-c4">Reply</button>
+          <button data-eval-gold="like-c4">Like (23)</button>
+          <button data-eval-gold="report-c4">Report</button>
+        </div>
+        <div class="replies">
+          <article class="comment" id="c5">
+            <p class="meta">
+              <a href="/u/pnair" data-eval-gold="author-c5">Priya Nair</a>
+              &middot;
+              <a href="#c5" data-eval-gold="time-c5">2 hours ago</a>
+            </p>
+            <p>
+              Warehouse could do four ten-hour shifts. Some sites already do.
+            </p>
+            <div class="actions">
+              <button data-eval-gold="reply-c5">Reply</button>
+              <button data-eval-gold="like-c5">Like (4)</button>
+              <button data-eval-gold="report-c5">Report</button>
+            </div>
+          </article>
+        </div>
+      </article>
+
+      <article class="comment" id="c6">
+        <p class="meta">
+          <a href="/u/tbecker" data-eval-gold="author-c6">Tom Becker</a>
+          &middot;
+          <a href="#c6" data-eval-gold="time-c6">1 hour ago</a>
+        </p>
+        <p>Ten-hour days would wreck my childcare schedule, honestly.</p>
+        <div class="actions">
+          <button data-eval-gold="reply-c6">Reply</button>
+          <button data-eval-gold="like-c6">Like (11)</button>
+          <button data-eval-gold="report-c6">Report</button>
+        </div>
+      </article>
+
+      <article class="comment" id="c7">
+        <p class="meta">
+          <a href="/u/atanaka" data-eval-gold="author-c7">Aiko Tanaka</a>
+          &middot;
+          <a href="#c7" data-eval-gold="time-c7">20 minutes ago</a>
+        </p>
+        <p>Could we pilot it in one team first and publish the results?</p>
+        <div class="actions">
+          <button data-eval-gold="reply-c7">Reply</button>
+          <button data-eval-gold="like-c7">Like (2)</button>
+          <button data-eval-gold="report-c7">Report</button>
+        </div>
+      </article>
+    </section>
+
+    <footer>
+      <a href="/forum/guidelines">Community guidelines</a> &middot;
+      <a href="/help">Help</a>
+    </footer>
+  </body>
+</html>

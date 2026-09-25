@@ -1,0 +1,117 @@
+{
+  "page": "comments-thread.html",
+  "cases": [
+    {
+      "id": "thread-reply-sam",
+      "op": "click",
+      "sentence": "click Reply on Sam O'Neil's comment",
+      "gold": ["reply-c4"],
+      "tags": ["repeated-group", "container", "author"]
+    },
+    {
+      "id": "thread-like-third-top",
+      "op": "click",
+      "sentence": "click Like on the third top-level comment",
+      "gold": ["like-c6"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "thread-reply-maria-unscoped",
+      "op": "click",
+      "sentence": "click Reply on Maria's comment",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "author", "underspecified"]
+    },
+    {
+      "id": "thread-reply-maria-nested",
+      "op": "click",
+      "sentence": "click Reply on Maria Lopez's answer to Dev",
+      "gold": ["reply-c3"],
+      "tags": ["repeated-group", "container", "author"]
+    },
+    {
+      "id": "thread-report-priya",
+      "op": "click",
+      "sentence": "report Priya's reply",
+      "gold": ["report-c5"],
+      "tags": ["repeated-group", "container", "author", "paraphrase"]
+    },
+    {
+      "id": "thread-like-42",
+      "op": "click",
+      "sentence": "click the Like button that shows 42 likes",
+      "gold": ["like-c1"],
+      "tags": ["repeated-group", "state", "indirect"]
+    },
+    {
+      "id": "thread-like-fewest",
+      "op": "click",
+      "sentence": "click Like on the comment with the fewest likes",
+      "gold": ["like-c7"],
+      "tags": ["repeated-group", "numeric"]
+    },
+    {
+      "id": "thread-load-more",
+      "op": "click",
+      "sentence": "click Load more replies",
+      "gold": ["load-more"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "thread-post",
+      "op": "click",
+      "sentence": "click Post comment",
+      "gold": ["post"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "thread-new-comment",
+      "op": "fill",
+      "sentence": "type {{comment}} in the new comment box",
+      "gold": ["new-comment"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "thread-sort",
+      "op": "click",
+      "sentence": "click the sort dropdown",
+      "gold": ["sort"],
+      "tags": ["select", "sort"]
+    },
+    {
+      "id": "thread-author-tom",
+      "op": "click",
+      "sentence": "click Tom Becker's name",
+      "gold": ["author-c6"],
+      "tags": ["author", "repeated-group"]
+    },
+    {
+      "id": "thread-time-aiko",
+      "op": "click",
+      "sentence": "click the timestamp on Aiko's comment",
+      "gold": ["time-c7"],
+      "tags": ["repeated-group", "container", "author"]
+    },
+    {
+      "id": "thread-reply-unscoped",
+      "op": "click",
+      "sentence": "click Reply",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "thread-edit-absent",
+      "op": "click",
+      "sentence": "click Edit on my comment",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "thread-delete-dev-absent",
+      "op": "click",
+      "sentence": "click Delete on Dev's reply",
+      "gold": "none",
+      "tags": ["absent", "author"]
+    }
+  ]
+}

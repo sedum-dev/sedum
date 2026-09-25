@@ -1,0 +1,117 @@
+{
+  "page": "error-form.html",
+  "cases": [
+    {
+      "id": "errform-summary-email",
+      "op": "click",
+      "sentence": "click the Email is required link",
+      "gold": ["summary-email"],
+      "tags": ["exact-label", "validation"]
+    },
+    {
+      "id": "errform-summary-password",
+      "op": "click",
+      "sentence": "click the password length error in the summary",
+      "gold": ["summary-password"],
+      "tags": ["validation", "paraphrase", "region"]
+    },
+    {
+      "id": "errform-email-error-field",
+      "op": "fill",
+      "sentence": "type {{email}} in the field with the email error",
+      "gold": ["email"],
+      "tags": ["validation", "state"]
+    },
+    {
+      "id": "errform-password",
+      "op": "fill",
+      "sentence": "type {{password}} in the password field",
+      "gold": ["password"],
+      "tags": ["near-duplicate-name", "substring-trap"]
+    },
+    {
+      "id": "errform-confirm",
+      "op": "fill",
+      "sentence": "type {{password}} in the confirm password field",
+      "gold": ["confirm"],
+      "tags": ["near-duplicate-name", "exact-label"]
+    },
+    {
+      "id": "errform-show-password",
+      "op": "click",
+      "sentence": "click Show password",
+      "gold": ["show-password"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "errform-resend",
+      "op": "click",
+      "sentence": "click Resend verification code",
+      "gold": ["resend"],
+      "tags": ["disabled", "exact-label"]
+    },
+    {
+      "id": "errform-submit",
+      "op": "click",
+      "sentence": "submit the registration form",
+      "gold": ["create"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "errform-sign-in",
+      "op": "click",
+      "sentence": "click the sign in link",
+      "gold": ["sign-in"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "errform-terms",
+      "op": "click",
+      "sentence": "check the terms checkbox",
+      "gold": ["terms"],
+      "tags": ["checkbox", "paraphrase"]
+    },
+    {
+      "id": "errform-first-invalid",
+      "op": "fill",
+      "sentence": "type {{email}} in the first invalid field",
+      "gold": ["email"],
+      "tags": ["validation", "ordinal", "state"]
+    },
+    {
+      "id": "errform-code",
+      "op": "fill",
+      "sentence": "type {{code}} in the verification code field",
+      "gold": ["code"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "errform-required-unscoped",
+      "op": "fill",
+      "sentence": "type {{value}} in the required field",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "validation"]
+    },
+    {
+      "id": "errform-username-absent",
+      "op": "fill",
+      "sentence": "type {{username}} in the username field",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "errform-name-error-absent",
+      "op": "click",
+      "sentence": "click the Name is required link",
+      "gold": "none",
+      "tags": ["absent", "validation"]
+    },
+    {
+      "id": "errform-show-confirm-absent",
+      "op": "click",
+      "sentence": "click Show password for the confirm password field",
+      "gold": "none",
+      "tags": ["absent", "near-duplicate-name"]
+    }
+  ]
+}

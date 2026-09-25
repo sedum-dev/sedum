@@ -1,0 +1,117 @@
+{
+  "page": "news-article.html",
+  "cases": [
+    {
+      "id": "article-who-second-para",
+      "op": "click",
+      "sentence": "click the link to the WHO report in the second paragraph",
+      "gold": ["who-2021"],
+      "tags": ["in-text-link", "ordinal"]
+    },
+    {
+      "id": "article-who-unscoped",
+      "op": "click",
+      "sentence": "click the WHO report link",
+      "gold": "ambiguous",
+      "tags": ["in-text-link", "underspecified"]
+    },
+    {
+      "id": "article-nasa",
+      "op": "click",
+      "sentence": "click the NASA study link",
+      "gold": ["nasa"],
+      "tags": ["in-text-link", "exact-label"]
+    },
+    {
+      "id": "article-author",
+      "op": "click",
+      "sentence": "click the author's name",
+      "gold": ["author"],
+      "tags": ["indirect"]
+    },
+    {
+      "id": "article-share-x",
+      "op": "click",
+      "sentence": "share the article on X",
+      "gold": ["share-x"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "article-copy-link",
+      "op": "click",
+      "sentence": "click the copy link icon",
+      "gold": ["copy-link"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "article-toc-next",
+      "op": "click",
+      "sentence": "click What comes next in the table of contents",
+      "gold": ["toc-3"],
+      "tags": ["region", "exact-label"]
+    },
+    {
+      "id": "article-toc-why",
+      "op": "click",
+      "sentence": "click Why cities are hotter",
+      "gold": ["toc-2"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "article-related-third",
+      "op": "click",
+      "sentence": "click the third related article",
+      "gold": ["related-3"],
+      "tags": ["ordinal", "region"]
+    },
+    {
+      "id": "article-related-barcelona",
+      "op": "click",
+      "sentence": "click the related article about Barcelona",
+      "gold": ["related-4"],
+      "tags": ["region", "near-duplicate-name"]
+    },
+    {
+      "id": "article-nl-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the newsletter email field",
+      "gold": ["nl-email"],
+      "tags": ["region"]
+    },
+    {
+      "id": "article-subscribe-unscoped",
+      "op": "click",
+      "sentence": "click Subscribe",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "article-subscribe-newsletter",
+      "op": "click",
+      "sentence": "click Subscribe in the newsletter box",
+      "gold": ["nl-subscribe"],
+      "tags": ["duplicate-name", "region"]
+    },
+    {
+      "id": "article-pdf",
+      "op": "click",
+      "sentence": "download the full report",
+      "gold": ["pdf"],
+      "tags": ["in-text-link", "paraphrase"]
+    },
+    {
+      "id": "article-linkedin-absent",
+      "op": "click",
+      "sentence": "click Share on LinkedIn",
+      "gold": "none",
+      "tags": ["absent", "icon"]
+    },
+    {
+      "id": "article-print-absent",
+      "op": "click",
+      "sentence": "click the print button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}
