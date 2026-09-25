@@ -1,0 +1,54 @@
+{
+  "page": "editor-toolbar.html",
+  "cases": [
+    {
+      "id": "editor-bold",
+      "op": "click",
+      "sentence": "click the bold button",
+      "gold": ["bold"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "editor-link",
+      "op": "click",
+      "sentence": "click the insert link button",
+      "gold": ["link"],
+      "tags": ["icon", "title-name"]
+    },
+    {
+      "id": "editor-trash",
+      "op": "click",
+      "sentence": "click the trash icon",
+      "gold": ["delete"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "editor-body",
+      "op": "fill",
+      "sentence": "type {{text}} in the draft body",
+      "gold": ["body"],
+      "tags": ["aria-label"]
+    },
+    {
+      "id": "editor-publish",
+      "op": "click",
+      "sentence": "click Publish",
+      "gold": ["publish"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "editor-archive-div",
+      "op": "click",
+      "sentence": "click Archive",
+      "gold": ["archive"],
+      "tags": ["recall", "clickable-div"]
+    },
+    {
+      "id": "editor-underline-absent",
+      "op": "click",
+      "sentence": "click the underline button",
+      "gold": "none",
+      "tags": ["icon", "absent"]
+    }
+  ]
+}

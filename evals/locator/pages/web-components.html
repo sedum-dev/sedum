@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Newsletter</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Weekly digest</h1>
+      <signup-card></signup-card>
+      <iframe
+        title="Payment"
+        style="width: 320px; height: 90px; border: 1px solid #999"
+        srcdoc='<button data-eval-gold="pay">Pay now</button>'
+      ></iframe>
+      <p><a href="/archive" data-eval-gold="archive">Browse the archive</a></p>
+    </main>
+    <script>
+      customElements.define(
+        "signup-card",
+        class extends HTMLElement {
+          connectedCallback() {
+            const root = this.attachShadow({ mode: "open" });
+            root.innerHTML =
+              '<p>Get the digest by email.</p><input placeholder="you@example.com" data-eval-gold="shadow-email"><button data-eval-gold="subscribe">Subscribe</button>';
+          }
+        },
+      );
+    </script>
+  </body>
+</html>

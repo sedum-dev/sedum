@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Project settings</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Project settings</h1>
+      <button>Rename project</button>
+      <button>Delete project</button>
+      <button>Cancel</button>
+    </main>
+    <dialog id="confirm" aria-labelledby="confirm-title">
+      <h2 id="confirm-title">Delete this project?</h2>
+      <p>This permanently removes all deployments.</p>
+      <button data-eval-gold="dialog-cancel">Cancel</button>
+      <button data-eval-gold="dialog-delete">Delete project</button>
+    </dialog>
+    <script>
+      document.getElementById("confirm").showModal();
+    </script>
+  </body>
+</html>

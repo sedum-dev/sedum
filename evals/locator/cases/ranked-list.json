@@ -1,0 +1,47 @@
+{
+  "page": "ranked-list.html",
+  "cases": [
+    {
+      "id": "ranked-first-comments",
+      "op": "click",
+      "sentence": "click the comments link for the first story",
+      "gold": ["comments-1"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "ranked-third-title",
+      "op": "click",
+      "sentence": "click the title of the third story",
+      "gold": ["title-3"],
+      "tags": ["ordinal"]
+    },
+    {
+      "id": "ranked-hide-second",
+      "op": "click",
+      "sentence": "click hide for the second story",
+      "gold": ["hide-2"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "ranked-sqlite-comments",
+      "op": "click",
+      "sentence": "click the comments for the SQLite story",
+      "gold": ["comments-2"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "ranked-gc-title",
+      "op": "click",
+      "sentence": "click the story about garbage collectors",
+      "gold": ["title-3"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "ranked-more",
+      "op": "click",
+      "sentence": "click More to see the next page",
+      "gold": ["more"],
+      "tags": ["exact-label"]
+    }
+  ]
+}

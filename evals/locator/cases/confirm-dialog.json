@@ -1,0 +1,26 @@
+{
+  "page": "confirm-dialog.html",
+  "cases": [
+    {
+      "id": "dialog-confirm",
+      "op": "click",
+      "sentence": "click Delete project in the confirmation dialog",
+      "gold": ["dialog-delete"],
+      "tags": ["modal", "duplicate-name"]
+    },
+    {
+      "id": "dialog-cancel",
+      "op": "click",
+      "sentence": "click Cancel",
+      "gold": ["dialog-cancel"],
+      "tags": ["modal", "duplicate-name"]
+    },
+    {
+      "id": "dialog-rename-behind",
+      "op": "click",
+      "sentence": "click Rename project",
+      "gold": "none",
+      "tags": ["modal", "occluded"]
+    }
+  ]
+}

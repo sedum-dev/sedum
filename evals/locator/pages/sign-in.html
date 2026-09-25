@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create account</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        max-width: 480px;
+        margin: 2rem auto;
+      }
+      label {
+        display: block;
+        margin: 0.5rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Create your account</h1>
+      <button data-eval-gold="google">Sign up with Google</button>
+      <form>
+        <label>Full name <input name="name" data-eval-gold="name" /></label>
+        <label
+          >Email address
+          <input name="email" type="email" data-eval-gold="email"
+        /></label>
+        <label
+          >Confirm email address
+          <input name="email2" type="email" data-eval-gold="email2"
+        /></label>
+        <input
+          name="company"
+          placeholder="Company (optional)"
+          data-eval-gold="company"
+        />
+        <label
+          >Password
+          <input name="password" type="password" data-eval-gold="password"
+        /></label>
+        <button
+          type="button"
+          aria-label="Show password"
+          data-eval-gold="show-password"
+        >
+          👁
+        </button>
+        <label
+          ><input type="checkbox" name="terms" data-eval-gold="terms" /> I agree
+          to the Terms of Service</label
+        >
+        <label
+          ><input type="checkbox" name="news" data-eval-gold="news" /> Send me
+          product news</label
+        >
+        <button type="submit" data-eval-gold="sign-up">Sign up</button>
+      </form>
+      <p>
+        Already have an account?
+        <a href="/login" data-eval-gold="login">Log in</a>
+      </p>
+    </main>
+  </body>
+</html>

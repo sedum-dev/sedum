@@ -1,0 +1,61 @@
+{
+  "page": "trip-search.html",
+  "cases": [
+    {
+      "id": "trip-selector",
+      "op": "click",
+      "sentence": "click the trip type selector showing Round trip",
+      "gold": ["trip"],
+      "tags": ["combobox", "labelledby"]
+    },
+    {
+      "id": "trip-one-way",
+      "op": "click",
+      "sentence": "click the One way option",
+      "gold": ["opt-oneway"],
+      "tags": ["option"]
+    },
+    {
+      "id": "trip-multi",
+      "op": "click",
+      "sentence": "click Multi-city",
+      "gold": ["opt-multi"],
+      "tags": ["option", "exact-label"]
+    },
+    {
+      "id": "trip-to",
+      "op": "fill",
+      "sentence": "type {{city}} in the destination field",
+      "gold": ["to"],
+      "tags": ["paraphrase", "aria-label"]
+    },
+    {
+      "id": "trip-from",
+      "op": "fill",
+      "sentence": "type {{city}} in the Where from field",
+      "gold": ["from"],
+      "tags": ["aria-label"]
+    },
+    {
+      "id": "trip-swap",
+      "op": "click",
+      "sentence": "click the button that swaps origin and destination",
+      "gold": ["swap"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "trip-cabin",
+      "op": "click",
+      "sentence": "click the cabin class selector",
+      "gold": ["cabin"],
+      "tags": ["select"]
+    },
+    {
+      "id": "trip-search-absent",
+      "op": "click",
+      "sentence": "click the Search flights button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

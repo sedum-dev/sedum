@@ -1,0 +1,33 @@
+{
+  "page": "web-components.html",
+  "cases": [
+    {
+      "id": "shadow-subscribe",
+      "op": "click",
+      "sentence": "click the Subscribe button",
+      "gold": ["subscribe"],
+      "tags": ["recall", "shadow-dom"]
+    },
+    {
+      "id": "shadow-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the email field",
+      "gold": ["shadow-email"],
+      "tags": ["recall", "shadow-dom"]
+    },
+    {
+      "id": "iframe-pay",
+      "op": "click",
+      "sentence": "click Pay now",
+      "gold": ["pay"],
+      "tags": ["recall", "iframe"]
+    },
+    {
+      "id": "shadow-archive",
+      "op": "click",
+      "sentence": "click Browse the archive",
+      "gold": ["archive"],
+      "tags": ["exact-label"]
+    }
+  ]
+}

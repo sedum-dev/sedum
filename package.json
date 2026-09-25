@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "fixtures:verify": "node scripts/verify-replies.mjs",
     "fixtures:record": "node scripts/record-replies.mjs",
+    "eval:locator": "node evals/locator/run.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm install --lockfile-only"
   },

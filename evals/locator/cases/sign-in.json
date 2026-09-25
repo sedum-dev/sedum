@@ -1,0 +1,89 @@
+{
+  "page": "sign-in.html",
+  "cases": [
+    {
+      "id": "signup-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the Email address field",
+      "gold": ["email"],
+      "tags": ["near-duplicate-name"]
+    },
+    {
+      "id": "signup-email-confirm",
+      "op": "fill",
+      "sentence": "type {{email}} in the Confirm email address field",
+      "gold": ["email2"],
+      "tags": ["near-duplicate-name"]
+    },
+    {
+      "id": "signup-name",
+      "op": "fill",
+      "sentence": "type {{name}} in the full name field",
+      "gold": ["name"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "signup-company",
+      "op": "fill",
+      "sentence": "type {{company}} in the company field",
+      "gold": ["company"],
+      "tags": ["placeholder-name"]
+    },
+    {
+      "id": "signup-password",
+      "op": "fill",
+      "sentence": "type {{password}} in the password field",
+      "gold": ["password"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "signup-phone-absent",
+      "op": "fill",
+      "sentence": "type {{phone}} in the phone number field",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "signup-submit",
+      "op": "click",
+      "sentence": "click the Sign up button",
+      "gold": ["sign-up"],
+      "tags": ["substring-trap"]
+    },
+    {
+      "id": "signup-google",
+      "op": "click",
+      "sentence": "click Sign up with Google",
+      "gold": ["google"],
+      "tags": ["substring-trap"]
+    },
+    {
+      "id": "signup-github-absent",
+      "op": "click",
+      "sentence": "click Sign up with GitHub",
+      "gold": "none",
+      "tags": ["substring-trap", "absent"]
+    },
+    {
+      "id": "signup-show-password",
+      "op": "click",
+      "sentence": "click the eye icon to reveal the password",
+      "gold": ["show-password"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "signup-terms",
+      "op": "click",
+      "sentence": "click the terms of service checkbox",
+      "gold": ["terms"],
+      "tags": ["checkbox"]
+    },
+    {
+      "id": "signup-login",
+      "op": "click",
+      "sentence": "click the Log in link",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    }
+  ]
+}
