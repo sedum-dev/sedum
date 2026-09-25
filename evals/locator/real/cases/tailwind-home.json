@@ -1,0 +1,124 @@
+{
+  "site": "tailwind-home",
+  "targets": {
+    "logo": "a[aria-label=\"Home\"]",
+    "version": "#headlessui-menu-button-_R_ualudb_",
+    "header-search": "html > body > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > button",
+    "docs": "html > body > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > a:nth-of-type(1)",
+    "blog": "html > body > div:nth-of-type(2) > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > a:nth-of-type(3)",
+    "github": "a[aria-label=\"GitHub repository\"]",
+    "get-started": "html > body > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(6) > div > a",
+    "quick-search": "html > body > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(6) > div > button",
+    "package-json": "html > body > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(6) > div > div > div > div > div > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(1) > button:nth-of-type(3)",
+    "footer-blog": "html > body > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(4) > footer > div:nth-of-type(2) > div:nth-of-type(1) > ul > li:nth-of-type(3) > a",
+    "footer-github": "html > body > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(4) > footer > div:nth-of-type(2) > div:nth-of-type(3) > ul > li:nth-of-type(1) > a",
+    "dark-theme": "#headlessui-radio-_R_7bcludb_"
+  },
+  "cases": [
+    {
+      "id": "twcss-docs",
+      "op": "click",
+      "sentence": "click Docs in the header",
+      "gold": ["docs"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "twcss-quick-search",
+      "op": "click",
+      "sentence": "click the Quick search box",
+      "gold": ["quick-search"],
+      "tags": ["exact-label", "search"]
+    },
+    {
+      "id": "twcss-header-search",
+      "op": "click",
+      "sentence": "click the search button in the top navigation",
+      "gold": ["header-search"],
+      "tags": ["region", "search", "icon"]
+    },
+    {
+      "id": "twcss-open-search",
+      "op": "click",
+      "sentence": "open the search",
+      "gold": ["header-search", "quick-search"],
+      "tags": ["search", "paraphrase", "duplicate-name"]
+    },
+    {
+      "id": "twcss-get-started",
+      "op": "click",
+      "sentence": "click Get started",
+      "gold": ["get-started"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "twcss-logo",
+      "op": "click",
+      "sentence": "click the Tailwind CSS logo",
+      "gold": ["logo"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "twcss-github-icon",
+      "op": "click",
+      "sentence": "click the GitHub icon in the header",
+      "gold": ["github"],
+      "tags": ["icon", "aria-label", "region"]
+    },
+    {
+      "id": "twcss-github-unscoped",
+      "op": "click",
+      "sentence": "click GitHub",
+      "gold": ["github", "footer-github"],
+      "tags": ["duplicate-name"]
+    },
+    {
+      "id": "twcss-version",
+      "op": "click",
+      "sentence": "open the version dropdown",
+      "gold": ["version"],
+      "tags": ["select", "paraphrase", "aria-label"]
+    },
+    {
+      "id": "twcss-blog-unscoped",
+      "op": "click",
+      "sentence": "click Blog",
+      "gold": ["blog", "footer-blog"],
+      "tags": ["duplicate-name", "nav"]
+    },
+    {
+      "id": "twcss-dark-theme",
+      "op": "click",
+      "sentence": "switch to the dark theme in the footer",
+      "gold": ["dark-theme"],
+      "tags": ["radio", "aria-label", "footer"]
+    },
+    {
+      "id": "twcss-sponsor-logo",
+      "op": "click",
+      "sentence": "click the sponsor logo",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "icon"]
+    },
+    {
+      "id": "twcss-package-json",
+      "op": "click",
+      "sentence": "click the package.json tab in the code editor",
+      "gold": ["package-json"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "twcss-signin-absent",
+      "op": "click",
+      "sentence": "click Sign in",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "twcss-pricing-absent",
+      "op": "click",
+      "sentence": "click Pricing in the header",
+      "gold": "none",
+      "tags": ["absent", "nav"]
+    }
+  ]
+}

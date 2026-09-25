@@ -1,0 +1,67 @@
+{
+  "site": "the-internet-login",
+  "targets": {
+    "username": "#username",
+    "password": "#password",
+    "login": "#login > button",
+    "elemental": "#page-footer > div > div > a"
+  },
+  "cases": [
+    {
+      "id": "tinet-username",
+      "op": "fill",
+      "sentence": "type {{username}} in the Username field",
+      "gold": ["username"],
+      "tags": ["exact-label", "form-field"]
+    },
+    {
+      "id": "tinet-password",
+      "op": "fill",
+      "sentence": "type {{password}} in the Password field",
+      "gold": ["password"],
+      "tags": ["exact-label", "form-field"]
+    },
+    {
+      "id": "tinet-login",
+      "op": "click",
+      "sentence": "click Login",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "tinet-signin",
+      "op": "click",
+      "sentence": "sign in to the secure area",
+      "gold": ["login"],
+      "tags": ["paraphrase", "indirect"]
+    },
+    {
+      "id": "tinet-elemental",
+      "op": "click",
+      "sentence": "click the Elemental Selenium link in the footer",
+      "gold": ["elemental"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "tinet-powered-by",
+      "op": "click",
+      "sentence": "click the link after Powered by",
+      "gold": ["elemental"],
+      "tags": ["indirect", "footer"]
+    },
+    {
+      "id": "tinet-logout-absent",
+      "op": "click",
+      "sentence": "click the Logout button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "tinet-register-absent",
+      "op": "click",
+      "sentence": "click Register",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

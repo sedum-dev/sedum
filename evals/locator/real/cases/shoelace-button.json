@@ -1,0 +1,140 @@
+{
+  "site": "shoelace-button",
+  "targets": {
+    "dialog-no-thanks-host": "#wa-dialog > div:nth-of-type(2) > div > div > sl-button:nth-of-type(2)",
+    "dialog-no-thanks": "#wa-dialog > div:nth-of-type(2) > div > div > sl-button:nth-of-type(2) >>> button",
+    "dialog-migrate-host": "#wa-dialog > div:nth-of-type(2) > div > div > sl-button:nth-of-type(1)",
+    "dialog-migrate": "#wa-dialog > div:nth-of-type(2) > div > div > sl-button:nth-of-type(1) >>> a",
+    "github": "#icon-toolbar > a:nth-of-type(1)",
+    "theme-host": "#theme-selector > sl-button",
+    "theme": "#theme-selector > sl-button >>> button",
+    "search": "button[aria-label=\"Search\"]",
+    "toc-variants": "#content > div:nth-of-type(1) > ul > li:nth-of-type(3) > a",
+    "variants-primary-host": "#content > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > sl-button:nth-of-type(2)",
+    "variants-primary": "#content > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > sl-button:nth-of-type(2) >>> button",
+    "outline-default-host": "#content > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(1) > sl-button:nth-of-type(1)",
+    "outline-default": "#content > div:nth-of-type(2) > div:nth-of-type(4) > div:nth-of-type(1) > sl-button:nth-of-type(1) >>> button",
+    "download-host": "#content > div:nth-of-type(2) > div:nth-of-type(8) > div:nth-of-type(1) > sl-button:nth-of-type(3)",
+    "download": "#content > div:nth-of-type(2) > div:nth-of-type(8) > div:nth-of-type(1) > sl-button:nth-of-type(3) >>> a",
+    "pink-host": "#content > div:nth-of-type(2) > div:nth-of-type(15) > div:nth-of-type(1) > sl-button",
+    "pink": "#content > div:nth-of-type(2) > div:nth-of-type(15) > div:nth-of-type(1) > sl-button >>> button",
+    "importing-react-tab": "#sl-tab-4"
+  },
+  "cases": [
+    {
+      "id": "shoelace-dialog-no-thanks",
+      "op": "click",
+      "sentence": "click No, thanks in the Web Awesome dialog",
+      "gold": ["dialog-no-thanks", "dialog-no-thanks-host"],
+      "tags": ["modal", "overlay", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "shoelace-dialog-migrate",
+      "op": "click",
+      "sentence": "click Migrate to Web Awesome!",
+      "gold": ["dialog-migrate", "dialog-migrate-host"],
+      "tags": ["modal", "exact-label", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "shoelace-variants-primary",
+      "op": "click",
+      "sentence": "click the Primary button in the Variants example",
+      "gold": ["variants-primary", "variants-primary-host"],
+      "tags": [
+        "container",
+        "near-duplicate-name",
+        "shadow-dom",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "shoelace-primary-unscoped",
+      "op": "click",
+      "sentence": "click the Primary button",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "shadow-dom"]
+    },
+    {
+      "id": "shoelace-outline-default",
+      "op": "click",
+      "sentence": "click the outlined Default button",
+      "gold": ["outline-default", "outline-default-host"],
+      "tags": [
+        "near-duplicate-name",
+        "paraphrase",
+        "shadow-dom",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "shoelace-download",
+      "op": "click",
+      "sentence": "click the Download link button",
+      "gold": ["download", "download-host"],
+      "tags": ["exact-label", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "shoelace-pink",
+      "op": "click",
+      "sentence": "click the Pink Button",
+      "gold": ["pink", "pink-host"],
+      "tags": ["exact-label", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "shoelace-refresh-unscoped",
+      "op": "click",
+      "sentence": "click Refresh",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "shadow-dom"]
+    },
+    {
+      "id": "shoelace-search",
+      "op": "click",
+      "sentence": "click the Search box in the sidebar",
+      "gold": ["search"],
+      "tags": ["search", "aria-label", "region"]
+    },
+    {
+      "id": "shoelace-toc-variants",
+      "op": "click",
+      "sentence": "click Variants in the table of contents",
+      "gold": ["toc-variants"],
+      "tags": ["region", "nav"]
+    },
+    {
+      "id": "shoelace-github",
+      "op": "click",
+      "sentence": "click the GitHub icon in the top-right toolbar",
+      "gold": ["github"],
+      "tags": ["icon", "aria-label", "region"]
+    },
+    {
+      "id": "shoelace-theme",
+      "op": "click",
+      "sentence": "open the theme selector",
+      "gold": ["theme", "theme-host"],
+      "tags": ["icon", "paraphrase", "shadow-dom", "invisible-to-sedum"]
+    },
+    {
+      "id": "shoelace-react-tab",
+      "op": "click",
+      "sentence": "click the React tab in the Importing section",
+      "gold": ["importing-react-tab"],
+      "tags": ["tab", "container", "duplicate-name"]
+    },
+    {
+      "id": "shoelace-login-absent",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "shoelace-newsletter-absent",
+      "op": "click",
+      "sentence": "click Subscribe to the newsletter",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "site": "demoqa-form",
+  "targets": {
+    "first-name": "#firstName",
+    "last-name": "#lastName",
+    "email": "#userEmail",
+    "female": "#gender-radio-2",
+    "mobile": "#userNumber",
+    "dob": "#dateOfBirthInput",
+    "subjects": "#subjectsInput",
+    "reading": "#hobbies-checkbox-2",
+    "upload": "#uploadPicture",
+    "address": "#currentAddress",
+    "state": "#react-select-3-input",
+    "submit": "#submit"
+  },
+  "cases": [
+    {
+      "id": "demoqa-first-name",
+      "op": "fill",
+      "sentence": "type {{firstName}} in the First Name field",
+      "gold": ["first-name"],
+      "tags": ["placeholder-name", "form-field"]
+    },
+    {
+      "id": "demoqa-last-name",
+      "op": "fill",
+      "sentence": "type {{lastName}} in the last name box next to First Name",
+      "gold": ["last-name"],
+      "tags": ["placeholder-name", "form-field", "indirect"]
+    },
+    {
+      "id": "demoqa-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the Email field",
+      "gold": ["email"],
+      "tags": ["form-field", "indirect"]
+    },
+    {
+      "id": "demoqa-gender-female",
+      "op": "click",
+      "sentence": "select Female for Gender",
+      "gold": ["female"],
+      "tags": ["radio", "form-field"]
+    },
+    {
+      "id": "demoqa-mobile",
+      "op": "fill",
+      "sentence": "type {{phone}} in the Mobile number field",
+      "gold": ["mobile"],
+      "tags": ["placeholder-name", "form-field", "numeric"]
+    },
+    {
+      "id": "demoqa-dob",
+      "op": "fill",
+      "sentence": "type {{date}} in the Date of Birth input",
+      "gold": ["dob"],
+      "tags": ["date", "form-field", "indirect", "invisible-to-sedum"]
+    },
+    {
+      "id": "demoqa-subjects",
+      "op": "fill",
+      "sentence": "type {{subject}} in the Subjects field",
+      "gold": ["subjects"],
+      "tags": ["combobox", "form-field", "indirect", "invisible-to-sedum"]
+    },
+    {
+      "id": "demoqa-hobby-reading",
+      "op": "click",
+      "sentence": "check the Reading hobby",
+      "gold": ["reading"],
+      "tags": ["checkbox", "form-field"]
+    },
+    {
+      "id": "demoqa-hobby-unscoped",
+      "op": "click",
+      "sentence": "check the hobby checkbox",
+      "gold": "ambiguous",
+      "tags": ["checkbox", "repeated-group", "underspecified"]
+    },
+    {
+      "id": "demoqa-upload",
+      "op": "click",
+      "sentence": "click Choose File to upload a picture",
+      "gold": ["upload"],
+      "tags": ["form-field", "exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "demoqa-address",
+      "op": "fill",
+      "sentence": "type {{address}} in the Current Address textarea",
+      "gold": ["address"],
+      "tags": ["placeholder-name", "form-field"]
+    },
+    {
+      "id": "demoqa-state",
+      "op": "click",
+      "sentence": "open the Select State dropdown",
+      "gold": ["state"],
+      "tags": ["select", "combobox", "invisible-to-sedum"]
+    },
+    {
+      "id": "demoqa-submit",
+      "op": "click",
+      "sentence": "click Submit",
+      "gold": ["submit"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "demoqa-permanent-absent",
+      "op": "fill",
+      "sentence": "type {{address}} in the Permanent Address field",
+      "gold": "none",
+      "tags": ["absent", "form-field"]
+    },
+    {
+      "id": "demoqa-reset-absent",
+      "op": "click",
+      "sentence": "click the Reset button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}
