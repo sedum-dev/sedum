@@ -1,0 +1,128 @@
+{
+  "site": "bbc-news",
+  "targets": {
+    "signin-link": "#bbc-header > div > div:nth-of-type(3) > div:nth-of-type(1) > div > a",
+    "signin-button": "button[aria-label=\"Sign In\"]",
+    "subscribe": "#bbc-header > div > div:nth-of-type(3) > div:nth-of-type(1) > button",
+    "menu": "button[aria-label=\"Open menu\"]",
+    "watch-live": "#bbc-header > div > div:nth-of-type(1) > div > div > a",
+    "logo": "#bbc-header > div > div:nth-of-type(2) > div > div > a",
+    "sport": "#main-navigation-container > section > nav > ul > li:nth-of-type(3) > div > a",
+    "business-nav": "#main-navigation-container > section > nav > ul > li:nth-of-type(4) > div > a",
+    "business-footer": "#bbc-footer > section:nth-of-type(1) > nav > ul > li:nth-of-type(4) > div > a",
+    "live-nav": "#main-navigation-container > section > nav > ul > li:nth-of-type(13) > div > a",
+    "live-footer": "#bbc-footer > section:nth-of-type(1) > nav > ul > li:nth-of-type(13) > div > a",
+    "germany-lead": "#bbc-main > article > section:nth-of-type(1) > section > div > div:nth-of-type(1) > div > div > div:nth-of-type(2) > div > div > a",
+    "germany-most-read": "#bbc-main > article > section:nth-of-type(7) > div > div:nth-of-type(2) > div:nth-of-type(2) > div > a",
+    "most-read-3": "#bbc-main > article > section:nth-of-type(7) > div > div:nth-of-type(2) > div:nth-of-type(3) > div > a",
+    "other-languages": "#bbc-footer > section:nth-of-type(2) > div > button",
+    "follow-x": "button[aria-label=\"Follow BBC on x\"]"
+  },
+  "cases": [
+    {
+      "id": "bbc-signin",
+      "op": "click",
+      "sentence": "click Sign In",
+      "gold": ["signin-link", "signin-button"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "bbc-subscribe",
+      "op": "click",
+      "sentence": "click Subscribe",
+      "gold": ["subscribe"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "bbc-menu",
+      "op": "click",
+      "sentence": "open the menu (the hamburger and search icon at top left)",
+      "gold": ["menu"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "bbc-logo",
+      "op": "click",
+      "sentence": "click the BBC logo",
+      "gold": ["logo"],
+      "tags": ["icon", "invisible-to-sedum"]
+    },
+    {
+      "id": "bbc-sport-nav",
+      "op": "click",
+      "sentence": "click Sport in the top navigation",
+      "gold": ["sport"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "bbc-business",
+      "op": "click",
+      "sentence": "go to the Business section",
+      "gold": ["business-nav", "business-footer"],
+      "tags": ["paraphrase", "duplicate-name", "nav"]
+    },
+    {
+      "id": "bbc-watch-live",
+      "op": "click",
+      "sentence": "click Watch Live",
+      "gold": ["watch-live"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "bbc-live",
+      "op": "click",
+      "sentence": "click Live",
+      "gold": ["live-nav", "live-footer"],
+      "tags": ["exact-label", "substring-trap", "nav"]
+    },
+    {
+      "id": "bbc-germany",
+      "op": "click",
+      "sentence": "open the story about students striking in Germany",
+      "gold": ["germany-lead", "germany-most-read"],
+      "tags": ["paraphrase", "duplicate-name"]
+    },
+    {
+      "id": "bbc-most-read-3",
+      "op": "click",
+      "sentence": "click the third story in Most read",
+      "gold": ["most-read-3"],
+      "tags": ["ordinal", "region", "repeated-group"]
+    },
+    {
+      "id": "bbc-other-languages",
+      "op": "click",
+      "sentence": "click BBC in other languages",
+      "gold": ["other-languages"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "bbc-follow-x",
+      "op": "click",
+      "sentence": "click the X icon to follow the BBC",
+      "gold": ["follow-x"],
+      "tags": ["icon", "aria-label", "footer"]
+    },
+    {
+      "id": "bbc-live-story-unscoped",
+      "op": "click",
+      "sentence": "click the LIVE story",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "bbc-search-absent",
+      "op": "fill",
+      "sentence": "type {{query}} in the search field",
+      "gold": "none",
+      "tags": ["absent", "search"]
+    },
+    {
+      "id": "bbc-weather-nav-absent",
+      "op": "click",
+      "sentence": "click Weather in the top navigation",
+      "gold": "none",
+      "tags": ["absent", "nav"]
+    }
+  ]
+}
