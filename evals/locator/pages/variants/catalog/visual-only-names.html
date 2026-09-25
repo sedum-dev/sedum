@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shop all · Outfitters</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #1d2330;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .search {
+        flex: 1;
+        display: flex;
+        max-width: 420px;
+      }
+      .search input {
+        flex: 1;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #bbb;
+        border-radius: 6px 0 0 6px;
+        font: inherit;
+      }
+      .search .go {
+        border: 1px solid #bbb;
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
+        background: #f4f4f4;
+        padding: 0 0.6rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+      }
+      .cart {
+        margin-left: auto;
+        color: #1d2330;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+      }
+      .filters {
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+      .filters .legend {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        padding: 0;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.35rem 0;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        position: relative;
+      }
+      .sort {
+        min-width: 170px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.75rem;
+        position: relative;
+      }
+      .card .name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+      }
+      .card .price {
+        margin: 0 0 0.25rem;
+        font-weight: 600;
+      }
+      .card .blurb {
+        margin: 0 0 0.75rem;
+        color: #555;
+      }
+      .heart {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: 0;
+        background: none;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #c0392b;
+      }
+      .add,
+      .more {
+        padding: 0.45rem 0.9rem;
+        border: 0;
+        border-radius: 6px;
+        background: #2f5bea;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        display: inline-block;
+      }
+      .more {
+        background: #fff;
+        color: #2f5bea;
+        border: 1px solid #2f5bea;
+      }
+      .more-row {
+        text-align: center;
+        margin: 1.25rem 0;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .nav-mobile {
+        display: none;
+      }
+      .heart.on path {
+        fill: currentColor;
+      }
+      .brand svg {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top nav-desktop">
+      <a class="brand" href="/"
+        ><svg width="110" height="22" viewBox="0 0 110 22" role="img">
+          <title>Outfitters home</title>
+          <text
+            x="0"
+            y="17"
+            font-size="17"
+            font-weight="700"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            Outfitters
+          </text>
+        </svg></a
+      >
+      <form class="search" action="/search">
+        <input
+          name="q"
+          type="search"
+          placeholder="Search products"
+          data-eval-gold="search"
+        />
+        <button class="go" type="submit">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <circle
+              cx="7"
+              cy="7"
+              r="5"
+              fill="none"
+              stroke="#333"
+              stroke-width="2"
+            />
+            <path d="M11 11l4 4" stroke="#333" stroke-width="2" /></svg
+          ><span class="sr-only">Search</span>
+        </button>
+      </form>
+      <a class="cart" href="/cart" data-eval-gold="cart">Cart (0)</a>
+    </header>
+    <header class="top nav-mobile">
+      <a class="brand" href="/"
+        ><svg width="110" height="22" viewBox="0 0 110 22" role="img">
+          <title>Outfitters home</title>
+          <text
+            x="0"
+            y="17"
+            font-size="17"
+            font-weight="700"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            Outfitters
+          </text>
+        </svg></a
+      >
+      <form class="search" action="/search">
+        <input name="q" type="search" placeholder="Search products" />
+        <button class="go" type="submit">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <circle
+              cx="7"
+              cy="7"
+              r="5"
+              fill="none"
+              stroke="#333"
+              stroke-width="2"
+            />
+            <path d="M11 11l4 4" stroke="#333" stroke-width="2" /></svg
+          ><span class="sr-only">Search</span>
+        </button>
+      </form>
+      <a class="cart" href="/cart">Cart (0)</a>
+    </header>
+    <div class="layout">
+      <aside>
+        <div class="filters">
+          <div class="legend">Category</div>
+          <label class="check"
+            ><input type="checkbox" name="category" value="bags" /> Bags</label
+          >
+          <label class="check"
+            ><input
+              type="checkbox"
+              name="category"
+              value="lights"
+              data-eval-gold="filter-lights"
+            />
+            Lights</label
+          >
+          <label class="check"
+            ><input type="checkbox" name="category" value="hats" /> Hats</label
+          >
+          <label class="check"
+            ><input
+              type="checkbox"
+              name="category"
+              value="drinkware"
+              data-eval-gold="filter-drinkware"
+            />
+            Drinkware</label
+          >
+        </div>
+      </aside>
+      <main>
+        <div class="toolbar">
+          <span>Sort by</span>
+          <select name="sort" class="sort" data-eval-gold="sort">
+            <option value="featured">Featured</option>
+            <option value="price-asc">Price: low to high</option>
+          </select>
+        </div>
+        <ul class="grid">
+          <li class="card">
+            <h3 class="name">Canvas Backpack</h3>
+            <p class="price">$29.99</p>
+            <p class="blurb">Water-resistant 20 L pack.</p>
+            <button type="button" class="heart">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img">
+                <title>Add Canvas Backpack to wishlist</title>
+                <path
+                  d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </button>
+            <button type="button" class="add" data-eval-gold="add-backpack">
+              Add to cart
+            </button>
+          </li>
+          <li class="card">
+            <h3 class="name">Trail Light</h3>
+            <p class="price">$9.99</p>
+            <p class="blurb">USB rechargeable headlamp.</p>
+            <button type="button" class="heart">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img">
+                <title>Add Trail Light to wishlist</title>
+                <path
+                  d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </button>
+            <button type="button" class="add" data-eval-gold="add-light">
+              Add to cart
+            </button>
+          </li>
+          <li class="card">
+            <h3 class="name">Merino Beanie</h3>
+            <p class="price">$24.00</p>
+            <p class="blurb">Soft wool hat.</p>
+            <button type="button" class="heart" data-eval-gold="wish-beanie">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img">
+                <title>Add Merino Beanie to wishlist</title>
+                <path
+                  d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </button>
+            <button type="button" class="add">Add to cart</button>
+          </li>
+          <li class="card">
+            <h3 class="name">Steel Bottle</h3>
+            <p class="price">$19.00</p>
+            <p class="blurb">Keeps drinks cold for 24 hours.</p>
+            <button type="button" class="heart">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img">
+                <title>Add Steel Bottle to wishlist</title>
+                <path
+                  d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </button>
+            <button type="button" class="add">Add to cart</button>
+          </li>
+          <li class="card">
+            <h3 class="name">Camp Mug</h3>
+            <p class="price">$12.00</p>
+            <p class="blurb">Enamel mug, 350 ml.</p>
+            <button type="button" class="heart" data-eval-gold="wish-mug">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img">
+                <title>Add Camp Mug to wishlist</title>
+                <path
+                  d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </button>
+            <button type="button" class="add">Add to cart</button>
+          </li>
+          <li class="card">
+            <h3 class="name">Market Tote</h3>
+            <p class="price">$15.00</p>
+            <p class="blurb">Heavy cotton shopping bag.</p>
+            <button type="button" class="heart">
+              <svg width="20" height="20" viewBox="0 0 24 24" role="img">
+                <title>Add Market Tote to wishlist</title>
+                <path
+                  d="M12 21s-7-4.5-9.5-9A5 5 0 0 1 12 6a5 5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                />
+              </svg>
+            </button>
+            <button type="button" class="add">Add to cart</button>
+          </li>
+        </ul>
+        <p class="more-row">
+          <button type="button" class="more" data-eval-gold="load-more">
+            Load more
+          </button>
+        </p>
+      </main>
+    </div>
+    <script>
+      document
+        .querySelectorAll(".heart")
+        .forEach((heart) =>
+          heart.addEventListener("click", () => heart.classList.toggle("on")),
+        );
+    </script>
+  </body>
+</html>

@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create your account · Nimbus</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .top a {
+        color: #1d2330;
+        text-decoration: none;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-weight: 700;
+        font-size: 1.1rem;
+      }
+      main {
+        max-width: 400px;
+        margin: 2rem auto;
+      }
+      .google {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #bbb;
+        background: #fff;
+        border-radius: 6px;
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        font: inherit;
+        cursor: pointer;
+      }
+      .or {
+        text-align: center;
+        color: #777;
+        margin: 1rem 0;
+      }
+      .field {
+        margin: 0 0 0.9rem;
+      }
+      .field label {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+      }
+      .field input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        font: inherit;
+      }
+      .pw {
+        position: relative;
+      }
+      .eye {
+        position: absolute;
+        right: 0.3rem;
+        top: 0.25rem;
+        border: 0;
+        background: none;
+        font-size: 1.1rem;
+        cursor: pointer;
+      }
+      fieldset {
+        border: 0;
+        padding: 0;
+        margin: 0 0 1rem;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.4rem 0;
+      }
+      .primary {
+        width: 100%;
+        padding: 0.65rem;
+        background: #2f5bea;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .foot {
+        text-align: center;
+        margin-top: 1rem;
+      }
+      .css-1u3bzj6 label {
+        display: block;
+      }
+      .PrivateSwitchBase-root {
+        position: relative;
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+      }
+      .PrivateSwitchBase-root svg {
+        width: 18px;
+        height: 18px;
+        color: #767676;
+      }
+      .PrivateSwitchBase-input {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        z-index: 1;
+        cursor: inherit;
+      }
+      .MuiTouchRipple-root {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .MuiButtonBase-root {
+        position: relative;
+      }
+      .MuiButtonBase-root.eye,
+      .MuiButtonBase-root.heart {
+        position: absolute;
+      }
+      .MuiDivider-root {
+        display: block;
+      }
+      .checks {
+        margin: 0 0 1rem;
+      }
+      .MuiStack-root {
+        display: block;
+      }
+      .css-1d3bbye a {
+        color: #1d2330;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // A stand-in for a client-rendered React + component-library bundle:
+      // the shell, the form, and the footer render in separate commits, and
+      // one label is wired to its input only after hydration.
+      const fields = [
+        {
+          id: ":r1:",
+          label: "Full name",
+          type: "text",
+          name: "name",
+          auto: "name",
+          gold: 'data-eval-gold="name"',
+        },
+        {
+          id: ":r2:",
+          label: "Email",
+          type: "email",
+          name: "email",
+          auto: "email",
+          gold: 'data-eval-gold="email"',
+        },
+        {
+          id: ":r3:",
+          label: "Confirm email",
+          type: "email",
+          name: "emailConfirm",
+          auto: "off",
+          gold: 'data-eval-gold="email2"',
+          lateLabel: true,
+        },
+        {
+          id: ":r4:",
+          label: "Password",
+          type: "password",
+          name: "password",
+          auto: "new-password",
+          gold: 'data-eval-gold="password"',
+          adornment: true,
+        },
+      ];
+      const checks = [
+        {
+          id: ":r5:",
+          label: "I agree to the Terms",
+          name: "terms",
+          gold: 'data-eval-gold="terms"',
+        },
+        {
+          id: ":r6:",
+          label: "Send me product news",
+          name: "news",
+          gold: 'data-eval-gold="news"',
+        },
+      ];
+      const root = document.getElementById("root");
+
+      function textField(f) {
+        const labelFor = f.lateLabel ? "" : ` for="${f.id}"`;
+        const adornment = f.adornment
+          ? `<div class="MuiInputAdornment-root MuiInputAdornment-positionEnd css-1laqsz7"><button class="MuiButtonBase-root MuiIconButton-root MuiIconButton-edgeEnd css-1yq5fb3 eye" tabindex="0" type="button" aria-label="toggle password visibility" data-eval-gold="show-password"><span class="MuiSvgIcon-root css-i4bv87">👁</span><span class="MuiTouchRipple-root css-w0pj6f"></span></button></div>`
+          : "";
+        return `<div class="MuiFormControl-root MuiTextField-root css-1u3bzj6 field"><label class="MuiFormLabel-root MuiInputLabel-root MuiInputLabel-formControl css-1jy569b" data-shrink="true" id="${f.id}-label"${labelFor}>${f.label}</label><div class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-formControl css-1v4ccyo pw"><input aria-invalid="false" id="${f.id}" name="${f.name}" type="${f.type}" autocomplete="${f.auto}" class="MuiInputBase-input MuiOutlinedInput-input css-1x5jdmq" value="" ${f.gold}>${adornment}</div></div>`;
+      }
+      function checkbox(c) {
+        return `<label class="MuiFormControlLabel-root MuiFormControlLabel-labelPlacementEnd css-1jaw3da check"><span class="MuiButtonBase-root MuiCheckbox-root MuiCheckbox-colorPrimary PrivateSwitchBase-root css-12wnr2w"><input class="PrivateSwitchBase-input css-1m9pwf3" type="checkbox" name="${c.name}" id="${c.id}" ${c.gold}><svg class="MuiSvgIcon-root css-i4bv87" focusable="false" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg><span class="MuiTouchRipple-root css-w0pj6f"></span></span><span class="MuiTypography-root MuiTypography-body1 MuiFormControlLabel-label css-9l3uo3">${c.label}</span></label>`;
+      }
+
+      const stages = [
+        () => {
+          root.innerHTML = `<div class="css-k008qs"><header class="MuiPaper-root MuiAppBar-root MuiAppBar-positionStatic css-1x7skt0"><div class="MuiToolbar-root MuiToolbar-regular css-12o98wt top"><a class="MuiTypography-root MuiLink-root MuiLink-underlineNone css-1n3ki0k brand" href="/" data-eval-gold="logo"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="10" fill="#2f5bea"/></svg>Nimbus</a><div class="css-1d3bbye"><a class="MuiTypography-root MuiLink-root MuiLink-underlineHover css-1n3ki0k" href="/help" data-eval-gold="help">Help</a></div></div></header><main class="MuiContainer-root MuiContainer-maxWidthXs css-1qsxih2"><div class="MuiBox-root css-1vqfsmj" id="page-body"><h1 class="MuiTypography-root MuiTypography-h1 css-1f6l3qe">Create your account</h1><div class="MuiSkeleton-root css-1l7q9tc" style="height: 300px"></div></div></main></div>`;
+        },
+        () => {
+          const body = document.getElementById("page-body");
+          body.querySelector(".MuiSkeleton-root").remove();
+          body.insertAdjacentHTML(
+            "beforeend",
+            `<div class="MuiStack-root css-j7qwjs"><button class="MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeLarge MuiButton-fullWidth css-1q2w3e google" tabindex="0" type="button" data-eval-gold="google"><span class="MuiButton-startIcon MuiButton-iconSizeLarge css-6xugel"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="#ea4335"/></svg></span>Continue with Google<span class="MuiTouchRipple-root css-w0pj6f"></span></button><div class="MuiDivider-root MuiDivider-withChildren css-1fwqb8e or" role="separator"><span class="MuiDivider-wrapper css-c1ovea">or</span></div></div><form class="MuiBox-root css-164r41r" novalidate id="signup-form"><div class="MuiStack-root css-1r6kkvv">${fields.map(textField).join("")}</div></form>`,
+          );
+        },
+        () => {
+          document
+            .getElementById("signup-form")
+            .insertAdjacentHTML(
+              "beforeend",
+              `<div class="MuiFormGroup-root css-dmmspl checks">${checks.map(checkbox).join("")}</div><button class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-containedPrimary MuiButton-sizeLarge MuiButton-fullWidth css-1hw9j7s primary" tabindex="0" type="submit" data-eval-gold="create"><span class="css-ssk2jr">Create account</span><span class="MuiTouchRipple-root css-w0pj6f"></span></button>`,
+            );
+          document
+            .getElementById("page-body")
+            .insertAdjacentHTML(
+              "beforeend",
+              `<p class="MuiTypography-root MuiTypography-body2 css-1ajvt8a foot">Already have an account? <a class="MuiTypography-root MuiLink-root MuiLink-underlineAlways css-1n3ki0k" href="/login" data-eval-gold="login">Log in</a></p>`,
+            );
+        },
+        () => {
+          // Hydration: the late field's label gets its htmlFor, handlers attach.
+          for (const f of fields.filter((f) => f.lateLabel))
+            document.getElementById(`${f.id}-label`).htmlFor = f.id;
+          const pw = document.getElementById(":r4:");
+          document.querySelector(".eye").addEventListener("click", () => {
+            pw.type = pw.type === "password" ? "text" : "password";
+          });
+          document
+            .getElementById("signup-form")
+            .addEventListener("submit", (event) => {
+              event.preventDefault();
+              fetch("/signup", { method: "POST" });
+            });
+        },
+      ];
+      let delay = 120;
+      stages.forEach((stage) => {
+        setTimeout(stage, delay);
+        delay += 200;
+      });
+    </script>
+  </body>
+</html>
