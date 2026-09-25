@@ -37,8 +37,9 @@ export const FREEZE = `(() => {
   // Images keep their rendered box but never load.
   for (const scope of scopes) {
     for (const el of scope.querySelectorAll("img,input[type=image],video,iframe,embed,object")) {
-      const rect = el.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
+      let rect = null;
+      try { rect = Element.prototype.getBoundingClientRect.call(el); } catch {}
+      if (rect && rect.width > 0 && rect.height > 0) {
         el.style.setProperty("width", rect.width + "px");
         el.style.setProperty("height", rect.height + "px");
       }

@@ -66,11 +66,6 @@
     "category": "news"
   },
   {
-    "id": "guardian-international",
-    "url": "https://www.theguardian.com/international",
-    "category": "news"
-  },
-  {
     "id": "lanacion",
     "url": "https://www.lanacion.com.ar/",
     "category": "news",
@@ -113,16 +108,6 @@
     "category": "retail"
   },
   {
-    "id": "walmart-home",
-    "url": "https://www.walmart.com/",
-    "category": "retail"
-  },
-  {
-    "id": "zara-home",
-    "url": "https://www.zara.com/us/",
-    "category": "retail"
-  },
-  {
     "id": "apple-iphone",
     "url": "https://www.apple.com/iphone/",
     "category": "retail"
@@ -135,12 +120,12 @@
   {
     "id": "airbnb-home",
     "url": "https://www.airbnb.com/",
-    "category": "travel"
-  },
-  {
-    "id": "openstreetmap",
-    "url": "https://www.openstreetmap.org/",
-    "category": "maps"
+    "category": "travel",
+    "actions": [
+      {
+        "click": "[role='dialog'][aria-modal='true'] button"
+      }
+    ]
   },
   {
     "id": "craigslist-ny",
