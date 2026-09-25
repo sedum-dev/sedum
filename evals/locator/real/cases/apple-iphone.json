@@ -1,0 +1,134 @@
+{
+  "site": "apple-iphone",
+  "targets": {
+    "bag": "#globalnav-menubutton-link-bag",
+    "nav_mac": "a[aria-label=\"Mac\"]",
+    "duo_learn_1": "#media-card-gallery-item-1 > div > div > div > div > div:nth-of-type(2) > a:nth-of-type(1)",
+    "duo_learn_2": "#gallery-item-1 > div:nth-of-type(2) > a:nth-of-type(1)",
+    "buy_air": "a[aria-label=\"Buy, iPhone Air\"]",
+    "compare_all": "#main > section:nth-of-type(5) > div:nth-of-type(1) > header > div > ul > li > a",
+    "next_chapter": "button[aria-label=\"next item\"]",
+    "upgrade_learn": "#main > section:nth-of-type(1) > div > div > div > div > div > p > a",
+    "tab_18pro": "#media-card-gallery-item-2-trigger",
+    "trade_in": "#main > section:nth-of-type(6) > div:nth-of-type(2) > div:nth-of-type(1) > div > ul > li:nth-of-type(3) > div > button",
+    "switch_android": "#iphone-index > nav > div:nth-of-type(1) > ul > li:nth-of-type(9) > a",
+    "shop_1": "a[aria-label=\"Shop iPhone\"]",
+    "shop_2": "#main > section:nth-of-type(6) > div:nth-of-type(1) > header > div > ul > li > a",
+    "shop_3": "#iphone-index > nav > div:nth-of-type(2) > ul > li:nth-of-type(1) > a",
+    "search": "#globalnav-menubutton-link-search"
+  },
+  "cases": [
+    {
+      "id": "ap-bag",
+      "op": "click",
+      "sentence": "click the shopping bag icon",
+      "gold": ["bag"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ap-search",
+      "op": "click",
+      "sentence": "click the search icon in the top bar",
+      "gold": ["search"],
+      "tags": ["icon", "aria-label", "search"]
+    },
+    {
+      "id": "ap-nav-mac",
+      "op": "click",
+      "sentence": "click Mac in the global navigation",
+      "gold": ["nav_mac"],
+      "tags": ["nav", "exact-label", "duplicate-name"]
+    },
+    {
+      "id": "ap-duo-learn-more",
+      "op": "click",
+      "sentence": "click Learn more for iPhone Duo",
+      "gold": ["duo_learn_1", "duo_learn_2"],
+      "tags": ["container", "repeated-group", "duplicate-name"]
+    },
+    {
+      "id": "ap-buy-air",
+      "op": "click",
+      "sentence": "click Buy under iPhone Air",
+      "gold": ["buy_air"],
+      "tags": ["container", "repeated-group"]
+    },
+    {
+      "id": "ap-learn-more-unscoped",
+      "op": "click",
+      "sentence": "click Learn more",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "ap-buy-unscoped",
+      "op": "click",
+      "sentence": "click the Buy link",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "ap-compare-all",
+      "op": "click",
+      "sentence": "click Compare all models",
+      "gold": ["compare_all"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ap-next-chapter",
+      "op": "click",
+      "sentence": "click the right arrow to scroll the row of iPhone models",
+      "gold": ["next_chapter"],
+      "tags": ["icon", "aria-label", "region"]
+    },
+    {
+      "id": "ap-upgrade-learn-more",
+      "op": "click",
+      "sentence": "click Learn more in the Apple Upgrade banner at the top",
+      "gold": ["upgrade_learn"],
+      "tags": ["region", "aria-label", "duplicate-name"]
+    },
+    {
+      "id": "ap-18pro-tab",
+      "op": "click",
+      "sentence": "select the iPhone 18 Pro tab below the hero gallery",
+      "gold": ["tab_18pro"],
+      "tags": ["tab", "near-duplicate-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "ap-trade-in",
+      "op": "click",
+      "sentence": "open the Apple Trade In card",
+      "gold": ["trade_in"],
+      "tags": ["aria-label", "paraphrase"]
+    },
+    {
+      "id": "ap-switch-android",
+      "op": "click",
+      "sentence": "click Switch from Android",
+      "gold": ["switch_android"],
+      "tags": ["exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "ap-shop-iphone",
+      "op": "click",
+      "sentence": "click Shop iPhone",
+      "gold": ["shop_1", "shop_2", "shop_3"],
+      "tags": ["duplicate-name"]
+    },
+    {
+      "id": "ap-add-bag-absent",
+      "op": "click",
+      "sentence": "click Add to Bag",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "ap-iphone15-absent",
+      "op": "click",
+      "sentence": "click the iPhone 15 link",
+      "gold": "none",
+      "tags": ["absent", "near-duplicate-name"]
+    }
+  ]
+}

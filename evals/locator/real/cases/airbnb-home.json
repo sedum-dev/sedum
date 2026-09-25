@@ -1,0 +1,131 @@
+{
+  "site": "airbnb-home",
+  "targets": {
+    "where_div": "#react-application > div > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(1) > div > div > header > form > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1)",
+    "where": "#bigsearch-query-location-input",
+    "when": "#react-application > div > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(1) > div > div > header > form > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3)",
+    "who": "#react-application > div > div > div:nth-of-type(1) > div > div > div > div:nth-of-type(1) > div:nth-of-type(3) > div:nth-of-type(1) > div > div > header > form > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(5)",
+    "search": "button[data-testid=\"structured-search-input-search-button\"]",
+    "homes": "#search-block-tab-STAYS",
+    "login": "button[aria-label=\"Log in or sign up\"]",
+    "wish_293": "#site-content > div > div:nth-of-type(2) > div > div > div > div > div:nth-of-type(2) > div > div:nth-of-type(6) > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > div > button",
+    "fred_first": "#site-content > div > div:nth-of-type(3) > div > div > div > div > div:nth-of-type(2) > div > div:nth-of-type(1) > a",
+    "next_bb": "button[aria-label=\"Next in Available in Broken Bow this weekend, showing 1–6 of 9 items\"]",
+    "massage": "#site-content > div > div:nth-of-type(1) > div > div > div > div > div > div > div:nth-of-type(2) > a:nth-of-type(3)",
+    "beach": "#tab--seo-link-section-tabbed-dense-grid--2"
+  },
+  "cases": [
+    {
+      "id": "ab-where",
+      "op": "fill",
+      "sentence": "type {{destination}} in the Where field",
+      "gold": ["where"],
+      "tags": ["placeholder-name", "search", "form-field"]
+    },
+    {
+      "id": "ab-where-click",
+      "op": "click",
+      "sentence": "click the Where section of the search bar",
+      "gold": ["where_div", "where"],
+      "tags": ["region", "form-field"]
+    },
+    {
+      "id": "ab-when",
+      "op": "click",
+      "sentence": "click Add dates to pick check-in and check-out",
+      "gold": ["when"],
+      "tags": ["date", "paraphrase"]
+    },
+    {
+      "id": "ab-who",
+      "op": "click",
+      "sentence": "click Who to add guests",
+      "gold": ["who"],
+      "tags": ["exact-label", "form-field"]
+    },
+    {
+      "id": "ab-search",
+      "op": "click",
+      "sentence": "click the red search button",
+      "gold": ["search"],
+      "tags": ["icon", "aria-label", "search"]
+    },
+    {
+      "id": "ab-homes-tab",
+      "op": "click",
+      "sentence": "click the Homes tab",
+      "gold": ["homes"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "ab-login",
+      "op": "click",
+      "sentence": "click the profile icon to log in or sign up",
+      "gold": ["login"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ab-wishlist-293",
+      "op": "click",
+      "sentence": "save the $293 cabin in Broken Bow to the wishlist",
+      "gold": ["wish_293"],
+      "tags": ["repeated-group", "container", "numeric", "icon"]
+    },
+    {
+      "id": "ab-wishlist-unscoped",
+      "op": "click",
+      "sentence": "click Add to wishlist for Cabin in Broken Bow",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "ab-fred-first",
+      "op": "click",
+      "sentence": "open the first listing under Stay in Fredericksburg",
+      "gold": ["fred_first"],
+      "tags": ["repeated-group", "ordinal", "region"]
+    },
+    {
+      "id": "ab-next-broken-bow",
+      "op": "click",
+      "sentence": "click the next arrow for Available in Broken Bow this weekend",
+      "gold": ["next_bb"],
+      "tags": ["icon", "aria-label", "container"]
+    },
+    {
+      "id": "ab-see-all",
+      "op": "click",
+      "sentence": "click See all",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "ab-massage",
+      "op": "click",
+      "sentence": "click Massage under Find services near you",
+      "gold": ["massage"],
+      "tags": ["region", "exact-label"]
+    },
+    {
+      "id": "ab-beach-tab",
+      "op": "click",
+      "sentence": "select the Beach tab in the inspiration section",
+      "gold": ["beach"],
+      "tags": ["tab", "region"]
+    },
+    {
+      "id": "ab-flexible-absent",
+      "op": "click",
+      "sentence": "click I'm flexible",
+      "gold": "none",
+      "tags": ["absent", "date"]
+    },
+    {
+      "id": "ab-pets-absent",
+      "op": "click",
+      "sentence": "turn on the Bring your pet toggle",
+      "gold": "none",
+      "tags": ["absent", "switch"]
+    }
+  ]
+}

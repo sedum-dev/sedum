@@ -1,0 +1,132 @@
+{
+  "site": "ikea-product",
+  "targets": {
+    "sort": "button[data-testid=\"plp-accordion-item-sort\"]",
+    "color": "button[data-testid=\"plp-accordion-item-COLOR\"]",
+    "bestseller": "label[data-testid=\"plp-checkbox-label-TOP_SELLER\"]",
+    "compare1": "input[data-testid=\"plp-compact-compare-checkbox-20522046-P0-1\"]",
+    "compare1_label": "#product-list > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(1) > span > span:nth-of-type(2) > label",
+    "add_49": "#product-list > div:nth-of-type(2) > div > div:nth-of-type(3) > div:nth-of-type(3) > div:nth-of-type(2) > button",
+    "add_15": "#product-list > div:nth-of-type(2) > div > div:nth-of-type(2) > div:nth-of-type(3) > div:nth-of-type(2) > button",
+    "save_first": "#product-list > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(2) > div:nth-of-type(2) > button",
+    "read_more": "html > body > main > div:nth-of-type(2) > button",
+    "crumb_series": "html > body > main > div:nth-of-type(1) > div > div > div:nth-of-type(1) > div > nav > ol > li:nth-of-type(2) > a",
+    "show_more": "a[aria-label=\"Show more products\"]",
+    "close_invite": "button[aria-label=\"Close invite\"]",
+    "planner_card": "a[data-testid=\"plp-breakout-card\"]"
+  },
+  "cases": [
+    {
+      "id": "ikp-sort",
+      "op": "click",
+      "sentence": "open the Sort menu",
+      "gold": ["sort"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ikp-color",
+      "op": "click",
+      "sentence": "expand the Color filter",
+      "gold": ["color"],
+      "tags": ["exact-label", "paraphrase"]
+    },
+    {
+      "id": "ikp-bestseller",
+      "op": "click",
+      "sentence": "check the Best seller filter",
+      "gold": ["bestseller"],
+      "tags": ["checkbox", "exact-label", "invisible-to-sedum"]
+    },
+    {
+      "id": "ikp-compare-first",
+      "op": "click",
+      "sentence": "check Compare on the first bookcase",
+      "gold": ["compare1", "compare1_label"],
+      "tags": ["checkbox", "ordinal", "repeated-group", "invisible-to-sedum"]
+    },
+    {
+      "id": "ikp-compare-unscoped",
+      "op": "click",
+      "sentence": "check the Compare box",
+      "gold": "ambiguous",
+      "tags": ["checkbox", "repeated-group", "underspecified"]
+    },
+    {
+      "id": "ikp-add-49",
+      "op": "click",
+      "sentence": "click Add to cart for the $49 bookcase",
+      "gold": ["add_49"],
+      "tags": ["repeated-group", "container", "numeric", "indirect"]
+    },
+    {
+      "id": "ikp-add-narrow",
+      "op": "click",
+      "sentence": "add the white BILLY bookcase that is 15 3/4 inches wide to the cart",
+      "gold": ["add_15"],
+      "tags": ["repeated-group", "container", "paraphrase"]
+    },
+    {
+      "id": "ikp-add-billy-unscoped",
+      "op": "click",
+      "sentence": "click Add to cart for the BILLY Bookcase",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "ikp-save-first",
+      "op": "click",
+      "sentence": "click the heart icon on the first product",
+      "gold": ["save_first"],
+      "tags": ["icon", "ordinal", "repeated-group"]
+    },
+    {
+      "id": "ikp-read-more",
+      "op": "click",
+      "sentence": "click Read more under the BILLY description",
+      "gold": ["read_more"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ikp-breadcrumb",
+      "op": "click",
+      "sentence": "click BILLY series in the breadcrumb",
+      "gold": ["crumb_series"],
+      "tags": ["nav", "exact-label"]
+    },
+    {
+      "id": "ikp-show-more",
+      "op": "click",
+      "sentence": "click Show more products",
+      "gold": ["show_more"],
+      "tags": ["exact-label", "pagination"]
+    },
+    {
+      "id": "ikp-close-chat",
+      "op": "click",
+      "sentence": "close the chat invitation",
+      "gold": ["close_invite"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "ikp-planner-card",
+      "op": "click",
+      "sentence": "open the Design your own BILLY bookcase planner card",
+      "gold": ["planner_card"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ikp-quantity-absent",
+      "op": "click",
+      "sentence": "click the plus button to increase the quantity",
+      "gold": "none",
+      "tags": ["absent", "numeric"]
+    },
+    {
+      "id": "ikp-store-absent",
+      "op": "click",
+      "sentence": "click Check in-store stock",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}
