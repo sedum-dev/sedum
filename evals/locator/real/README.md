@@ -81,3 +81,13 @@ skipped and reported. Label targets that a person would use even when Sedum
 cannot see them today; those cases measure recall.
 
 Recorded model replies for real sites are written to `<store>/replies/`.
+
+## Known limits
+
+- CSS animations still run in a snapshot. A page that animates visibility
+  (the Apple page does) can offer slightly different candidates on each run,
+  so its recorded replies do not always replay offline; those cases report
+  `provider_error` in an `--offline` run.
+- Sites that block headless browsers, freeze behind a bot check, or put
+  their consent dialog in a cross-origin iframe are left out: Zara,
+  OpenStreetMap, Walmart, Target, and The Guardian.
