@@ -1,0 +1,117 @@
+{
+  "page": "data-grid.html",
+  "cases": [
+    {
+      "id": "grid-more-1042",
+      "op": "click",
+      "sentence": "click More actions for order #1042",
+      "gold": ["more-1042"],
+      "tags": ["exact-label", "aria-label", "table-row"]
+    },
+    {
+      "id": "grid-open-1047",
+      "op": "click",
+      "sentence": "click order #1047",
+      "gold": ["link-1047"],
+      "tags": ["table-row", "exact-label"]
+    },
+    {
+      "id": "grid-highest-total",
+      "op": "click",
+      "sentence": "click the order number of the order with the highest total",
+      "gold": ["link-1043"],
+      "tags": ["numeric", "table-row"]
+    },
+    {
+      "id": "grid-cheapest-actions",
+      "op": "click",
+      "sentence": "open the actions menu for the cheapest order",
+      "gold": ["more-1046"],
+      "tags": ["numeric", "table-row", "icon", "paraphrase"]
+    },
+    {
+      "id": "grid-sort-total",
+      "op": "click",
+      "sentence": "sort the table by total",
+      "gold": ["sort-total"],
+      "tags": ["sort", "paraphrase"]
+    },
+    {
+      "id": "grid-sort-date",
+      "op": "click",
+      "sentence": "click the Date column header",
+      "gold": ["sort-date"],
+      "tags": ["sort", "exact-label"]
+    },
+    {
+      "id": "grid-ben-unscoped",
+      "op": "click",
+      "sentence": "click the order link for Ben Carter",
+      "gold": "ambiguous",
+      "tags": ["table-row", "underspecified"]
+    },
+    {
+      "id": "grid-ben-pending",
+      "op": "click",
+      "sentence": "click the order number for Ben Carter's pending order",
+      "gold": ["link-1042"],
+      "tags": ["table-row", "state"]
+    },
+    {
+      "id": "grid-refunded-kebab",
+      "op": "click",
+      "sentence": "click the three-dot menu on the refunded order",
+      "gold": ["more-1044"],
+      "tags": ["table-row", "icon", "state"]
+    },
+    {
+      "id": "grid-next",
+      "op": "click",
+      "sentence": "go to the next page of orders",
+      "gold": ["next"],
+      "tags": ["pagination", "paraphrase"]
+    },
+    {
+      "id": "grid-page-3-absent",
+      "op": "click",
+      "sentence": "click page 3",
+      "gold": "none",
+      "tags": ["pagination", "absent"]
+    },
+    {
+      "id": "grid-rows-per-page",
+      "op": "click",
+      "sentence": "click the Rows per page dropdown",
+      "gold": ["rows-per-page"],
+      "tags": ["select", "pagination"]
+    },
+    {
+      "id": "grid-filter",
+      "op": "fill",
+      "sentence": "type {{query}} in the filter box",
+      "gold": ["filter"],
+      "tags": ["placeholder-name", "paraphrase"]
+    },
+    {
+      "id": "grid-select-last",
+      "op": "click",
+      "sentence": "check the box for the last row",
+      "gold": ["select-1048"],
+      "tags": ["checkbox", "ordinal", "table-row"]
+    },
+    {
+      "id": "grid-delete-absent",
+      "op": "click",
+      "sentence": "click Delete for order #1043",
+      "gold": "none",
+      "tags": ["absent", "table-row"]
+    },
+    {
+      "id": "grid-more-1050-absent",
+      "op": "click",
+      "sentence": "click More actions for order #1050",
+      "gold": "none",
+      "tags": ["absent", "near-duplicate-name"]
+    }
+  ]
+}

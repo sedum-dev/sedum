@@ -1,0 +1,110 @@
+{
+  "page": "carousel-media.html",
+  "cases": [
+    {
+      "id": "carousel-shop-now",
+      "op": "click",
+      "sentence": "click Shop now",
+      "gold": ["slide1-cta"],
+      "tags": ["carousel", "hidden", "exact-label"]
+    },
+    {
+      "id": "carousel-learn-more-hidden",
+      "op": "click",
+      "sentence": "click Learn more",
+      "gold": "none",
+      "tags": ["carousel", "hidden"]
+    },
+    {
+      "id": "carousel-shipping-cta-hidden",
+      "op": "click",
+      "sentence": "click the link on the free shipping slide",
+      "gold": "none",
+      "tags": ["carousel", "hidden", "container"]
+    },
+    {
+      "id": "carousel-next",
+      "op": "click",
+      "sentence": "click the next slide arrow",
+      "gold": ["next-slide"],
+      "tags": ["carousel", "icon", "aria-label"]
+    },
+    {
+      "id": "carousel-prev",
+      "op": "click",
+      "sentence": "go back to the previous slide",
+      "gold": ["prev-slide"],
+      "tags": ["carousel", "paraphrase", "aria-label"]
+    },
+    {
+      "id": "carousel-dot-3",
+      "op": "click",
+      "sentence": "click the third dot",
+      "gold": ["dot-3"],
+      "tags": ["carousel", "ordinal", "icon"]
+    },
+    {
+      "id": "carousel-dot-2",
+      "op": "click",
+      "sentence": "click Go to slide 2",
+      "gold": ["dot-2"],
+      "tags": ["carousel", "aria-label", "exact-label"]
+    },
+    {
+      "id": "carousel-pause",
+      "op": "click",
+      "sentence": "stop the banner from rotating automatically",
+      "gold": ["pause"],
+      "tags": ["carousel", "paraphrase"]
+    },
+    {
+      "id": "carousel-play",
+      "op": "click",
+      "sentence": "click the play button on the video",
+      "gold": ["play"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "carousel-speaker",
+      "op": "click",
+      "sentence": "click the speaker icon",
+      "gold": ["mute"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "carousel-subtitles",
+      "op": "click",
+      "sentence": "turn on subtitles",
+      "gold": ["captions"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "carousel-fullscreen",
+      "op": "click",
+      "sentence": "click the expand icon to go full screen",
+      "gold": ["fullscreen"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "carousel-volume",
+      "op": "click",
+      "sentence": "click the volume slider",
+      "gold": ["volume"],
+      "tags": ["slider", "aria-label"]
+    },
+    {
+      "id": "carousel-slider-unscoped",
+      "op": "click",
+      "sentence": "click the slider",
+      "gold": "ambiguous",
+      "tags": ["slider", "underspecified"]
+    },
+    {
+      "id": "carousel-pip-absent",
+      "op": "click",
+      "sentence": "click the picture-in-picture button",
+      "gold": "none",
+      "tags": ["absent", "icon"]
+    }
+  ]
+}
