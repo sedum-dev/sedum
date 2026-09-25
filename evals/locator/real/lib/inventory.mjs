@@ -55,11 +55,24 @@ export const INVENTORY = `(() => {
     }
     return parts.join(" >>> ");
   }
+  const clean = (value) => (value ?? "").replace(/\\s+/g, " ").trim();
   function text(el) {
-    return (el.innerText ?? el.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 80);
+    const byIds = (el.getAttribute("aria-labelledby") || "").split(/\\s+/).filter(Boolean)
+      .map((id) => clean(el.getRootNode().getElementById?.(id)?.textContent)).join(" ");
+    const labels = el.labels ? [...el.labels].map((l) => clean(l.textContent)).join(" ") : "";
+    const alt = [...el.querySelectorAll("img[alt],svg title")].map((n) => clean(n.getAttribute?.("alt") ?? n.textContent)).join(" ");
+    return clean(byIds || labels || clean(el.innerText) || clean(el.textContent) || alt).slice(0, 80);
   }
   function candidate(el, parentPointer) {
     if (el.matches("a[href],button,input:not([type=hidden]),select,textarea,summary,[contenteditable]:not([contenteditable=false]),[onclick],[tabindex]:not([tabindex='-1'])")) return true;
+    // A label that toggles a visually hidden checkbox or radio is the control people click.
+    if (el.matches("label[for]")) {
+      const control = el.getRootNode().getElementById?.(el.htmlFor);
+      if (control && control.matches("input[type=checkbox],input[type=radio]")) {
+        const box = control.getBoundingClientRect();
+        if (box.width < 2 || box.height < 2 || getComputedStyle(control).opacity === "0") return true;
+      }
+    }
     const role = (el.getAttribute("role") || "").split(" ")[0];
     if (WIDGET_ROLES.has(role)) return true;
     return getComputedStyle(el).cursor === "pointer" && !parentPointer;
