@@ -88,3 +88,72 @@ export function loadSuites(root) {
   }
   return { cases, problems };
 }
+
+/**
+ * Real-site suites name a captured `site` and a `targets` map from gold id to
+ * a selector chain (" >>> " steps into a shadow root). Snapshots live in the
+ * store, outside Git; a suite whose snapshot is missing is reported, not run.
+ */
+export function loadRealSuites(realRoot, store) {
+  const dir = join(realRoot, "cases");
+  const sites = new Map(
+    JSON.parse(readFileSync(join(realRoot, "sites.json"), "utf8")).map(
+      (site) => [site.id, site],
+    ),
+  );
+  const problems = [];
+  const missing = [];
+  const seen = new Set();
+  const cases = [];
+  if (!existsSync(dir)) return { cases, problems, missing };
+  for (const file of readdirSync(dir)
+    .filter((name) => name.endsWith(".json"))
+    .sort()) {
+    const where = `real/cases/${file}`;
+    let suite;
+    try {
+      suite = JSON.parse(readFileSync(join(dir, file), "utf8"));
+    } catch (error) {
+      problems.push(`${where}: invalid JSON (${error.message})`);
+      continue;
+    }
+    if (!sites.has(suite.site)) {
+      problems.push(`${where}: site ${suite.site} is not in sites.json`);
+      continue;
+    }
+    const targets = suite.targets ?? {};
+    for (const [id, chain] of Object.entries(targets))
+      if (typeof chain !== "string" || !chain.trim())
+        problems.push(`${where}: target ${id} needs a selector`);
+    const snapshot = existsSync(join(store, suite.site, "snapshot.html.gz"));
+    if (!snapshot) missing.push(suite.site);
+    for (const testCase of suite.cases ?? []) {
+      const label = `${where} ${testCase.id ?? "(no id)"}`;
+      if (!testCase.id || seen.has(testCase.id))
+        problems.push(`${label}: missing or duplicate case id`);
+      seen.add(testCase.id);
+      if (!OPERATIONS.has(testCase.op))
+        problems.push(`${label}: op must be click, fill, or read`);
+      if (typeof testCase.sentence !== "string" || !testCase.sentence.trim())
+        problems.push(`${label}: missing sentence`);
+      if (!Array.isArray(testCase.tags) || testCase.tags.length === 0)
+        problems.push(`${label}: needs at least one tag`);
+      if (Array.isArray(testCase.gold)) {
+        if (testCase.gold.length === 0)
+          problems.push(`${label}: gold list is empty`);
+        for (const id of testCase.gold)
+          if (!Object.hasOwn(targets, id))
+            problems.push(`${label}: gold ${id} is not in targets`);
+      } else if (testCase.gold !== "none" && testCase.gold !== "ambiguous")
+        problems.push(`${label}: gold must be ids, "none", or "ambiguous"`);
+      if (snapshot)
+        cases.push({
+          ...testCase,
+          site: suite.site,
+          page: `real/${suite.site}/snapshot.html`,
+          targets,
+        });
+    }
+  }
+  return { cases, problems, missing };
+}

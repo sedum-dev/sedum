@@ -1,0 +1,62 @@
+{
+  "site": "wikipedia-article",
+  "targets": {
+    "search": "#searchInput",
+    "search-button": "#searchform > button",
+    "talk": "#ca-talk > a",
+    "history": "#ca-history > a",
+    "login": "#pt-login-2 > a",
+    "babbage-first": "#mwGQ"
+  },
+  "cases": [
+    {
+      "id": "wp-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search Wikipedia field",
+      "gold": ["search"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wp-search-button",
+      "op": "click",
+      "sentence": "click the Search button",
+      "gold": ["search-button"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wp-talk",
+      "op": "click",
+      "sentence": "click the Talk tab",
+      "gold": ["talk"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wp-history",
+      "op": "click",
+      "sentence": "click View history",
+      "gold": ["history"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wp-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wp-babbage-first",
+      "op": "click",
+      "sentence": "click the first Charles Babbage link in the article",
+      "gold": ["babbage-first"],
+      "tags": ["ordinal", "repeated-group"]
+    },
+    {
+      "id": "wp-edit-absent",
+      "op": "click",
+      "sentence": "click the Print this page button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

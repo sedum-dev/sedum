@@ -10,11 +10,15 @@ import {
   quietPage,
   resolveTarget,
 } from "../../packages/core/dist/index.js";
-import { loadSuites } from "./lib/cases.mjs";
+import { loadRealSuites, loadSuites } from "./lib/cases.mjs";
+import { storeDir } from "./real/lib/browser.mjs";
+import { DEEP_QUERY } from "./real/lib/inventory.mjs";
+import { serveStore } from "./real/lib/serve.mjs";
 import { cachedResolver, lexicalResolver } from "./lib/resolvers.mjs";
 import { scoreCase, summarize } from "./lib/score.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
+const realRoot = join(root, "real");
 const { values: args } = parseArgs({
   options: {
     resolver: { type: "string", default: "lexical" },
@@ -25,11 +29,26 @@ const { values: args } = parseArgs({
     verbose: { type: "boolean", short: "v", default: false },
     out: { type: "string" },
     validate: { type: "boolean", default: false },
+    suite: { type: "string", default: "synthetic" },
+    site: { type: "string" },
   },
 });
 
+const real = args.suite === "real";
+if (!real && args.suite !== "synthetic")
+  throw new Error(`Unknown suite ${args.suite}; use synthetic or real.`);
+const store = storeDir(realRoot);
+
 function loadCases() {
-  const { cases, problems } = loadSuites(root);
+  const {
+    cases,
+    problems,
+    missing = [],
+  } = real ? loadRealSuites(realRoot, store) : loadSuites(root);
+  if (missing.length)
+    console.error(
+      `Skipping ${missing.length} site(s) with no snapshot in ${store}: ${missing.join(", ")}`,
+    );
   if (problems.length) {
     console.error(["Invalid eval cases:", ...problems].join("\n  "));
     process.exit(1);
@@ -38,7 +57,8 @@ function loadCases() {
     (testCase) =>
       (!args.case || testCase.id.includes(args.case)) &&
       (!args.tag || testCase.tags?.includes(args.tag)) &&
-      (!args.variant || testCase.variant === args.variant),
+      (!args.variant || testCase.variant === args.variant) &&
+      (!args.site || testCase.site === args.site),
   );
 }
 
@@ -53,7 +73,11 @@ async function makeResolver() {
       : new TypeSafeAdapter();
     const cache = cachedResolver(
       inner,
-      join(root, "replies", `${model}.json`),
+      // Real-site replies quote page text, so they stay in the store.
+      join(
+        real ? join(store, "replies") : join(root, "replies"),
+        `${model}.json`,
+      ),
       { model, offline: args.offline },
     );
     return { resolver: cache, cache };
@@ -91,10 +115,34 @@ function serve(dir) {
 /** Map run-local candidate refs to their `data-eval-gold` labels. */
 function goldOf(page, refs) {
   return page.evaluate(
-    `((refs) => refs.map((ref) => {
-      const element = document.querySelector('[data-sedum-ref="' + CSS.escape(ref) + '"]');
-      return element ? element.getAttribute("data-eval-gold") : null;
-    }))(${JSON.stringify(refs)})`,
+    `((refs) => {
+      const find = (root, selector) => {
+        const hit = root.querySelector(selector);
+        if (hit) return hit;
+        for (const el of root.querySelectorAll("*"))
+          if (el.shadowRoot) { const inner = find(el.shadowRoot, selector); if (inner) return inner; }
+        return null;
+      };
+      return refs.map((ref) => {
+        const element = find(document, '[data-sedum-ref="' + CSS.escape(ref) + '"]');
+        return element ? element.getAttribute("data-eval-gold") : null;
+      });
+    })(${JSON.stringify(refs)})`,
+  );
+}
+
+/** Label a real snapshot's targets in the page; returns the first failure. */
+async function markTargets(page, targets) {
+  return page.evaluate(
+    `((targets) => {
+      const query = ${DEEP_QUERY};
+      for (const [id, chain] of Object.entries(targets)) {
+        const found = query(chain);
+        if (found.error) return id + ": selector " + found.error;
+        found.element.setAttribute("data-eval-gold", id);
+      }
+      return null;
+    })(${JSON.stringify(targets)})`,
   );
 }
 
@@ -136,6 +184,10 @@ async function runCase(session, base, resolver, testCase) {
     const page = await context.newPage();
     await page.goto(`${base}/${testCase.page}`, { timeoutMs: 15_000 });
     await quietPage(page, 300, 5_000);
+    if (testCase.targets) {
+      const failure = await markTargets(page, testCase.targets);
+      if (failure) return { case: testCase, skipped: failure };
+    }
     const decisions = [];
     const result = await resolveTarget(
       page,
@@ -240,7 +292,9 @@ if (args.validate) {
 }
 if (cases.length === 0) throw new Error("No cases match the filters.");
 const { resolver, cache } = await makeResolver();
-const { server, base } = await serve(join(root, "pages"));
+const { server, base } = real
+  ? await serveStore(store)
+  : await serve(join(root, "pages"));
 const session = await new PlaywrightBrowserDriver().launch({
   browser: "chromium",
 });
@@ -257,8 +311,16 @@ try {
   server.close();
 }
 if (process.stdout.isTTY) process.stdout.write("\r");
-const summary = summarize(results);
-console.log(report(summary, results));
+const skipped = results.filter((item) => item.skipped);
+const scored = results.filter((item) => !item.skipped);
+const summary = summarize(scored);
+console.log(report(summary, scored));
+if (skipped.length)
+  console.log(
+    ["", `Skipped ${skipped.length} case(s) whose targets did not resolve:`]
+      .concat(skipped.map((item) => `  ${item.case.id}: ${item.skipped}`))
+      .join("\n"),
+  );
 if (cache)
   console.log(`\nReply cache: ${cache.hits} hits, ${cache.misses} misses`);
 const out =
@@ -269,5 +331,8 @@ const out =
     `${args.resolver}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
   );
 mkdirSync(dirname(out), { recursive: true });
-writeFileSync(out, JSON.stringify({ summary, results }, null, 2) + "\n");
+writeFileSync(
+  out,
+  JSON.stringify({ summary, results: scored, skipped }, null, 2) + "\n",
+);
 console.log(`\nResults: ${out}`);
