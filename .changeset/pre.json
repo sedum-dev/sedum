@@ -9,6 +9,7 @@
   },
   "changesets": [
     "agent-markdown-report",
+    "configurable-system-one-provider",
     "junit-reporter",
     "parallel-runs-and-sharding",
     "real-site-hardening",
