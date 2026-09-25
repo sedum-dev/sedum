@@ -1,0 +1,125 @@
+{
+  "site": "w3schools-forms",
+  "targets": {
+    "search": "#tnb-google-search-input",
+    "sign-in": "#tnb-login-btn",
+    "fname-1": "#fname",
+    "submit-1": "#main > div:nth-of-type(3) > div > form > input:nth-of-type(3)",
+    "next-top": "#main > div:nth-of-type(2) > a:nth-of-type(2)",
+    "next-bottom": "#main > div:nth-of-type(15) > a:nth-of-type(2)",
+    "radio-css": "#css",
+    "cb-car": "#vehicle2",
+    "try-2": "#main > div:nth-of-type(7) > a",
+    "bookmark": "#bookmark-btn",
+    "subnav-python": "#subtopnav > a:nth-of-type(5)",
+    "left-input-types": "#leftmenuinnerinner > a:nth-of-type(45)",
+    "copy-link": "button[aria-label=\"Copy link\"]"
+  },
+  "cases": [
+    {
+      "id": "w3-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search field at the top",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "w3-sign-in",
+      "op": "click",
+      "sentence": "click Sign In",
+      "gold": ["sign-in"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "w3-fname-first-example",
+      "op": "fill",
+      "sentence": "type {{first}} in the First name field of the first example",
+      "gold": ["fname-1"],
+      "tags": ["form-field", "ordinal", "container", "duplicate-name"]
+    },
+    {
+      "id": "w3-submit-first-example",
+      "op": "click",
+      "sentence": "click the Submit button in the first example form",
+      "gold": ["submit-1"],
+      "tags": ["ordinal", "container", "duplicate-name"]
+    },
+    {
+      "id": "w3-next",
+      "op": "click",
+      "sentence": "click Next",
+      "gold": ["next-top", "next-bottom"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "w3-radio-css",
+      "op": "click",
+      "sentence": "select the CSS radio button",
+      "gold": ["radio-css"],
+      "tags": ["radio", "duplicate-name"]
+    },
+    {
+      "id": "w3-cb-car",
+      "op": "click",
+      "sentence": "check I have a car",
+      "gold": ["cb-car"],
+      "tags": ["checkbox", "exact-label"]
+    },
+    {
+      "id": "w3-try-second",
+      "op": "click",
+      "sentence": "click the second Try it Yourself button",
+      "gold": ["try-2"],
+      "tags": ["ordinal", "repeated-group"]
+    },
+    {
+      "id": "w3-bookmark",
+      "op": "click",
+      "sentence": "click the bookmark icon next to the page title",
+      "gold": ["bookmark"],
+      "tags": ["icon", "title-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "w3-subnav-python",
+      "op": "click",
+      "sentence": "click PYTHON in the tutorials bar",
+      "gold": ["subnav-python"],
+      "tags": ["region", "nav"]
+    },
+    {
+      "id": "w3-left-input-types",
+      "op": "click",
+      "sentence": "click HTML Input Types in the left menu",
+      "gold": ["left-input-types"],
+      "tags": ["region", "duplicate-name", "nav"]
+    },
+    {
+      "id": "w3-copy-link",
+      "op": "click",
+      "sentence": "click the Copy link share button",
+      "gold": ["copy-link"],
+      "tags": ["aria-label", "icon"]
+    },
+    {
+      "id": "w3-try-unscoped",
+      "op": "click",
+      "sentence": "click Try it Yourself",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "w3-fname-unscoped",
+      "op": "fill",
+      "sentence": "type {{first}} in the First name field",
+      "gold": "ambiguous",
+      "tags": ["form-field", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "w3-cookies-absent",
+      "op": "click",
+      "sentence": "click Accept all cookies",
+      "gold": "none",
+      "tags": ["absent", "cookie-banner"]
+    }
+  ]
+}

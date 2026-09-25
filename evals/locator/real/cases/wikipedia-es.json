@@ -1,0 +1,128 @@
+{
+  "site": "wikipedia-es",
+  "targets": {
+    "search": "#searchInput",
+    "login": "#pt-login-2 > a",
+    "edit": "#ca-edit > a",
+    "talk": "#ca-talk > a",
+    "history": "#ca-history > a",
+    "toc-historia": "#toc-Historia > a",
+    "toc-cultura-toggle": "#toc-Cultura > button",
+    "theme-dark": "#skin-client-pref-skin-theme-value-night",
+    "languages": "#p-lang-btn-checkbox",
+    "infobox-colon": "#mwAQ > table > tbody > tr:nth-of-type(3) > td > span:nth-of-type(2) > a:nth-of-type(11)",
+    "hide-contents": "button[aria-label=\"Ocultar Contenidos\"]"
+  },
+  "cases": [
+    {
+      "id": "wpes-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Buscar en Wikipedia field",
+      "gold": ["search"],
+      "tags": ["exact-label", "placeholder-name", "non-english"]
+    },
+    {
+      "id": "wpes-search-en",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box",
+      "gold": ["search"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "wpes-login-en",
+      "op": "click",
+      "sentence": "click the Log in link",
+      "gold": ["login"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "wpes-edit",
+      "op": "click",
+      "sentence": "click Editar",
+      "gold": ["edit"],
+      "tags": ["exact-label", "non-english"]
+    },
+    {
+      "id": "wpes-history-en",
+      "op": "click",
+      "sentence": "click View history",
+      "gold": ["history"],
+      "tags": ["paraphrase", "non-english"]
+    },
+    {
+      "id": "wpes-talk",
+      "op": "click",
+      "sentence": "click the Discusión tab",
+      "gold": ["talk"],
+      "tags": ["exact-label", "substring-trap", "tab", "non-english"]
+    },
+    {
+      "id": "wpes-toc-historia",
+      "op": "click",
+      "sentence": "click Historia in the Contenidos sidebar",
+      "gold": ["toc-historia"],
+      "tags": ["exact-label", "region", "non-english"]
+    },
+    {
+      "id": "wpes-toc-expand-cultura-en",
+      "op": "click",
+      "sentence": "expand the Culture subsection in the table of contents",
+      "gold": ["toc-cultura-toggle"],
+      "tags": ["paraphrase", "aria-label", "region", "non-english"]
+    },
+    {
+      "id": "wpes-theme-oscuro",
+      "op": "click",
+      "sentence": "select the Oscuro color option",
+      "gold": ["theme-dark"],
+      "tags": ["radio", "invisible-to-sedum", "non-english"]
+    },
+    {
+      "id": "wpes-languages-en",
+      "op": "click",
+      "sentence": "open the languages menu",
+      "gold": ["languages"],
+      "tags": ["paraphrase", "invisible-to-sedum", "non-english"]
+    },
+    {
+      "id": "wpes-infobox-colon",
+      "op": "click",
+      "sentence": "click Teatro Colón in the infobox",
+      "gold": ["infobox-colon"],
+      "tags": ["container", "in-text-link", "non-english"]
+    },
+    {
+      "id": "wpes-hide-contents",
+      "op": "click",
+      "sentence": "click ocultar next to Contenidos",
+      "gold": ["hide-contents"],
+      "tags": ["exact-label", "duplicate-name", "region", "non-english"]
+    },
+    {
+      "id": "wpes-provincia-unscoped",
+      "op": "click",
+      "sentence": "click the provincia de Buenos Aires link",
+      "gold": "ambiguous",
+      "tags": [
+        "duplicate-name",
+        "underspecified",
+        "in-text-link",
+        "non-english"
+      ]
+    },
+    {
+      "id": "wpes-ocultar-unscoped",
+      "op": "click",
+      "sentence": "click ocultar",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "non-english"]
+    },
+    {
+      "id": "wpes-google-absent",
+      "op": "click",
+      "sentence": "click the Sign in with Google button",
+      "gold": "none",
+      "tags": ["absent", "non-english"]
+    }
+  ]
+}

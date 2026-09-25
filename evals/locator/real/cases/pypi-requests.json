@@ -1,0 +1,124 @@
+{
+  "site": "pypi-requests",
+  "targets": {
+    "search": "#search",
+    "search-btn": "html > body > header > div > div > div:nth-of-type(1) > form > button",
+    "login": "html > body > header > div > div > div:nth-of-type(2) > div > nav:nth-of-type(1) > ul > li:nth-of-type(3) > a",
+    "copy-pip": "#content > div:nth-of-type(1) > div > div > p > button",
+    "tab-history": "#history-tab",
+    "tab-files": "#files-tab",
+    "source": "#description > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > div > ul > li > a",
+    "docs-link": "#description > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > ul > li > a",
+    "lukasa": "a[aria-label=\"Lukasa\"]",
+    "stars": "#description > div > div:nth-of-type(2) > div:nth-of-type(7) > div > div > ul > li:nth-of-type(2) > a",
+    "verified-links": "#description > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > details > summary",
+    "docs-header": "html > body > header > div > div > div:nth-of-type(2) > div > nav:nth-of-type(1) > ul > li:nth-of-type(2) > a"
+  },
+  "cases": [
+    {
+      "id": "pp-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search projects field",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "pp-search-button",
+      "op": "click",
+      "sentence": "click the search icon button",
+      "gold": ["search-btn"],
+      "tags": ["icon", "search"]
+    },
+    {
+      "id": "pp-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "pp-copy-pip",
+      "op": "click",
+      "sentence": "copy the pip install command",
+      "gold": ["copy-pip"],
+      "tags": ["paraphrase", "aria-label", "icon"]
+    },
+    {
+      "id": "pp-tab-history",
+      "op": "click",
+      "sentence": "click the Release history tab",
+      "gold": ["tab-history"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "pp-tab-files",
+      "op": "click",
+      "sentence": "open the Release files tab",
+      "gold": ["tab-files"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "pp-source",
+      "op": "click",
+      "sentence": "click Source under Project links",
+      "gold": ["source"],
+      "tags": ["container", "exact-label"]
+    },
+    {
+      "id": "pp-docs-link",
+      "op": "click",
+      "sentence": "click Documentation in the project links",
+      "gold": ["docs-link"],
+      "tags": ["container", "near-duplicate-name"]
+    },
+    {
+      "id": "pp-docs-header",
+      "op": "click",
+      "sentence": "click Docs in the header",
+      "gold": ["docs-header"],
+      "tags": ["region", "nav", "near-duplicate-name"]
+    },
+    {
+      "id": "pp-maintainer-lukasa",
+      "op": "click",
+      "sentence": "click the maintainer Lukasa",
+      "gold": ["lukasa"],
+      "tags": ["exact-label", "repeated-group"]
+    },
+    {
+      "id": "pp-stars",
+      "op": "click",
+      "sentence": "click the GitHub stars count",
+      "gold": ["stars"],
+      "tags": ["indirect", "paraphrase"]
+    },
+    {
+      "id": "pp-verified-links",
+      "op": "click",
+      "sentence": "expand the Data verified by PyPI details under Project links",
+      "gold": ["verified-links"],
+      "tags": ["container", "duplicate-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "pp-psf-unscoped",
+      "op": "click",
+      "sentence": "click Python Software Foundation",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "footer"]
+    },
+    {
+      "id": "pp-pypi-data-unscoped",
+      "op": "click",
+      "sentence": "click PyPI data",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "pp-changelog-absent",
+      "op": "click",
+      "sentence": "click the Changelog link in Project links",
+      "gold": "none",
+      "tags": ["absent", "container"]
+    }
+  ]
+}
