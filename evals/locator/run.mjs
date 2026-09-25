@@ -20,6 +20,7 @@ const { values: args } = parseArgs({
     resolver: { type: "string", default: "lexical" },
     case: { type: "string" },
     tag: { type: "string" },
+    variant: { type: "string" },
     offline: { type: "boolean", default: false },
     verbose: { type: "boolean", short: "v", default: false },
     out: { type: "string" },
@@ -36,7 +37,8 @@ function loadCases() {
   return cases.filter(
     (testCase) =>
       (!args.case || testCase.id.includes(args.case)) &&
-      (!args.tag || testCase.tags?.includes(args.tag)),
+      (!args.tag || testCase.tags?.includes(args.tag)) &&
+      (!args.variant || testCase.variant === args.variant),
   );
 }
 
@@ -196,6 +198,16 @@ function report(summary, results) {
       ([tag, t]) =>
         `  ${tag.padEnd(22)} ${String(t.ok).padStart(3)}/${String(t.cases).padEnd(3)} ${t.wrong ? `wrong ${t.wrong}` : ""}`,
     ),
+    ...(Object.keys(summary.variants).length
+      ? [
+          "",
+          "By coding variant (success on answerable, wrong actions, recall misses):",
+          ...Object.entries(summary.variants).map(
+            ([variant, v]) =>
+              `  ${variant.padEnd(22)} ${percent(v.successRate).padStart(6)}  wrong ${v.wrong}  recall ${v.recall}  (${v.cases} cases)`,
+          ),
+        ]
+      : []),
     "",
     "Failed cases:",
   ];
