@@ -484,9 +484,17 @@ class PlaywrightPage implements BrowserPage {
     if (!checked.actionable) return checked as AimResult;
     const handle = await this.page
       .evaluateHandle((ref) => {
-        const matches = Array.from(
-          document.querySelectorAll("[data-sedum-ref]"),
-        ).filter((element) => element.getAttribute("data-sedum-ref") === ref);
+        // Candidates can live in open shadow roots, which selectors do not cross.
+        const matches: Element[] = [];
+        const roots: ParentNode[] = [document];
+        while (roots.length) {
+          const root = roots.pop()!;
+          for (const element of Array.from(root.querySelectorAll("*"))) {
+            if (element.getAttribute("data-sedum-ref") === ref)
+              matches.push(element);
+            if (element.shadowRoot) roots.push(element.shadowRoot);
+          }
+        }
         return matches.length === 1 ? matches[0] : null;
       }, aim.ref)
       .catch(() => null);

@@ -79,13 +79,100 @@ if (!window.__sedum) {
     )
       revision++;
   });
-  observer.observe(document, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-    attributes: true,
-    attributeOldValue: true,
-  });
+  const observed = new WeakSet<Node>();
+  function observe(root: Document | ShadowRoot): void {
+    if (observed.has(root)) return;
+    observed.add(root);
+    observer.observe(root, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeOldValue: true,
+    });
+  }
+  observe(document);
+
+  /** The parent in the flat tree: a shadow root's host stands in for it. */
+  function composedParent(element: Element): Element | null {
+    if (element.parentElement) return element.parentElement;
+    const parent = element.parentNode;
+    return parent instanceof ShadowRoot ? parent.host : null;
+  }
+  /** Every element under root in document order, entering open shadow roots. */
+  function allElements(root: Element, limit: number): Element[] | null {
+    const result: Element[] = [];
+    const stack: Element[] = [];
+    const push = (parent: ParentNode) => {
+      for (let i = parent.children.length - 1; i >= 0; i--)
+        stack.push(parent.children[i]!);
+    };
+    if (root.shadowRoot) {
+      observe(root.shadowRoot);
+      push(root.shadowRoot);
+    }
+    push(root);
+    while (stack.length) {
+      const element = stack.pop()!;
+      result.push(element);
+      if (result.length > limit) return null;
+      push(element);
+      if (element.shadowRoot) {
+        observe(element.shadowRoot);
+        push(element.shadowRoot);
+      }
+    }
+    return result;
+  }
+  /**
+   * Rendered text nodes under root in flat-tree order: a shadow host shows its
+   * shadow tree, and a slot shows the nodes assigned to it.
+   */
+  function flatTextNodes(root: Node): Text[] {
+    const result: Text[] = [];
+    const visit = (node: Node) => {
+      if (node instanceof Text) {
+        result.push(node);
+        return;
+      }
+      if (node instanceof HTMLSlotElement) {
+        const assigned = node.assignedNodes({ flatten: true });
+        for (const child of assigned.length
+          ? assigned
+          : Array.from(node.childNodes))
+          visit(child);
+        return;
+      }
+      const children =
+        node instanceof Element && node.shadowRoot
+          ? node.shadowRoot.childNodes
+          : node.childNodes;
+      for (const child of Array.from(children)) visit(child);
+    };
+    visit(root);
+    return result;
+  }
+  function deepElementFromPoint(x: number, y: number): Element | null {
+    let hit = document.elementFromPoint(x, y);
+    while (hit?.shadowRoot) {
+      // elementFromPoint retargets slotted text to the host; the stack keeps
+      // the shadow element that actually renders it.
+      const root = hit.shadowRoot;
+      const inner = root
+        .elementsFromPoint(x, y)
+        .find((element) => element.getRootNode() === root);
+      if (!inner) break;
+      hit = inner;
+    }
+    return hit;
+  }
+  function deepContains(ancestor: Element, node: Element): boolean {
+    for (let current: Element | null = node; current;) {
+      if (current === ancestor) return true;
+      current = composedParent(current);
+    }
+    return false;
+  }
 
   function version(): PageVersion {
     if (route !== location.href) {
@@ -130,7 +217,21 @@ if (!window.__sedum) {
       )
         return false;
     }
-    for (let node: Element | null = element; node; node = node.parentElement) {
+    for (
+      let node: Element | null = element;
+      node;
+      node = composedParent(node)
+    ) {
+      // closest() stops at a shadow root, so hosts are checked here.
+      if (
+        node.getRootNode() !== element.getRootNode() &&
+        node.matches(
+          visualOnly
+            ? "[hidden],[inert]"
+            : "[hidden],[inert],[aria-hidden='true']",
+        )
+      )
+        return false;
       const style = getComputedStyle(node);
       if (
         Number.parseFloat(style.opacity) === 0 ||
@@ -202,12 +303,11 @@ if (!window.__sedum) {
     return false;
   }
   function publicText(element: Element): string {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     const parts: string[] = [];
-    while (walker.nextNode()) {
-      const parent = walker.currentNode.parentElement;
+    for (const node of flatTextNodes(element)) {
+      const parent = node.parentElement;
       if (parent && visible(parent) && !excludedTextAncestor(parent))
-        parts.push(walker.currentNode.textContent ?? "");
+        parts.push(node.textContent ?? "");
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
@@ -266,6 +366,75 @@ if (!window.__sedum) {
       if (value) return value;
     }
     return publicText(element) || element.getAttribute("title")?.trim() || "";
+  }
+  /**
+   * A control with no accessible name takes the nearest visible text on
+   * screen: to its right on the same line (a checkbox and its caption), to
+   * its left on the same line, or directly above it (a field and its label).
+   */
+  function nearbyText(element: Element): string {
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height) return "";
+    const middle = box.top + box.height / 2;
+    let best: { text: string; distance: number } | null = null;
+    let scope: Element | null = composedParent(element);
+    for (let level = 0; scope && level < 3 && !best; level++) {
+      for (const node of flatTextNodes(scope)) {
+        const parent = node.parentElement;
+        const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (
+          !parent ||
+          !text ||
+          deepContains(element, parent) ||
+          excludedTextAncestor(parent, true) ||
+          // Text that already labels another control is that control's name.
+          (parent.closest("label") as HTMLLabelElement | null)?.control ||
+          !visible(parent)
+        )
+          continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rect = range.getBoundingClientRect();
+        if (!rect.width || !rect.height) continue;
+        const sameLine =
+          Math.abs(rect.top + rect.height / 2 - middle) <
+          Math.max(box.height, rect.height) / 2;
+        const overlapsColumn = rect.left < box.right && rect.right > box.left;
+        let distance = Infinity;
+        if (sameLine && rect.left >= box.right - 2)
+          distance = rect.left - box.right;
+        else if (sameLine && rect.right <= box.left + 2)
+          distance = box.left - rect.right;
+        else if (overlapsColumn && rect.bottom <= box.top + 2)
+          distance = box.top - rect.bottom;
+        if (distance > 48) continue;
+        if (!best || distance < best.distance) best = { text, distance };
+      }
+      scope = scope && composedParent(scope);
+    }
+    return best?.text ?? "";
+  }
+  function candidateName(element: Element): string {
+    return label(element) || nearbyText(element);
+  }
+  /**
+   * An element the page styles as clickable but marks up with no role: the
+   * outermost element with a pointer cursor, holding no real control.
+   */
+  function pointerTarget(element: Element): boolean {
+    if (
+      interactive(element) ||
+      element.matches("html,body,label,svg *") ||
+      getComputedStyle(element).cursor !== "pointer"
+    )
+      return false;
+    const parent = composedParent(element);
+    if (parent && getComputedStyle(parent).cursor === "pointer") return false;
+    for (let node = parent; node; node = composedParent(node))
+      if (interactive(node)) return false;
+    return !element.querySelector(
+      "button,a[href],input,textarea,select,[role]",
+    );
   }
   function boundedName(name: string): string {
     const points = Array.from(name);
@@ -488,13 +657,15 @@ if (!window.__sedum) {
       return { candidates, refs, complete: false };
     const root = selectedModal ?? document.body;
     if (!root) return { candidates, refs, complete: true };
-    const elements = root.querySelectorAll("*");
-    if (elements.length > MAX_ELEMENTS)
-      return { candidates, refs, complete: false };
-    for (const element of Array.from(elements)) {
+    const elements = allElements(root, MAX_ELEMENTS);
+    if (!elements) return { candidates, refs, complete: false };
+    for (const element of elements) {
       if (
         !visible(element) ||
-        (operation === "read" ? !readable(element) : !interactive(element))
+        (operation === "read"
+          ? !readable(element)
+          : !interactive(element) &&
+            (operation !== "click" || !pointerTarget(element)))
       )
         continue;
       if (operation === "fill" && !editable(element)) continue;
@@ -504,7 +675,8 @@ if (!window.__sedum) {
         !element.matches("input[type='checkbox'],input[type='radio']")
       )
         continue;
-      const rawName = label(element);
+      const rawName =
+        operation === "read" ? label(element) : candidateName(element);
       if (!rawName) continue;
       const name = boundedName(rawName);
       const ref = `${documentId}-${++sequence}`;
@@ -763,8 +935,8 @@ if (!window.__sedum) {
       return null;
     const element = refElement(target.ref);
     if (!element || element.tagName.toLowerCase() !== target.tag) return null;
-    const matches = Array.from(
-      document.querySelectorAll("[data-sedum-ref]"),
+    const matches = (
+      allElements(document.documentElement, Infinity) ?? []
     ).filter((node) => node.getAttribute("data-sedum-ref") === target.ref);
     if (matches.length !== 1 || matches[0] !== element) return null;
     const candidate = snapshot.candidates.find(
@@ -779,7 +951,7 @@ if (!window.__sedum) {
         (element instanceof HTMLElement && element.isContentEditable)
       ) ||
       candidate.name !== target.name ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       !editable(element) ||
@@ -837,7 +1009,7 @@ if (!window.__sedum) {
     const candidate = snapshot?.candidates.find((item) => item.ref === ref);
     if (
       !candidate ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       (expected && expected.name !== candidate.name)
@@ -873,8 +1045,8 @@ if (!window.__sedum) {
         const x = rect.left + rect.width * fx!;
         const y = rect.top + rect.height * fy!;
         if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
-        const hit = document.elementFromPoint(x, y);
-        if (hit && (hit === element || element.contains(hit))) {
+        const hit = deepElementFromPoint(x, y);
+        if (hit && deepContains(element, hit)) {
           return {
             actionable: true,
             aim: {
