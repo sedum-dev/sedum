@@ -480,6 +480,51 @@ function inNamedRegion(
   return kept.length ? kept : [...candidates];
 }
 
+const GRAMMAR_WORDS = new Set(
+  "a an the this that it its please then and or of on in into to at for".split(
+    " ",
+  ),
+);
+const ROLE_WORDS = new Set(
+  (
+    "click tap press hit open select choose check tick uncheck toggle " +
+    "button link icon field box option menu tab checkbox radio switch " +
+    "item control slider dropdown"
+  ).split(" "),
+);
+
+/**
+ * "click the checkbox" names only a kind of control. When the page has
+ * another control of the same role with a different name, no pick is safe.
+ * Words that also appear in the chosen element's name count as naming it, so
+ * "click Go" or "click Button" still resolve.
+ */
+function roleOnlyAmbiguous(
+  sentence: string,
+  selected: Candidate,
+  candidates: readonly Candidate[],
+): boolean {
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const named = new Set(words(selected.name));
+  const meaningful = words(sentence.replace(/\{\{[^}]*\}\}/g, " ")).filter(
+    (word) => !GRAMMAR_WORDS.has(word),
+  );
+  if (
+    !meaningful.length ||
+    meaningful.some((word) => !ROLE_WORDS.has(word) || named.has(word))
+  )
+    return false;
+  const role = selected.role || selected.tag;
+  return candidates.some(
+    (candidate) =>
+      candidate !== selected &&
+      (candidate.role || candidate.tag) === role &&
+      candidate.name.trim().toLocaleLowerCase() !==
+        selected.name.trim().toLocaleLowerCase(),
+  );
+}
+
 function sameIdentity(a: Candidate, b: Candidate): boolean {
   if (
     a.signals.nodeId !== b.signals.nodeId ||
@@ -896,6 +941,10 @@ export async function resolveTarget(
       if (gate === "low_confidence_or_margin") gate = "repeated_member_proven";
       if (options.operation === "fill" && !member.editable)
         return unresolved("not_fillable");
+      if (roleOnlyAmbiguous(options.sentence, member, candidates)) {
+        gate = "role_only_ambiguous";
+        return unresolved("ambiguous");
+      }
       return await refresh(member);
     }
     if (
@@ -917,6 +966,10 @@ export async function resolveTarget(
     }
     if (options.operation === "fill" && !selected.editable)
       return unresolved("not_fillable");
+    if (roleOnlyAmbiguous(options.sentence, selected, candidates)) {
+      gate = "role_only_ambiguous";
+      return unresolved("ambiguous");
+    }
     return await refresh(selected);
 
     async function refresh(
