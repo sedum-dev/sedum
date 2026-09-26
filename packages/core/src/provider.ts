@@ -5,6 +5,8 @@ export interface ResolverCandidate {
   readonly role: string;
   readonly name: string;
   readonly peers: readonly string[];
+  /** Where the element sits: landmark and nearest heading. */
+  readonly location?: string;
   readonly editable: boolean;
   readonly disabled: boolean;
 }

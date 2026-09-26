@@ -42,6 +42,8 @@ export interface Candidate {
   readonly role: string;
   readonly name: string;
   readonly peers: readonly string[];
+  /** Landmark and nearest heading, e.g. "footer · Company". Sent to the model. */
+  readonly location?: string;
   readonly editable: boolean;
   readonly disabled: boolean;
   readonly inputType: string;
@@ -152,6 +154,7 @@ export function projectCandidates(page: CandidatePage): readonly {
   role: string;
   name: string;
   peers: readonly string[];
+  location?: string;
   editable: boolean;
   disabled: boolean;
 }[] {
@@ -162,7 +165,9 @@ export function projectCandidates(page: CandidatePage): readonly {
       codePoints(candidate.name) > NAME_LIMIT ||
       (candidate.role !== "" && !isSafeRole(candidate.role)) ||
       candidate.peers.length > 2 ||
-      candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT)
+      candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT) ||
+      (candidate.location !== undefined &&
+        codePoints(candidate.location) > PEER_LIMIT)
     )
       throw new Error("candidate_field_too_large");
     return {
@@ -171,6 +176,7 @@ export function projectCandidates(page: CandidatePage): readonly {
       role: candidate.role,
       name: candidate.name,
       peers: candidate.peers,
+      ...(candidate.location ? { location: candidate.location } : {}),
       editable: candidate.editable,
       disabled: candidate.disabled,
     };
