@@ -109,6 +109,53 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ]);
       await context.close();
     });
+    it("offers and clicks controls inside open shadow roots with slotted names", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`
+        customElements.define("x-button", class extends HTMLElement {
+          connectedCallback() {
+            this.attachShadow({ mode: "open" }).innerHTML = "<button><slot></slot></button>";
+            this.shadowRoot.querySelector("button").addEventListener("click", () => window.shadowClicks = (window.shadowClicks || 0) + 1);
+          }
+        });
+        document.querySelector('#app').innerHTML = '<x-button>Save draft</x-button>';`);
+      const found = await collectCandidates(page, "click");
+      expect(found.candidates).toEqual([
+        expect.objectContaining({
+          tag: "button",
+          role: "button",
+          name: "Save draft",
+        }),
+      ]);
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(await page.evaluate("window.shadowClicks || 0")).toBe(1);
+      await context.close();
+    });
+    it("offers pointer-styled elements with no role and names nameless controls by nearby text", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<div style="cursor:pointer" id="go"><svg width="10" height="10"></svg><span>Create account</span></div>' +
+        '<div style="display:flex;gap:8px"><div style="cursor:pointer;width:16px;height:16px;border:1px solid"></div><span>I agree to the Terms</span></div>' +
+        '<div><span style="display:block">Email</span><input type="email"></div>'`);
+      const click = await collectCandidates(page, "click");
+      expect(
+        click.candidates.map((candidate) => [
+          candidate.tag,
+          candidate.role,
+          candidate.name,
+        ]),
+      ).toEqual([
+        ["div", "", "Create account"],
+        ["div", "", "I agree to the Terms"],
+      ]);
+      const fill = await collectCandidates(page, "fill");
+      expect(fill.candidates).toEqual([
+        expect.objectContaining({ tag: "input", name: "Email" }),
+      ]);
+      await context.close();
+    });
     it("keeps long controls available without losing their full-name guard", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =
