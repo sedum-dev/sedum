@@ -199,11 +199,14 @@ export function buildResolverRequest(
       )
     )
       invalid("Candidate peer excerpts are invalid or exceed the limit.");
+    if (candidate.location !== undefined)
+      checkText(candidate.location, PEER_LIMIT, "Candidate location");
     criteria[candidate.id] = {
       tag: candidate.tag,
       role: candidate.role,
       name: candidate.name,
       peers: [...candidate.peers],
+      ...(candidate.location ? { location: candidate.location } : {}),
       editable: candidate.editable,
       disabled: candidate.disabled,
     };

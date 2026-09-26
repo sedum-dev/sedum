@@ -439,6 +439,84 @@ if (!window.__sedum) {
       !inside.some((node) => interactive(node) || node.hasAttribute("role"))
     );
   }
+  const SECTIONING = "article,aside,main,nav,section";
+  /** The landmark a person would name for an element's place on the page. */
+  function landmarkOf(node: Element): string {
+    const tag = node.tagName.toLowerCase();
+    const explicit = node.getAttribute("role");
+    if (tag === "dialog" || explicit === "dialog" || explicit === "alertdialog")
+      return "dialog";
+    if (
+      explicit === "banner" ||
+      (tag === "header" && !node.parentElement?.closest(SECTIONING))
+    )
+      return "header";
+    if (
+      explicit === "contentinfo" ||
+      (tag === "footer" && !node.parentElement?.closest(SECTIONING))
+    )
+      return "footer";
+    if (tag === "nav" || explicit === "navigation") return "navigation";
+    if (tag === "aside" || explicit === "complementary") return "sidebar";
+    if (tag === "main" || explicit === "main") return "main";
+    // Many sites mark regions only with class names or ids.
+    const hint =
+      `${node.id} ${typeof node.className === "string" ? node.className : ""}`.toLowerCase();
+    if (
+      /(^|[\s_-])(site-?header|masthead|top-?bar|navbar|header)($|[\s_-])/.test(
+        hint,
+      )
+    )
+      return "header";
+    if (/(^|[\s_-])(site-?footer|footer)($|[\s_-])/.test(hint)) return "footer";
+    if (
+      /(^|[\s_-])(sidebar|side-?nav|toc|table-of-contents)($|[\s_-])/.test(hint)
+    )
+      return "sidebar";
+    return "";
+  }
+  /**
+   * Where a control sits, as a person would say it: its outermost and
+   * innermost landmarks and the nearest heading above it, e.g.
+   * "footer, navigation · Company".
+   */
+  /** The outermost landmark element around a node, or null. */
+  function landmarkRoot(element: Element): Element | null {
+    let root: Element | null = null;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body;
+      node = composedParent(node)
+    )
+      if (landmarkOf(node)) root = node;
+    return root;
+  }
+  function locationOf(
+    element: Element,
+    heading: { text: string; root: Element | null },
+  ): string {
+    const marks: string[] = [];
+    let root: Element | null = null;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body;
+      node = composedParent(node)
+    ) {
+      const mark = landmarkOf(node);
+      if (!mark) continue;
+      root = node;
+      if (!marks.includes(mark)) marks.unshift(mark);
+    }
+    const kept =
+      marks.length > 2 ? [marks[0]!, marks[marks.length - 1]!] : marks;
+    // A heading from another region, such as the last section before the
+    // footer, would mislabel the control.
+    const parts = [
+      kept.join(", "),
+      heading.root === root ? heading.text : "",
+    ].filter(Boolean);
+    return Array.from(parts.join(" · ")).slice(0, PEER_LIMIT).join("");
+  }
   function boundedName(name: string): string {
     const points = Array.from(name);
     return points.length <= NAME_LIMIT
@@ -665,7 +743,16 @@ if (!window.__sedum) {
     if (!root) return { candidates, refs, complete: true };
     const elements = allElements(root, MAX_ELEMENTS);
     if (!elements) return { candidates, refs, complete: false };
+    let heading: { text: string; root: Element | null } = {
+      text: "",
+      root: null,
+    };
     for (const element of elements) {
+      if (element.matches("h1,h2,h3,h4,h5,h6,[role='heading']")) {
+        const text = visible(element) ? publicText(element) : "";
+        if (text && Array.from(text).length <= 60)
+          heading = { text, root: landmarkRoot(element) };
+      }
       if (
         !visible(element) ||
         (operation === "read"
@@ -692,6 +779,7 @@ if (!window.__sedum) {
         nodeIds.set(element, nodeId);
       }
       const peerData = peers(element, name);
+      const location = locationOf(element, heading);
       owned.set(element, {
         old: element.getAttribute("data-sedum-ref"),
         ref,
@@ -706,6 +794,7 @@ if (!window.__sedum) {
           role: role(element),
           name,
           peers: Object.freeze(peerData.texts),
+          ...(location ? { location } : {}),
           editable: editable(element),
           disabled: disabled(element),
           inputType: element instanceof HTMLInputElement ? element.type : "",

@@ -59,6 +59,7 @@ function validPage(value: CandidatePage): boolean {
         typeof item.tag === "string" &&
         typeof item.role === "string" &&
         Array.isArray(item.peers) &&
+        (item.location === undefined || typeof item.location === "string") &&
         typeof item.disabled === "boolean" &&
         typeof item.editable === "boolean" &&
         !!item.signals &&

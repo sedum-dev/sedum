@@ -408,10 +408,15 @@ function sentenceEvidence(
     haystack.some((_, index) =>
       phrase.every((word, offset) => haystack[index + offset] === word),
     );
+  const texts = (candidate: Candidate): string[] => [
+    candidate.name,
+    ...candidate.peers,
+    ...(candidate.location?.split(/[,·]/) ?? []),
+  ];
   const otherTexts = group
     .filter((candidate) => candidate !== selected)
-    .flatMap((candidate) => [candidate.name, ...candidate.peers].map(words));
-  return [selected.name, ...selected.peers].some((text) => {
+    .flatMap((candidate) => texts(candidate).map(words));
+  return texts(selected).some((text) => {
     const phrase = words(text);
     return (
       phrase.some((word) => !WEAK_MEMBER_WORDS.has(word)) &&
@@ -473,6 +478,53 @@ function qualifiesMember(sentence: string, member: Candidate): boolean {
   );
 }
 
+const REGIONS: readonly {
+  readonly sentence: RegExp;
+  readonly location: (location: string) => boolean;
+}[] = [
+  {
+    sentence:
+      /\b(header|navbar|masthead|top (?:nav(?:igation)?|bar|menu)|(?:global|main) (?:nav(?:igation)?|menu))\b/i,
+    location: (location) =>
+      /\bheader\b/.test(location) ||
+      (/\bnavigation\b/.test(location) &&
+        !/\b(footer|sidebar)\b/.test(location)),
+  },
+  {
+    sentence: /\b(footer|bottom of the page)\b/i,
+    location: (location) => /\bfooter\b/.test(location),
+  },
+  {
+    sentence:
+      /\b(sidebar|side ?bar|side menu|left (?:menu|nav(?:igation)?)|table of contents)\b/i,
+    location: (location) =>
+      /\bsidebar\b/.test(location) ||
+      (/\bnavigation\b/.test(location) &&
+        !/\b(header|footer)\b/.test(location)),
+  },
+  {
+    sentence: /\b(dialog|modal|pop-?up)\b/i,
+    location: (location) => /\bdialog\b/.test(location),
+  },
+];
+
+/**
+ * Candidates in the page region the sentence names, such as "in the footer".
+ * Returns every candidate when the sentence names none, or when no candidate
+ * is known to be there, so a missing landmark never hides the target.
+ */
+function inNamedRegion(
+  sentence: string,
+  candidates: readonly Candidate[],
+): Candidate[] {
+  const named = REGIONS.filter((region) => region.sentence.test(sentence));
+  if (named.length !== 1) return [...candidates];
+  const kept = candidates.filter((candidate) =>
+    named[0]!.location(candidate.location ?? ""),
+  );
+  return kept.length ? kept : [...candidates];
+}
+
 function explicitRegionEvidence(
   sentence: string,
   candidate: Candidate,
@@ -503,7 +555,8 @@ function sameIdentity(a: Candidate, b: Candidate): boolean {
     a.signals.nameTruncated !== b.signals.nameTruncated ||
     a.signals.region !== b.signals.region ||
     a.signals.path !== b.signals.path ||
-    JSON.stringify(a.peers) !== JSON.stringify(b.peers)
+    JSON.stringify(a.peers) !== JSON.stringify(b.peers) ||
+    a.location !== b.location
   )
     return false;
   for (const key of ["hook", "id", "name", "href"] as const) {
@@ -774,6 +827,9 @@ export async function resolveTarget(
                       ...candidate,
                       name: options.projectText(candidate.name),
                       peers: candidate.peers.map(options.projectText),
+                      ...(candidate.location
+                        ? { location: options.projectText(candidate.location) }
+                        : {}),
                     }
                   : candidate,
               })),
@@ -792,7 +848,7 @@ export async function resolveTarget(
       rounds++;
       return decision;
     };
-    let pool: Candidate[] = [...candidates];
+    let pool: Candidate[] = inNamedRegion(options.sentence, candidates);
     let finalists: Candidate[] = [];
     let decision: ResolverDecision;
     let reducedAcrossBatches = false;
