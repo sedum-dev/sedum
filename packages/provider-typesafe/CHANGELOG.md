@@ -1,5 +1,17 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.2
+
+### Minor Changes
+
+- 978f16e: Allow Sedum to use TypeSafe System One-compatible services through the
+  `TYPESAFE_BASE_URL`, `TYPESAFE_DEFAULT_MODEL`, and `TYPESAFE_API_KEY`
+  environment variables, matching the TypeSafe SDK.
+
+### Patch Changes
+
+- @sedum-dev/core@0.1.0-alpha.2
+
 ## 0.1.0-alpha.1
 
 ### Patch Changes
