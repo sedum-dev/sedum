@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Book a room - Harbor Inn</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #0d3b4f;
+        align-items: center;
+      }
+      header a {
+        color: #fff;
+      }
+      main {
+        max-width: 720px;
+        margin: 1rem auto;
+      }
+      form {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+      }
+      .calendar {
+        grid-column: 1 / 3;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        padding: 0.75rem;
+        box-shadow: 0 4px 12px #0002;
+      }
+      .cal-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      table {
+        width: 100%;
+        text-align: center;
+      }
+      td button {
+        width: 2.2rem;
+        height: 2.2rem;
+        border: 0;
+        border-radius: 50%;
+        background: none;
+      }
+      td button:disabled {
+        color: #bbb;
+      }
+      td button.outside {
+        color: #999;
+      }
+      td button.today {
+        border: 1px solid #0d3b4f;
+      }
+      td button.selected {
+        background: #0d3b4f;
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Harbor Inn</a>
+      <a href="/rooms">Rooms</a>
+      <a href="/dining">Dining</a>
+      <a href="/contact">Contact</a>
+    </header>
+    <main>
+      <h1>Book a room</h1>
+      <form onsubmit="return false;">
+        <label
+          >Check-in
+          <input
+            placeholder="MM/DD/YYYY"
+            value="10/14/2026"
+            aria-haspopup="dialog"
+            aria-expanded="true"
+            data-eval-gold="check-in"
+        /></label>
+        <label
+          >Check-out
+          <input
+            placeholder="MM/DD/YYYY"
+            aria-haspopup="dialog"
+            data-eval-gold="check-out"
+        /></label>
+        <div class="calendar" role="dialog" aria-label="Choose check-out date">
+          <div class="cal-head">
+            <button
+              type="button"
+              aria-label="Previous month"
+              data-eval-gold="prev-month"
+            >
+              ‹
+            </button>
+            <h2 id="month-heading" aria-live="polite">October 2026</h2>
+            <button
+              type="button"
+              aria-label="Next month"
+              data-eval-gold="next-month"
+            >
+              ›
+            </button>
+          </div>
+          <table role="grid" aria-labelledby="month-heading">
+            <thead>
+              <tr>
+                <th abbr="Sunday">Su</th>
+                <th abbr="Monday">Mo</th>
+                <th abbr="Tuesday">Tu</th>
+                <th abbr="Wednesday">We</th>
+                <th abbr="Thursday">Th</th>
+                <th abbr="Friday">Fr</th>
+                <th abbr="Saturday">Sa</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Sunday, September 27, 2026"
+                    data-eval-gold="sep-27"
+                    disabled
+                  >
+                    27
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Monday, September 28, 2026"
+                    data-eval-gold="sep-28"
+                    disabled
+                  >
+                    28
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Tuesday, September 29, 2026"
+                    data-eval-gold="sep-29"
+                    disabled
+                  >
+                    29
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Wednesday, September 30, 2026"
+                    data-eval-gold="sep-30"
+                    disabled
+                  >
+                    30
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Thursday, October 1, 2026"
+                    data-eval-gold="oct-1"
+                    disabled
+                  >
+                    1
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Friday, October 2, 2026"
+                    data-eval-gold="oct-2"
+                    disabled
+                  >
+                    2
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Saturday, October 3, 2026"
+                    data-eval-gold="oct-3"
+                    disabled
+                  >
+                    3
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Sunday, October 4, 2026"
+                    data-eval-gold="oct-4"
+                    disabled
+                  >
+                    4
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Monday, October 5, 2026"
+                    data-eval-gold="oct-5"
+                    disabled
+                  >
+                    5
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Tuesday, October 6, 2026"
+                    data-eval-gold="oct-6"
+                    disabled
+                  >
+                    6
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Wednesday, October 7, 2026"
+                    data-eval-gold="oct-7"
+                    disabled
+                  >
+                    7
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="today"
+                    aria-label="Thursday, October 8, 2026"
+                    data-eval-gold="oct-8"
+                    aria-current="date"
+                  >
+                    8
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Friday, October 9, 2026"
+                    data-eval-gold="oct-9"
+                  >
+                    9
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Saturday, October 10, 2026"
+                    data-eval-gold="oct-10"
+                  >
+                    10
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Sunday, October 11, 2026"
+                    data-eval-gold="oct-11"
+                  >
+                    11
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Monday, October 12, 2026"
+                    data-eval-gold="oct-12"
+                  >
+                    12
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Tuesday, October 13, 2026"
+                    data-eval-gold="oct-13"
+                  >
+                    13
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="selected"
+                    aria-label="Wednesday, October 14, 2026"
+                    data-eval-gold="oct-14"
+                    aria-selected="true"
+                  >
+                    14
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Thursday, October 15, 2026"
+                    data-eval-gold="oct-15"
+                  >
+                    15
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Friday, October 16, 2026"
+                    data-eval-gold="oct-16"
+                  >
+                    16
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Saturday, October 17, 2026"
+                    data-eval-gold="oct-17"
+                  >
+                    17
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Sunday, October 18, 2026"
+                    data-eval-gold="oct-18"
+                  >
+                    18
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Monday, October 19, 2026"
+                    data-eval-gold="oct-19"
+                  >
+                    19
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Tuesday, October 20, 2026"
+                    data-eval-gold="oct-20"
+                  >
+                    20
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Wednesday, October 21, 2026"
+                    data-eval-gold="oct-21"
+                  >
+                    21
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Thursday, October 22, 2026"
+                    data-eval-gold="oct-22"
+                  >
+                    22
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Friday, October 23, 2026"
+                    data-eval-gold="oct-23"
+                  >
+                    23
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Saturday, October 24, 2026"
+                    data-eval-gold="oct-24"
+                  >
+                    24
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Sunday, October 25, 2026"
+                    data-eval-gold="oct-25"
+                  >
+                    25
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Monday, October 26, 2026"
+                    data-eval-gold="oct-26"
+                  >
+                    26
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Tuesday, October 27, 2026"
+                    data-eval-gold="oct-27"
+                  >
+                    27
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Wednesday, October 28, 2026"
+                    data-eval-gold="oct-28"
+                  >
+                    28
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Thursday, October 29, 2026"
+                    data-eval-gold="oct-29"
+                  >
+                    29
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Friday, October 30, 2026"
+                    data-eval-gold="oct-30"
+                  >
+                    30
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    aria-label="Saturday, October 31, 2026"
+                    data-eval-gold="oct-31"
+                  >
+                    31
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Sunday, November 1, 2026"
+                    data-eval-gold="nov-1"
+                  >
+                    1
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Monday, November 2, 2026"
+                    data-eval-gold="nov-2"
+                  >
+                    2
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Tuesday, November 3, 2026"
+                    data-eval-gold="nov-3"
+                  >
+                    3
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Wednesday, November 4, 2026"
+                    data-eval-gold="nov-4"
+                  >
+                    4
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Thursday, November 5, 2026"
+                    data-eval-gold="nov-5"
+                  >
+                    5
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Friday, November 6, 2026"
+                    data-eval-gold="nov-6"
+                  >
+                    6
+                  </button>
+                </td>
+                <td role="gridcell">
+                  <button
+                    type="button"
+                    class="outside"
+                    aria-label="Saturday, November 7, 2026"
+                    data-eval-gold="nov-7"
+                  >
+                    7
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <button type="button" data-eval-gold="today">Today</button>
+            <button type="button" data-eval-gold="clear-dates">
+              Clear dates
+            </button>
+          </p>
+        </div>
+        <label
+          >Guests
+          <input
+            type="number"
+            role="spinbutton"
+            min="1"
+            max="6"
+            value="2"
+            data-eval-gold="guests"
+        /></label>
+        <label
+          >Arrival time
+          <select data-eval-gold="arrival-time">
+            <option>Not sure yet</option>
+            <option>Before noon</option>
+            <option>12:00 – 4:00 PM</option>
+            <option>After 4:00 PM</option>
+          </select></label
+        >
+        <label
+          >Promo code
+          <input placeholder="Optional" data-eval-gold="promo" />
+        </label>
+        <p>
+          <button type="submit" data-eval-gold="search">
+            Search availability
+          </button>
+        </p>
+      </form>
+    </main>
+  </body>
+</html>

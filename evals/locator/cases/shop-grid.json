@@ -1,0 +1,89 @@
+{
+  "page": "shop-grid.html",
+  "cases": [
+    {
+      "id": "shop-add-light",
+      "op": "click",
+      "sentence": "click the Add to cart button for Trail Light",
+      "gold": ["add-light"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "shop-add-backpack",
+      "op": "click",
+      "sentence": "click Add to cart for the Canvas Backpack",
+      "gold": ["add-backpack"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "shop-add-mug-paraphrase",
+      "op": "click",
+      "sentence": "add the camp mug to the basket",
+      "gold": ["add-mug"],
+      "tags": ["repeated-group", "container", "paraphrase"]
+    },
+    {
+      "id": "shop-add-by-price",
+      "op": "click",
+      "sentence": "click Add to cart for the $89 jacket",
+      "gold": ["add-shell"],
+      "tags": ["repeated-group", "container", "indirect"]
+    },
+    {
+      "id": "shop-add-second",
+      "op": "click",
+      "sentence": "click the second Add to cart button",
+      "gold": ["add-light"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "shop-add-last",
+      "op": "click",
+      "sentence": "click the last Add to cart button",
+      "gold": ["add-mug"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "shop-add-unscoped",
+      "op": "click",
+      "sentence": "click the Add to cart button",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "shop-add-missing-product",
+      "op": "click",
+      "sentence": "click the Add to cart button for Wool Socks",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    },
+    {
+      "id": "shop-cart",
+      "op": "click",
+      "sentence": "click the cart link",
+      "gold": ["cart"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "shop-load-more",
+      "op": "click",
+      "sentence": "click the Load more button",
+      "gold": ["load-more"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "shop-checkout-absent",
+      "op": "click",
+      "sentence": "click the Checkout button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "shop-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search field",
+      "gold": ["search"],
+      "tags": ["placeholder-name"]
+    }
+  ]
+}

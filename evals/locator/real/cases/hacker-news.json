@@ -1,0 +1,123 @@
+{
+  "site": "hacker-news",
+  "targets": {
+    "login": "#hnmain > tbody > tr:nth-of-type(1) > td > table > tbody > tr > td:nth-of-type(3) > span > a",
+    "submit": "#hnmain > tbody > tr:nth-of-type(1) > td > table > tbody > tr > td:nth-of-type(2) > span > a:nth-of-type(7)",
+    "story-1": "#bigbox > td > table > tbody > tr:nth-of-type(1) > td:nth-of-type(3) > span > a",
+    "comments-2": "#bigbox > td > table > tbody > tr:nth-of-type(5) > td:nth-of-type(2) > span > a:nth-of-type(3)",
+    "comments-fdroid": "#bigbox > td > table > tbody > tr:nth-of-type(20) > td:nth-of-type(2) > span > a:nth-of-type(3)",
+    "hide-anthropic": "#bigbox > td > table > tbody > tr:nth-of-type(11) > td:nth-of-type(2) > span > a:nth-of-type(2)",
+    "upvote-1": "#bigbox > td > table > tbody > tr:nth-of-type(1) > td:nth-of-type(2) > center > a",
+    "author-gitbug": "#bigbox > td > table > tbody > tr:nth-of-type(5) > td:nth-of-type(2) > span > a:nth-of-type(1)",
+    "more": "#bigbox > td > table > tbody > tr:nth-of-type(92) > td:nth-of-type(2) > a",
+    "guidelines": "#hnmain > tbody > tr:nth-of-type(4) > td > center > span > a:nth-of-type(1)",
+    "search": "input[name=\"q\"]"
+  },
+  "cases": [
+    {
+      "id": "hn-login",
+      "op": "click",
+      "sentence": "click login",
+      "gold": ["login"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "hn-submit",
+      "op": "click",
+      "sentence": "click the link to submit a new story",
+      "gold": ["submit"],
+      "tags": ["paraphrase", "nav"]
+    },
+    {
+      "id": "hn-first-story",
+      "op": "click",
+      "sentence": "open the first story",
+      "gold": ["story-1"],
+      "tags": ["ordinal", "repeated-group", "table-row"]
+    },
+    {
+      "id": "hn-second-comments",
+      "op": "click",
+      "sentence": "click the comments link for the second story",
+      "gold": ["comments-2"],
+      "tags": ["ordinal", "repeated-group", "table-row"]
+    },
+    {
+      "id": "hn-comments-fdroid",
+      "op": "click",
+      "sentence": "click the comments link under F-Droid 2.0",
+      "gold": ["comments-fdroid"],
+      "tags": ["repeated-group", "table-row", "container"]
+    },
+    {
+      "id": "hn-hide-anthropic",
+      "op": "click",
+      "sentence": "click hide on the story about Anthropic being designated a supply chain risk",
+      "gold": ["hide-anthropic"],
+      "tags": ["repeated-group", "table-row", "container"]
+    },
+    {
+      "id": "hn-upvote-first",
+      "op": "click",
+      "sentence": "click the upvote arrow next to the first story",
+      "gold": ["upvote-1"],
+      "tags": ["icon", "ordinal", "table-row", "invisible-to-sedum"]
+    },
+    {
+      "id": "hn-author-gitbug",
+      "op": "click",
+      "sentence": "click the username of whoever posted the Git-bug story",
+      "gold": ["author-gitbug"],
+      "tags": ["indirect", "table-row", "container"]
+    },
+    {
+      "id": "hn-more",
+      "op": "click",
+      "sentence": "click More to load the next page",
+      "gold": ["more"],
+      "tags": ["exact-label", "pagination"]
+    },
+    {
+      "id": "hn-guidelines",
+      "op": "click",
+      "sentence": "click Guidelines in the footer",
+      "gold": ["guidelines"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "hn-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search box at the bottom",
+      "gold": ["search"],
+      "tags": ["search", "region", "footer", "invisible-to-sedum"]
+    },
+    {
+      "id": "hn-hide-unscoped",
+      "op": "click",
+      "sentence": "click hide",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "hn-time-ambiguous",
+      "op": "click",
+      "sentence": "click the 6 hours ago link",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "hn-downvote-absent",
+      "op": "click",
+      "sentence": "click the downvote arrow for the first story",
+      "gold": "none",
+      "tags": ["absent", "icon"]
+    },
+    {
+      "id": "hn-signup-absent",
+      "op": "click",
+      "sentence": "click the Sign up button",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

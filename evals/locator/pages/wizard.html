@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Set up your workspace - Loop</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        background: #f4f5f7;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 1.5rem;
+        background: #fff;
+        border-bottom: 1px solid #ddd;
+      }
+      main {
+        max-width: 640px;
+        margin: 2rem auto;
+        background: #fff;
+        padding: 1.5rem;
+        border-radius: 8px;
+      }
+      ol.stepper {
+        display: flex;
+        gap: 0.5rem;
+        list-style: none;
+        padding: 0;
+        counter-reset: step;
+      }
+      ol.stepper li {
+        flex: 1;
+      }
+      ol.stepper button {
+        width: 100%;
+        border: 0;
+        border-top: 3px solid #ccc;
+        background: none;
+        padding: 0.5rem 0;
+        text-align: left;
+      }
+      ol.stepper button.done {
+        border-color: #2a7;
+      }
+      ol.stepper button[aria-current] {
+        border-color: #36c;
+        font-weight: 600;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 1rem;
+      }
+      .actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .actions .spacer {
+        flex: 1;
+      }
+      .chat {
+        position: fixed;
+        right: 1.5rem;
+        bottom: 1.5rem;
+        width: 3rem;
+        height: 3rem;
+        border-radius: 50%;
+        border: 0;
+        background: #36c;
+        color: #fff;
+        font-size: 1.3rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Loop</strong>
+      <span
+        >Signed in as sam@loop.test ·
+        <a href="/logout" data-eval-gold="logout">Log out</a></span
+      >
+    </header>
+    <main>
+      <nav aria-label="Setup progress">
+        <ol class="stepper">
+          <li>
+            <button class="done" data-eval-gold="step-account">
+              <span aria-hidden="true">✓</span> 1. Account
+            </button>
+          </li>
+          <li>
+            <button aria-current="step" data-eval-gold="step-company">
+              2. Company
+            </button>
+          </li>
+          <li>
+            <button disabled data-eval-gold="step-team">3. Team</button>
+          </li>
+          <li>
+            <button disabled data-eval-gold="step-review">4. Review</button>
+          </li>
+        </ol>
+      </nav>
+      <h1>Tell us about your company</h1>
+      <p>Step 2 of 4. You can change these details later in Settings.</p>
+      <form onsubmit="return false;">
+        <div class="field">
+          <label for="company-name">Company name</label>
+          <input
+            id="company-name"
+            required
+            autocomplete="organization"
+            data-eval-gold="company-name"
+          />
+        </div>
+        <div class="field">
+          <label for="company-size">Company size</label>
+          <select id="company-size" data-eval-gold="company-size">
+            <option value="">Select…</option>
+            <option>Just me</option>
+            <option>2–10</option>
+            <option>11–50</option>
+            <option>51–200</option>
+            <option>201+</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="industry">Industry</label>
+          <select id="industry" data-eval-gold="industry">
+            <option value="">Select…</option>
+            <option>Software</option>
+            <option>Retail</option>
+            <option>Healthcare</option>
+            <option>Education</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="website">Website</label>
+          <input
+            id="website"
+            type="url"
+            placeholder="https://example.com"
+            data-eval-gold="website"
+          />
+        </div>
+        <div class="field">
+          <label for="company-phone">Phone (optional)</label>
+          <input id="company-phone" type="tel" data-eval-gold="phone" />
+        </div>
+        <div class="actions">
+          <button type="button" data-eval-gold="back">Back</button>
+          <a href="#draft" data-eval-gold="save-draft">Save draft</a>
+          <span class="spacer"></span>
+          <button type="button" data-eval-gold="skip">Skip for now</button>
+          <button type="submit" data-eval-gold="next">Next</button>
+        </div>
+      </form>
+    </main>
+    <button
+      class="chat"
+      aria-label="Open help chat"
+      title="Chat with us"
+      data-eval-gold="help-chat"
+    >
+      💬
+    </button>
+  </body>
+</html>

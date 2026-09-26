@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Draft editor</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 1rem;
+      }
+      [role="toolbar"] {
+        display: flex;
+        gap: 0.25rem;
+      }
+      .chip {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border: 1px solid #999;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div role="toolbar" aria-label="Formatting">
+        <button aria-label="Bold" data-eval-gold="bold"><b>B</b></button>
+        <button aria-label="Italic" data-eval-gold="italic"><i>I</i></button>
+        <button title="Insert link" data-eval-gold="link">
+          <svg width="14" height="14" aria-hidden="true">
+            <circle cx="7" cy="7" r="6" />
+          </svg>
+        </button>
+        <button data-eval-gold="unnamed-icon">
+          <svg width="14" height="14" aria-hidden="true">
+            <rect width="14" height="14" />
+          </svg>
+        </button>
+      </div>
+      <textarea aria-label="Draft body" data-eval-gold="body"></textarea>
+      <p>
+        <button aria-label="Delete draft" data-eval-gold="delete">🗑</button>
+        <span
+          class="chip"
+          onclick="this.textContent = 'Archived'"
+          data-eval-gold="archive"
+          >Archive</span
+        >
+        <button data-eval-gold="publish">Publish</button>
+      </p>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create your account</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0 auto;
+        max-width: 520px;
+        padding: 1rem;
+      }
+      .summary {
+        border: 2px solid #b00;
+        padding: 0.5rem 1rem;
+        margin-bottom: 1rem;
+      }
+      .field {
+        margin: 0.9rem 0;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+      }
+      .req {
+        color: #b00;
+      }
+      input[aria-invalid="true"] {
+        border: 2px solid #b00;
+      }
+      .error {
+        color: #b00;
+        font-size: 13px;
+        margin: 0.2rem 0;
+      }
+      .hint {
+        color: #666;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <header><a href="/">Ledgerly</a></header>
+    <h1>Create your account</h1>
+
+    <div class="summary" role="alert" aria-labelledby="summary-title">
+      <h2 id="summary-title">There are 2 problems with your details</h2>
+      <ul>
+        <li>
+          <a href="#email" data-eval-gold="summary-email">Email is required</a>
+        </li>
+        <li>
+          <a href="#password" data-eval-gold="summary-password"
+            >Password must be at least 12 characters</a
+          >
+        </li>
+      </ul>
+    </div>
+
+    <form novalidate onsubmit="return false;">
+      <div class="field">
+        <label for="name"
+          >Full name <span class="req" aria-hidden="true">*</span></label
+        >
+        <input id="name" required value="Jordan Lee" data-eval-gold="name" />
+      </div>
+
+      <div class="field">
+        <label for="email"
+          >Email address <span class="req" aria-hidden="true">*</span></label
+        >
+        <p class="error" id="email-error">Error: Email is required</p>
+        <input
+          id="email"
+          type="email"
+          required
+          aria-invalid="true"
+          aria-describedby="email-error"
+          data-eval-gold="email"
+        />
+      </div>
+
+      <div class="field">
+        <label for="phone">Mobile number</label>
+        <input
+          id="phone"
+          type="tel"
+          value="+1 555 0142"
+          data-eval-gold="phone"
+        />
+      </div>
+
+      <div class="field">
+        <label for="code"
+          >Verification code
+          <span class="req" aria-hidden="true">*</span></label
+        >
+        <span class="hint" id="code-hint"
+          >We sent a 6-digit code to your phone.</span
+        >
+        <input
+          id="code"
+          inputmode="numeric"
+          required
+          aria-describedby="code-hint"
+          data-eval-gold="code"
+        />
+        <button type="button" disabled data-eval-gold="resend">
+          Resend verification code (available in 30s)
+        </button>
+      </div>
+
+      <div class="field">
+        <label for="password"
+          >Password <span class="req" aria-hidden="true">*</span></label
+        >
+        <p class="error" id="password-error">
+          Error: Password must be at least 12 characters
+        </p>
+        <input
+          id="password"
+          type="password"
+          required
+          value="hunter2"
+          aria-invalid="true"
+          aria-describedby="password-error"
+          data-eval-gold="password"
+        />
+        <button
+          type="button"
+          aria-pressed="false"
+          data-eval-gold="show-password"
+        >
+          Show password
+        </button>
+      </div>
+
+      <div class="field">
+        <label for="confirm"
+          >Confirm password <span class="req" aria-hidden="true">*</span></label
+        >
+        <input
+          id="confirm"
+          type="password"
+          required
+          value="hunter2"
+          data-eval-gold="confirm"
+        />
+      </div>
+
+      <div class="field">
+        <input type="checkbox" id="terms" required data-eval-gold="terms" />
+        <label for="terms" style="display: inline; font-weight: 400"
+          >I agree to the
+          <a href="/terms" data-eval-gold="terms-link"
+            >Terms of Service</a
+          ></label
+        >
+      </div>
+      <div class="field">
+        <input type="checkbox" id="news" data-eval-gold="newsletter" />
+        <label for="news" style="display: inline; font-weight: 400"
+          >Send me product updates</label
+        >
+      </div>
+
+      <button type="submit" data-eval-gold="create">Create account</button>
+    </form>
+    <p>
+      Already registered?
+      <a href="/sign-in" data-eval-gold="sign-in">Sign in</a>
+    </p>
+    <footer><a href="/privacy">Privacy</a> <a href="/help">Help</a></footer>
+  </body>
+</html>

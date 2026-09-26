@@ -1,0 +1,142 @@
+{
+  "site": "khan-academy",
+  "targets": {
+    "accept": "#onetrust-accept-btn-handler",
+    "close_cookie": "button[aria-label=\"Close\"]",
+    "signup_header": "#top-header-container > nav > div:nth-of-type(1) > div:nth-of-type(3) > a:nth-of-type(2)",
+    "login_1": "#login-or-signup",
+    "login_2": "#main-content > section:nth-of-type(1) > div > div:nth-of-type(2) > p > a",
+    "explore": "button[data-testid=\"learn-menu-dropdown\"]",
+    "one_time": "#gift-frequency-0",
+    "one_time_label": "#donate-banner > div > div > div > div > form > fieldset > div > ul:nth-of-type(1) > li:nth-of-type(1) > label",
+    "yearly": "#frequency-1",
+    "amt35": "#gift-amount-2",
+    "amt35_label": "#donate-banner > div > div > div > div > form > div:nth-of-type(1) > div > fieldset > ul > li:nth-of-type(3) > label",
+    "give": "button[data-testid=\"donation-button-classy\"]",
+    "close_donation": "button[data-testid=\"close-donate-banner\"]",
+    "teacher_card": "#main-content > section:nth-of-type(1) > div > div:nth-of-type(2) > a:nth-of-type(3)",
+    "students_tab": "#students-tab",
+    "math": "#main-content > section:nth-of-type(3) > nav > ul > li:nth-of-type(1) > a"
+  },
+  "cases": [
+    {
+      "id": "ka-accept-cookies",
+      "op": "click",
+      "sentence": "click Accept All Cookies",
+      "gold": ["accept"],
+      "tags": ["cookie-banner", "exact-label"]
+    },
+    {
+      "id": "ka-close-cookie",
+      "op": "click",
+      "sentence": "close the cookie banner with the X",
+      "gold": ["close_cookie"],
+      "tags": ["cookie-banner", "icon"]
+    },
+    {
+      "id": "ka-signup-header",
+      "op": "click",
+      "sentence": "click Sign up in the header",
+      "gold": ["signup_header"],
+      "tags": ["nav", "duplicate-name"]
+    },
+    {
+      "id": "ka-signup-unscoped",
+      "op": "click",
+      "sentence": "click Sign up",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "ka-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login_1", "login_2"],
+      "tags": ["duplicate-name", "exact-label"]
+    },
+    {
+      "id": "ka-explore",
+      "op": "click",
+      "sentence": "open the Explore menu",
+      "gold": ["explore"],
+      "tags": ["nav", "paraphrase"]
+    },
+    {
+      "id": "ka-one-time",
+      "op": "click",
+      "sentence": "select One time as the gift frequency",
+      "gold": ["one_time", "one_time_label"],
+      "tags": ["radio", "exact-label"]
+    },
+    {
+      "id": "ka-yearly",
+      "op": "click",
+      "sentence": "choose Yearly",
+      "gold": ["yearly"],
+      "tags": ["radio", "exact-label"]
+    },
+    {
+      "id": "ka-amount-35",
+      "op": "click",
+      "sentence": "select the $35 donation amount",
+      "gold": ["amt35", "amt35_label"],
+      "tags": ["radio", "numeric"]
+    },
+    {
+      "id": "ka-give-now",
+      "op": "click",
+      "sentence": "click Give now",
+      "gold": ["give"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ka-close-donation",
+      "op": "click",
+      "sentence": "close the donation panel",
+      "gold": ["close_donation"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "ka-teacher-card",
+      "op": "click",
+      "sentence": "click Teacher under Get started as a",
+      "gold": ["teacher_card"],
+      "tags": ["container", "region"]
+    },
+    {
+      "id": "ka-students-tab",
+      "op": "click",
+      "sentence": "select the Students tab",
+      "gold": ["students_tab"],
+      "tags": ["tab", "exact-label"]
+    },
+    {
+      "id": "ka-math",
+      "op": "click",
+      "sentence": "click Math in the courses list",
+      "gold": ["math"],
+      "tags": ["region", "exact-label"]
+    },
+    {
+      "id": "ka-talk-to-team",
+      "op": "click",
+      "sentence": "click Talk to our team",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "ka-amount-50-absent",
+      "op": "click",
+      "sentence": "select the $50 donation amount",
+      "gold": "none",
+      "tags": ["absent", "numeric", "radio"]
+    },
+    {
+      "id": "ka-google-absent",
+      "op": "click",
+      "sentence": "click Continue with Google",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

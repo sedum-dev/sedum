@@ -1,0 +1,131 @@
+{
+  "site": "figma-home",
+  "targets": {
+    "dismiss": "#app > div:nth-of-type(1) > div > button",
+    "logo": "#app > div:nth-of-type(2) > header > div > div > div > a",
+    "products": "#app > div:nth-of-type(2) > header > div > div > div > nav > ul > li:nth-of-type(1) > div > button",
+    "login": "#app > div:nth-of-type(2) > header > div > div > ul > li:nth-of-type(1) > a",
+    "contact-sales": "#app > div:nth-of-type(2) > header > div > div > ul > li:nth-of-type(2) > a",
+    "get-started-free": "#app > div:nth-of-type(2) > header > div > div > ul > li:nth-of-type(3) > a:nth-of-type(2)",
+    "get-started-hero": "#main > section:nth-of-type(1) > div > div:nth-of-type(3) > div > a",
+    "get-started-bottom": "#main > section:nth-of-type(7) > div > div:nth-of-type(2) > a",
+    "explore-design": "#main > section:nth-of-type(2) > div > div:nth-of-type(2) > ul > li:nth-of-type(1) > article > div:nth-of-type(2) > div > a",
+    "browse-templates": "#main > section:nth-of-type(8) > div > div:nth-of-type(1) > div:nth-of-type(2) > a",
+    "next-slide": "button[aria-label=\"Next slide\"]",
+    "websites": "#_R_1an4lubsodqivb_ > div:nth-of-type(2) > div > div > div:nth-of-type(2) > article > div > div:nth-of-type(2) > a",
+    "youtube": "a[aria-label=\"YouTube\"]",
+    "homepage-footer-link": "a[aria-label=\"Homepage\"]"
+  },
+  "cases": [
+    {
+      "id": "fig-login",
+      "op": "click",
+      "sentence": "click Log in",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "fig-get-started",
+      "op": "click",
+      "sentence": "click Get started",
+      "gold": ["get-started-hero", "get-started-bottom", "get-started-free"],
+      "tags": ["exact-label", "duplicate-name", "substring-trap"]
+    },
+    {
+      "id": "fig-contact-sales",
+      "op": "click",
+      "sentence": "click Contact sales in the header",
+      "gold": ["contact-sales"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "fig-products",
+      "op": "click",
+      "sentence": "open the Products menu",
+      "gold": ["products"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "fig-logo",
+      "op": "click",
+      "sentence": "click the Figma logo in the header",
+      "gold": ["logo", "homepage-footer-link"],
+      "tags": ["icon", "region", "invisible-to-sedum"]
+    },
+    {
+      "id": "fig-dismiss-banner",
+      "op": "click",
+      "sentence": "close the Figma Motion announcement banner",
+      "gold": ["dismiss"],
+      "tags": ["icon", "aria-label", "overlay"]
+    },
+    {
+      "id": "fig-pause",
+      "op": "click",
+      "sentence": "click Pause",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "fig-play",
+      "op": "click",
+      "sentence": "click the play button",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "icon"]
+    },
+    {
+      "id": "fig-explore-design",
+      "op": "click",
+      "sentence": "click Explore design tools",
+      "gold": ["explore-design"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "fig-browse-templates",
+      "op": "click",
+      "sentence": "click Browse all templates",
+      "gold": ["browse-templates"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "fig-next-slide",
+      "op": "click",
+      "sentence": "click the next arrow on the templates carousel",
+      "gold": ["next-slide"],
+      "tags": ["icon", "aria-label", "container"]
+    },
+    {
+      "id": "fig-websites",
+      "op": "click",
+      "sentence": "click Websites in the templates carousel",
+      "gold": ["websites"],
+      "tags": [
+        "exact-label",
+        "container",
+        "repeated-group",
+        "invisible-to-sedum"
+      ]
+    },
+    {
+      "id": "fig-youtube",
+      "op": "click",
+      "sentence": "click the YouTube icon in the footer",
+      "gold": ["youtube"],
+      "tags": ["icon", "aria-label", "footer"]
+    },
+    {
+      "id": "fig-search-absent",
+      "op": "fill",
+      "sentence": "type {{query}} in the search bar",
+      "gold": "none",
+      "tags": ["absent", "search"]
+    },
+    {
+      "id": "fig-google-absent",
+      "op": "click",
+      "sentence": "click Sign in with Google",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

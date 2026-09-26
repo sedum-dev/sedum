@@ -1,0 +1,127 @@
+{
+  "site": "usa-gov",
+  "targets": {
+    "search": "#search-field-small",
+    "search-button": "#usagov_all_gov-desktop > button",
+    "espanol": "#header > div:nth-of-type(2) > div:nth-of-type(2) > a",
+    "logo": "#extended-logo > em > a",
+    "benefits-nav": "#header > nav > div > ul > li:nth-of-type(3) > a",
+    "benefits-card": "#main-content > div:nth-of-type(2) > div > ul > li:nth-of-type(7) > a",
+    "travel-nav": "#header > nav > div > ul > li:nth-of-type(6) > a",
+    "passport": "#block-usagov-content > div > div:nth-of-type(4) > ul > li:nth-of-type(2) > a",
+    "how-you-know": "#usagov-banner > div > div:nth-of-type(1) > div > button",
+    "all-topics-nav": "#header > nav > div > ul > li:nth-of-type(1) > a",
+    "all-topics-footer": "html > body > footer > div:nth-of-type(1) > div > div > div > nav > div > div:nth-of-type(1) > section > ul > li:nth-of-type(1) > a",
+    "all-topics-jump": "#block-usagov-content > div > div:nth-of-type(5) > a",
+    "find-benefits": "#block-usagov-content > div > div:nth-of-type(6) > div > a",
+    "report-issue": "html > body > footer > div:nth-of-type(1) > div > div > div > nav > div > div:nth-of-type(2) > section > ul > li:nth-of-type(2) > a",
+    "unclaimed": "#block-usagov-content > div > div:nth-of-type(4) > ul > li:nth-of-type(4) > a"
+  },
+  "cases": [
+    {
+      "id": "ug-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box",
+      "gold": ["search"],
+      "tags": ["search", "form-field"]
+    },
+    {
+      "id": "ug-search-button",
+      "op": "click",
+      "sentence": "click the search button",
+      "gold": ["search-button"],
+      "tags": ["icon", "search", "invisible-to-sedum"]
+    },
+    {
+      "id": "ug-espanol",
+      "op": "click",
+      "sentence": "switch the site to Español",
+      "gold": ["espanol"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ug-logo",
+      "op": "click",
+      "sentence": "click the USAGov logo",
+      "gold": ["logo"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "ug-benefits",
+      "op": "click",
+      "sentence": "click Government benefits",
+      "gold": ["benefits-nav", "benefits-card"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "ug-travel-nav",
+      "op": "click",
+      "sentence": "click Travel in the main navigation",
+      "gold": ["travel-nav"],
+      "tags": ["nav", "duplicate-name"]
+    },
+    {
+      "id": "ug-passport",
+      "op": "click",
+      "sentence": "click Get or renew a passport",
+      "gold": ["passport"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ug-unclaimed",
+      "op": "click",
+      "sentence": "find unclaimed money",
+      "gold": ["unclaimed"],
+      "tags": ["exact-label", "substring-trap"]
+    },
+    {
+      "id": "ug-how-you-know",
+      "op": "click",
+      "sentence": "click Here's how you know",
+      "gold": ["how-you-know"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "ug-all-topics",
+      "op": "click",
+      "sentence": "go to all topics and services",
+      "gold": ["all-topics-nav", "all-topics-footer", "all-topics-jump"],
+      "tags": ["paraphrase", "duplicate-name"]
+    },
+    {
+      "id": "ug-find-benefits",
+      "op": "click",
+      "sentence": "click the Find benefits button",
+      "gold": ["find-benefits"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "ug-report-issue",
+      "op": "click",
+      "sentence": "click Report a website issue in the footer",
+      "gold": ["report-issue"],
+      "tags": ["exact-label", "footer"]
+    },
+    {
+      "id": "ug-how-do-i-unscoped",
+      "op": "click",
+      "sentence": "click the link under How do I ...",
+      "gold": "ambiguous",
+      "tags": ["region", "underspecified"]
+    },
+    {
+      "id": "ug-signin-absent",
+      "op": "click",
+      "sentence": "click Sign in",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "ug-english-absent",
+      "op": "click",
+      "sentence": "click the English language link",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

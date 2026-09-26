@@ -9,3 +9,5 @@ coverage/
 release-candidate/
 release-notes.md
 release-evidence.json
+evals/locator/results/
+evals/locator/real/store/

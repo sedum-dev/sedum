@@ -1,0 +1,124 @@
+{
+  "site": "python-org",
+  "targets": {
+    "search": "#id-search-field",
+    "go": "#submit",
+    "logo": "#touchnav-wrapper > header > div > div:nth-of-type(1) > a",
+    "python-tab": "#top > nav > ul > li:nth-of-type(1) > a",
+    "pypi-tab": "#top > nav > ul > li:nth-of-type(4) > a",
+    "downloads-menu": "#downloads > a",
+    "shell": "#start-shell",
+    "slide-3": "#dive-into-python > ol > li:nth-of-type(3) > a",
+    "latest-release": "#content > div > section > div:nth-of-type(1) > div:nth-of-type(2) > p:nth-of-type(2) > a",
+    "events-more": "#content > div > section > div:nth-of-type(2) > div:nth-of-type(2) > div > p > a",
+    "flask": "#content > div > section > div:nth-of-type(3) > div:nth-of-type(2) > div > ul > li:nth-of-type(1) > span > a:nth-of-type(5)",
+    "donate": "#touchnav-wrapper > header > div > div:nth-of-type(2) > a"
+  },
+  "cases": [
+    {
+      "id": "py-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "py-go",
+      "op": "click",
+      "sentence": "click the GO button next to the search box",
+      "gold": ["go"],
+      "tags": ["exact-label", "search"]
+    },
+    {
+      "id": "py-logo",
+      "op": "click",
+      "sentence": "click the Python logo",
+      "gold": ["logo", "python-tab"],
+      "tags": ["icon", "invisible-to-sedum"]
+    },
+    {
+      "id": "py-pypi",
+      "op": "click",
+      "sentence": "click PyPI in the top bar",
+      "gold": ["pypi-tab"],
+      "tags": ["exact-label", "nav", "region"]
+    },
+    {
+      "id": "py-downloads-menu",
+      "op": "click",
+      "sentence": "click Downloads in the main menu",
+      "gold": ["downloads-menu"],
+      "tags": ["exact-label", "nav", "region", "duplicate-name"]
+    },
+    {
+      "id": "py-shell",
+      "op": "click",
+      "sentence": "click the terminal icon to launch the interactive shell",
+      "gold": ["shell"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "py-slide-3",
+      "op": "click",
+      "sentence": "go to slide 3 of the code examples",
+      "gold": ["slide-3"],
+      "tags": ["pagination", "numeric"]
+    },
+    {
+      "id": "py-latest-release",
+      "op": "click",
+      "sentence": "click the latest Python release link in the Download section",
+      "gold": ["latest-release"],
+      "tags": ["indirect", "container"]
+    },
+    {
+      "id": "py-learn-more",
+      "op": "click",
+      "sentence": "click Learn more",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "py-more-unscoped",
+      "op": "click",
+      "sentence": "click More",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "py-events-more",
+      "op": "click",
+      "sentence": "click More in the Upcoming Events section",
+      "gold": ["events-more"],
+      "tags": ["container", "duplicate-name"]
+    },
+    {
+      "id": "py-flask",
+      "op": "click",
+      "sentence": "click Flask under Use Python for",
+      "gold": ["flask"],
+      "tags": ["exact-label", "container", "repeated-group"]
+    },
+    {
+      "id": "py-donate",
+      "op": "click",
+      "sentence": "click the yellow Donate button in the header",
+      "gold": ["donate"],
+      "tags": ["exact-label", "region", "near-duplicate-name"]
+    },
+    {
+      "id": "py-signin-absent",
+      "op": "click",
+      "sentence": "click Sign in",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "py-darkmode-absent",
+      "op": "click",
+      "sentence": "click the dark mode toggle",
+      "gold": "none",
+      "tags": ["absent", "switch"]
+    }
+  ]
+}

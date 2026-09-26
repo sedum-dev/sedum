@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shop all · Outfitters</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #1d2330;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .search {
+        flex: 1;
+        display: flex;
+        max-width: 420px;
+      }
+      .search input {
+        flex: 1;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #bbb;
+        border-radius: 6px 0 0 6px;
+        font: inherit;
+      }
+      .search .go {
+        border: 1px solid #bbb;
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
+        background: #f4f4f4;
+        padding: 0 0.6rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+      }
+      .cart {
+        margin-left: auto;
+        color: #1d2330;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+      }
+      .filters {
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+      .filters .legend {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        padding: 0;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.35rem 0;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        position: relative;
+      }
+      .sort {
+        min-width: 170px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.75rem;
+        position: relative;
+      }
+      .card .name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+      }
+      .card .price {
+        margin: 0 0 0.25rem;
+        font-weight: 600;
+      }
+      .card .blurb {
+        margin: 0 0 0.75rem;
+        color: #555;
+      }
+      .heart {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: 0;
+        background: none;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #c0392b;
+      }
+      .add,
+      .more {
+        padding: 0.45rem 0.9rem;
+        border: 0;
+        border-radius: 6px;
+        background: #2f5bea;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        display: inline-block;
+      }
+      .more {
+        background: #fff;
+        color: #2f5bea;
+        border: 1px solid #2f5bea;
+      }
+      .more-row {
+        text-align: center;
+        margin: 1.25rem 0;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .PrivateSwitchBase-root {
+        position: relative;
+        display: inline-flex;
+        width: 18px;
+        height: 18px;
+      }
+      .PrivateSwitchBase-root svg {
+        width: 18px;
+        height: 18px;
+        color: #767676;
+      }
+      .PrivateSwitchBase-input {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        z-index: 1;
+        cursor: inherit;
+      }
+      .MuiTouchRipple-root {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .MuiButtonBase-root {
+        position: relative;
+      }
+      .MuiButtonBase-root.eye,
+      .MuiButtonBase-root.heart {
+        position: absolute;
+      }
+      .MuiInputBase-root {
+        display: flex;
+        flex: 1;
+      }
+      .MuiSelect-nativeInput {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        opacity: 0;
+        pointer-events: none;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .MuiSelect-root {
+        position: relative;
+        flex: 0 0 auto;
+      }
+      .sort::after {
+        content: " ▾";
+        float: right;
+      }
+      .card .MuiCardContent-root,
+      .card .MuiCardActions-root {
+        padding: 0;
+      }
+      .cart {
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // A stand-in for a client-rendered React + MUI bundle: shell, filters,
+      // product grid, and pagination commit separately, and the search
+      // field's label is wired to its input only after hydration.
+      const products = [
+        {
+          id: "backpack",
+          name: "Canvas Backpack",
+          price: "$29.99",
+          blurb: "Water-resistant 20 L pack.",
+          addGold: 'data-eval-gold="add-backpack"',
+          wishGold: "",
+        },
+        {
+          id: "light",
+          name: "Trail Light",
+          price: "$9.99",
+          blurb: "USB rechargeable headlamp.",
+          addGold: 'data-eval-gold="add-light"',
+          wishGold: "",
+        },
+        {
+          id: "beanie",
+          name: "Merino Beanie",
+          price: "$24.00",
+          blurb: "Soft wool hat.",
+          addGold: "",
+          wishGold: 'data-eval-gold="wish-beanie"',
+        },
+        {
+          id: "bottle",
+          name: "Steel Bottle",
+          price: "$19.00",
+          blurb: "Keeps drinks cold for 24 hours.",
+          addGold: "",
+          wishGold: "",
+        },
+        {
+          id: "mug",
+          name: "Camp Mug",
+          price: "$12.00",
+          blurb: "Enamel mug, 350 ml.",
+          addGold: "",
+          wishGold: 'data-eval-gold="wish-mug"',
+        },
+        {
+          id: "tote",
+          name: "Market Tote",
+          price: "$15.00",
+          blurb: "Heavy cotton shopping bag.",
+          addGold: "",
+          wishGold: "",
+        },
+      ];
+      const categories = [
+        { id: ":r3:", value: "bags", label: "Bags", gold: "" },
+        {
+          id: ":r4:",
+          value: "lights",
+          label: "Lights",
+          gold: 'data-eval-gold="filter-lights"',
+        },
+        { id: ":r5:", value: "hats", label: "Hats", gold: "" },
+        {
+          id: ":r6:",
+          value: "drinkware",
+          label: "Drinkware",
+          gold: 'data-eval-gold="filter-drinkware"',
+        },
+      ];
+      const ripple = '<span class="MuiTouchRipple-root css-w0pj6f"></span>';
+      const root = document.getElementById("root");
+
+      function productCard(p) {
+        return `<li class="MuiGrid-root MuiGrid-item css-1wxaqej"><div class="MuiPaper-root MuiCard-root css-8ezbv1 card"><div class="MuiCardContent-root css-1qw96cp"><div class="MuiTypography-root MuiTypography-h6 css-1ce7f9n name">${p.name}</div><p class="MuiTypography-root MuiTypography-body1 css-1b0wz0d price">${p.price}</p><p class="MuiTypography-root MuiTypography-body2 css-1m6bl2h blurb">${p.blurb}</p></div><div class="MuiCardActions-root MuiCardActions-spacing css-3zukih"><button class="MuiButtonBase-root MuiIconButton-root MuiIconButton-sizeMedium css-1yq5fb3 heart" tabindex="0" type="button" aria-label="Add ${p.name} to wishlist" ${p.wishGold}><span class="MuiSvgIcon-root css-i4bv87">♡</span>${ripple}</button><button class="MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeSmall css-1q2w3e add" tabindex="0" type="button" ${p.addGold}><span class="css-ssk2jr">Add to cart</span>${ripple}</button></div></div></li>`;
+      }
+      function categoryCheckbox(c) {
+        return `<label class="MuiFormControlLabel-root MuiFormControlLabel-labelPlacementEnd css-1jaw3da check"><span class="MuiButtonBase-root MuiCheckbox-root MuiCheckbox-colorPrimary PrivateSwitchBase-root css-12wnr2w"><input class="PrivateSwitchBase-input css-1m9pwf3" type="checkbox" id="${c.id}" value="${c.value}" ${c.gold}><svg class="MuiSvgIcon-root css-i4bv87" focusable="false" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>${ripple}</span><span class="MuiTypography-root MuiTypography-body1 MuiFormControlLabel-label css-9l3uo3">${c.label}</span></label>`;
+      }
+
+      const stages = [
+        () => {
+          root.innerHTML = `<div class="css-k008qs"><header class="MuiPaper-root MuiAppBar-root MuiAppBar-positionStatic css-1x7skt0"><div class="MuiToolbar-root MuiToolbar-regular css-12o98wt top"><a class="MuiTypography-root MuiLink-root MuiLink-underlineNone css-1n3ki0k brand" href="/">Outfitters</a><div class="MuiFormControl-root MuiTextField-root css-1u3bzj6 search"><label class="MuiFormLabel-root MuiInputLabel-root css-1jy569b sr-only" id=":r1:-label">Search products</label><div class="MuiInputBase-root MuiOutlinedInput-root MuiInputBase-adornedEnd css-1v4ccyo"><input aria-invalid="false" id=":r1:" type="search" placeholder="Search products" class="MuiInputBase-input MuiOutlinedInput-input css-1x5jdmq" value="" data-eval-gold="search"></div><button class="MuiButtonBase-root MuiIconButton-root css-1yq5fb3 go" type="button" aria-label="search">${'<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="#333" stroke-width="2"/><path d="M11 11l4 4" stroke="#333" stroke-width="2"/></svg>'}${ripple}</button></div><a class="MuiButtonBase-root MuiButton-root MuiButton-text css-1ujsas3 cart" tabindex="0" href="/cart" data-eval-gold="cart"><span class="css-ssk2jr">Cart (0)</span>${ripple}</a></div></header><div class="MuiContainer-root css-1oqqzyl layout"><aside class="MuiBox-root css-0" id="filters"><div class="MuiSkeleton-root css-1l7q9tc" style="height: 140px"></div></aside><main class="MuiBox-root css-0" id="results"><div class="MuiSkeleton-root css-1l7q9tc" style="height: 400px"></div></main></div></div>`;
+        },
+        () => {
+          document.getElementById("filters").innerHTML =
+            `<div class="MuiFormControl-root css-13sljp9 filters" role="group" aria-labelledby=":r2:"><div class="MuiFormLabel-root css-u4tvz2 legend" id=":r2:">Category</div><div class="MuiFormGroup-root css-dmmspl">${categories.map(categoryCheckbox).join("")}</div></div>`;
+        },
+        () => {
+          document.getElementById("results").innerHTML =
+            `<h1 class="sr-only">All products</h1><div class="MuiStack-root css-1xhj18k toolbar"><span class="MuiTypography-root css-1b0wz0d" id=":r7:">Sort by</span><div class="MuiInputBase-root MuiOutlinedInput-root MuiSelect-root css-1d3z3hw"><div tabindex="0" role="combobox" aria-controls=":r8:" aria-expanded="false" aria-haspopup="listbox" aria-labelledby=":r7: :r9:" id=":r9:" class="MuiSelect-select MuiSelect-outlined MuiInputBase-input MuiOutlinedInput-input css-qiwgdb sort" data-eval-gold="sort">Featured</div><input aria-invalid="false" aria-hidden="true" tabindex="-1" class="MuiSelect-nativeInput css-1k3x8v3" value="featured"></div></div><ul class="MuiGrid-root MuiGrid-container css-1d3bbye grid">${products.map(productCard).join("")}</ul>`;
+        },
+        () => {
+          document
+            .getElementById("results")
+            .insertAdjacentHTML(
+              "beforeend",
+              `<div class="MuiBox-root css-1rr4qq7 more-row"><button class="MuiButtonBase-root MuiButton-root MuiButton-outlined css-79xub more" tabindex="0" type="button" data-eval-gold="load-more"><span class="css-ssk2jr">Load more</span>${ripple}</button></div>`,
+            );
+        },
+        () => {
+          // Hydration: the search label gets its htmlFor, handlers attach.
+          document.getElementById(":r1:-label").htmlFor = ":r1:";
+          let count = 0;
+          const cart = document.querySelector(".cart .css-ssk2jr");
+          document.querySelectorAll(".add").forEach((btn) =>
+            btn.addEventListener("click", () => {
+              cart.textContent = `Cart (${++count})`;
+            }),
+          );
+          document.querySelectorAll(".heart").forEach((heart) =>
+            heart.addEventListener("click", () => {
+              const icon = heart.querySelector(".MuiSvgIcon-root");
+              icon.textContent = icon.textContent === "♡" ? "♥" : "♡";
+            }),
+          );
+          document
+            .querySelector(".more")
+            .addEventListener("click", () => fetch("/products?page=2"));
+        },
+      ];
+      let delay = 100;
+      stages.forEach((stage) => {
+        setTimeout(stage, delay);
+        delay += 200;
+      });
+    </script>
+  </body>
+</html>

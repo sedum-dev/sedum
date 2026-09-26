@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create your account · Nimbus</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .top a {
+        color: #1d2330;
+        text-decoration: none;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-weight: 700;
+        font-size: 1.1rem;
+      }
+      main {
+        max-width: 400px;
+        margin: 2rem auto;
+      }
+      .google {
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #bbb;
+        background: #fff;
+        border-radius: 6px;
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        font: inherit;
+        cursor: pointer;
+      }
+      .or {
+        text-align: center;
+        color: #777;
+        margin: 1rem 0;
+      }
+      .field {
+        margin: 0 0 0.9rem;
+      }
+      .field label {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+      }
+      .field input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        font: inherit;
+      }
+      .pw {
+        position: relative;
+      }
+      .eye {
+        position: absolute;
+        right: 0.3rem;
+        top: 0.25rem;
+        border: 0;
+        background: none;
+        font-size: 1.1rem;
+        cursor: pointer;
+      }
+      fieldset {
+        border: 0;
+        padding: 0;
+        margin: 0 0 1rem;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.4rem 0;
+      }
+      .primary {
+        width: 100%;
+        padding: 0.65rem;
+        background: #2f5bea;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .foot {
+        text-align: center;
+        margin-top: 1rem;
+      }
+      .lbl {
+        display: block;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+      }
+      .checkbox {
+        width: 13px;
+        height: 13px;
+        border: 1px solid #767676;
+        border-radius: 2px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .checkbox.checked {
+        background: #2f5bea;
+        border-color: #2f5bea;
+      }
+      .link {
+        color: #0645ad;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .top .link,
+      .brand {
+        color: #1d2330;
+        text-decoration: none;
+      }
+      .google,
+      .primary,
+      .eye {
+        text-align: center;
+        box-sizing: border-box;
+      }
+      .h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin: 0.67em 0;
+      }
+      .checks {
+        margin: 0 0 1rem;
+      }
+      [role="button"]:focus-visible,
+      [role="checkbox"]:focus-visible,
+      [role="link"]:focus-visible {
+        outline: 2px solid #2f5bea;
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top" role="banner">
+      <div
+        class="brand"
+        role="link"
+        tabindex="0"
+        data-href="/"
+        data-eval-gold="logo"
+      >
+        <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+          <circle cx="11" cy="11" r="10" fill="#2f5bea" /></svg
+        >Nimbus
+      </div>
+      <div role="navigation" aria-label="Support">
+        <span
+          class="link"
+          role="link"
+          tabindex="0"
+          data-href="/help"
+          data-eval-gold="help"
+          >Help</span
+        >
+      </div>
+    </div>
+    <div role="main" class="main-wrap">
+      <main>
+        <div class="h1" role="heading" aria-level="1">Create your account</div>
+        <div
+          class="google"
+          role="button"
+          tabindex="0"
+          data-action="google"
+          data-eval-gold="google"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <circle cx="9" cy="9" r="8" fill="#ea4335" /></svg
+          >Continue with Google
+        </div>
+        <div class="or">or</div>
+        <div role="form" aria-labelledby="form-title" class="form">
+          <span id="form-title" hidden>Sign up</span>
+          <div class="field">
+            <span class="lbl" id="name-label">Full name</span>
+            <input
+              aria-labelledby="name-label"
+              autocomplete="name"
+              data-eval-gold="name"
+            />
+          </div>
+          <div class="field">
+            <span class="lbl" id="email-label">Email</span>
+            <input
+              aria-labelledby="email-label"
+              type="email"
+              autocomplete="email"
+              data-eval-gold="email"
+            />
+          </div>
+          <div class="field">
+            <span class="lbl" id="email2-label">Confirm email</span>
+            <input
+              aria-labelledby="email2-label"
+              type="email"
+              data-eval-gold="email2"
+            />
+          </div>
+          <div class="field">
+            <span class="lbl" id="password-label">Password</span>
+            <div class="pw">
+              <input
+                id="password"
+                aria-labelledby="password-label"
+                type="password"
+                data-eval-gold="password"
+              />
+              <div
+                class="eye"
+                role="button"
+                tabindex="0"
+                aria-label="Show password"
+                aria-pressed="false"
+                aria-controls="password"
+                data-action="toggle-password"
+                data-eval-gold="show-password"
+              >
+                👁
+              </div>
+            </div>
+          </div>
+          <div role="group" aria-label="Agreements" class="checks">
+            <div class="check">
+              <div
+                class="checkbox"
+                role="checkbox"
+                tabindex="0"
+                aria-checked="false"
+                aria-labelledby="terms-label"
+                data-eval-gold="terms"
+              ></div>
+              <span id="terms-label">I agree to the Terms</span>
+            </div>
+            <div class="check">
+              <div
+                class="checkbox"
+                role="checkbox"
+                tabindex="0"
+                aria-checked="false"
+                aria-labelledby="news-label"
+                data-eval-gold="news"
+              ></div>
+              <span id="news-label">Send me product news</span>
+            </div>
+          </div>
+          <div
+            class="primary"
+            role="button"
+            tabindex="0"
+            data-action="submit"
+            data-eval-gold="create"
+          >
+            Create account
+          </div>
+        </div>
+        <div class="foot">
+          Already have an account?
+          <span
+            class="link"
+            role="link"
+            tabindex="0"
+            data-href="/login"
+            data-eval-gold="login"
+            >Log in</span
+          >
+        </div>
+      </main>
+    </div>
+    <script>
+      function activate(el, handler) {
+        el.addEventListener("click", handler);
+        el.addEventListener("keydown", (event) => {
+          if (
+            event.key === "Enter" ||
+            (event.key === " " && el.getAttribute("role") !== "link")
+          ) {
+            event.preventDefault();
+            handler();
+          }
+        });
+      }
+      document.querySelectorAll("[data-href]").forEach((el) => {
+        activate(el, () => {
+          location.href = el.dataset.href;
+        });
+      });
+      document.querySelectorAll('[role="checkbox"]').forEach((box) => {
+        activate(box, () => {
+          const checked = box.getAttribute("aria-checked") === "true";
+          box.setAttribute("aria-checked", String(!checked));
+          box.classList.toggle("checked", !checked);
+        });
+      });
+      const pw = document.getElementById("password");
+      const eye = document.querySelector('[data-action="toggle-password"]');
+      activate(eye, () => {
+        const shown = pw.type === "text";
+        pw.type = shown ? "password" : "text";
+        eye.setAttribute("aria-pressed", String(!shown));
+      });
+      activate(document.querySelector('[data-action="google"]'), () => {
+        location.href = "/auth/google";
+      });
+      activate(document.querySelector('[data-action="submit"]'), () => {
+        fetch("/signup", { method: "POST" });
+      });
+    </script>
+  </body>
+</html>

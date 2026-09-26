@@ -1,0 +1,117 @@
+{
+  "page": "mobile-nav.html",
+  "cases": [
+    {
+      "id": "mnav-home-unscoped",
+      "op": "click",
+      "sentence": "click Home",
+      "gold": ["drawer-home", "tab-home"],
+      "tags": ["duplicate-name", "equivalent-targets"]
+    },
+    {
+      "id": "mnav-home-tab",
+      "op": "click",
+      "sentence": "click the Home tab in the bottom bar",
+      "gold": ["tab-home"],
+      "tags": ["duplicate-name", "region"]
+    },
+    {
+      "id": "mnav-home-drawer",
+      "op": "click",
+      "sentence": "click Home in the side menu",
+      "gold": ["drawer-home"],
+      "tags": ["duplicate-name", "region"]
+    },
+    {
+      "id": "mnav-deals",
+      "op": "click",
+      "sentence": "click Deals",
+      "gold": ["drawer-deals"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "mnav-orders",
+      "op": "click",
+      "sentence": "go to my orders",
+      "gold": ["drawer-orders"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "mnav-sign-out",
+      "op": "click",
+      "sentence": "log out",
+      "gold": ["sign-out"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "mnav-cart-icon",
+      "op": "click",
+      "sentence": "click the cart icon",
+      "gold": ["tab-cart"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "mnav-cart-badge",
+      "op": "click",
+      "sentence": "click the cart with 2 items",
+      "gold": ["tab-cart"],
+      "tags": ["aria-label", "state"]
+    },
+    {
+      "id": "mnav-hamburger",
+      "op": "click",
+      "sentence": "click the hamburger icon",
+      "gold": ["open-menu"],
+      "tags": ["icon", "paraphrase"]
+    },
+    {
+      "id": "mnav-close",
+      "op": "click",
+      "sentence": "close the menu",
+      "gold": ["close-menu"],
+      "tags": ["aria-label", "near-duplicate-name"]
+    },
+    {
+      "id": "mnav-fab",
+      "op": "click",
+      "sentence": "click the round plus button",
+      "gold": ["fab"],
+      "tags": ["icon"]
+    },
+    {
+      "id": "mnav-search-unscoped",
+      "op": "click",
+      "sentence": "click Search",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "mnav-search-header",
+      "op": "click",
+      "sentence": "click the magnifying glass in the header",
+      "gold": ["header-search"],
+      "tags": ["icon", "region", "duplicate-name"]
+    },
+    {
+      "id": "mnav-settings-absent",
+      "op": "click",
+      "sentence": "click Settings",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "mnav-wishlist-absent",
+      "op": "click",
+      "sentence": "click the Wishlist tab",
+      "gold": "none",
+      "tags": ["absent", "region"]
+    },
+    {
+      "id": "mnav-save-bike",
+      "op": "click",
+      "sentence": "save the kids' bike",
+      "gold": ["save-bike"],
+      "tags": ["repeated-group", "container", "icon"]
+    }
+  ]
+}

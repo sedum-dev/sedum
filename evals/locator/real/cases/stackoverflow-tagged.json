@@ -1,0 +1,125 @@
+{
+  "site": "stackoverflow-tagged",
+  "targets": {
+    "search": "input[name=\"q\"]",
+    "watch-tag": "button[data-testid=\"watch-tag-button\"]",
+    "wiki": "#tag-headline-container > header > div:nth-of-type(3) > a",
+    "unanswered": "#mainbar > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > a:nth-of-type(4)",
+    "first-question": "#questions > div > div:nth-of-type(1) > div > div:nth-of-type(2) > h3 > a",
+    "k6-question": "#questions > div > div:nth-of-type(2) > div > div:nth-of-type(2) > h3 > a",
+    "first-reactjs": "#questions > div > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(1) > ul > li:nth-of-type(2) > a",
+    "cookie-necessary": "#onetrust-reject-all-handler",
+    "cookie-close": "#onetrust-close-btn-container > button",
+    "cookie-policy-banner": "#onetrust-policy-text > a",
+    "next-page": "a[aria-label=\"Go to next page\"]",
+    "avatar-rajveer": "#questions > div > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > a",
+    "name-rajveer": "#questions > div > div:nth-of-type(1) > div > div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div > a"
+  },
+  "cases": [
+    {
+      "id": "so-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box",
+      "gold": ["search"],
+      "tags": ["search", "placeholder-name"]
+    },
+    {
+      "id": "so-ask-absent",
+      "op": "click",
+      "sentence": "click the Ask Question button",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "so-watch-tag",
+      "op": "click",
+      "sentence": "click Watch tag",
+      "gold": ["watch-tag"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "so-wiki",
+      "op": "click",
+      "sentence": "open the tag wiki",
+      "gold": ["wiki"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "so-unanswered",
+      "op": "click",
+      "sentence": "switch to Unanswered questions",
+      "gold": ["unanswered"],
+      "tags": ["tab", "paraphrase"]
+    },
+    {
+      "id": "so-first-question",
+      "op": "click",
+      "sentence": "open the first question in the list",
+      "gold": ["first-question"],
+      "tags": ["ordinal", "repeated-group"]
+    },
+    {
+      "id": "so-k6-question",
+      "op": "click",
+      "sentence": "open the question about splitting a K6 dataset among VUs",
+      "gold": ["k6-question"],
+      "tags": ["indirect", "repeated-group"]
+    },
+    {
+      "id": "so-first-reactjs-tag",
+      "op": "click",
+      "sentence": "click the reactjs tag on the first question",
+      "gold": ["first-reactjs"],
+      "tags": ["container", "repeated-group", "ordinal", "aria-label"]
+    },
+    {
+      "id": "so-cookie-necessary",
+      "op": "click",
+      "sentence": "click Necessary cookies only in the cookie banner",
+      "gold": ["cookie-necessary"],
+      "tags": ["cookie-banner", "overlay", "exact-label"]
+    },
+    {
+      "id": "so-cookie-close",
+      "op": "click",
+      "sentence": "close the cookie banner",
+      "gold": ["cookie-close"],
+      "tags": ["cookie-banner", "overlay", "icon"]
+    },
+    {
+      "id": "so-cookie-policy-banner",
+      "op": "click",
+      "sentence": "click Cookie Policy in the cookie banner",
+      "gold": ["cookie-policy-banner"],
+      "tags": ["cookie-banner", "duplicate-name", "in-text-link"]
+    },
+    {
+      "id": "so-next-page",
+      "op": "click",
+      "sentence": "go to the next page of questions",
+      "gold": ["next-page"],
+      "tags": ["pagination", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "so-avatar-first",
+      "op": "click",
+      "sentence": "click the avatar of the first question's author",
+      "gold": ["avatar-rajveer", "name-rajveer"],
+      "tags": ["icon", "ordinal", "invisible-to-sedum"]
+    },
+    {
+      "id": "so-javascript-tag-unscoped",
+      "op": "click",
+      "sentence": "click the javascript tag",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "so-cookie-accept-absent",
+      "op": "click",
+      "sentence": "click Accept all cookies",
+      "gold": "none",
+      "tags": ["absent", "cookie-banner"]
+    }
+  ]
+}

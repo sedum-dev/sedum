@@ -1,0 +1,117 @@
+{
+  "page": "date-picker.html",
+  "cases": [
+    {
+      "id": "date-oct-20",
+      "op": "click",
+      "sentence": "click October 20 in the calendar",
+      "gold": ["oct-20"],
+      "tags": ["date", "aria-label"]
+    },
+    {
+      "id": "date-the-20th",
+      "op": "click",
+      "sentence": "click the 20th",
+      "gold": ["oct-20"],
+      "tags": ["date", "numeric"]
+    },
+    {
+      "id": "date-full-label",
+      "op": "click",
+      "sentence": "click Saturday, October 31, 2026",
+      "gold": ["oct-31"],
+      "tags": ["date", "aria-label", "exact-label"]
+    },
+    {
+      "id": "date-last-friday",
+      "op": "click",
+      "sentence": "pick the last Friday of October",
+      "gold": ["oct-30"],
+      "tags": ["date", "indirect", "ordinal"]
+    },
+    {
+      "id": "date-nov-3-outside",
+      "op": "click",
+      "sentence": "click November 3",
+      "gold": ["nov-3"],
+      "tags": ["date", "aria-label"]
+    },
+    {
+      "id": "date-the-28th",
+      "op": "click",
+      "sentence": "click the 28th",
+      "gold": ["oct-28"],
+      "tags": ["date", "numeric", "near-duplicate-name", "disabled"]
+    },
+    {
+      "id": "date-the-1st",
+      "op": "click",
+      "sentence": "click the 1st",
+      "gold": "ambiguous",
+      "tags": ["date", "numeric", "underspecified", "disabled"]
+    },
+    {
+      "id": "date-past-disabled",
+      "op": "click",
+      "sentence": "click October 5",
+      "gold": ["oct-5"],
+      "tags": ["date", "disabled"]
+    },
+    {
+      "id": "date-next-month",
+      "op": "click",
+      "sentence": "click the right arrow next to the month name",
+      "gold": ["next-month"],
+      "tags": ["icon", "aria-label", "indirect"]
+    },
+    {
+      "id": "date-prev-month",
+      "op": "click",
+      "sentence": "go back one month in the calendar",
+      "gold": ["prev-month"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "date-today",
+      "op": "click",
+      "sentence": "click the Today button",
+      "gold": ["today"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "date-check-out",
+      "op": "fill",
+      "sentence": "type {{date}} in the check-out field",
+      "gold": ["check-out"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "date-guests",
+      "op": "fill",
+      "sentence": "type {{count}} in the number of guests field",
+      "gold": ["guests"],
+      "tags": ["spinbutton", "paraphrase"]
+    },
+    {
+      "id": "date-december-absent",
+      "op": "click",
+      "sentence": "click December 12 in the calendar",
+      "gold": "none",
+      "tags": ["date", "absent"]
+    },
+    {
+      "id": "date-nov-14-absent",
+      "op": "click",
+      "sentence": "click November 14",
+      "gold": "none",
+      "tags": ["date", "absent", "near-duplicate-name"]
+    },
+    {
+      "id": "date-flexible-absent",
+      "op": "click",
+      "sentence": "check the My dates are flexible checkbox",
+      "gold": "none",
+      "tags": ["checkbox", "absent"]
+    }
+  ]
+}

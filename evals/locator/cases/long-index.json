@@ -1,0 +1,26 @@
+{
+  "page": "long-index.html",
+  "cases": [
+    {
+      "id": "long-next",
+      "op": "click",
+      "sentence": "click the Next page link",
+      "gold": ["next"],
+      "tags": ["over-128"]
+    },
+    {
+      "id": "long-item",
+      "op": "click",
+      "sentence": "click Item 137",
+      "gold": ["item-137"],
+      "tags": ["over-128", "exact-label"]
+    },
+    {
+      "id": "long-item-absent",
+      "op": "click",
+      "sentence": "click Item 250",
+      "gold": "none",
+      "tags": ["over-128", "absent"]
+    }
+  ]
+}

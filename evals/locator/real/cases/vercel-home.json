@@ -1,0 +1,128 @@
+{
+  "site": "vercel-home",
+  "targets": {
+    "logo": "#marketing-header-logo",
+    "products": "#marketing-header > div > nav > div > button:nth-of-type(1)",
+    "pricing-header": "#marketing-header > div > nav > div > a:nth-of-type(2)",
+    "pricing-footer": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > nav > div > div:nth-of-type(10) > ul > li:nth-of-type(9) > a",
+    "get-demo": "#marketing-header > div > div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(1)",
+    "login": "#marketing-header > div > div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(2)",
+    "signup": "#marketing-header > div > div:nth-of-type(3) > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(3)",
+    "ticket": "html > body > div:nth-of-type(2) > div > main > div:nth-of-type(2) > div:nth-of-type(1) > div > div > div:nth-of-type(2) > a",
+    "deploy-hero": "html > body > div:nth-of-type(2) > div > main > div:nth-of-type(2) > section:nth-of-type(1) > div:nth-of-type(1) > div > header > div > a:nth-of-type(1)",
+    "talk-sales": "html > body > div:nth-of-type(2) > div > main > div:nth-of-type(2) > section:nth-of-type(1) > div:nth-of-type(1) > div > header > div > a:nth-of-type(2)",
+    "deploy-bottom": "html > body > div:nth-of-type(2) > div > main > div:nth-of-type(2) > div:nth-of-type(3) > section > div > div > a",
+    "onboard-agent": "button[aria-label=\"Onboard your agent\"]",
+    "docs-footer": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > nav > div > div:nth-of-type(8) > ul > li:nth-of-type(1) > a",
+    "github-footer": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > nav > div > div:nth-of-type(12) > ul > li:nth-of-type(1) > a",
+    "theme-dark": "html > body > div:nth-of-type(2) > div > div:nth-of-type(3) > footer > div > div > fieldset > span:nth-of-type(3) > label",
+    "theme-dark-radio": "input[aria-label=\"dark\"][type=\"radio\"]"
+  },
+  "cases": [
+    {
+      "id": "vc-login",
+      "op": "click",
+      "sentence": "click Log In",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "vc-signup",
+      "op": "click",
+      "sentence": "click the Sign Up button in the top right",
+      "gold": ["signup"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "vc-logo",
+      "op": "click",
+      "sentence": "click the triangle logo in the header",
+      "gold": ["logo"],
+      "tags": ["icon", "region"]
+    },
+    {
+      "id": "vc-products",
+      "op": "click",
+      "sentence": "open the Products menu",
+      "gold": ["products"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "vc-pricing",
+      "op": "click",
+      "sentence": "click Pricing",
+      "gold": ["pricing-header", "pricing-footer"],
+      "tags": ["exact-label", "duplicate-name", "nav"]
+    },
+    {
+      "id": "vc-deploy-now",
+      "op": "click",
+      "sentence": "click Deploy now",
+      "gold": ["deploy-hero", "deploy-bottom"],
+      "tags": ["exact-label", "duplicate-name"]
+    },
+    {
+      "id": "vc-contact-sales",
+      "op": "click",
+      "sentence": "click Contact sales",
+      "gold": ["get-demo", "talk-sales"],
+      "tags": ["paraphrase", "duplicate-name"]
+    },
+    {
+      "id": "vc-ticket",
+      "op": "click",
+      "sentence": "click the link to get a Ship 26 ticket",
+      "gold": ["ticket"],
+      "tags": ["paraphrase", "indirect"]
+    },
+    {
+      "id": "vc-onboard-agent",
+      "op": "click",
+      "sentence": "click Onboard your agent",
+      "gold": ["onboard-agent"],
+      "tags": ["exact-label", "aria-label"]
+    },
+    {
+      "id": "vc-docs-footer",
+      "op": "click",
+      "sentence": "click Docs under Learn in the footer",
+      "gold": ["docs-footer"],
+      "tags": ["exact-label", "footer", "container"]
+    },
+    {
+      "id": "vc-github-footer",
+      "op": "click",
+      "sentence": "click GitHub in the footer's Social column",
+      "gold": ["github-footer"],
+      "tags": ["exact-label", "footer", "container"]
+    },
+    {
+      "id": "vc-theme-dark",
+      "op": "click",
+      "sentence": "switch the display theme to dark",
+      "gold": ["theme-dark", "theme-dark-radio"],
+      "tags": ["radio", "icon", "footer", "invisible-to-sedum"]
+    },
+    {
+      "id": "vc-eve-footer",
+      "op": "click",
+      "sentence": "click eve in the footer",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "footer"]
+    },
+    {
+      "id": "vc-start-free-absent",
+      "op": "click",
+      "sentence": "click Start for free",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "vc-search-absent",
+      "op": "fill",
+      "sentence": "type {{query}} in the site search box",
+      "gold": "none",
+      "tags": ["absent", "search"]
+    }
+  ]
+}

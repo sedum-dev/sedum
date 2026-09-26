@@ -1,0 +1,128 @@
+{
+  "site": "python-docs-datetime",
+  "targets": {
+    "search-top": "html > body > div:nth-of-type(2) > ul > li:nth-of-type(13) > div > form > input:nth-of-type(1)",
+    "search-bottom": "html > body > div:nth-of-type(4) > ul > li:nth-of-type(13) > div > form > input:nth-of-type(1)",
+    "go-top": "html > body > div:nth-of-type(2) > ul > li:nth-of-type(13) > div > form > input:nth-of-type(2)",
+    "go-bottom": "html > body > div:nth-of-type(4) > ul > li:nth-of-type(13) > div > form > input:nth-of-type(2)",
+    "next-top": "html > body > div:nth-of-type(2) > ul > li:nth-of-type(3) > a",
+    "next-bottom": "html > body > div:nth-of-type(4) > ul > li:nth-of-type(3) > a",
+    "version-top": "html > body > div:nth-of-type(2) > ul > li:nth-of-type(7) > div:nth-of-type(2) > select",
+    "theme-top": "html > body > div:nth-of-type(2) > ul > li:nth-of-type(14) > label > select",
+    "theme-bottom": "html > body > div:nth-of-type(4) > ul > li:nth-of-type(14) > label > select",
+    "toc-timedelta": "html > body > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(1) > ul > li > ul > li:nth-of-type(4) > a",
+    "tip-format-codes": "#module-datetime > div:nth-of-type(1) > p:nth-of-type(2) > a",
+    "source-file": "#module-datetime > p:nth-of-type(1) > a",
+    "report-bug": "html > body > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(4) > ul > li:nth-of-type(1) > a",
+    "sidebar-toggle": "#sidebarbutton",
+    "sidebar-prev": "html > body > div:nth-of-type(3) > div:nth-of-type(2) > div:nth-of-type(1) > div:nth-of-type(2) > p > a",
+    "seealso-zoneinfo": "#module-datetime > div:nth-of-type(2) > dl > dt:nth-of-type(3) > a"
+  },
+  "cases": [
+    {
+      "id": "pyd-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Quick search box",
+      "gold": ["search-top", "search-bottom"],
+      "tags": ["placeholder-name", "duplicate-name", "search"]
+    },
+    {
+      "id": "pyd-go",
+      "op": "click",
+      "sentence": "click Go",
+      "gold": ["go-top", "go-bottom"],
+      "tags": ["exact-label", "duplicate-name", "search"]
+    },
+    {
+      "id": "pyd-next",
+      "op": "click",
+      "sentence": "click the next link",
+      "gold": ["next-top", "next-bottom"],
+      "tags": ["exact-label", "duplicate-name", "nav"]
+    },
+    {
+      "id": "pyd-version-top",
+      "op": "click",
+      "sentence": "open the Python version dropdown at the top of the page",
+      "gold": ["version-top"],
+      "tags": ["select", "region", "duplicate-name"]
+    },
+    {
+      "id": "pyd-theme",
+      "op": "click",
+      "sentence": "open the Theme dropdown",
+      "gold": ["theme-top", "theme-bottom"],
+      "tags": ["select", "duplicate-name"]
+    },
+    {
+      "id": "pyd-toc-timedelta",
+      "op": "click",
+      "sentence": "click timedelta objects in the Table of Contents",
+      "gold": ["toc-timedelta"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "pyd-tip-format-codes",
+      "op": "click",
+      "sentence": "click the format codes link in the Tip box",
+      "gold": ["tip-format-codes"],
+      "tags": ["container", "in-text-link", "near-duplicate-name"]
+    },
+    {
+      "id": "pyd-source-file",
+      "op": "click",
+      "sentence": "open the module source code file",
+      "gold": ["source-file"],
+      "tags": ["paraphrase", "indirect"]
+    },
+    {
+      "id": "pyd-report-bug",
+      "op": "click",
+      "sentence": "click Report a bug",
+      "gold": ["report-bug"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "pyd-collapse-sidebar",
+      "op": "click",
+      "sentence": "collapse the sidebar",
+      "gold": ["sidebar-toggle"],
+      "tags": ["icon", "paraphrase", "invisible-to-sedum"]
+    },
+    {
+      "id": "pyd-previous-topic",
+      "op": "click",
+      "sentence": "click the Previous topic link in the sidebar",
+      "gold": ["sidebar-prev"],
+      "tags": ["indirect", "region"]
+    },
+    {
+      "id": "pyd-seealso-zoneinfo",
+      "op": "click",
+      "sentence": "click zoneinfo in the See also box",
+      "gold": ["seealso-zoneinfo"],
+      "tags": ["container", "in-text-link", "near-duplicate-name"]
+    },
+    {
+      "id": "pyd-timedelta-unscoped",
+      "op": "click",
+      "sentence": "click the timedelta link",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified", "in-text-link"]
+    },
+    {
+      "id": "pyd-examples-unscoped",
+      "op": "click",
+      "sentence": "click the Examples of usage link",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "substring-trap"]
+    },
+    {
+      "id": "pyd-login-absent",
+      "op": "click",
+      "sentence": "click the Log in link",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

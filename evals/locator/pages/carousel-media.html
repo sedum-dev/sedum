@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Northfield Outdoor</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+      }
+      header {
+        display: flex;
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+        background: #eee;
+      }
+      .carousel {
+        position: relative;
+        background: #234;
+        color: #fff;
+        padding: 2rem 4rem;
+        min-height: 160px;
+      }
+      .slide[hidden] {
+        display: none;
+      }
+      .slide a {
+        color: #fff;
+        background: #c63;
+        padding: 0.4rem 0.9rem;
+        text-decoration: none;
+      }
+      .arrow {
+        position: absolute;
+        top: 40%;
+        font-size: 24px;
+        background: none;
+        color: #fff;
+        border: 0;
+      }
+      .arrow.prev {
+        left: 0.5rem;
+      }
+      .arrow.next {
+        right: 0.5rem;
+      }
+      .dots button {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 0;
+        background: #889;
+        padding: 0;
+      }
+      .dots button[aria-current="true"] {
+        background: #fff;
+      }
+      .player {
+        margin: 1.5rem 1rem;
+        max-width: 640px;
+      }
+      .screen {
+        background: #000;
+        height: 280px;
+      }
+      .controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        background: #222;
+        padding: 0.4rem;
+      }
+      .controls button {
+        background: none;
+        border: 0;
+        color: #fff;
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">Northfield Outdoor</a>
+      <a href="/new">New arrivals</a>
+      <a href="/sale">Sale</a>
+    </header>
+
+    <section
+      class="carousel"
+      aria-roledescription="carousel"
+      aria-label="Featured"
+    >
+      <div class="slide" aria-roledescription="slide" aria-label="1 of 4">
+        <h2>The autumn collection is here</h2>
+        <p>Layers for every trail, from base to shell.</p>
+        <a href="/autumn" data-eval-gold="slide1-cta">Shop now</a>
+      </div>
+      <div
+        class="slide"
+        aria-roledescription="slide"
+        aria-label="2 of 4"
+        hidden
+        aria-hidden="true"
+      >
+        <h2>Free shipping on orders over $50</h2>
+        <p>No code needed, all season long.</p>
+        <a href="/shipping" data-eval-gold="slide2-cta">Learn more</a>
+      </div>
+      <div
+        class="slide"
+        aria-roledescription="slide"
+        aria-label="3 of 4"
+        hidden
+        aria-hidden="true"
+      >
+        <h2>New trail running shoes</h2>
+        <p>Grippy, light, and ready for mud.</p>
+        <a href="/shoes" data-eval-gold="slide3-cta">Shop now</a>
+      </div>
+      <div
+        class="slide"
+        aria-roledescription="slide"
+        aria-label="4 of 4"
+        hidden
+        aria-hidden="true"
+      >
+        <h2>Our repair program</h2>
+        <p>We fix zips, seams, and soles for life.</p>
+        <a href="/repair" data-eval-gold="slide4-cta">Learn more</a>
+      </div>
+      <button
+        class="arrow prev"
+        aria-label="Previous slide"
+        data-eval-gold="prev-slide"
+      >
+        &#8249;
+      </button>
+      <button
+        class="arrow next"
+        aria-label="Next slide"
+        data-eval-gold="next-slide"
+      >
+        &#8250;
+      </button>
+      <div class="dots">
+        <button
+          aria-label="Go to slide 1"
+          aria-current="true"
+          data-eval-gold="dot-1"
+        ></button>
+        <button aria-label="Go to slide 2" data-eval-gold="dot-2"></button>
+        <button aria-label="Go to slide 3" data-eval-gold="dot-3"></button>
+        <button aria-label="Go to slide 4" data-eval-gold="dot-4"></button>
+        <button data-eval-gold="pause">Pause autoplay</button>
+      </div>
+    </section>
+
+    <section class="player" aria-label="Video: Packing a 3-day kit">
+      <h2>Watch: packing a 3-day kit in 5 minutes</h2>
+      <div class="screen"></div>
+      <div class="controls">
+        <button aria-label="Play" data-eval-gold="play">&#9654;</button>
+        <input
+          type="range"
+          aria-label="Seek"
+          min="0"
+          max="300"
+          value="0"
+          data-eval-gold="seek"
+        />
+        <span>0:00 / 5:00</span>
+        <button aria-label="Mute" data-eval-gold="mute">&#128266;</button>
+        <input
+          type="range"
+          aria-label="Volume"
+          min="0"
+          max="100"
+          value="80"
+          data-eval-gold="volume"
+        />
+        <button
+          aria-label="Captions"
+          aria-pressed="false"
+          data-eval-gold="captions"
+        >
+          CC
+        </button>
+        <button aria-label="Settings" data-eval-gold="settings">&#9881;</button>
+        <button aria-label="Fullscreen" data-eval-gold="fullscreen">
+          &#x26F6;
+        </button>
+      </div>
+      <p>
+        <a href="/videos/3-day-kit/transcript" data-eval-gold="transcript"
+          >Read the transcript</a
+        >
+      </p>
+    </section>
+
+    <footer style="padding: 1rem; background: #eee">
+      <a href="/stores">Find a store</a> <a href="/help">Help</a>
+    </footer>
+  </body>
+</html>

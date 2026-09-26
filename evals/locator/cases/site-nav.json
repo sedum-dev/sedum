@@ -1,0 +1,75 @@
+{
+  "page": "site-nav.html",
+  "cases": [
+    {
+      "id": "nav-pricing-top",
+      "op": "click",
+      "sentence": "click Pricing in the top navigation",
+      "gold": ["nav-pricing"],
+      "tags": ["duplicate-name", "region"]
+    },
+    {
+      "id": "nav-pricing-footer",
+      "op": "click",
+      "sentence": "click the Pricing link in the footer",
+      "gold": ["footer-pricing"],
+      "tags": ["duplicate-name", "region"]
+    },
+    {
+      "id": "nav-pricing-unscoped",
+      "op": "click",
+      "sentence": "click the Pricing link",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "nav-docs-main",
+      "op": "click",
+      "sentence": "click the Read the docs link",
+      "gold": ["main-docs"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "nav-login-paraphrase",
+      "op": "click",
+      "sentence": "click the Sign in link",
+      "gold": ["nav-login"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "nav-signup",
+      "op": "click",
+      "sentence": "click Start for free",
+      "gold": ["start-free"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "nav-sales",
+      "op": "click",
+      "sentence": "click the Contact sales button",
+      "gold": ["contact-sales"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "nav-plans",
+      "op": "click",
+      "sentence": "click the link to compare plans",
+      "gold": ["main-pricing"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "nav-privacy",
+      "op": "click",
+      "sentence": "click the privacy policy link",
+      "gold": ["privacy"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "nav-blog-absent",
+      "op": "click",
+      "sentence": "click the Blog link",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

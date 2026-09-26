@@ -1,0 +1,110 @@
+{
+  "variants": {
+    "semantic": "variants/signup/semantic.html",
+    "div-soup": "variants/signup/div-soup.html",
+    "aria-widgets": "variants/signup/aria-widgets.html",
+    "framework-rendered": "variants/signup/framework-rendered.html",
+    "visual-only-names": "variants/signup/visual-only-names.html",
+    "web-components": "variants/signup/web-components.html"
+  },
+  "cases": [
+    {
+      "id": "v-signup-name",
+      "op": "fill",
+      "sentence": "type {{name}} in the Full name field",
+      "gold": ["name"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-signup-email",
+      "op": "fill",
+      "sentence": "type {{email}} in the Email field",
+      "gold": ["email"],
+      "tags": ["exact-label", "near-duplicate-name"]
+    },
+    {
+      "id": "v-signup-email-confirm",
+      "op": "fill",
+      "sentence": "type {{email}} in the Confirm email field",
+      "gold": ["email2"],
+      "tags": ["near-duplicate-name"]
+    },
+    {
+      "id": "v-signup-password",
+      "op": "fill",
+      "sentence": "type {{password}} in the Password field",
+      "gold": ["password"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-signup-show-password",
+      "op": "click",
+      "sentence": "click the eye icon to show the password",
+      "gold": ["show-password"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "v-signup-terms",
+      "op": "click",
+      "sentence": "click the I agree to the Terms checkbox",
+      "gold": ["terms"],
+      "tags": ["checkbox", "exact-label"]
+    },
+    {
+      "id": "v-signup-checkbox-unscoped",
+      "op": "click",
+      "sentence": "click the checkbox",
+      "gold": "ambiguous",
+      "tags": ["checkbox", "underspecified"]
+    },
+    {
+      "id": "v-signup-create",
+      "op": "click",
+      "sentence": "click the Create account button",
+      "gold": ["create"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-signup-google",
+      "op": "click",
+      "sentence": "click the sign up with Google button",
+      "gold": ["google"],
+      "tags": ["paraphrase"]
+    },
+    {
+      "id": "v-signup-login",
+      "op": "click",
+      "sentence": "click the Log in link",
+      "gold": ["login"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "v-signup-help",
+      "op": "click",
+      "sentence": "click Help in the header",
+      "gold": ["help"],
+      "tags": ["exact-label", "region"]
+    },
+    {
+      "id": "v-signup-logo",
+      "op": "click",
+      "sentence": "click the Nimbus logo",
+      "gold": ["logo"],
+      "tags": ["icon"]
+    },
+    {
+      "id": "v-signup-apple-absent",
+      "op": "click",
+      "sentence": "click Continue with Apple",
+      "gold": "none",
+      "tags": ["absent", "near-duplicate-name"]
+    },
+    {
+      "id": "v-signup-forgot-absent",
+      "op": "click",
+      "sentence": "click the Forgot password link",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

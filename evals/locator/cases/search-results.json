@@ -1,0 +1,117 @@
+{
+  "page": "search-results.html",
+  "cases": [
+    {
+      "id": "serp-brand-acme",
+      "op": "click",
+      "sentence": "click the Acme brand filter",
+      "gold": ["brand-acme"],
+      "tags": ["checkbox", "container"]
+    },
+    {
+      "id": "serp-noise-cancelling-filter",
+      "op": "click",
+      "sentence": "click the Noise cancelling filter checkbox",
+      "gold": ["feat-anc"],
+      "tags": ["checkbox", "substring-trap"]
+    },
+    {
+      "id": "serp-max-price-paraphrase",
+      "op": "fill",
+      "sentence": "type {{max}} in the maximum price box",
+      "gold": ["price-max"],
+      "tags": ["paraphrase", "numeric"]
+    },
+    {
+      "id": "serp-sort",
+      "op": "click",
+      "sentence": "click the Sort by dropdown",
+      "gold": ["sort"],
+      "tags": ["select", "exact-label"]
+    },
+    {
+      "id": "serp-second-organic",
+      "op": "click",
+      "sentence": "click the second non-sponsored result",
+      "gold": ["title-sonata-s7"],
+      "tags": ["ordinal", "sponsored"]
+    },
+    {
+      "id": "serp-third-result",
+      "op": "click",
+      "sentence": "click the third result",
+      "gold": ["title-sonata-s7", "title-acme-buds"],
+      "tags": ["ordinal", "sponsored"]
+    },
+    {
+      "id": "serp-sponsored",
+      "op": "click",
+      "sentence": "click the sponsored result",
+      "gold": ["title-pulse-air"],
+      "tags": ["sponsored", "indirect"]
+    },
+    {
+      "id": "serp-compare-q20",
+      "op": "click",
+      "sentence": "click Compare for the Acme Q20",
+      "gold": ["compare-acme-q20"],
+      "tags": ["repeated-group", "container", "checkbox"]
+    },
+    {
+      "id": "serp-compare-cheapest",
+      "op": "click",
+      "sentence": "click Compare on the cheapest result",
+      "gold": ["compare-acme-buds"],
+      "tags": ["repeated-group", "numeric", "indirect", "checkbox"]
+    },
+    {
+      "id": "serp-page-3",
+      "op": "click",
+      "sentence": "click page 3",
+      "gold": ["page-3"],
+      "tags": ["pagination", "aria-label"]
+    },
+    {
+      "id": "serp-next-page",
+      "op": "click",
+      "sentence": "click Next",
+      "gold": ["page-next"],
+      "tags": ["pagination", "exact-label"]
+    },
+    {
+      "id": "serp-current-page",
+      "op": "click",
+      "sentence": "click the current page number in the pagination",
+      "gold": ["page-1"],
+      "tags": ["pagination", "indirect"]
+    },
+    {
+      "id": "serp-compare-unscoped",
+      "op": "click",
+      "sentence": "click the Compare checkbox",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified", "checkbox"]
+    },
+    {
+      "id": "serp-page-7-absent",
+      "op": "click",
+      "sentence": "click page 7",
+      "gold": "none",
+      "tags": ["pagination", "absent"]
+    },
+    {
+      "id": "serp-brand-bose-absent",
+      "op": "click",
+      "sentence": "click the Bose brand filter",
+      "gold": "none",
+      "tags": ["checkbox", "absent"]
+    },
+    {
+      "id": "serp-add-to-cart-absent",
+      "op": "click",
+      "sentence": "click Add to cart for Acme Buds Lite",
+      "gold": "none",
+      "tags": ["repeated-group", "absent"]
+    }
+  ]
+}

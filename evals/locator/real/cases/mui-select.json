@@ -1,0 +1,124 @@
+{
+  "site": "mui-select",
+  "targets": {
+    "search": "html > body > div:nth-of-type(1) > div > header > div > div:nth-of-type(2) > button:nth-of-type(1)",
+    "github": "a[aria-label=\"GitHub repository\"]",
+    "settings": "button[aria-label=\"Toggle settings drawer\"]",
+    "nav-slider": "html > body > div:nth-of-type(1) > div > nav > div > div > div:nth-of-type(2) > div > div > ul > li:nth-of-type(2) > div > div > div > ul > li:nth-of-type(2) > ul > li:nth-of-type(10) > a",
+    "basic-age": "#demo-simple-select",
+    "standard-age": "#demo-simple-select-standard",
+    "filled-age": "#demo-simple-select-filled",
+    "basic-expand-code": "#main-content > div > div:nth-of-type(11) > div:nth-of-type(11) > div > div:nth-of-type(2) > button:nth-of-type(1)",
+    "native-demo-select": "#_R_1dam2d9l7aqll6_-select",
+    "open-the-select": "#demo-_R_9id9l7aqll6_ > div > button",
+    "toc-native-select": "html > body > div:nth-of-type(1) > div > main > nav:nth-of-type(1) > ul > li:nth-of-type(4) > a",
+    "cookie-essential": "html > body > div:nth-of-type(3) > div > div:nth-of-type(2) > button:nth-of-type(2)"
+  },
+  "cases": [
+    {
+      "id": "mui-basic-age",
+      "op": "click",
+      "sentence": "click the Age select in the Basic select demo",
+      "gold": ["basic-age"],
+      "tags": ["select", "combobox", "container"]
+    },
+    {
+      "id": "mui-age-unscoped",
+      "op": "click",
+      "sentence": "click the Age select",
+      "gold": "ambiguous",
+      "tags": ["select", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "mui-filled-age",
+      "op": "click",
+      "sentence": "open the filled Age select in the Variants section",
+      "gold": ["filled-age"],
+      "tags": ["select", "combobox", "container", "near-duplicate-name"]
+    },
+    {
+      "id": "mui-standard-age",
+      "op": "click",
+      "sentence": "click the standard variant Age dropdown",
+      "gold": ["standard-age"],
+      "tags": ["select", "combobox", "near-duplicate-name", "paraphrase"]
+    },
+    {
+      "id": "mui-search",
+      "op": "click",
+      "sentence": "click the Search button in the header",
+      "gold": ["search"],
+      "tags": ["search", "region"]
+    },
+    {
+      "id": "mui-github",
+      "op": "click",
+      "sentence": "click the GitHub icon",
+      "gold": ["github"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "mui-settings",
+      "op": "click",
+      "sentence": "open the settings drawer",
+      "gold": ["settings"],
+      "tags": ["icon", "aria-label", "paraphrase"]
+    },
+    {
+      "id": "mui-nav-slider",
+      "op": "click",
+      "sentence": "click Slider in the sidebar",
+      "gold": ["nav-slider"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "mui-toc-native",
+      "op": "click",
+      "sentence": "click Native select in the table of contents",
+      "gold": ["toc-native-select"],
+      "tags": ["region", "duplicate-name", "nav"]
+    },
+    {
+      "id": "mui-cookie-essential",
+      "op": "click",
+      "sentence": "click Essential only in the cookie banner",
+      "gold": ["cookie-essential"],
+      "tags": ["cookie-banner", "exact-label"]
+    },
+    {
+      "id": "mui-basic-expand-code",
+      "op": "click",
+      "sentence": "click Expand code under the basic select demo",
+      "gold": ["basic-expand-code"],
+      "tags": ["container", "exact-label"]
+    },
+    {
+      "id": "mui-copy-source-unscoped",
+      "op": "click",
+      "sentence": "click Copy the source",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "aria-label", "underspecified"]
+    },
+    {
+      "id": "mui-native-demo",
+      "op": "click",
+      "sentence": "click the select in the Native select demo",
+      "gold": ["native-demo-select"],
+      "tags": ["select", "container"]
+    },
+    {
+      "id": "mui-open-the-select",
+      "op": "click",
+      "sentence": "click Open the select",
+      "gold": ["open-the-select"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "mui-signin-absent",
+      "op": "click",
+      "sentence": "click Sign in",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Overview - Acme Admin</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        margin: 0;
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        min-height: 100vh;
+      }
+      aside {
+        background: #1f2330;
+        color: #ccd;
+        padding: 1rem 0.5rem;
+      }
+      aside a {
+        color: #ccd;
+        display: block;
+        padding: 0.25rem 0.5rem;
+        text-decoration: none;
+      }
+      aside ul {
+        list-style: none;
+        margin: 0;
+        padding-left: 0.75rem;
+      }
+      aside a[aria-current] {
+        background: #334;
+        color: #fff;
+      }
+      .section-toggle {
+        background: none;
+        border: 0;
+        color: #fff;
+        font-weight: 600;
+        padding: 0.4rem 0.5rem;
+        width: 100%;
+        text-align: left;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .topbar .spacer {
+        flex: 1;
+      }
+      .content {
+        padding: 1rem;
+      }
+      nav[aria-label="Breadcrumb"] ol {
+        display: flex;
+        gap: 0.5rem;
+        list-style: none;
+        padding: 0;
+      }
+      nav[aria-label="Breadcrumb"] li + li::before {
+        content: "/ ";
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+      .card {
+        border: 1px solid #ddd;
+        padding: 1rem;
+        border-radius: 6px;
+      }
+      .card .value {
+        font-size: 1.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <strong>Acme Admin</strong>
+      <nav aria-label="Main">
+        <a href="/home" data-eval-gold="side-home">Home</a>
+        <button
+          class="section-toggle"
+          aria-expanded="true"
+          data-eval-gold="side-analytics"
+        >
+          Analytics
+        </button>
+        <ul>
+          <li>
+            <a
+              href="/analytics/overview"
+              aria-current="page"
+              data-eval-gold="side-overview"
+              >Overview</a
+            >
+          </li>
+          <li>
+            <a href="/analytics/reports" data-eval-gold="side-reports"
+              >Reports</a
+            >
+          </li>
+        </ul>
+        <button
+          class="section-toggle"
+          aria-expanded="true"
+          data-eval-gold="side-users"
+        >
+          Users
+        </button>
+        <ul>
+          <li>
+            <a href="/users" data-eval-gold="side-all-users">All users</a>
+          </li>
+          <li><a href="/users/roles" data-eval-gold="side-roles">Roles</a></li>
+        </ul>
+        <button
+          class="section-toggle"
+          aria-expanded="false"
+          data-eval-gold="side-billing"
+        >
+          Billing
+        </button>
+        <a href="/settings" data-eval-gold="side-settings">Settings</a>
+      </nav>
+    </aside>
+    <div>
+      <div class="topbar">
+        <input
+          type="search"
+          placeholder="Search users, reports…"
+          aria-label="Search"
+          data-eval-gold="search"
+        />
+        <span class="spacer"></span>
+        <button aria-label="Help" title="Help" data-eval-gold="help">?</button>
+        <button
+          aria-label="Notifications, 3 unread"
+          data-eval-gold="notifications"
+        >
+          🔔<span aria-hidden="true">3</span>
+        </button>
+        <button
+          aria-label="Account menu"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          data-eval-gold="account-menu"
+        >
+          <span aria-hidden="true">JK</span>
+        </button>
+      </div>
+      <main class="content">
+        <nav aria-label="Breadcrumb">
+          <ol>
+            <li><a href="/home" data-eval-gold="crumb-home">Home</a></li>
+            <li>
+              <a href="/analytics" data-eval-gold="crumb-analytics"
+                >Analytics</a
+              >
+            </li>
+            <li><span aria-current="page">Overview</span></li>
+          </ol>
+        </nav>
+        <h1>Overview</h1>
+        <p>
+          <label
+            >Date range
+            <select data-eval-gold="date-range">
+              <option>Last 7 days</option>
+              <option selected>Last 30 days</option>
+              <option>Last 90 days</option>
+              <option>Year to date</option>
+            </select></label
+          >
+          <label
+            >Region
+            <select data-eval-gold="region">
+              <option>All regions</option>
+              <option>EMEA</option>
+              <option>Americas</option>
+              <option>APAC</option>
+            </select></label
+          >
+          <button data-eval-gold="export-csv">Export CSV</button>
+          <button data-eval-gold="refresh">Refresh data</button>
+        </p>
+        <section class="cards" aria-label="Key metrics">
+          <article class="card">
+            <h2>Revenue</h2>
+            <p class="value">$482,190</p>
+            <p>+8.2% vs previous period</p>
+            <a href="/analytics/reports/revenue" data-eval-gold="report-revenue"
+              >View report</a
+            >
+          </article>
+          <article class="card">
+            <h2>Active users</h2>
+            <p class="value">12,408</p>
+            <p>+3.1% vs previous period</p>
+            <a href="/analytics/reports/active" data-eval-gold="report-active"
+              >View report</a
+            >
+          </article>
+          <article class="card">
+            <h2>Churn</h2>
+            <p class="value">2.4%</p>
+            <p>−0.3 pts vs previous period</p>
+            <a href="/analytics/reports/churn" data-eval-gold="report-churn"
+              >View report</a
+            >
+          </article>
+        </section>
+        <section aria-labelledby="h-signups">
+          <h2 id="h-signups">Recent sign-ups</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Plan</th>
+                <th>Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <a href="/users/881" data-eval-gold="user-lina">Lina Park</a>
+                </td>
+                <td>Pro</td>
+                <td>Today</td>
+              </tr>
+              <tr>
+                <td>
+                  <a href="/users/880" data-eval-gold="user-omar"
+                    >Omar Haddad</a
+                  >
+                </td>
+                <td>Free</td>
+                <td>Yesterday</td>
+              </tr>
+            </tbody>
+          </table>
+          <a href="/users" data-eval-gold="view-all-users">View all users</a>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

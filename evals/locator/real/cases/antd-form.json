@@ -1,0 +1,127 @@
+{
+  "site": "antd-form",
+  "targets": {
+    "search": "#root > div > header > div > div:nth-of-type(2) > div > div:nth-of-type(1) > input",
+    "nav-components-item": "#root > div > header > div > div:nth-of-type(2) > div > ul > li:nth-of-type(3)",
+    "nav-components-link": "#root > div > header > div > div:nth-of-type(2) > div > ul > li:nth-of-type(3) > span > a",
+    "basic-username": "#form-demo-basic > section:nth-of-type(1) > form > div:nth-of-type(1) > div > div:nth-of-type(2) > div > div > input",
+    "basic-show-password": "#form-demo-basic > section:nth-of-type(1) > form > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div > span > span > span",
+    "basic-remember-label": "#form-demo-basic > section:nth-of-type(1) > form > div:nth-of-type(3) > div > div > div > div > label",
+    "basic-remember-checkbox": "#form-demo-basic > section:nth-of-type(1) > form > div:nth-of-type(3) > div > div > div > div > label > span:nth-of-type(1) > input",
+    "basic-submit": "#form-demo-basic > section:nth-of-type(1) > form > div:nth-of-type(4) > div > div > div > div > button",
+    "note": "#control-hooks_note",
+    "gender": "#control-hooks_gender",
+    "fill-form": "#control-hooks > div:nth-of-type(3) > div > div > div > div > div > div:nth-of-type(3) > button",
+    "layout-vertical": "#layout > label:nth-of-type(2)",
+    "form-disabled-label": "#form-demo-disabled > section:nth-of-type(1) > label",
+    "form-disabled-checkbox": "#form-demo-disabled > section:nth-of-type(1) > label > span:nth-of-type(1) > input",
+    "login-button": "#login > div:nth-of-type(4) > div > div > div > div > button"
+  },
+  "cases": [
+    {
+      "id": "antd-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the search box at the top",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search", "region"]
+    },
+    {
+      "id": "antd-components-nav",
+      "op": "click",
+      "sentence": "click Components in the top navigation",
+      "gold": ["nav-components-item", "nav-components-link"],
+      "tags": ["exact-label", "nav"]
+    },
+    {
+      "id": "antd-basic-username",
+      "op": "fill",
+      "sentence": "type {{username}} in the Username field of the first example",
+      "gold": ["basic-username"],
+      "tags": ["form-field", "container", "ordinal"]
+    },
+    {
+      "id": "antd-password-unscoped",
+      "op": "fill",
+      "sentence": "type {{password}} in the Password field",
+      "gold": "ambiguous",
+      "tags": ["form-field", "duplicate-name", "underspecified"]
+    },
+    {
+      "id": "antd-remember-me",
+      "op": "click",
+      "sentence": "uncheck Remember me in the basic usage demo",
+      "gold": ["basic-remember-checkbox", "basic-remember-label"],
+      "tags": ["checkbox", "container", "invisible-to-sedum"]
+    },
+    {
+      "id": "antd-show-password",
+      "op": "click",
+      "sentence": "click the eye icon to show the password in the first example",
+      "gold": ["basic-show-password"],
+      "tags": ["icon", "container"]
+    },
+    {
+      "id": "antd-basic-submit",
+      "op": "click",
+      "sentence": "click Submit in the Basic Usage demo",
+      "gold": ["basic-submit"],
+      "tags": ["container", "duplicate-name"]
+    },
+    {
+      "id": "antd-submit-unscoped",
+      "op": "click",
+      "sentence": "click Submit",
+      "gold": "ambiguous",
+      "tags": ["duplicate-name", "underspecified"]
+    },
+    {
+      "id": "antd-note",
+      "op": "fill",
+      "sentence": "type {{note}} in the Note field",
+      "gold": ["note"],
+      "tags": ["exact-label", "form-field"]
+    },
+    {
+      "id": "antd-gender",
+      "op": "click",
+      "sentence": "open the Gender select",
+      "gold": ["gender"],
+      "tags": ["select", "combobox", "form-field"]
+    },
+    {
+      "id": "antd-fill-form",
+      "op": "click",
+      "sentence": "click Fill form",
+      "gold": ["fill-form"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "antd-layout-vertical",
+      "op": "click",
+      "sentence": "switch the Form Layout to Vertical",
+      "gold": ["layout-vertical"],
+      "tags": ["radio", "invisible-to-sedum"]
+    },
+    {
+      "id": "antd-form-disabled",
+      "op": "click",
+      "sentence": "uncheck the Form disabled checkbox",
+      "gold": ["form-disabled-checkbox", "form-disabled-label"],
+      "tags": ["checkbox", "near-duplicate-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "antd-login-button",
+      "op": "click",
+      "sentence": "click the Log in button in the login form demo",
+      "gold": ["login-button"],
+      "tags": ["exact-label", "container"]
+    },
+    {
+      "id": "antd-google-absent",
+      "op": "click",
+      "sentence": "click Sign in with Google",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

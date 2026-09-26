@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shop all · Outfitters</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 0;
+        color: #1d2330;
+      }
+      .top {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        border-bottom: 1px solid #ddd;
+      }
+      .brand {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #1d2330;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .search {
+        flex: 1;
+        display: flex;
+        max-width: 420px;
+      }
+      .search input {
+        flex: 1;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid #bbb;
+        border-radius: 6px 0 0 6px;
+        font: inherit;
+      }
+      .search .go {
+        border: 1px solid #bbb;
+        border-left: 0;
+        border-radius: 0 6px 6px 0;
+        background: #f4f4f4;
+        padding: 0 0.6rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+      }
+      .cart {
+        margin-left: auto;
+        color: #1d2330;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+      }
+      .filters {
+        border: 0;
+        padding: 0;
+        margin: 0;
+      }
+      .filters .legend {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        padding: 0;
+      }
+      .check {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 0.35rem 0;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+        position: relative;
+      }
+      .sort {
+        min-width: 170px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #bbb;
+        border-radius: 6px;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 0.75rem;
+        position: relative;
+      }
+      .card .name {
+        font-size: 1.05rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem;
+      }
+      .card .price {
+        margin: 0 0 0.25rem;
+        font-weight: 600;
+      }
+      .card .blurb {
+        margin: 0 0 0.75rem;
+        color: #555;
+      }
+      .heart {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: 0;
+        background: none;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #c0392b;
+      }
+      .add,
+      .more {
+        padding: 0.45rem 0.9rem;
+        border: 0;
+        border-radius: 6px;
+        background: #2f5bea;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+        display: inline-block;
+      }
+      .more {
+        background: #fff;
+        color: #2f5bea;
+        border: 1px solid #2f5bea;
+      }
+      .more-row {
+        text-align: center;
+        margin: 1.25rem 0;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      ui-icon-button.heart {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+      }
+      ui-search-field.search {
+        display: flex;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/">Outfitters</a>
+      <ui-search-field
+        class="search"
+        placeholder="Search products"
+        gold-key="search"
+      ></ui-search-field>
+      <ui-link class="cart" href="/cart" gold-key="cart">Cart (0)</ui-link>
+    </header>
+    <div class="layout">
+      <aside>
+        <div class="filters">
+          <div class="legend">Category</div>
+          <ui-checkbox name="category" value="bags">Bags</ui-checkbox>
+          <ui-checkbox name="category" value="lights" gold-key="filter-lights"
+            >Lights</ui-checkbox
+          >
+          <ui-checkbox name="category" value="hats">Hats</ui-checkbox>
+          <ui-checkbox
+            name="category"
+            value="drinkware"
+            gold-key="filter-drinkware"
+            >Drinkware</ui-checkbox
+          >
+        </div>
+      </aside>
+      <main>
+        <h1 class="sr-only">All products</h1>
+        <div class="toolbar">
+          <ui-select
+            label="Sort by"
+            options="featured:Featured|price-asc:Price: low to high"
+            gold-key="sort"
+          ></ui-select>
+        </div>
+        <ul class="grid">
+          <li class="card">
+            <h3 class="name">Canvas Backpack</h3>
+            <p class="price">$29.99</p>
+            <p class="blurb">Water-resistant 20 L pack.</p>
+            <ui-icon-button
+              class="heart"
+              icon="heart"
+              label="Add Canvas Backpack to wishlist"
+            ></ui-icon-button>
+            <ui-button gold-key="add-backpack">Add to cart</ui-button>
+          </li>
+          <li class="card">
+            <h3 class="name">Trail Light</h3>
+            <p class="price">$9.99</p>
+            <p class="blurb">USB rechargeable headlamp.</p>
+            <ui-icon-button
+              class="heart"
+              icon="heart"
+              label="Add Trail Light to wishlist"
+            ></ui-icon-button>
+            <ui-button gold-key="add-light">Add to cart</ui-button>
+          </li>
+          <li class="card">
+            <h3 class="name">Merino Beanie</h3>
+            <p class="price">$24.00</p>
+            <p class="blurb">Soft wool hat.</p>
+            <ui-icon-button
+              class="heart"
+              icon="heart"
+              label="Add Merino Beanie to wishlist"
+              gold-key="wish-beanie"
+            ></ui-icon-button>
+            <ui-button>Add to cart</ui-button>
+          </li>
+          <li class="card">
+            <h3 class="name">Steel Bottle</h3>
+            <p class="price">$19.00</p>
+            <p class="blurb">Keeps drinks cold for 24 hours.</p>
+            <ui-icon-button
+              class="heart"
+              icon="heart"
+              label="Add Steel Bottle to wishlist"
+            ></ui-icon-button>
+            <ui-button>Add to cart</ui-button>
+          </li>
+          <li class="card">
+            <h3 class="name">Camp Mug</h3>
+            <p class="price">$12.00</p>
+            <p class="blurb">Enamel mug, 350 ml.</p>
+            <ui-icon-button
+              class="heart"
+              icon="heart"
+              label="Add Camp Mug to wishlist"
+              gold-key="wish-mug"
+            ></ui-icon-button>
+            <ui-button>Add to cart</ui-button>
+          </li>
+          <li class="card">
+            <h3 class="name">Market Tote</h3>
+            <p class="price">$15.00</p>
+            <p class="blurb">Heavy cotton shopping bag.</p>
+            <ui-icon-button
+              class="heart"
+              icon="heart"
+              label="Add Market Tote to wishlist"
+            ></ui-icon-button>
+            <ui-button>Add to cart</ui-button>
+          </li>
+        </ul>
+        <div class="more-row">
+          <ui-button variant="outlined" gold-key="load-more"
+            >Load more</ui-button
+          >
+        </div>
+      </main>
+    </div>
+    <script>
+      // Evaluation labels for the real controls inside each shadow root.
+      const GOLD = {
+        search: 'data-eval-gold="search"',
+        cart: 'data-eval-gold="cart"',
+        sort: 'data-eval-gold="sort"',
+        "load-more": 'data-eval-gold="load-more"',
+        "filter-lights": 'data-eval-gold="filter-lights"',
+        "filter-drinkware": 'data-eval-gold="filter-drinkware"',
+        "add-backpack": 'data-eval-gold="add-backpack"',
+        "add-light": 'data-eval-gold="add-light"',
+        "wish-mug": 'data-eval-gold="wish-mug"',
+        "wish-beanie": 'data-eval-gold="wish-beanie"',
+      };
+      const gold = (key) => GOLD[key] ?? "";
+      const esc = (value) =>
+        String(value ?? "").replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+      const ICONS = {
+        heart: "♡",
+        search:
+          '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="#333" stroke-width="2"/><path d="M11 11l4 4" stroke="#333" stroke-width="2"/></svg>',
+      };
+      function define(name, render) {
+        customElements.define(
+          name,
+          class extends HTMLElement {
+            connectedCallback() {
+              if (this.shadowRoot) return;
+              this.attachShadow({ mode: "open" }).innerHTML = render(this);
+              this.dispatchEvent(
+                new CustomEvent("ui-ready", { bubbles: true }),
+              );
+            }
+          },
+        );
+      }
+      const BUTTON_CSS = `button { padding: .45rem .9rem; border-radius: 6px; font: inherit; cursor: pointer; border: 1px solid #2f5bea; }
+        :host(:not([variant])) button { background: #2f5bea; color: #fff; border: 0; }
+        :host([variant="outlined"]) button { background: #fff; color: #2f5bea; }`;
+      define(
+        "ui-button",
+        (el) =>
+          `<style>${BUTTON_CSS}</style><button part="control" type="button" ${gold(el.getAttribute("gold-key"))}><slot></slot></button>`,
+      );
+      define(
+        "ui-icon-button",
+        (el) =>
+          `<style>button { border: 0; background: none; font-size: 1.2rem; line-height: 1; cursor: pointer; color: #c0392b; padding: 0; }</style><button part="control" type="button" aria-label="${esc(el.getAttribute("label"))}" ${gold(el.getAttribute("gold-key"))}>${ICONS[el.getAttribute("icon")] ?? ""}</button>`,
+      );
+      define(
+        "ui-link",
+        (el) =>
+          `<style>a { color: #1d2330; text-decoration: none; font-weight: 600; }</style><a part="anchor" href="${esc(el.getAttribute("href"))}" ${gold(el.getAttribute("gold-key"))}><slot></slot></a>`,
+      );
+      define(
+        "ui-checkbox",
+        (el) =>
+          `<style>:host { display: block; margin: .35rem 0; } label { display: flex; gap: .5rem; align-items: center; }</style><label><input type="checkbox" name="${esc(el.getAttribute("name"))}" value="${esc(el.getAttribute("value"))}" ${gold(el.getAttribute("gold-key"))}><slot></slot></label>`,
+      );
+      define(
+        "ui-search-field",
+        (el) =>
+          `<style>:host { display: flex; } input { flex: 1; padding: .45rem .6rem; border: 1px solid #bbb; border-radius: 6px 0 0 6px; font: inherit; } button { border: 1px solid #bbb; border-left: 0; border-radius: 0 6px 6px 0; background: #f4f4f4; padding: 0 .6rem; cursor: pointer; display: flex; align-items: center; }</style><input type="search" placeholder="${esc(el.getAttribute("placeholder"))}" ${gold(el.getAttribute("gold-key"))}><button type="button" aria-label="Search">${ICONS.search}</button>`,
+      );
+      define("ui-select", (el) => {
+        const options = (el.getAttribute("options") ?? "")
+          .split("|")
+          .map((pair) => {
+            const [value, ...label] = pair.split(":");
+            return `<option value="${esc(value)}">${esc(label.join(":"))}</option>`;
+          })
+          .join("");
+        return `<style>:host { display: flex; gap: .5rem; align-items: center; } select { min-width: 170px; padding: .35rem .5rem; border: 1px solid #bbb; border-radius: 6px; background: #fff; font: inherit; }</style><label for="control">${esc(el.getAttribute("label"))}</label><select id="control" ${gold(el.getAttribute("gold-key"))}>${options}</select>`;
+      });
+      let count = 0;
+      const cart = document.querySelector("ui-link.cart");
+      document.querySelectorAll(".card ui-button").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          cart.textContent = `Cart (${++count})`;
+        }),
+      );
+    </script>
+  </body>
+</html>

@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Orders</title>
+    <style>
+      body {
+        font: 14px system-ui;
+        margin: 1rem;
+      }
+      .toolbar,
+      .pager {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        margin: 0.75rem 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #ddd;
+        padding: 0.4rem 0.6rem;
+        text-align: left;
+      }
+      th button {
+        background: none;
+        border: 0;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .num {
+        text-align: right;
+      }
+      .badge {
+        border-radius: 999px;
+        padding: 0.1rem 0.5rem;
+        font-size: 12px;
+        background: #eee;
+      }
+      .paid {
+        background: #d7f5dd;
+      }
+      .pending {
+        background: #fff1c2;
+      }
+      .shipped {
+        background: #d6e6ff;
+      }
+      .refunded,
+      .cancelled {
+        background: #f6d6d6;
+      }
+      .kebab {
+        background: none;
+        border: 0;
+        font-size: 18px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav aria-label="Main">
+        <a href="/dashboard">Dashboard</a> <a href="/orders">Orders</a>
+        <a href="/customers">Customers</a> <a href="/settings">Settings</a>
+      </nav>
+    </header>
+    <h1>Orders</h1>
+    <div class="toolbar">
+      <input
+        type="search"
+        placeholder="Filter orders"
+        aria-label="Filter orders"
+        data-eval-gold="filter"
+      />
+      <button data-eval-gold="export">Export CSV</button>
+      <button data-eval-gold="new-order">New order</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>
+            <input
+              type="checkbox"
+              aria-label="Select all orders"
+              data-eval-gold="select-all"
+            />
+          </th>
+          <th aria-sort="descending">
+            <button data-eval-gold="sort-order">Order</button>
+          </th>
+          <th><button data-eval-gold="sort-customer">Customer</button></th>
+          <th><button data-eval-gold="sort-date">Date</button></th>
+          <th class="num">
+            <button data-eval-gold="sort-total">Total</button>
+          </th>
+          <th><button data-eval-gold="sort-status">Status</button></th>
+          <th><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1041"
+              data-eval-gold="select-1041"
+            />
+          </td>
+          <td><a href="/orders/1041" data-eval-gold="link-1041">#1041</a></td>
+          <td>Ana Silva</td>
+          <td>2026-09-01</td>
+          <td class="num">$128.40</td>
+          <td><span class="badge paid">Paid</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1041"
+              data-eval-gold="more-1041"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1042"
+              data-eval-gold="select-1042"
+            />
+          </td>
+          <td><a href="/orders/1042" data-eval-gold="link-1042">#1042</a></td>
+          <td>Ben Carter</td>
+          <td>2026-09-02</td>
+          <td class="num">$59.00</td>
+          <td><span class="badge pending">Pending</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1042"
+              data-eval-gold="more-1042"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1043"
+              data-eval-gold="select-1043"
+            />
+          </td>
+          <td><a href="/orders/1043" data-eval-gold="link-1043">#1043</a></td>
+          <td>Chloe Kim</td>
+          <td>2026-09-03</td>
+          <td class="num">$1,204.99</td>
+          <td><span class="badge shipped">Shipped</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1043"
+              data-eval-gold="more-1043"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1044"
+              data-eval-gold="select-1044"
+            />
+          </td>
+          <td><a href="/orders/1044" data-eval-gold="link-1044">#1044</a></td>
+          <td>Diego Ruiz</td>
+          <td>2026-09-03</td>
+          <td class="num">$312.50</td>
+          <td><span class="badge refunded">Refunded</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1044"
+              data-eval-gold="more-1044"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1045"
+              data-eval-gold="select-1045"
+            />
+          </td>
+          <td><a href="/orders/1045" data-eval-gold="link-1045">#1045</a></td>
+          <td>Ben Carter</td>
+          <td>2026-09-05</td>
+          <td class="num">$87.25</td>
+          <td><span class="badge paid">Paid</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1045"
+              data-eval-gold="more-1045"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1046"
+              data-eval-gold="select-1046"
+            />
+          </td>
+          <td><a href="/orders/1046" data-eval-gold="link-1046">#1046</a></td>
+          <td>Fatima Zahra</td>
+          <td>2026-09-06</td>
+          <td class="num">$14.99</td>
+          <td><span class="badge paid">Paid</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1046"
+              data-eval-gold="more-1046"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1047"
+              data-eval-gold="select-1047"
+            />
+          </td>
+          <td><a href="/orders/1047" data-eval-gold="link-1047">#1047</a></td>
+          <td>George Liu</td>
+          <td>2026-09-07</td>
+          <td class="num">$945.00</td>
+          <td><span class="badge cancelled">Cancelled</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1047"
+              data-eval-gold="more-1047"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              aria-label="Select order #1048"
+              data-eval-gold="select-1048"
+            />
+          </td>
+          <td><a href="/orders/1048" data-eval-gold="link-1048">#1048</a></td>
+          <td>Hana Sato</td>
+          <td>2026-09-08</td>
+          <td class="num">$210.00</td>
+          <td><span class="badge pending">Pending</span></td>
+          <td>
+            <button
+              class="kebab"
+              aria-label="More actions for order #1048"
+              data-eval-gold="more-1048"
+            >
+              &#8942;
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="pager">
+      <label
+        >Rows per page
+        <select data-eval-gold="rows-per-page">
+          <option>8</option>
+          <option>25</option>
+          <option>50</option>
+        </select></label
+      >
+      <button disabled data-eval-gold="prev">Previous</button>
+      <span>Page 1 of 5</span>
+      <button data-eval-gold="next">Next</button>
+    </div>
+  </body>
+</html>

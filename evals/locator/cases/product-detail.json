@@ -1,0 +1,117 @@
+{
+  "page": "product-detail.html",
+  "cases": [
+    {
+      "id": "pdp-size-large",
+      "op": "click",
+      "sentence": "click size L",
+      "gold": ["size-l"],
+      "tags": ["option", "exact-label"]
+    },
+    {
+      "id": "pdp-size-xl-sold-out",
+      "op": "click",
+      "sentence": "click the XL size",
+      "gold": ["size-xl"],
+      "tags": ["option", "disabled"]
+    },
+    {
+      "id": "pdp-color-heather",
+      "op": "click",
+      "sentence": "click the Heather grey color",
+      "gold": ["color-heather"],
+      "tags": ["radio", "exact-label"]
+    },
+    {
+      "id": "pdp-qty-plus",
+      "op": "click",
+      "sentence": "click the plus button next to the quantity",
+      "gold": ["qty-inc"],
+      "tags": ["icon", "aria-label", "spinbutton"]
+    },
+    {
+      "id": "pdp-qty-decrease",
+      "op": "click",
+      "sentence": "click Decrease quantity",
+      "gold": ["qty-dec"],
+      "tags": ["aria-label", "exact-label", "spinbutton"]
+    },
+    {
+      "id": "pdp-qty-fill",
+      "op": "fill",
+      "sentence": "type {{qty}} in the quantity field",
+      "gold": ["qty"],
+      "tags": ["spinbutton", "exact-label"]
+    },
+    {
+      "id": "pdp-add-main-product",
+      "op": "click",
+      "sentence": "click Add to cart for the Harbor Crew Sweatshirt",
+      "gold": ["add-to-cart"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "pdp-add-related-joggers",
+      "op": "click",
+      "sentence": "click Add to cart for the Pier Joggers",
+      "gold": ["related-joggers"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "pdp-wishlist-heart",
+      "op": "click",
+      "sentence": "click the heart icon",
+      "gold": ["wishlist"],
+      "tags": ["icon", "aria-label"]
+    },
+    {
+      "id": "pdp-helpful-marcus",
+      "op": "click",
+      "sentence": "click Helpful on Marcus T.'s review",
+      "gold": ["helpful-marcus"],
+      "tags": ["repeated-group", "container"]
+    },
+    {
+      "id": "pdp-report-sleeves",
+      "op": "click",
+      "sentence": "click Report on the review that says the sleeves run long",
+      "gold": ["report-marcus"],
+      "tags": ["repeated-group", "container", "indirect"]
+    },
+    {
+      "id": "pdp-helpful-first",
+      "op": "click",
+      "sentence": "click the Helpful button on the first review",
+      "gold": ["helpful-priya"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "pdp-carousel-next",
+      "op": "click",
+      "sentence": "click the right arrow on the product image carousel",
+      "gold": ["gallery-next"],
+      "tags": ["carousel", "icon", "paraphrase"]
+    },
+    {
+      "id": "pdp-report-unscoped",
+      "op": "click",
+      "sentence": "click Report",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "pdp-size-xxl-absent",
+      "op": "click",
+      "sentence": "click size XXL",
+      "gold": "none",
+      "tags": ["option", "absent", "substring-trap"]
+    },
+    {
+      "id": "pdp-color-red-absent",
+      "op": "click",
+      "sentence": "click the Red color option",
+      "gold": "none",
+      "tags": ["radio", "absent"]
+    }
+  ]
+}

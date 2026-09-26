@@ -1,0 +1,127 @@
+{
+  "site": "automationexercise-products",
+  "targets": {
+    "search": "input[name=\"search\"]",
+    "search_btn": "#advertisement > div > button",
+    "add_blue_1": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(1) > a",
+    "add_blue_2": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(2) > div > div:nth-of-type(1) > div:nth-of-type(2) > div > a",
+    "add_winter_1": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(6) > div > div:nth-of-type(1) > div:nth-of-type(1) > a",
+    "add_winter_2": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(6) > div > div:nth-of-type(1) > div:nth-of-type(2) > div > a",
+    "add_stylish_1": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(5) > div > div:nth-of-type(1) > div:nth-of-type(1) > a",
+    "add_stylish_2": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(5) > div > div:nth-of-type(1) > div:nth-of-type(2) > div > a",
+    "view_third": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div > div:nth-of-type(4) > div > div:nth-of-type(2) > ul > li > a",
+    "polo": "html > body > section:nth-of-type(2) > div > div > div:nth-of-type(1) > div:nth-of-type(1) > div:nth-of-type(2) > div > ul > li:nth-of-type(1) > a",
+    "women": "#accordian > div:nth-of-type(1) > div:nth-of-type(1) > h4 > a",
+    "logo": "#header > div > div > div > div:nth-of-type(1) > div > a",
+    "home": "#header > div > div > div > div:nth-of-type(2) > div > ul > li:nth-of-type(1) > a",
+    "subscribe": "#subscribe",
+    "close_anchor": "svg[aria-label=\"Close shopping anchor\"]"
+  },
+  "cases": [
+    {
+      "id": "ae-search",
+      "op": "fill",
+      "sentence": "type {{query}} in the Search Product field",
+      "gold": ["search"],
+      "tags": ["placeholder-name", "search"]
+    },
+    {
+      "id": "ae-search-btn",
+      "op": "click",
+      "sentence": "click the magnifying glass button next to the search field",
+      "gold": ["search_btn"],
+      "tags": ["icon", "search", "invisible-to-sedum"]
+    },
+    {
+      "id": "ae-add-blue-top",
+      "op": "click",
+      "sentence": "click Add to cart for Blue Top",
+      "gold": ["add_blue_1", "add_blue_2"],
+      "tags": ["repeated-group", "container", "duplicate-name"]
+    },
+    {
+      "id": "ae-add-winter",
+      "op": "click",
+      "sentence": "add the Winter Top to the cart",
+      "gold": ["add_winter_1", "add_winter_2"],
+      "tags": ["repeated-group", "container", "paraphrase"]
+    },
+    {
+      "id": "ae-add-1500",
+      "op": "click",
+      "sentence": "click Add to cart for the Rs. 1500 product",
+      "gold": ["add_stylish_1", "add_stylish_2"],
+      "tags": ["repeated-group", "container", "numeric", "indirect"]
+    },
+    {
+      "id": "ae-add-400",
+      "op": "click",
+      "sentence": "click Add to cart for the Rs. 400 product",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "numeric", "underspecified"]
+    },
+    {
+      "id": "ae-add-unscoped",
+      "op": "click",
+      "sentence": "click Add to cart",
+      "gold": "ambiguous",
+      "tags": ["repeated-group", "underspecified"]
+    },
+    {
+      "id": "ae-view-third",
+      "op": "click",
+      "sentence": "click View Product on the third product",
+      "gold": ["view_third"],
+      "tags": ["repeated-group", "ordinal"]
+    },
+    {
+      "id": "ae-brand-polo",
+      "op": "click",
+      "sentence": "filter by the POLO brand",
+      "gold": ["polo"],
+      "tags": ["region", "paraphrase"]
+    },
+    {
+      "id": "ae-cat-women",
+      "op": "click",
+      "sentence": "expand the Women category",
+      "gold": ["women"],
+      "tags": ["region", "exact-label"]
+    },
+    {
+      "id": "ae-logo",
+      "op": "click",
+      "sentence": "click the Automation Exercise logo",
+      "gold": ["logo", "home"],
+      "tags": ["icon", "indirect"]
+    },
+    {
+      "id": "ae-subscribe-btn",
+      "op": "click",
+      "sentence": "click the arrow button to subscribe",
+      "gold": ["subscribe"],
+      "tags": ["icon", "footer", "form-field", "invisible-to-sedum"]
+    },
+    {
+      "id": "ae-close-anchor",
+      "op": "click",
+      "sentence": "close the Blue Tops shopping popup",
+      "gold": ["close_anchor"],
+      "tags": ["icon", "aria-label", "overlay"]
+    },
+    {
+      "id": "ae-checkout-absent",
+      "op": "click",
+      "sentence": "click Proceed To Checkout",
+      "gold": "none",
+      "tags": ["absent"]
+    },
+    {
+      "id": "ae-logout-absent",
+      "op": "click",
+      "sentence": "click Logout in the header",
+      "gold": "none",
+      "tags": ["absent", "nav"]
+    }
+  ]
+}

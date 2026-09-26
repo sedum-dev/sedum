@@ -1,0 +1,127 @@
+{
+  "site": "weather-gov",
+  "targets": {
+    "location": "#inputstring",
+    "go": "#btnSearch",
+    "custom-location": "#myfcst-location-input",
+    "remember": "#myfcst-remember",
+    "get-weather": "#myfcst-submit",
+    "read-more": "#topnews > div:nth-of-type(2) > p > a",
+    "privacy-form": "#myfcst-form > div:nth-of-type(2) > p > a",
+    "privacy-footer": "#footer_required_links > div:nth-of-type(2) > a:nth-of-type(1)",
+    "hurricane-warning": "#wwaleft > ul > li:nth-of-type(2) > a",
+    "flood-warning": "#wwaleft > ul > li:nth-of-type(6) > a",
+    "forecast": "#topnav > li:nth-of-type(2) > div:nth-of-type(1) > a",
+    "nws-banner": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(1)",
+    "noaa-logo": "html > body > div:nth-of-type(1) > div:nth-of-type(1) > a:nth-of-type(3)",
+    "noaa-footer-link": "#footer_legal_info > p > a:nth-of-type(2)",
+    "nws-footer-link": "#footer_legal_info > p > a:nth-of-type(3)"
+  },
+  "cases": [
+    {
+      "id": "wg-location",
+      "op": "fill",
+      "sentence": "type {{city}} in the Local forecast by City, St or ZIP code field",
+      "gold": ["location"],
+      "tags": ["form-field", "placeholder-name", "near-duplicate-name"]
+    },
+    {
+      "id": "wg-go",
+      "op": "click",
+      "sentence": "click Go",
+      "gold": ["go"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wg-custom-location",
+      "op": "fill",
+      "sentence": "type {{zip}} in the City, ST field under Customize Your Weather.gov",
+      "gold": ["custom-location"],
+      "tags": ["form-field", "region", "near-duplicate-name"]
+    },
+    {
+      "id": "wg-remember",
+      "op": "click",
+      "sentence": "check Remember Me",
+      "gold": ["remember"],
+      "tags": ["checkbox"]
+    },
+    {
+      "id": "wg-get-weather",
+      "op": "click",
+      "sentence": "click Get Weather",
+      "gold": ["get-weather"],
+      "tags": ["exact-label"]
+    },
+    {
+      "id": "wg-read-more",
+      "op": "click",
+      "sentence": "click Read More on the Tropical Storm Nolo headline",
+      "gold": ["read-more"],
+      "tags": ["container"]
+    },
+    {
+      "id": "wg-privacy",
+      "op": "click",
+      "sentence": "click Privacy Policy",
+      "gold": ["privacy-form", "privacy-footer"],
+      "tags": ["duplicate-name"]
+    },
+    {
+      "id": "wg-hurricane-warning",
+      "op": "click",
+      "sentence": "click Hurricane Warning in the alert legend",
+      "gold": ["hurricane-warning"],
+      "tags": ["near-duplicate-name", "region"]
+    },
+    {
+      "id": "wg-flood-warning",
+      "op": "click",
+      "sentence": "click Flood Warning",
+      "gold": ["flood-warning"],
+      "tags": ["substring-trap"]
+    },
+    {
+      "id": "wg-forecast-nav",
+      "op": "click",
+      "sentence": "click FORECAST in the top menu",
+      "gold": ["forecast"],
+      "tags": ["nav", "substring-trap"]
+    },
+    {
+      "id": "wg-noaa-logo",
+      "op": "click",
+      "sentence": "click the NOAA logo",
+      "gold": ["noaa-logo", "noaa-footer-link"],
+      "tags": ["icon", "title-name", "invisible-to-sedum"]
+    },
+    {
+      "id": "wg-nws-banner",
+      "op": "click",
+      "sentence": "click the National Weather Service banner at the top of the page",
+      "gold": ["nws-banner", "nws-footer-link"],
+      "tags": ["icon", "region", "invisible-to-sedum"]
+    },
+    {
+      "id": "wg-location-unscoped",
+      "op": "fill",
+      "sentence": "type {{city}} in the location field",
+      "gold": "ambiguous",
+      "tags": ["underspecified", "form-field"]
+    },
+    {
+      "id": "wg-tornado-absent",
+      "op": "click",
+      "sentence": "click Tornado Warning",
+      "gold": "none",
+      "tags": ["absent", "near-duplicate-name"]
+    },
+    {
+      "id": "wg-signin-absent",
+      "op": "click",
+      "sentence": "click Sign in",
+      "gold": "none",
+      "tags": ["absent"]
+    }
+  ]
+}

@@ -1,0 +1,225 @@
+[
+  {
+    "id": "wikipedia-article",
+    "url": "https://en.wikipedia.org/wiki/Ada_Lovelace",
+    "category": "reference"
+  },
+  {
+    "id": "wikipedia-es",
+    "url": "https://es.wikipedia.org/wiki/Buenos_Aires",
+    "category": "reference",
+    "locale": "es-AR"
+  },
+  {
+    "id": "mdn-button",
+    "url": "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/button",
+    "category": "docs"
+  },
+  {
+    "id": "python-docs-datetime",
+    "url": "https://docs.python.org/3/library/datetime.html",
+    "category": "docs"
+  },
+  {
+    "id": "stripe-docs-checkout",
+    "url": "https://docs.stripe.com/payments/checkout",
+    "category": "docs"
+  },
+  {
+    "id": "w3schools-forms",
+    "url": "https://www.w3schools.com/html/html_forms.asp",
+    "category": "docs"
+  },
+  {
+    "id": "pypi-requests",
+    "url": "https://pypi.org/project/requests/",
+    "category": "developer"
+  },
+  {
+    "id": "github-repo",
+    "url": "https://github.com/microsoft/playwright",
+    "category": "developer"
+  },
+  {
+    "id": "stackoverflow-tagged",
+    "url": "https://stackoverflow.com/questions/tagged/javascript",
+    "category": "developer"
+  },
+  {
+    "id": "hacker-news",
+    "url": "https://news.ycombinator.com/",
+    "category": "community"
+  },
+  {
+    "id": "reddit-programming",
+    "url": "https://www.reddit.com/r/programming/",
+    "category": "community"
+  },
+  {
+    "id": "goodreads-book",
+    "url": "https://www.goodreads.com/book/show/5907.The_Hobbit",
+    "category": "community"
+  },
+  {
+    "id": "bbc-news",
+    "url": "https://www.bbc.com/news",
+    "category": "news"
+  },
+  {
+    "id": "lanacion",
+    "url": "https://www.lanacion.com.ar/",
+    "category": "news",
+    "locale": "es-AR"
+  },
+  {
+    "id": "gov-uk",
+    "url": "https://www.gov.uk/",
+    "category": "government"
+  },
+  {
+    "id": "usa-gov",
+    "url": "https://www.usa.gov/",
+    "category": "government"
+  },
+  {
+    "id": "weather-gov",
+    "url": "https://www.weather.gov/",
+    "category": "government"
+  },
+  {
+    "id": "argentina-gob",
+    "url": "https://www.argentina.gob.ar/",
+    "category": "government",
+    "locale": "es-AR"
+  },
+  {
+    "id": "ikea-home",
+    "url": "https://www.ikea.com/us/en/",
+    "category": "retail"
+  },
+  {
+    "id": "ikea-product",
+    "url": "https://www.ikea.com/us/en/p/billy-bookcase-white-00263850/",
+    "category": "retail"
+  },
+  {
+    "id": "apple-iphone",
+    "url": "https://www.apple.com/iphone/",
+    "category": "retail"
+  },
+  {
+    "id": "automationexercise-products",
+    "url": "https://automationexercise.com/products",
+    "category": "retail"
+  },
+  {
+    "id": "airbnb-home",
+    "url": "https://www.airbnb.com/",
+    "category": "travel",
+    "actions": [
+      {
+        "click": "[role='dialog'][aria-modal='true'] button"
+      }
+    ]
+  },
+  {
+    "id": "craigslist-ny",
+    "url": "https://newyork.craigslist.org/",
+    "category": "classifieds"
+  },
+  {
+    "id": "coursera-home",
+    "url": "https://www.coursera.org/",
+    "category": "education"
+  },
+  {
+    "id": "khan-academy",
+    "url": "https://www.khanacademy.org/",
+    "category": "education"
+  },
+  {
+    "id": "duolingo-home",
+    "url": "https://www.duolingo.com/",
+    "category": "education"
+  },
+  {
+    "id": "python-org",
+    "url": "https://www.python.org/",
+    "category": "open-source"
+  },
+  {
+    "id": "rust-lang",
+    "url": "https://www.rust-lang.org/",
+    "category": "open-source"
+  },
+  {
+    "id": "microsoft-home",
+    "url": "https://www.microsoft.com/en-us/",
+    "category": "corporate"
+  },
+  {
+    "id": "vercel-home",
+    "url": "https://vercel.com/",
+    "category": "saas"
+  },
+  {
+    "id": "linear-home",
+    "url": "https://linear.app/",
+    "category": "saas"
+  },
+  {
+    "id": "notion-home",
+    "url": "https://www.notion.com/",
+    "category": "saas"
+  },
+  {
+    "id": "figma-home",
+    "url": "https://www.figma.com/",
+    "category": "saas"
+  },
+  {
+    "id": "shopify-home",
+    "url": "https://www.shopify.com/",
+    "category": "saas"
+  },
+  {
+    "id": "tailwind-home",
+    "url": "https://tailwindcss.com/",
+    "category": "saas"
+  },
+  {
+    "id": "mui-select",
+    "url": "https://mui.com/material-ui/react-select/",
+    "category": "component-library"
+  },
+  {
+    "id": "antd-form",
+    "url": "https://ant.design/components/form",
+    "category": "component-library"
+  },
+  {
+    "id": "shoelace-button",
+    "url": "https://shoelace.style/components/button",
+    "category": "component-library"
+  },
+  {
+    "id": "todomvc-react",
+    "url": "https://todomvc.com/examples/react/dist/",
+    "category": "web-app"
+  },
+  {
+    "id": "saucedemo-login",
+    "url": "https://www.saucedemo.com/",
+    "category": "web-app"
+  },
+  {
+    "id": "the-internet-login",
+    "url": "https://the-internet.herokuapp.com/login",
+    "category": "web-app"
+  },
+  {
+    "id": "demoqa-form",
+    "url": "https://demoqa.com/automation-practice-form",
+    "category": "web-app"
+  }
+]

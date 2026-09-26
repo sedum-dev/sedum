@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Flights</title>
+    <style>
+      body {
+        font: 15px system-ui;
+        margin: 1rem;
+      }
+      [role="listbox"] {
+        border: 1px solid #999;
+        width: 12rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span id="trip-label" hidden>Change ticket type.</span>
+      <div
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="trip-options"
+        aria-labelledby="trip-label trip-value"
+        tabindex="0"
+        data-eval-gold="trip"
+      >
+        <span id="trip-value" aria-hidden="true">Round trip</span>
+      </div>
+      <ul role="listbox" id="trip-options">
+        <li role="option" aria-selected="true" data-eval-gold="opt-round">
+          Round trip
+        </li>
+        <li role="option" data-eval-gold="opt-oneway">One way</li>
+        <li role="option" data-eval-gold="opt-multi">Multi-city</li>
+      </ul>
+      <label
+        >Cabin class
+        <select data-eval-gold="cabin">
+          <option>Economy</option>
+          <option>Business</option>
+        </select></label
+      >
+      <input
+        aria-label="Where from?"
+        value="Buenos Aires"
+        data-eval-gold="from"
+      />
+      <input aria-label="Where to?" data-eval-gold="to" />
+      <button aria-label="Swap origin and destination" data-eval-gold="swap">
+        ⇄
+      </button>
+      <button data-eval-gold="explore">Explore</button>
+    </main>
+  </body>
+</html>
