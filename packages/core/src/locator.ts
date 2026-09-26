@@ -154,6 +154,22 @@ export interface LocatorOptions {
   readonly runtimeDependent?: boolean;
   /** Redact sensitive page-derived text only at the Resolver boundary. */
   readonly projectText?: (text: string) => string;
+  /**
+   * Experimental: when to accept the model's pick among repeated elements
+   * (same name or destination) whose sentence words do not single it out.
+   * Unset keeps the lexical rule: the sentence must name the member.
+   */
+  readonly repeatedMember?: RepeatedMemberPolicy;
+}
+
+export interface RepeatedMemberPolicy {
+  /** Accept any member when every member links to the same address. */
+  readonly sameDestination?: boolean;
+  /** Accept the model's pick at or above this probability and lead. */
+  readonly trust?: {
+    readonly minProbability: number;
+    readonly minLead: number;
+  };
 }
 
 class LocatorError extends Error {
@@ -403,6 +419,30 @@ function sentenceEvidence(
       !otherTexts.some((other) => containsPhrase(other, phrase))
     );
   });
+}
+
+/** Why a repeated member without sentence evidence is still accepted, if it is. */
+function repeatedMemberAccepted(
+  policy: RepeatedMemberPolicy | undefined,
+  member: Candidate,
+  group: readonly Candidate[],
+  decision: ResolverDecision,
+): string | null {
+  if (!policy) return null;
+  const href = member.signals.href;
+  if (
+    policy.sameDestination &&
+    href &&
+    group.every((candidate) => candidate.signals.href === href)
+  )
+    return "repeated_member_same_destination";
+  if (
+    policy.trust &&
+    decision.probabilities[member.ref]! >= policy.trust.minProbability &&
+    comparableLead(decision, member.ref) >= policy.trust.minLead
+  )
+    return "repeated_member_trusted";
+  return null;
 }
 
 function explicitRegionEvidence(
@@ -816,14 +856,23 @@ export async function resolveTarget(
         return unresolved("ambiguous");
       }
       if (!sentenceEvidence(options.sentence, member, group)) {
-        gate = "repeated_member_no_evidence";
-        return unresolved("ambiguous");
+        const accepted = repeatedMemberAccepted(
+          options.repeatedMember,
+          member,
+          group,
+          narrower,
+        );
+        if (!accepted) {
+          gate = "repeated_member_no_evidence";
+          return unresolved("ambiguous");
+        }
+        gate = accepted;
       }
       if (!explicitRegionEvidence(options.sentence, member)) {
         gate = "explicit_region_unproven";
         return unresolved("ambiguous");
       }
-      gate = "repeated_member_proven";
+      if (gate === "low_confidence_or_margin") gate = "repeated_member_proven";
       if (options.operation === "fill" && !member.editable)
         return unresolved("not_fillable");
       return await refresh(member);
@@ -832,8 +881,17 @@ export async function resolveTarget(
       group.length > 1 &&
       !sentenceEvidence(options.sentence, selected, group)
     ) {
-      gate = "repeated_member_no_evidence";
-      return unresolved("ambiguous");
+      const accepted = repeatedMemberAccepted(
+        options.repeatedMember,
+        selected,
+        group,
+        decision,
+      );
+      if (!accepted) {
+        gate = "repeated_member_no_evidence";
+        return unresolved("ambiguous");
+      }
+      gate = accepted;
     }
     if (options.operation === "fill" && !selected.editable)
       return unresolved("not_fillable");

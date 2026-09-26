@@ -716,6 +716,88 @@ describe("locator", () => {
     ).toBe("resolved");
   });
 
+  it("accepts a repeated member only under an opted-in policy", async () => {
+    const items = [
+      candidate(0, {
+        name: "Pricing",
+        peers: [],
+        signals: { path: "nav", href: "/pricing" },
+      }),
+      candidate(1, {
+        name: "Pricing",
+        peers: [],
+        signals: { path: "footer", href: "/pricing" },
+      }),
+      candidate(2, {
+        name: "Edit",
+        peers: ["Ada Lovelace"],
+        signals: { path: "ada" },
+      }),
+      candidate(3, {
+        name: "Edit",
+        peers: ["Grace Hopper"],
+        signals: { path: "grace" },
+      }),
+    ];
+    const { page } = recordedPage(items);
+    const pricing = resolver((options) =>
+      answer(
+        options,
+        "r0",
+        { r0: 0.6, r1: 0.35, r2: 0, r3: 0, none: 0.05 },
+        0.9,
+      ),
+    );
+    const vague = { operation: "click" as const, sentence: "click Pricing" };
+    expect(await resolveTarget(page, pricing, vague)).toMatchObject({
+      kind: "unresolved",
+      diagnostic: { gate: "repeated_member_no_evidence" },
+    });
+    expect(
+      await resolveTarget(page, pricing, {
+        ...vague,
+        repeatedMember: { sameDestination: true },
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "repeated_member_same_destination" },
+    });
+    const edit = resolver((options) =>
+      answer(
+        options,
+        "r3",
+        { r0: 0, r1: 0, r2: 0.05, r3: 0.9, none: 0.05 },
+        0.95,
+      ),
+    );
+    const paraphrase = {
+      operation: "click" as const,
+      sentence: "edit the second team member",
+    };
+    const trust = { minProbability: 0.7, minLead: 0.3 };
+    expect(
+      await resolveTarget(page, edit, {
+        ...paraphrase,
+        repeatedMember: { sameDestination: true },
+      }),
+    ).toMatchObject({ kind: "unresolved" });
+    expect(
+      await resolveTarget(page, edit, {
+        ...paraphrase,
+        repeatedMember: { trust },
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "repeated_member_trusted" },
+    });
+    expect(
+      await resolveTarget(page, edit, {
+        ...paraphrase,
+        repeatedMember: { trust: { minProbability: 0.95, minLead: 0.3 } },
+      }),
+    ).toMatchObject({ kind: "unresolved" });
+  });
+
   it("does not treat a generic category word as evidence for one product", async () => {
     const items = [
       candidate(0, {

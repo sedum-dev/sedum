@@ -31,8 +31,24 @@ const { values: args } = parseArgs({
     validate: { type: "boolean", default: false },
     suite: { type: "string", default: "synthetic" },
     site: { type: "string" },
+    // Experimental repeated-member policy: --trust 0.7,0.3 --same-destination
+    trust: { type: "string" },
+    "same-destination": { type: "boolean", default: false },
   },
 });
+
+function repeatedMemberPolicy() {
+  const policy = {};
+  if (args["same-destination"]) policy.sameDestination = true;
+  if (args.trust) {
+    const [minProbability, minLead] = args.trust.split(",").map(Number);
+    if (!(minProbability >= 0 && minLead >= 0))
+      throw new Error("--trust takes <minProbability>,<minLead>, e.g. 0.7,0.3");
+    policy.trust = { minProbability, minLead };
+  }
+  return Object.keys(policy).length ? policy : undefined;
+}
+const repeatedMember = repeatedMemberPolicy();
 
 const real = args.suite === "real";
 if (!real && args.suite !== "synthetic")
@@ -196,6 +212,7 @@ async function runCase(session, base, resolver, testCase) {
         operation: testCase.op,
         sentence: testCase.sentence,
         timeoutMs: 60_000,
+        ...(repeatedMember ? { repeatedMember } : {}),
       },
     );
     const observation =
