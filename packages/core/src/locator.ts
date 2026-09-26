@@ -424,25 +424,53 @@ function sentenceEvidence(
 /** Why a repeated member without sentence evidence is still accepted, if it is. */
 function repeatedMemberAccepted(
   policy: RepeatedMemberPolicy | undefined,
+  sentence: string,
   member: Candidate,
   group: readonly Candidate[],
   decision: ResolverDecision,
 ): string | null {
   if (!policy) return null;
-  const href = member.signals.href;
+  const href = member.signals.href?.trim();
   if (
     policy.sameDestination &&
     href &&
-    group.every((candidate) => candidate.signals.href === href)
+    // "#" and script links run page code, so equal hrefs prove nothing.
+    href !== "#" &&
+    !/^javascript:/i.test(href) &&
+    group.every((candidate) => candidate.signals.href?.trim() === href)
   )
     return "repeated_member_same_destination";
   if (
     policy.trust &&
+    qualifiesMember(sentence, member) &&
     decision.probabilities[member.ref]! >= policy.trust.minProbability &&
     comparableLead(decision, member.ref) >= policy.trust.minLead
   )
     return "repeated_member_trusted";
   return null;
+}
+
+const FILLER_WORDS = new Set(
+  (
+    "a an the this that it its please then and or of on in into to at for " +
+    "click tap press hit open select choose check tick uncheck toggle type " +
+    "enter fill go button link icon field box option menu tab checkbox " +
+    "radio switch item control"
+  ).split(" "),
+);
+
+/**
+ * Whether the sentence says something beyond the member's own label, such as
+ * a row, an ordinal, or a region. "click Add to cart" does not, so a confident
+ * model pick among six Add to cart buttons is still a guess.
+ */
+function qualifiesMember(sentence: string, member: Candidate): boolean {
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const label = new Set(words(member.name));
+  return words(sentence.replace(/\{\{[^}]*\}\}/g, " ")).some(
+    (word) => !label.has(word) && !FILLER_WORDS.has(word),
+  );
 }
 
 function explicitRegionEvidence(
@@ -858,6 +886,7 @@ export async function resolveTarget(
       if (!sentenceEvidence(options.sentence, member, group)) {
         const accepted = repeatedMemberAccepted(
           options.repeatedMember,
+          options.sentence,
           member,
           group,
           narrower,
@@ -883,6 +912,7 @@ export async function resolveTarget(
     ) {
       const accepted = repeatedMemberAccepted(
         options.repeatedMember,
+        options.sentence,
         selected,
         group,
         decision,

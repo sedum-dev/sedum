@@ -796,6 +796,18 @@ describe("locator", () => {
         repeatedMember: { trust: { minProbability: 0.95, minLead: 0.3 } },
       }),
     ).toMatchObject({ kind: "unresolved" });
+    // A sentence that only repeats the shared label is a guess however sure
+    // the model is.
+    expect(
+      await resolveTarget(page, edit, {
+        operation: "click",
+        sentence: "click the Edit button",
+        repeatedMember: { trust },
+      }),
+    ).toMatchObject({
+      kind: "unresolved",
+      diagnostic: { gate: "repeated_member_no_evidence" },
+    });
   });
 
   it("does not treat a generic category word as evidence for one product", async () => {
