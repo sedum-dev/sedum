@@ -156,6 +156,38 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ]);
       await context.close();
     });
+    it("offers drawn checkboxes, icon-named controls, and summary toggles", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<label><input type="checkbox" style="opacity:0;position:absolute;width:0;height:0"><span>Remember me</span></label>' +
+        '<label style="position:relative"><input type="radio" name="t" style="opacity:0;position:absolute;inset:0;width:20px;height:20px"><span>Dark</span></label>' +
+        '<a href="/home"><img alt="Acme home" width="20" height="20"></a>' +
+        '<button><svg width="16" height="16"><title>Search</title></svg></button>' +
+        '<details><summary>Show rules</summary><p>Be kind</p></details>'`);
+      const click = await collectCandidates(page, "click");
+      expect(
+        click.candidates.map((candidate) => [
+          candidate.tag,
+          candidate.role,
+          candidate.name,
+        ]),
+      ).toEqual([
+        ["label", "checkbox", "Remember me"],
+        ["input", "radio", "Dark"],
+        ["a", "link", "Acme home"],
+        ["button", "button", "Search"],
+        ["summary", "button", "Show rules"],
+      ]);
+      const aimed = await clickTarget(page, click.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(
+        await page.evaluate(
+          "document.querySelector('input[type=checkbox]').checked",
+        ),
+      ).toBe(true);
+      await context.close();
+    });
     it("keeps long controls available without losing their full-name guard", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =

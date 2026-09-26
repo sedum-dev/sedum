@@ -286,6 +286,30 @@ function batches(
   return result;
 }
 
+/**
+ * After elimination rounds the finalists are a few batch winners, out of
+ * order and without the same-name elements around them, so "the second Try
+ * it" or "zoneinfo in See also" loses its meaning. Give the final round every
+ * same-name or same-destination sibling of a finalist, in page order, when
+ * that still fits one request.
+ */
+function withSiblings(
+  sentence: string,
+  finalists: readonly Candidate[],
+  candidates: readonly Candidate[],
+): Candidate[] {
+  const keep = new Set<Candidate>(finalists);
+  for (const finalist of finalists)
+    for (const sibling of repeatedGroup(finalist, candidates))
+      keep.add(sibling);
+  const ordered = candidates.filter((candidate) => keep.has(candidate));
+  try {
+    return batches(sentence, ordered).length === 1 ? ordered : [...finalists];
+  } catch {
+    return [...finalists];
+  }
+}
+
 function validateDecision(
   decision: ResolverDecision,
   candidates: readonly Candidate[],
@@ -906,7 +930,9 @@ export async function resolveTarget(
     while (true) {
       const heats = batches(options.sentence, pool);
       if (heats.length === 1) {
-        finalists = heats[0]!;
+        finalists = reducedAcrossBatches
+          ? withSiblings(options.sentence, heats[0]!, candidates)
+          : heats[0]!;
         decision = await choose(finalists);
         break;
       }

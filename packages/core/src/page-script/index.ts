@@ -197,7 +197,11 @@ if (!window.__sedum) {
     owned.clear();
     snapshot = undefined;
   }
-  function visible(element: Element, visualOnly = false): boolean {
+  function visible(
+    element: Element,
+    visualOnly = false,
+    ignoreOwnOpacity = false,
+  ): boolean {
     if (
       element.closest(
         visualOnly
@@ -234,7 +238,8 @@ if (!window.__sedum) {
         return false;
       const style = getComputedStyle(node);
       if (
-        Number.parseFloat(style.opacity) === 0 ||
+        (Number.parseFloat(style.opacity) === 0 &&
+          !(ignoreOwnOpacity && node === element)) ||
         style.contentVisibility === "hidden"
       )
         return false;
@@ -414,8 +419,63 @@ if (!window.__sedum) {
     }
     return best?.text ?? "";
   }
+  /** A name carried only by an image or icon inside the control. */
+  function mediaName(element: Element): string {
+    for (const node of Array.from(
+      element.querySelectorAll(
+        "img[alt],svg[aria-label],svg title,[aria-label]",
+      ),
+    )) {
+      // An SVG <title> has no box of its own; the drawing it names does.
+      const drawn = node.matches("svg title") ? node.closest("svg")! : node;
+      if (interactive(node) || !visible(drawn, true)) continue;
+      const text = (
+        node instanceof HTMLImageElement
+          ? node.alt
+          : node.matches("svg title")
+            ? (node.textContent ?? "")
+            : (node.getAttribute("aria-label") ?? "")
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text) return text;
+    }
+    return "";
+  }
   function candidateName(element: Element): string {
-    return label(element) || nearbyText(element);
+    return label(element) || mediaName(element) || nearbyText(element);
+  }
+  function isToggle(element: Element): element is HTMLInputElement {
+    return (
+      element instanceof HTMLInputElement &&
+      (element.type === "checkbox" || element.type === "radio")
+    );
+  }
+  /**
+   * A checkbox or radio the page draws itself, keeping the real input
+   * transparent on top. It is offered when it still covers a clickable area.
+   */
+  function transparentToggle(element: Element): boolean {
+    if (!isToggle(element) || visible(element)) return false;
+    const box = element.getBoundingClientRect();
+    return box.width >= 8 && box.height >= 8 && visible(element, false, true);
+  }
+  /**
+   * The visible label of a checkbox or radio whose input is not drawn at all.
+   * Clicking the label toggles the input, so the label stands in for it.
+   */
+  function toggleLabel(element: Element): HTMLInputElement | null {
+    if (!(element instanceof HTMLLabelElement)) return null;
+    const control = element.control;
+    if (
+      !control ||
+      !isToggle(control) ||
+      visible(control) ||
+      transparentToggle(control) ||
+      control.labels?.[0] !== element
+    )
+      return null;
+    return control;
   }
   /**
    * An element the page styles as clickable but marks up with no role: the
@@ -544,6 +604,7 @@ if (!window.__sedum) {
                   ? "searchbox"
                   : "textbox";
     if (element instanceof HTMLTextAreaElement) return "textbox";
+    if (element.matches("details > summary")) return "button";
     if (element instanceof HTMLSelectElement) return "combobox";
     return "";
   }
@@ -551,7 +612,7 @@ if (!window.__sedum) {
     if (element.parentElement?.closest("a[href]")) return false;
     return (
       element.matches(
-        "button,a[href],input,textarea,select,[contenteditable]",
+        "button,a[href],input,textarea,select,[contenteditable],details > summary",
       ) ||
       [
         "button",
@@ -753,11 +814,13 @@ if (!window.__sedum) {
         if (text && Array.from(text).length <= 60)
           heading = { text, root: landmarkRoot(element) };
       }
+      const proxied = operation === "click" ? toggleLabel(element) : null;
       if (
-        !visible(element) ||
+        !(visible(element) || transparentToggle(element)) ||
         (operation === "read"
           ? !readable(element)
           : !interactive(element) &&
+            !proxied &&
             (operation !== "click" || !pointerTarget(element)))
       )
         continue;
@@ -765,7 +828,9 @@ if (!window.__sedum) {
       if (
         operation === "click" &&
         editable(element) &&
-        !element.matches("input[type='checkbox'],input[type='radio']")
+        !element.matches("input[type='checkbox'],input[type='radio']") &&
+        role(element) !== "combobox" &&
+        !(element as HTMLInputElement).readOnly
       )
         continue;
       const rawName =
@@ -791,7 +856,7 @@ if (!window.__sedum) {
         Object.freeze({
           ref,
           tag: element.tagName.toLowerCase(),
-          role: role(element),
+          role: proxied ? role(proxied) : role(element),
           name,
           peers: Object.freeze(peerData.texts),
           ...(location ? { location } : {}),
@@ -1110,7 +1175,7 @@ if (!window.__sedum) {
       (expected && expected.name !== candidate.name)
     )
       return { actionable: false, reason: "stale" };
-    if (!visible(element) || disabled(element))
+    if (!(visible(element) || transparentToggle(element)) || disabled(element))
       return { actionable: false, reason: "not_actionable" };
     const enclosingLink = element.closest("a[href]");
     if (enclosingLink) {
