@@ -133,6 +133,7 @@ export function cachedResolver(inner, file, { model, offline = false } = {}) {
       return decision;
     },
     save() {
+      if (this.misses === 0) return;
       const sorted = Object.fromEntries(
         Object.entries(store).sort(([a], [b]) => a.localeCompare(b)),
       );
