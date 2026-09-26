@@ -165,6 +165,12 @@ export interface LocatorOptions {
 export interface RepeatedMemberPolicy {
   /** Accept any member when every member links to the same address. */
   readonly sameDestination?: boolean;
+  /**
+   * Accept a pick among at most three links to one address whose names are
+   * the same text, or one inside the other, such as a header and a footer
+   * Pricing link, when the sentence names only that text.
+   */
+  readonly duplicateLinks?: boolean;
   /** Accept the model's pick at or above this probability and lead. */
   readonly trust?: {
     readonly minProbability: number;
@@ -470,6 +476,23 @@ function repeatedMemberAccepted(
   )
     return "repeated_member_same_destination";
   if (
+    policy.duplicateLinks &&
+    href &&
+    href !== "#" &&
+    !/^javascript:/i.test(href) &&
+    group.length <= 3 &&
+    !qualifiesMember(sentence, member) &&
+    group.every((candidate) => {
+      const name = candidate.name.trim().toLocaleLowerCase();
+      const picked = member.name.trim().toLocaleLowerCase();
+      return (
+        candidate.signals.href?.trim() === href &&
+        (name.includes(picked) || picked.includes(name))
+      );
+    })
+  )
+    return "repeated_member_duplicate_link";
+  if (
     policy.trust &&
     qualifiesMember(sentence, member) &&
     decision.probabilities[member.ref]! >= policy.trust.minProbability &&
@@ -591,6 +614,38 @@ function roleOnlyAmbiguous(
       (candidate.role || candidate.tag) === role &&
       candidate.name.trim().toLocaleLowerCase() !==
         selected.name.trim().toLocaleLowerCase(),
+  );
+}
+
+/**
+ * Another offered element whose name also holds every meaningful word of the
+ * sentence, and that the model gave real weight: "click Hide" against "Hide
+ * Contents" and "Hide Appearance". The sentence does not tell them apart.
+ */
+function nearNamesake(
+  sentence: string,
+  selected: Candidate,
+  offered: readonly Candidate[],
+  decision: ResolverDecision,
+): boolean {
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const content = words(sentence.replace(/\{\{[^}]*\}\}/g, " ")).filter(
+    (word) => !FILLER_WORDS.has(word),
+  );
+  if (!content.length) return false;
+  const holdsAll = (candidate: Candidate) => {
+    const name = new Set(words(candidate.name));
+    return content.every((word) => name.has(word));
+  };
+  if (!holdsAll(selected)) return false;
+  return offered.some(
+    (candidate) =>
+      candidate !== selected &&
+      candidate.name.trim().toLocaleLowerCase() !==
+        selected.name.trim().toLocaleLowerCase() &&
+      (decision.probabilities[candidate.ref] ?? 0) >= 0.1 &&
+      holdsAll(candidate),
   );
 }
 
@@ -1068,6 +1123,13 @@ export async function resolveTarget(
     }
     if (roleOnlyAmbiguous(options.sentence, selected, candidates)) {
       gate = "role_only_ambiguous";
+      return unresolved("ambiguous");
+    }
+    if (
+      group.length < 2 &&
+      nearNamesake(options.sentence, selected, finalists, decision)
+    ) {
+      gate = "near_namesake";
       return unresolved("ambiguous");
     }
     return await refresh(selected);
