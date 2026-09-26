@@ -848,7 +848,13 @@ export async function resolveTarget(
       rounds++;
       return decision;
     };
-    let pool: Candidate[] = inNamedRegion(options.sentence, candidates);
+    // Filter by named region only when the page needs elimination rounds:
+    // on a page that fits one request the model sees every location, and a
+    // region the page does not mark would otherwise hide the target.
+    let pool: Candidate[] =
+      candidates.length > CANDIDATE_LIMIT
+        ? inNamedRegion(options.sentence, candidates)
+        : [...candidates];
     let finalists: Candidate[] = [];
     let decision: ResolverDecision;
     let reducedAcrossBatches = false;
