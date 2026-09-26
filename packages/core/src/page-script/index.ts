@@ -432,8 +432,11 @@ if (!window.__sedum) {
     if (parent && getComputedStyle(parent).cursor === "pointer") return false;
     for (let node = parent; node; node = composedParent(node))
       if (interactive(node)) return false;
-    return !element.querySelector(
-      "button,a[href],input,textarea,select,[role]",
+    // A real control inside, including in a shadow root, is the target instead.
+    const inside = allElements(element, 500);
+    return (
+      !!inside &&
+      !inside.some((node) => interactive(node) || node.hasAttribute("role"))
     );
   }
   function boundedName(name: string): string {
@@ -576,16 +579,19 @@ if (!window.__sedum) {
             .slice(0, PEER_LIMIT)
             .join("")
         : "";
-    let region: Element | null = element.parentElement;
+    let region: Element | null = composedParent(element);
     let lastUnique: Element | null = null;
     while (region && region !== document.body) {
-      const possible = region.querySelectorAll(
-        "button,a[href],[role='button'],input[type='button'],input[type='submit']",
+      const scope = allElements(region, 2000);
+      const possible = (scope ?? []).filter((item) =>
+        item.matches(
+          "button,a[href],[role='button'],input[type='button'],input[type='submit']",
+        ),
       );
       // Large ancestors cannot supply a useful 80-character item context. In
       // particular, comparing every link in an article for every article link
       // turns a dense Wikipedia page into a quadratic scan.
-      if (possible.length > 32) {
+      if (!scope || possible.length > 32) {
         region = lastUnique;
         break;
       }
@@ -598,7 +604,7 @@ if (!window.__sedum) {
       }
       lastUnique = region;
       if (region.matches("article,li,[data-product],[role='listitem']")) break;
-      region = region.parentElement;
+      region = composedParent(region);
     }
     region = region === document.body ? lastUnique : region;
     if (!region)
