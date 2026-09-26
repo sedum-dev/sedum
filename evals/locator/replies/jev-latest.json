@@ -95,6 +95,40 @@
       "totalCostUsd": 0.00018727800000000003
     }
   },
+  "012376680be2dd4e22f61462e29b9fc0a203cc80cbb60f10bfea2e3f2eeaa4c3": {
+    "sentence": "click the eye icon to show the password",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0.91,
+      0,
+      0,
+      0,
+      0,
+      0.09
+    ],
+    "selection": 3,
+    "confidence": 0.9,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1088,
+        "outputTokens": 350
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000045696000000000004,
+      "totalCostUsd": 0.000045696000000000004,
+      "queueWaitMs": 1
+    }
+  },
   "017522f03b6e41d2133c869b27b852da4526b05157843babd940d138a865a2bb": {
     "sentence": "click Edit for Linus Torvalds",
     "probabilities": [
@@ -467,6 +501,71 @@
       "totalCostUsd": 0.00017383800000000003
     }
   },
+  "04adda00e87898b0fac49cdfa18d5ab67aa6dfdc2727211a2b61103a82eeb43b": {
+    "sentence": "click Save changes",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 9,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1591,
+        "outputTokens": 596
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000066822,
+      "totalCostUsd": 0.000066822
+    }
+  },
+  "04d66ddb4c9ed5ae5151324dc996d61054ce1aa71001a38e495247da32b85aa4": {
+    "sentence": "click the Subscribe button",
+    "probabilities": [
+      0.99,
+      0,
+      0.01
+    ],
+    "selection": 0,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 518,
+        "outputTokens": 131
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000021756,
+      "totalCostUsd": 0.000021756
+    }
+  },
   "0529b00098dd03ae847096dd81f72d4af3f4c369aa60dfe6062098d3f585d251": {
     "sentence": "click Helpful on Marcus T.'s review",
     "probabilities": [
@@ -704,6 +803,52 @@
       },
       "successfulResponseCostUsd": 0.000064554,
       "totalCostUsd": 0.000064554
+    }
+  },
+  "06e4c3165428376843e777ab2b3315c8accdabb1ae23962f9040f1b5953de66a": {
+    "sentence": "save the Merino Beanie to my wishlist",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 12,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2526,
+        "outputTokens": 822
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00010609200000000001,
+      "totalCostUsd": 0.00010609200000000001
     }
   },
   "072ac4768e247a7da48ed7394175966933fd569130979ed877db9def838f8d59": {
@@ -1769,6 +1914,48 @@
       "totalCostUsd": 0.00021445200000000004
     }
   },
+  "0f08d7c668627356898fc7d80fc7999a820d147f553b31b0a701a15efc7ea614": {
+    "sentence": "click the button to add a new teammate",
+    "probabilities": [
+      0,
+      0.98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.02
+    ],
+    "selection": 1,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2037,
+        "outputTokens": 709
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000085554,
+      "totalCostUsd": 0.000085554
+    }
+  },
   "0f6f7281db51f2ff295f7905ac939d1d9c7479deb738a3c863c4a72d509b7478": {
     "sentence": "click Agregar al carrito",
     "probabilities": [
@@ -2306,6 +2493,48 @@
       "successfulResponseCostUsd": 0.00017871,
       "totalCostUsd": 0.00017871,
       "queueWaitMs": 1
+    }
+  },
+  "1598a3bc20edc2f16704025341635cd528bfedaadfa24e4160213ca682c016d6": {
+    "sentence": "open the more actions menu for the owner",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0.03,
+      0.96,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 5,
+    "confidence": 0.95,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2003,
+        "outputTokens": 673
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000084126,
+      "totalCostUsd": 0.000084126
     }
   },
   "169dfe13c0c87fce5b7807d103ad0fe8975ca1d9de4a22580bd354b5b0512689": {
@@ -4368,6 +4597,71 @@
       "totalCostUsd": 0.000043386
     }
   },
+  "246a7b072850c9b8896d6b9c66d0e5be384d37746a3da65c050dbf8e9726e8d6": {
+    "sentence": "click Browse the archive",
+    "probabilities": [
+      0.06,
+      0.85,
+      0.09
+    ],
+    "selection": 1,
+    "confidence": 0.77,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 522,
+        "outputTokens": 137
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000021924000000000002,
+      "totalCostUsd": 0.000021924000000000002
+    }
+  },
+  "252371f6c1a12635ac33bef2a4fed484032807cdab1ceb3f877e1d4955367726": {
+    "sentence": "click the Two-factor authentication switch",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99
+    ],
+    "selection": -1,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1555,
+        "outputTokens": 522
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00006531,
+      "totalCostUsd": 0.00006531
+    }
+  },
   "25c0043a0dab4b2f7861ac2c01393a1c686163d70aec58e6dbab76b80ccfb42e": {
     "sentence": "type {{email}} in the Email field",
     "probabilities": [
@@ -4898,6 +5192,48 @@
       },
       "successfulResponseCostUsd": 0.00018480000000000002,
       "totalCostUsd": 0.00018480000000000002
+    }
+  },
+  "2a6fe038f8b9812b150a7022649d8e889e7c7c3e86ec51e0bc8c794bf1e5b049": {
+    "sentence": "click Edit for Grace Hopper",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 7,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2086,
+        "outputTokens": 763
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00008761200000000001,
+      "totalCostUsd": 0.00008761200000000001
     }
   },
   "2b573b80c363581520366de85dc4efb07dc0a0a9a26705a9b4101a58c1b4a0fc": {
@@ -5442,6 +5778,44 @@
       "totalCostUsd": 0.00010903200000000001
     }
   },
+  "2df5a9e67321f6ed58f99e242a746ab7df5ca615444ceba8946098a9251b680c": {
+    "sentence": "click the Security tab",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 4,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1566,
+        "outputTokens": 567
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000065772,
+      "totalCostUsd": 0.000065772
+    }
+  },
   "2e172b0b3b16c3fbbc377b9b541f8a630f24dbd7ca7853b5f150f7f94bfa9224": {
     "sentence": "click the heart for the Camp Mug",
     "probabilities": [
@@ -5586,6 +5960,33 @@
       },
       "successfulResponseCostUsd": 0.000036918,
       "totalCostUsd": 0.000036918,
+      "queueWaitMs": 1
+    }
+  },
+  "2ebedd507eaf4d504118d4c11f90bb89b386831f4bef2dbc9523003ddbb8e0d0": {
+    "sentence": "type {{query}} in the search field",
+    "probabilities": [
+      0.82,
+      0.18
+    ],
+    "selection": 0,
+    "confidence": 0.64,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 425,
+        "outputTokens": 83
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00001785,
+      "totalCostUsd": 0.00001785,
       "queueWaitMs": 1
     }
   },
@@ -6377,6 +6778,44 @@
       },
       "successfulResponseCostUsd": 0.00007707,
       "totalCostUsd": 0.00007707
+    }
+  },
+  "33cd467aa386dfbcac52b3a5222367d547224b63e237e88aa756610223229089": {
+    "sentence": "click the button to temporarily disable my account",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.98,
+      0,
+      0.02
+    ],
+    "selection": 11,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1570,
+        "outputTokens": 568
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00006594,
+      "totalCostUsd": 0.00006594
     }
   },
   "348d81c808c1980e9ed005d1021730846d63162ddfb2025e2f732d0d4d1f90d2": {
@@ -7335,6 +7774,52 @@
       "queueWaitMs": 1
     }
   },
+  "398d964c13d5ec563aaf9ba2afd35266f925f670fe2f48ef878e2fbff9182512": {
+    "sentence": "click Add to cart for the Wool Socks",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.02,
+      0,
+      0,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.97
+    ],
+    "selection": -1,
+    "confidence": 0.96,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2568,
+        "outputTokens": 834
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000107856,
+      "totalCostUsd": 0.000107856
+    }
+  },
   "39bf535e69583c9f34040e8c0ccb2cce28b0d16671219215ca7c3f99355d031c": {
     "sentence": "add the canvas backpack to my basket",
     "probabilities": [
@@ -7426,6 +7911,52 @@
       },
       "successfulResponseCostUsd": 0.000029988,
       "totalCostUsd": 0.000029988
+    }
+  },
+  "3a5566248f240b1bdb1c86b0c6aa524baebb5fd87e7e549a235a0692cbc701a0": {
+    "sentence": "click the Sort by dropdown",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 7,
+    "confidence": 1,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2564,
+        "outputTokens": 865
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000107688,
+      "totalCostUsd": 0.000107688
     }
   },
   "3a71f8ece11c5917804e14e2d442e645c9bc8e808ebdae1ef8a09af0373b32d2": {
@@ -7528,6 +8059,48 @@
       },
       "successfulResponseCostUsd": 0.000184716,
       "totalCostUsd": 0.000184716
+    }
+  },
+  "3abe0dcc96c1890d7a91a6a176898274c38226a8c8659cac7e5123c980b325e2": {
+    "sentence": "click the Export CSV button",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "selection": -1,
+    "confidence": 1,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2085,
+        "outputTokens": 729
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00008757,
+      "totalCostUsd": 0.00008757
     }
   },
   "3b54c46973c9af376da6a9fcd54f3169e2b9885b40d90bf2b652dbf81396b73c": {
@@ -10112,6 +10685,52 @@
       "totalCostUsd": 0.00006069
     }
   },
+  "4c94df08769e52c049842e13d3fd626d9b722abc12df79616e3e6c2d5488eec3": {
+    "sentence": "click the heart for the Camp Mug",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 16,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2566,
+        "outputTokens": 866
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00010777200000000001,
+      "totalCostUsd": 0.00010777200000000001
+    }
+  },
   "4cb8eb07b4544eece8b0bfa8943878cf33b645e14b285cf097e967ef441b79bb": {
     "sentence": "click the Export CSV button",
     "probabilities": [
@@ -10551,6 +11170,34 @@
       "totalCostUsd": 0.000043932
     }
   },
+  "4e38041db373d88b995818e7be0a13325401ef79e07860721dfa03a0f4849a65": {
+    "sentence": "click Pay now",
+    "probabilities": [
+      0,
+      0,
+      1
+    ],
+    "selection": -1,
+    "confidence": 1,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 515,
+        "outputTokens": 98
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00002163,
+      "totalCostUsd": 0.00002163,
+      "queueWaitMs": 1
+    }
+  },
   "4e4ac824364033baa443ebe412e5cd47ae6bcafe8d63173b15fec048060b5788": {
     "sentence": "click the Nimbus logo",
     "probabilities": [
@@ -10583,6 +11230,52 @@
       "successfulResponseCostUsd": 0.000043344000000000004,
       "totalCostUsd": 0.000043344000000000004,
       "queueWaitMs": 1
+    }
+  },
+  "4e511f56c0ad2954157093e955e33330ef7da7a1e7d5db4999d4d55cd8dc9aea": {
+    "sentence": "add the canvas backpack to my basket",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 9,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2671,
+        "outputTokens": 976
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000112182,
+      "totalCostUsd": 0.000112182
     }
   },
   "4e5271b7165d3230ffc51fa516a840370c08275112ec4ff7983d8e3ffcc2bde5": {
@@ -12323,6 +13016,44 @@
       "totalCostUsd": 0.000021336000000000004
     }
   },
+  "5ca7daf56df6bbe171f704198ac5fa60e3e50976740d9f9fc6bcd459565fe732": {
+    "sentence": "click the Email alerts switch",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 5,
+    "confidence": 1,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1489,
+        "outputTokens": 483
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000062538,
+      "totalCostUsd": 0.000062538
+    }
+  },
   "5d23878ddfd6be6fd221522c088f783aab5857cb7b526ec5192cf26096d579ae": {
     "sentence": "click the Security tab",
     "probabilities": [
@@ -13052,6 +13783,77 @@
       "totalCostUsd": 0.000182196
     }
   },
+  "617457dbd8fc47831d88b0ac77bce3ead5d828cf1d582503d81f73fe01b1de9c": {
+    "sentence": "click the Billing tab",
+    "probabilities": [
+      0,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99
+    ],
+    "selection": -1,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1553,
+        "outputTokens": 522
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000065226,
+      "totalCostUsd": 0.000065226
+    }
+  },
+  "61e811711f68d446e42a34e6172120bdcc7876c92e0152525f30ebdb14bfca0f": {
+    "sentence": "click the I agree to the Terms checkbox",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 4,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1096,
+        "outputTokens": 359
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000046032,
+      "totalCostUsd": 0.000046032
+    }
+  },
   "61ff296cf18d2d4dac5f664e70d925d1f004602049781eb5316862a350cf1f1e": {
     "sentence": "click Item 137",
     "probabilities": [
@@ -13221,6 +14023,40 @@
       },
       "successfulResponseCostUsd": 0.000043638000000000005,
       "totalCostUsd": 0.000043638000000000005
+    }
+  },
+  "64098564173bd99cd127f819715a4e29f411b6dc29ee76e33b290ab72a5ab930": {
+    "sentence": "click Continue with Apple",
+    "probabilities": [
+      0,
+      0,
+      0.09,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.91
+    ],
+    "selection": -1,
+    "confidence": 0.89,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1092,
+        "outputTokens": 328
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00004586400000000001,
+      "totalCostUsd": 0.00004586400000000001,
+      "queueWaitMs": 1
     }
   },
   "647a0b50afce219a54101c97d9be1b1badba36305f887a98863778d9a6909428": {
@@ -13429,6 +14265,44 @@
       },
       "successfulResponseCostUsd": 0.000045738,
       "totalCostUsd": 0.000045738
+    }
+  },
+  "66476b26db519091d75b603c24c2edd92295aebd2863ed6c68b109ce36c85913": {
+    "sentence": "click the switch",
+    "probabilities": [
+      0,
+      0.01,
+      0,
+      0.01,
+      0,
+      0.39,
+      0.19,
+      0.13,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.27
+    ],
+    "selection": 5,
+    "confidence": 0.33,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1565,
+        "outputTokens": 567
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00006573000000000001,
+      "totalCostUsd": 0.00006573000000000001
     }
   },
   "665384a9e5d55a5531f3c645c8afc0c0a8dd2bac2b2c3a01a87e045de4c79605": {
@@ -13683,6 +14557,128 @@
       },
       "successfulResponseCostUsd": 0.000065268,
       "totalCostUsd": 0.000065268
+    }
+  },
+  "67cfd0221347eb67ab7303036a7fd74fc6f93a3baad4bff745b8ac11e9d246aa": {
+    "sentence": "click the Select all checkbox",
+    "probabilities": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 2,
+    "confidence": 1,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2051,
+        "outputTokens": 727
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00008614200000000002,
+      "totalCostUsd": 0.00008614200000000002
+    }
+  },
+  "67e35f49fdb89bbfb1c33061a544cb89f163d19febab28e1811b78d43a80fa9a": {
+    "sentence": "click the Nimbus logo",
+    "probabilities": [
+      0.85,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.15
+    ],
+    "selection": 0,
+    "confidence": 0.82,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1068,
+        "outputTokens": 332
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000044856,
+      "totalCostUsd": 0.000044856,
+      "queueWaitMs": 1
+    }
+  },
+  "686aeba2ddb4b926bd5d08d62a953754bc579aa9d0c0b7dd4041d004a38d0d36": {
+    "sentence": "check the Shoes filter",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99
+    ],
+    "selection": -1,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2563,
+        "outputTokens": 834
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000107646,
+      "totalCostUsd": 0.000107646
     }
   },
   "687248a1721797465b0b6d661cab902056fce11e37e1ccaf3c17decaef4545c1": {
@@ -13958,6 +14954,48 @@
       },
       "successfulResponseCostUsd": 0.000180726,
       "totalCostUsd": 0.000180726
+    }
+  },
+  "6b9121998221e8734ade47cac51b2e504db5d06c6541492e363a19fbea61e09b": {
+    "sentence": "click the three-dots menu for Alan Turing",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.02
+    ],
+    "selection": 11,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2073,
+        "outputTokens": 746
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000087066,
+      "totalCostUsd": 0.000087066
     }
   },
   "6bc1f820bb604bb382df2d539c2b309bb160f6ac885202f519d54076955ea77d": {
@@ -15128,6 +16166,39 @@
       "totalCostUsd": 0.00012553800000000002
     }
   },
+  "734ef10a93c5675f635b471e31e9829b947783c205db82d63888653227431ddb": {
+    "sentence": "click Help in the header",
+    "probabilities": [
+      0.01,
+      0.96,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.03
+    ],
+    "selection": 1,
+    "confidence": 0.96,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1061,
+        "outputTokens": 323
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000044562000000000005,
+      "totalCostUsd": 0.000044562000000000005
+    }
+  },
   "73bcecfaebff436e8308e6810afd64e67eb2584c389d700b2ab596731f0de071": {
     "sentence": "click the three-dots menu for Alan Turing",
     "probabilities": [
@@ -16108,6 +17179,39 @@
       },
       "successfulResponseCostUsd": 0.000060480000000000004,
       "totalCostUsd": 0.000060480000000000004
+    }
+  },
+  "7b9ef7f13d977e229df53b78fd54b4a29d1b0b82f11d86bf249d9cd250e9e01e": {
+    "sentence": "click the Log in link",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+    ],
+    "selection": 7,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1085,
+        "outputTokens": 350
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00004557,
+      "totalCostUsd": 0.00004557
     }
   },
   "7be4a2099e5cf5f50482c4c51bb1d1424aafbd3c99822ac0e458fe0668cc1b29": {
@@ -17430,6 +18534,48 @@
       "totalCostUsd": 0.00006552000000000001
     }
   },
+  "881e1c58cfb12b6da3c768c44e346457b56d4246719c5770ad9804283fc6e3f0": {
+    "sentence": "click Previous",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.92,
+      0,
+      0.08
+    ],
+    "selection": 15,
+    "confidence": 0.9,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2031,
+        "outputTokens": 710
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000085302,
+      "totalCostUsd": 0.000085302
+    }
+  },
   "881ff2bd3e374fe8c136afdc70f5ba6011604b2017631d60c629b5d64b288977": {
     "sentence": "check the Lights filter",
     "probabilities": [
@@ -18132,6 +19278,48 @@
       "totalCostUsd": 0.00022390200000000003
     }
   },
+  "8ecbfc3115eeb8628211fce81ab4226ece1399cea3fa756318a49628d408968a": {
+    "sentence": "click Invite member",
+    "probabilities": [
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 1,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2066,
+        "outputTokens": 745
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000086772,
+      "totalCostUsd": 0.000086772
+    }
+  },
   "8f0491dba2652454b0750dc7bd13a613a0d3102636ae39e01a8ecb9854f39f68": {
     "sentence": "click the Search flights button",
     "probabilities": [
@@ -18495,6 +19683,44 @@
       "successfulResponseCostUsd": 0.000091644,
       "totalCostUsd": 0.000091644,
       "queueWaitMs": 1
+    }
+  },
+  "90d5d22d601debac09866643c6ebe8278cb35a2978f4e120fd13d65094055112": {
+    "sentence": "open the profile section",
+    "probabilities": [
+      0,
+      0.01,
+      0.98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 2,
+    "confidence": 0.97,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1540,
+        "outputTokens": 539
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00006468000000000001,
+      "totalCostUsd": 0.00006468000000000001
     }
   },
   "91274125f49457e1a84ad06dc64d6f9c3a4108dc1f425c66549e39446063a273": {
@@ -19030,6 +20256,39 @@
       "totalCostUsd": 0.000036834
     }
   },
+  "9515bcda29286a068d41dd037e684a83a3a62bba465e6b230c6fe8051c46cbfc": {
+    "sentence": "click the Create account button",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0.01
+    ],
+    "selection": 6,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1093,
+        "outputTokens": 359
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000045906000000000004,
+      "totalCostUsd": 0.000045906000000000004
+    }
+  },
   "959e44745a85cd2187270cad38d0dc029e06a49f0e5a2d37a57b846aa6307e9b": {
     "sentence": "click the button to temporarily disable my account",
     "probabilities": [
@@ -19302,6 +20561,48 @@
       "totalCostUsd": 0.000063588
     }
   },
+  "971076c068970134297fcc2a32ce4f3a614c4e268ac1a1d48662e22c9e561291": {
+    "sentence": "click Edit",
+    "probabilities": [
+      0.01,
+      0,
+      0,
+      0,
+      0.75,
+      0,
+      0,
+      0.03,
+      0,
+      0,
+      0.04,
+      0,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0.16
+    ],
+    "selection": 4,
+    "confidence": 0.73,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2031,
+        "outputTokens": 709
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000085302,
+      "totalCostUsd": 0.000085302
+    }
+  },
   "9718bf3f60f589845bc12aa2d742f543e3105ad1eedce08b12c7c679f05ef61e": {
     "sentence": "click Place order",
     "probabilities": [
@@ -19550,6 +20851,72 @@
       },
       "successfulResponseCostUsd": 0.00006892200000000002,
       "totalCostUsd": 0.00006892200000000002
+    }
+  },
+  "98544ab5b1ca8d79beda3a1130225ece40b8634ae0a150e3da004011c816f932": {
+    "sentence": "click the checkbox",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0.66,
+      0.1,
+      0,
+      0,
+      0.24
+    ],
+    "selection": 4,
+    "confidence": 0.62,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1083,
+        "outputTokens": 350
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000045486000000000005,
+      "totalCostUsd": 0.000045486000000000005
+    }
+  },
+  "988a337e6d6150653b0b530915fe730298ba5d9420d4d057913d0b88dd3af89c": {
+    "sentence": "click the sign up with Google button",
+    "probabilities": [
+      0,
+      0,
+      0.98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.02
+    ],
+    "selection": 2,
+    "confidence": 0.97,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1095,
+        "outputTokens": 359
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000045990000000000005,
+      "totalCostUsd": 0.000045990000000000005
     }
   },
   "98e276b9ca63d04a8bbcfd604224b00ac90e6e54814480c9b325fae14caf098d": {
@@ -20785,6 +22152,82 @@
       "totalCostUsd": 0.00006917400000000001
     }
   },
+  "a15351a947a5083ec8024a7bede44f8902fa54c3a106a32625a033957dda96d2": {
+    "sentence": "click the checkbox for alan@example.com",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.9,
+      0.05,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.05
+    ],
+    "selection": 9,
+    "confidence": 0.88,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2019,
+        "outputTokens": 692
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000084798,
+      "totalCostUsd": 0.000084798,
+      "queueWaitMs": 1
+    }
+  },
+  "a1c53f949099ebdb9a7cae0b1be7a6d53e7c2eb4df7550b66cc486b16285dce7": {
+    "sentence": "click the Forgot password link",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01,
+      0.99
+    ],
+    "selection": -1,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1117,
+        "outputTokens": 352
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000046914,
+      "totalCostUsd": 0.000046914
+    }
+  },
   "a1ec8908f6e6c7ba69c07aaea9e4864e193854db7633bea6236a08e806194979": {
     "sentence": "click Show password",
     "probabilities": [
@@ -21412,6 +22855,48 @@
       "totalCostUsd": 0.000151914
     }
   },
+  "a715450247f281c15e3b6210531814b7fedba4edfa4eb52d25264b4e906ad853": {
+    "sentence": "click Edit for Linus Torvalds",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99
+    ],
+    "selection": -1,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2037,
+        "outputTokens": 678
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000085554,
+      "totalCostUsd": 0.000085554
+    }
+  },
   "a71d8850aaca84e4cef4fe54099ed91038b630431af4d57b692f89ace0712ab1": {
     "sentence": "type {{query}} in the search box at the top",
     "probabilities": [
@@ -21578,6 +23063,44 @@
       },
       "successfulResponseCostUsd": 0.000126084,
       "totalCostUsd": 0.000126084
+    }
+  },
+  "a88aaf5a48231e25783bcfb6561f327961e58f192627659d946c3ff3aee4e287": {
+    "sentence": "click Delete account",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.97,
+      0.03
+    ],
+    "selection": 12,
+    "confidence": 0.97,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1539,
+        "outputTokens": 540
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000064638,
+      "totalCostUsd": 0.000064638
     }
   },
   "a8a5e216643add033840e298024e03b5d5ee00dc715a91413caf1e434ef020e1": {
@@ -21890,6 +23413,44 @@
       },
       "successfulResponseCostUsd": 0.000059304,
       "totalCostUsd": 0.000059304
+    }
+  },
+  "ad368adc550993b9a37f9f076e3b0f9a53ade814560579157eb091c3d51e5d58": {
+    "sentence": "click the account menu icon in the header",
+    "probabilities": [
+      0,
+      0.98,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 1,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1557,
+        "outputTokens": 553
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000065394,
+      "totalCostUsd": 0.000065394
     }
   },
   "ae07020683d34dc4f8f046fb723b0c776391192afdba6ca0323d6cf3174161a3": {
@@ -22206,6 +23767,45 @@
       "totalCostUsd": 0.000092106
     }
   },
+  "b067ea4f72cfc5349dabbee978526847619cde9dc613dbeaf1663808b81196e0": {
+    "sentence": "click the Cancel link",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 10,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1553,
+        "outputTokens": 554
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000065226,
+      "totalCostUsd": 0.000065226,
+      "queueWaitMs": 1
+    }
+  },
   "b0e2f54ccdea98e365d6e23e46b59ba08bdbee180bab0ce157810d063cff2a4d": {
     "sentence": "click the heart for the Camp Mug",
     "probabilities": [
@@ -22451,6 +24051,44 @@
       },
       "successfulResponseCostUsd": 0.00006216,
       "totalCostUsd": 0.00006216
+    }
+  },
+  "b1dd459307a5afd966f1895da056c4053f92e6970a9b3813e4e71983d6320240": {
+    "sentence": "click the Digest day dropdown",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 8,
+    "confidence": 1,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1580,
+        "outputTokens": 581
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00006636,
+      "totalCostUsd": 0.00006636
     }
   },
   "b2d90254e23efd8bf3d0fdac3f2042ed69f24625bc69218837cd3462d0b7a7b2": {
@@ -23763,6 +25401,44 @@
       "totalCostUsd": 0.000063546
     }
   },
+  "bbf7bc8ea4c5644b7292a1b0dbf05ec67cd116f0114565fc32e2f237c564aa3c": {
+    "sentence": "turn on push notifications",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 6,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1566,
+        "outputTokens": 567
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000065772,
+      "totalCostUsd": 0.000065772
+    }
+  },
   "bc6222fdf8018f54d4a396eada05c3908f74aa140131c942ae239d9d17af6a20": {
     "sentence": "type {{username}} in the username field",
     "probabilities": [
@@ -23792,6 +25468,33 @@
       },
       "successfulResponseCostUsd": 0.000041538,
       "totalCostUsd": 0.000041538
+    }
+  },
+  "bcd39687eb10859ab4af7faa1b4f6dec3d49dbe2bd4f6a62f35dad204c79194b": {
+    "sentence": "type {{query}} in the Search members field",
+    "probabilities": [
+      0.89,
+      0.11
+    ],
+    "selection": 0,
+    "confidence": 0.77,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 439,
+        "outputTokens": 95
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000018438000000000002,
+      "totalCostUsd": 0.000018438000000000002,
+      "queueWaitMs": 1
     }
   },
   "bd2773dd8bde4537e9622743265d3db2610e76329c1f75912e99375f04ad5007": {
@@ -25104,6 +26807,52 @@
       "totalCostUsd": 0.00021256200000000002
     }
   },
+  "c905f352d338f35648b5b270ddfed4f10cb94b78e18176ac07fccf9b9f51bc85": {
+    "sentence": "click the Checkout button",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "selection": -1,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2605,
+        "outputTokens": 876
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00010941000000000001,
+      "totalCostUsd": 0.00010941000000000001
+    }
+  },
   "c95bd0707d92427e093f2412741d74df1897fdc6464100862d20b0f9c0632044": {
     "sentence": "click Save changes",
     "probabilities": [
@@ -25389,6 +27138,44 @@
       },
       "successfulResponseCostUsd": 0.00009781800000000002,
       "totalCostUsd": 0.00009781800000000002
+    }
+  },
+  "cb2e740ada55719222a1be662778bda17caf07e3b19ab62d6a1eba9320f6b203": {
+    "sentence": "click the Northwind logo",
+    "probabilities": [
+      0.92,
+      0.03,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.05
+    ],
+    "selection": 0,
+    "confidence": 0.91,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 1568,
+        "outputTokens": 567
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00006585600000000001,
+      "totalCostUsd": 0.00006585600000000001
     }
   },
   "cb3d60d7e19a5a67a25e1ca7bb525280f42e543909f84639d315f4058f69b02d": {
@@ -26384,6 +28171,32 @@
       },
       "successfulResponseCostUsd": 0.000065562,
       "totalCostUsd": 0.000065562
+    }
+  },
+  "d0340eb74d543ff935b1b59105b6bfdc2aff8f5fe9152ed6e07ca7ef01e3e441": {
+    "sentence": "type {{email}} in the email field",
+    "probabilities": [
+      0.68,
+      0.32
+    ],
+    "selection": 0,
+    "confidence": 0.36,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 437,
+        "outputTokens": 101
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000018354000000000004,
+      "totalCostUsd": 0.000018354000000000004
     }
   },
   "d09f082f722f83239be5ef09d805ac7f67d13e1244ee495717a56b3b76fa2297": {
@@ -27490,6 +29303,52 @@
       },
       "successfulResponseCostUsd": 0.000055062,
       "totalCostUsd": 0.000055062
+    }
+  },
+  "d7f89dc7e7c992c8c4d36d9593e4c855c62197499f67ac3b48cb3fc9afcbcd14": {
+    "sentence": "click Load more",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0.01
+    ],
+    "selection": 20,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2604,
+        "outputTokens": 910
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00010936800000000001,
+      "totalCostUsd": 0.00010936800000000001
     }
   },
   "d8549e7c04bc778e38dfa68d244cdd1863022a1351d9462e07f9ee3a59f8a441": {
@@ -29189,6 +31048,52 @@
       "totalCostUsd": 0.000125034
     }
   },
+  "e4bcf348e005289368cff8f5f08cbedcb7868bf3fc10a1d55f586fa5325f27e0": {
+    "sentence": "click Add to cart",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.95,
+      0,
+      0.01,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.04
+    ],
+    "selection": 9,
+    "confidence": 0.94,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2626,
+        "outputTokens": 932
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00011029200000000001,
+      "totalCostUsd": 0.00011029200000000001
+    }
+  },
   "e511a55130142c9d8dbe1854e889b3d749204c925d52ab2dd38179b4161b9fc4": {
     "sentence": "click the Subscribe button",
     "probabilities": [
@@ -30155,6 +32060,52 @@
       "totalCostUsd": 0.00010479
     }
   },
+  "ea58847cb2305d9f8811fdba725dc7018389fbfb84c9165db818652d6c306d5b": {
+    "sentence": "tick Drinkware under Category",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.98,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.02
+    ],
+    "selection": 6,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2628,
+        "outputTokens": 931
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000110376,
+      "totalCostUsd": 0.000110376
+    }
+  },
   "ea81ab755724c1401fa5b6af521f5b2704cc6a454deeddc4c39464abffda7a3a": {
     "sentence": "click the Read the docs link",
     "probabilities": [
@@ -30485,6 +32436,52 @@
       },
       "successfulResponseCostUsd": 0.000041538,
       "totalCostUsd": 0.000041538
+    }
+  },
+  "ed1980a0c5482db2f6a083074d88e5272b9e49660a940687e2084c93fc23bc87": {
+    "sentence": "check the Lights filter",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 4,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2479,
+        "outputTokens": 777
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00010411800000000001,
+      "totalCostUsd": 0.00010411800000000001
     }
   },
   "ed5da42b2b1559056a672e1658d57b39e7cb0f0e8991d7d09541c6bb3a9f613a": {
@@ -31710,6 +33707,48 @@
       "totalCostUsd": 0.000221592
     }
   },
+  "f8448952bb26f3399f838f2b16170214082784ddea34da17e35d5533ddaf50f5": {
+    "sentence": "click Remove selected",
+    "probabilities": [
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 0,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2032,
+        "outputTokens": 709
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.00008534400000000002,
+      "totalCostUsd": 0.00008534400000000002
+    }
+  },
   "f8688c1811a1d301748c3ad5b860c4b06e5994e58a567c7a6f8812130a5735b7": {
     "sentence": "click Edit",
     "probabilities": [
@@ -31908,6 +33947,52 @@
       "totalCostUsd": 0.000092862
     }
   },
+  "fac996bf337fb602d8399f95b9e081c9415ba8746b7b02caf1f138e20ebefa7f": {
+    "sentence": "click Add to cart for the Trail Light",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.01
+    ],
+    "selection": 11,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2546,
+        "outputTokens": 844
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000106932,
+      "totalCostUsd": 0.000106932
+    }
+  },
   "fb0f0acd15f304e379bf7b3589699c0ec22975d18c7334f41333124289068f82": {
     "sentence": "click the Cancel link",
     "probabilities": [
@@ -32091,6 +34176,48 @@
       "totalCostUsd": 0.000053592000000000005
     }
   },
+  "fc5eeee38820101e5740cf62df535f9a75cf1d3ae71fb9ee13aa456344c5b31c": {
+    "sentence": "go to the next page",
+    "probabilities": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.99,
+      0.01
+    ],
+    "selection": 16,
+    "confidence": 0.98,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2017,
+        "outputTokens": 692
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000084714,
+      "totalCostUsd": 0.000084714
+    }
+  },
   "fc7f2cba24125c967aae6505fab65c2ff88f02bc85a27cafe5f5f1cf0772bb13": {
     "sentence": "click Pay now",
     "probabilities": [
@@ -32149,6 +34276,52 @@
       },
       "successfulResponseCostUsd": 0.000049728,
       "totalCostUsd": 0.000049728
+    }
+  },
+  "fd2b19535c521d5972881cd2acf8881f233685373741083b12c2a976a7f6585e": {
+    "sentence": "click the cart link",
+    "probabilities": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "selection": 2,
+    "confidence": 0.99,
+    "call": {
+      "requestedModel": "jev-latest",
+      "model": "jev-1.13.0",
+      "attempts": 1,
+      "usage": {
+        "inputTokens": 2500,
+        "outputTokens": 799
+      },
+      "rate": {
+        "inputUsdPerMillion": 0.042,
+        "outputUsdPerMillion": 0,
+        "source": "https://typesafe.ai/blog/introducing-system-one-models-and-jev",
+        "checkedAt": "2026-09-21"
+      },
+      "successfulResponseCostUsd": 0.000105,
+      "totalCostUsd": 0.000105
     }
   },
   "fd8d9d305892a5503f7a1beb83c80972a3e2e67aeaa919f0caf4293f6c50c664": {
