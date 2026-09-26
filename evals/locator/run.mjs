@@ -34,12 +34,14 @@ const { values: args } = parseArgs({
     // Experimental repeated-member policy: --trust 0.7,0.3 --same-destination
     trust: { type: "string" },
     "same-destination": { type: "boolean", default: false },
+    "duplicate-links": { type: "boolean", default: false },
   },
 });
 
 function repeatedMemberPolicy() {
   const policy = {};
   if (args["same-destination"]) policy.sameDestination = true;
+  if (args["duplicate-links"]) policy.duplicateLinks = true;
   if (args.trust) {
     const [minProbability, minLead] = args.trust.split(",").map(Number);
     if (!(minProbability >= 0 && minLead >= 0))
