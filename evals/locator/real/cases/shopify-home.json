@@ -81,6 +81,7 @@
     },
     {
       "id": "shpf-play-ambiguous",
+      "excluded": "The 2026-09-26 capture has a single play button, so the step is no longer ambiguous.",
       "op": "click",
       "sentence": "click the play button",
       "gold": "ambiguous",

@@ -100,7 +100,11 @@ if (!window.__sedum) {
     return parent instanceof ShadowRoot ? parent.host : null;
   }
   /** Every element under root in document order, entering open shadow roots. */
-  function allElements(root: Element, limit: number): Element[] | null {
+  function allElements(
+    root: Element,
+    limit: number,
+    skipDrawings = false,
+  ): Element[] | null {
     const result: Element[] = [];
     const stack: Element[] = [];
     const push = (parent: ParentNode) => {
@@ -116,6 +120,8 @@ if (!window.__sedum) {
       const element = stack.pop()!;
       result.push(element);
       if (result.length > limit) return null;
+      // The inside of an <svg> is drawing, not controls.
+      if (skipDrawings && element instanceof SVGSVGElement) continue;
       push(element);
       if (element.shadowRoot) {
         observe(element.shadowRoot);
@@ -307,11 +313,15 @@ if (!window.__sedum) {
     }
     return false;
   }
-  function publicText(element: Element): string {
+  function publicText(element: Element, visualOnly = false): string {
     const parts: string[] = [];
     for (const node of flatTextNodes(element)) {
       const parent = node.parentElement;
-      if (parent && visible(parent) && !excludedTextAncestor(parent))
+      if (
+        parent &&
+        visible(parent, visualOnly) &&
+        !excludedTextAncestor(parent)
+      )
         parts.push(node.textContent ?? "");
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
@@ -334,7 +344,7 @@ if (!window.__sedum) {
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
-  function label(element: Element): string {
+  function label(element: Element, visualOnly = false): string {
     const aria = element.getAttribute("aria-label")?.trim();
     if (aria) return aria;
     const labelledby = element.getAttribute("aria-labelledby");
@@ -352,7 +362,7 @@ if (!window.__sedum) {
     if (element instanceof HTMLElement && "labels" in element) {
       const labels = (element as HTMLInputElement).labels;
       const text = labels?.length
-        ? Array.from(labels).map(publicText).join(" ").trim()
+        ? Array.from(labels).map((node) => publicText(node)).join(" ").trim()
         : "";
       if (text) return text;
     }
@@ -370,7 +380,11 @@ if (!window.__sedum) {
       const value = element.value.trim();
       if (value) return value;
     }
-    return publicText(element) || element.getAttribute("title")?.trim() || "";
+    return (
+      publicText(element, visualOnly) ||
+      element.getAttribute("title")?.trim() ||
+      ""
+    );
   }
   /**
    * A control with no accessible name takes the nearest visible text on
@@ -442,8 +456,153 @@ if (!window.__sedum) {
     }
     return "";
   }
+  /** The aria-label of a component whose shadow root holds only this control. */
+  function hostLabel(element: Element): string {
+    const root = element.getRootNode();
+    if (!(root instanceof ShadowRoot)) return "";
+    const host = root.host;
+    const aria = host.getAttribute("aria-label")?.trim();
+    if (!aria || interactive(host)) return "";
+    const inside = allElements(host, 500) ?? [];
+    return inside.filter((node) => interactive(node)).length === 1 ? aria : "";
+  }
+  /** An icon-font glyph's name, such as "search" for fa-search. */
+  function iconName(element: Element): string {
+    for (const node of Array.from(element.querySelectorAll("i,span,em"))) {
+      if (node.textContent?.trim()) continue;
+      for (const token of Array.from(node.classList)) {
+        const match =
+          /^(?:fa|bi|glyphicon|icon|mdi|ti|ri)-([a-z][a-z0-9-]*)$/.exec(token);
+        if (
+          match &&
+          !/^(lg|[0-9]x|fw|solid|regular|light|brands|spin|pulse|border|inverse|stack.*|rotate.*|flip.*)$/.test(
+            match[1]!,
+          )
+        )
+          return match[1]!.replace(/-/g, " ");
+      }
+    }
+    return "";
+  }
+  /** A combobox's visible description, such as its "Select State" prompt. */
+  function describedText(element: Element): string {
+    const ids = element.getAttribute("aria-describedby");
+    if (!ids || role(element) !== "combobox") return "";
+    return ids
+      .split(/\s+/)
+      .map((id) => {
+        const node = document.getElementById(id);
+        return node && visible(node) ? publicText(node) : "";
+      })
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 80);
+  }
+  /** A form field alone in its row takes the row's caption: "Date of Birth | [input]". */
+  function rowLabel(element: Element): string {
+    if (
+      !element.matches(
+        "input,textarea,select,[role='combobox'],[role='textbox']",
+      )
+    )
+      return "";
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height) return "";
+    let row: Element | null = null;
+    let node = composedParent(element);
+    for (let level = 0; node && node !== document.body && level < 7; level++) {
+      const inside = allElements(node, 400);
+      if (
+        !inside ||
+        inside.some(
+          (other) => other !== element && interactive(other) && visible(other),
+        )
+      )
+        break;
+      row = node;
+      node = composedParent(node);
+    }
+    if (!row) return "";
+    const middle = box.top + box.height / 2;
+    let best: { text: string; distance: number } | null = null;
+    for (const text of flatTextNodes(row)) {
+      const parent = text.parentElement;
+      const value = (text.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (
+        !parent ||
+        !value ||
+        deepContains(element, parent) ||
+        excludedTextAncestor(parent, true) ||
+        !visible(parent)
+      )
+        continue;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      const rect = range.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      const sameLine =
+        Math.abs(rect.top + rect.height / 2 - middle) <
+        Math.max(box.height, rect.height) / 2;
+      let distance = Infinity;
+      if (sameLine && rect.right <= box.left + 2)
+        distance = box.left - rect.right;
+      else if (rect.bottom <= box.top + 2 && rect.left < box.right)
+        distance = box.top - rect.bottom;
+      if (distance > 400) continue;
+      if (!best || distance < best.distance) best = { text: value, distance };
+    }
+    return best?.text ?? "";
+  }
   function candidateName(element: Element): string {
-    return label(element) || mediaName(element) || nearbyText(element);
+    const visualOnly = ariaHiddenOnly(element);
+    return (
+      label(element, visualOnly) ||
+      mediaName(element) ||
+      nearbyText(element) ||
+      hostLabel(element) ||
+      iconName(element) ||
+      describedText(element) ||
+      rowLabel(element)
+    );
+  }
+  function clippedAway(element: Element): boolean {
+    const box = element.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body;
+      node = composedParent(node)
+    ) {
+      const style = getComputedStyle(node);
+      if (style.overflowX === "visible" && style.overflowY === "visible")
+        continue;
+      const bounds = node.getBoundingClientRect();
+      if (
+        x < bounds.left ||
+        x > bounds.right ||
+        y < bounds.top ||
+        y > bounds.bottom
+      )
+        return true;
+    }
+    return false;
+  }
+  /**
+   * A control hidden from assistive technology only (aria-hidden), still
+   * drawn with its own text and reachable by pointer, such as a card's
+   * duplicate "Learn more" link.
+   */
+  function ariaHiddenOnly(element: Element): boolean {
+    if (!interactive(element) || visible(element) || !visible(element, true))
+      return false;
+    const box = element.getBoundingClientRect();
+    return (
+      box.width >= 8 &&
+      box.height >= 8 &&
+      !clippedAway(element) &&
+      !!publicText(element, true)
+    );
   }
   function isToggle(element: Element): element is HTMLInputElement {
     return (
@@ -602,7 +761,9 @@ if (!window.__sedum) {
                 ? "spinbutton"
                 : element.type === "search"
                   ? "searchbox"
-                  : "textbox";
+                  : element.type === "file"
+                    ? "button"
+                    : "textbox";
     if (element instanceof HTMLTextAreaElement) return "textbox";
     if (element.matches("details > summary")) return "button";
     if (element instanceof HTMLSelectElement) return "combobox";
@@ -812,7 +973,9 @@ if (!window.__sedum) {
       return { candidates, refs, complete: false };
     const root = selectedModal ?? document.body;
     if (!root) return { candidates, refs, complete: true };
-    const elements = allElements(root, MAX_ELEMENTS);
+    // Pages heavy with inline SVG art can pass the limit on drawing alone.
+    const elements =
+      allElements(root, MAX_ELEMENTS) ?? allElements(root, MAX_ELEMENTS, true);
     if (!elements) return { candidates, refs, complete: false };
     let heading: { text: string; root: Element | null } = {
       text: "",
@@ -826,7 +989,11 @@ if (!window.__sedum) {
       }
       const proxied = operation === "click" ? toggleLabel(element) : null;
       if (
-        !(visible(element) || transparentToggle(element)) ||
+        !(
+          visible(element) ||
+          transparentToggle(element) ||
+          (operation === "click" && ariaHiddenOnly(element))
+        ) ||
         (operation === "read"
           ? !readable(element)
           : !interactive(element) &&
@@ -1186,7 +1353,14 @@ if (!window.__sedum) {
       (expected && expected.name !== candidate.name)
     )
       return { actionable: false, reason: "stale" };
-    if (!(visible(element) || transparentToggle(element)) || disabled(element))
+    if (
+      !(
+        visible(element) ||
+        transparentToggle(element) ||
+        ariaHiddenOnly(element)
+      ) ||
+      disabled(element)
+    )
       return { actionable: false, reason: "not_actionable" };
     const enclosingLink = element.closest("a[href]");
     if (enclosingLink) {

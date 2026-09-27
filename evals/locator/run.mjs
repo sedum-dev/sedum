@@ -5,6 +5,7 @@ import { URL, fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import process from "node:process";
 import console from "node:console";
+import { setTimeout } from "node:timers";
 import {
   PlaywrightBrowserDriver,
   quietPage,
@@ -205,6 +206,9 @@ async function runCase(session, base, resolver, testCase) {
     const page = await context.newPage();
     await page.goto(`${base}/${testCase.page}`, { timeoutMs: 15_000 });
     await quietPage(page, 300, 5_000);
+    // Frozen pages keep their CSS animations, which can reveal controls
+    // after the DOM is quiet (Apple fades in 26 links over a second).
+    if (real) await new Promise((settled) => setTimeout(settled, 1_500));
     if (testCase.targets) {
       const failure = await markTargets(page, testCase.targets);
       if (failure) return { case: testCase, skipped: failure };

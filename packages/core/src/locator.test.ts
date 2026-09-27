@@ -965,10 +965,17 @@ describe("locator", () => {
         peers: ["1. Story One"],
         signals: { path: "other", href: "/comments/1" },
       }),
+      candidate(2, {
+        tag: "a",
+        role: "link",
+        name: "12 comments",
+        peers: ["2. Story Two"],
+        signals: { path: "second", href: "/comments/2" },
+      }),
     ];
     const { page } = recordedPage(items);
     const model = resolver((options) =>
-      answer(options, "r0", { r0: 0.9, r1: 0.05, none: 0.05 }, 0.95),
+      answer(options, "r0", { r0: 0.9, r1: 0.03, r2: 0.02, none: 0.05 }, 0.95),
     );
     expect(
       await resolveTarget(page, model, {

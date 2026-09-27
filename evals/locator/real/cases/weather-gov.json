@@ -111,6 +111,7 @@
     },
     {
       "id": "wg-tornado-absent",
+      "excluded": "The 2026-09-26 capture has a Tornado Warning link, so the target is no longer absent.",
       "op": "click",
       "sentence": "click Tornado Warning",
       "gold": "none",

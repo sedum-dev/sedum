@@ -6,7 +6,7 @@
     "story-1": "#bigbox > td > table > tbody > tr:nth-of-type(1) > td:nth-of-type(3) > span > a",
     "comments-2": "#bigbox > td > table > tbody > tr:nth-of-type(5) > td:nth-of-type(2) > span > a:nth-of-type(3)",
     "comments-fdroid": "#bigbox > td > table > tbody > tr:nth-of-type(20) > td:nth-of-type(2) > span > a:nth-of-type(3)",
-    "hide-anthropic": "#bigbox > td > table > tbody > tr:nth-of-type(11) > td:nth-of-type(2) > span > a:nth-of-type(2)",
+    "hide-anthropic": "a[href='hide?id=49845977&goto=news']",
     "upvote-1": "#bigbox > td > table > tbody > tr:nth-of-type(1) > td:nth-of-type(2) > center > a",
     "author-gitbug": "#bigbox > td > table > tbody > tr:nth-of-type(5) > td:nth-of-type(2) > span > a:nth-of-type(1)",
     "more": "#bigbox > td > table > tbody > tr:nth-of-type(92) > td:nth-of-type(2) > a",
@@ -44,6 +44,7 @@
     },
     {
       "id": "hn-comments-fdroid",
+      "excluded": "No F-Droid 2.0 story on the 2026-09-26 capture; the gold points at another story's comments.",
       "op": "click",
       "sentence": "click the comments link under F-Droid 2.0",
       "gold": ["comments-fdroid"],
@@ -65,6 +66,7 @@
     },
     {
       "id": "hn-author-gitbug",
+      "excluded": "No Git-bug story on the 2026-09-26 capture; the gold points at another story's author.",
       "op": "click",
       "sentence": "click the username of whoever posted the Git-bug story",
       "gold": ["author-gitbug"],

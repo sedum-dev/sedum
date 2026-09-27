@@ -532,9 +532,22 @@ function inNamedRegion(
 ): Candidate[] {
   const named = REGIONS.filter((region) => region.sentence.test(sentence));
   if (named.length !== 1) return [...candidates];
-  const kept = candidates.filter((candidate) =>
-    named[0]!.location(candidate.location ?? ""),
+  // A control the sentence names outright stays even when the page does not
+  // mark the region it sits in.
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const regionWords = new Set(
+    words(sentence.match(named[0]!.sentence)?.[0] ?? ""),
   );
+  const wanted = words(sentence.replace(/\{\{[^}]*\}\}/g, " ")).filter(
+    (word) => !FILLER_WORDS.has(word) && !regionWords.has(word),
+  );
+  const kept = candidates.filter((candidate) => {
+    if (named[0]!.location(candidate.location ?? "")) return true;
+    if (!wanted.length) return false;
+    const name = new Set(words(candidate.name));
+    return wanted.every((word) => name.has(word));
+  });
   return kept.length ? kept : [...candidates];
 }
 
@@ -610,7 +623,7 @@ function nearNamesake(
       candidate !== selected &&
       candidate.name.trim().toLocaleLowerCase() !==
         selected.name.trim().toLocaleLowerCase() &&
-      (decision.probabilities[candidate.ref] ?? 0) >= 0.1 &&
+      (decision.probabilities[candidate.ref] ?? 0) >= 0.05 &&
       holdsAll(candidate),
   );
 }
@@ -691,6 +704,8 @@ function resolveInCode(
     // "the second Add to cart" or "the first story"; anything else, such as
     // "the first non-sponsored", is a qualifier code cannot check.
     if (!label.has(next) && !ITEM_NOUNS.has(next)) return null;
+    // "the first story" alone does not say which of the story's controls.
+    if (!label.has(next) && !said.some((word) => label.has(word))) return null;
     const index = k === -1 ? group.length - 1 : k - 1;
     return index < group.length ? group[index]! : null;
   }
@@ -747,6 +762,31 @@ function resolveInCode(
     return wanted.every((word) => text.has(word));
   });
   return matching.length === 1 ? matching[0]! : null;
+}
+
+/**
+ * The pick's name shares no meaningful word with the sentence, while another
+ * offered element's name holds all of them: "click Sign In" picking a promo
+ * link over the Sign In link.
+ */
+function lexicalMiss(
+  sentence: string,
+  selected: Candidate,
+  offered: readonly Candidate[],
+): boolean {
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const content = words(sentence.replace(/\{\{[^}]*\}\}/g, " ")).filter(
+    (word) => !FILLER_WORDS.has(word),
+  );
+  if (!content.length) return false;
+  const picked = new Set(words(selected.name));
+  if (content.some((word) => picked.has(word))) return false;
+  return offered.some((candidate) => {
+    if (candidate === selected) return false;
+    const name = new Set(words(candidate.name));
+    return content.every((word) => name.has(word));
+  });
 }
 
 function sameIdentity(a: Candidate, b: Candidate): boolean {
@@ -1186,15 +1226,27 @@ export async function resolveTarget(
       }
       return await refresh(member);
     }
+    // Links that only share the pick's address ("Fork 6.5k" beside a star
+    // link to the same login page) are told apart by their names already.
+    // Counts do not tell members apart: "306 comments" and "12 comments"
+    // are the same control on two stories.
+    const masked = (name: string) =>
+      name
+        .trim()
+        .toLocaleLowerCase()
+        .replace(/\d[\d.,]*[km]?(?=\s+\p{L})/gu, "#");
+    const sameName = candidates.filter(
+      (candidate) => masked(candidate.name) === masked(selected.name),
+    );
     if (
-      group.length > 1 &&
-      !sentenceEvidence(options.sentence, selected, group)
+      sameName.length > 1 &&
+      !sentenceEvidence(options.sentence, selected, sameName)
     ) {
       const accepted = repeatedMemberAccepted(
         options.repeatedMember,
         options.sentence,
         selected,
-        group,
+        sameName,
         decision,
       );
       if (!accepted) {
@@ -1214,6 +1266,10 @@ export async function resolveTarget(
       nearNamesake(options.sentence, selected, finalists, decision)
     ) {
       gate = "near_namesake";
+      return unresolved("ambiguous");
+    }
+    if (lexicalMiss(options.sentence, selected, finalists)) {
+      gate = "lexical_miss";
       return unresolved("ambiguous");
     }
     return await refresh(selected);

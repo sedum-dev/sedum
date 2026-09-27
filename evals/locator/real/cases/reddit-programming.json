@@ -7,7 +7,7 @@
     "create-post": "button[data-testid=\"create-post\"]",
     "join": "shreddit-subreddit-header-buttons[name=\"programming\"] >>> shreddit-join-button[name=\"programming\"] >>> button",
     "sort": "#main-content > div:nth-of-type(1) > shreddit-async-loader > div > div > shreddit-sort-dropdown >>> button[aria-label=\"Sort by: Best\"]",
-    "upvote-1": "#t3_1wpuggf >>> div > rpl-action-bar > div > span > shreddit-vote-animations > span > button:nth-of-type(1)",
+    "upvote-1": "#t3_1wq8nbw >>> div > rpl-action-bar > div > span > shreddit-vote-animations > span > button:nth-of-type(1)",
     "share-1": "#t3_1wpuggf >>> div > rpl-action-bar > div > slot:nth-of-type(1) > shreddit-post-share-button >>> rpl-dropdown > button",
     "comments-dns": "#t3_1w06vn1 >>> a[name=\"comments-action-button\"]",
     "raytracer-overlay": "#t3_1wptfjd > a",
