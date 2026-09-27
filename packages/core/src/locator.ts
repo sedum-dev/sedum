@@ -118,9 +118,11 @@ export interface LocatorOptions {
    */
   readonly acceptLowConfidence?: boolean;
   /**
-   * Experimental: when to accept the model's pick among repeated elements
-   * (same name or destination) whose sentence words do not single it out.
-   * Unset keeps the lexical rule: the sentence must name the member.
+   * When to accept the model's pick among repeated elements (same name or
+   * destination) whose sentence words do not single it out. Unset acts on
+   * the model's pick ({ modelPick: true }): a vague step clicks the likely
+   * element, and the test author can add detail. Pass {} for the strict
+   * lexical rule.
    */
   readonly repeatedMember?: RepeatedMemberPolicy;
 }
@@ -894,6 +896,7 @@ export async function resolveTarget(
   options: LocatorOptions,
 ): Promise<LocatorResult> {
   const calls: ProviderCall[] = [];
+  const repeatedMember = options.repeatedMember ?? { modelPick: true };
   let candidateCount = 0;
   let rounds = 0;
   let top: LocatorOptionDiagnostic[] = [];
@@ -1169,7 +1172,7 @@ export async function resolveTarget(
     const low =
       (decision.confidence !== null && decision.confidence < MIN_CONFIDENCE) ||
       comparableLead(decision, selected.ref) < MIN_LEAD;
-    if (low && group.length >= 2 && options.repeatedMember?.modelPick)
+    if (low && group.length >= 2 && repeatedMember.modelPick)
       gate = "repeated_member_model_pick";
     else if (low && group.length < 2 && options.acceptLowConfidence)
       gate = "low_confidence_accepted";
@@ -1205,7 +1208,7 @@ export async function resolveTarget(
       }
       if (!sentenceEvidence(options.sentence, member, group)) {
         const accepted = repeatedMemberAccepted(
-          options.repeatedMember,
+          repeatedMember,
           options.sentence,
           member,
           group,
@@ -1243,7 +1246,7 @@ export async function resolveTarget(
       !sentenceEvidence(options.sentence, selected, sameName)
     ) {
       const accepted = repeatedMemberAccepted(
-        options.repeatedMember,
+        repeatedMember,
         options.sentence,
         selected,
         sameName,

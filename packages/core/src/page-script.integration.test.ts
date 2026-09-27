@@ -365,6 +365,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       });
       const result = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the link to the Charles Babbage article in the article body",
       });
       expect(result).toMatchObject({
@@ -392,12 +393,14 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       });
       const vague = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart for the product",
       });
       expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
       expect(await page.evaluate("window.clicked")).toBeUndefined();
       const specific = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart for Product Camera",
       });
       expect(specific.kind).toBe("resolved");

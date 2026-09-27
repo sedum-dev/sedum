@@ -678,12 +678,14 @@ describe("locator", () => {
     });
     const clear = await resolveTarget(page, model, {
       operation: "click",
+      repeatedMember: {},
       sentence: "Add Camera to cart",
     });
     expect(clear.kind).toBe("resolved");
     expect(clear.calls).toHaveLength(2);
     const vague = await resolveTarget(page, model, {
       operation: "click",
+      repeatedMember: {},
       sentence: "Add to cart",
     });
     expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
@@ -704,6 +706,7 @@ describe("locator", () => {
     });
     const result = await resolveTarget(page, model, {
       operation: "click",
+      repeatedMember: {},
       sentence: "Add Phone to cart",
     });
     expect(result.kind).toBe("resolved");
@@ -732,6 +735,7 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart",
       }),
     ).toMatchObject({
@@ -743,6 +747,7 @@ describe("locator", () => {
       (
         await resolveTarget(page, model, {
           operation: "click",
+          repeatedMember: {},
           sentence: "Add Camera to cart",
         })
       ).kind,
@@ -775,6 +780,7 @@ describe("locator", () => {
     const picked = async (sentence: string) => {
       const result = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence,
       });
       return result.kind === "resolved"
@@ -795,6 +801,27 @@ describe("locator", () => {
     expect(await picked("click the first non-sponsored Add to cart")).toBe(
       "ambiguous",
     );
+  });
+
+  it("acts on the model's pick among repeated elements by default", async () => {
+    const items = [
+      candidate(0, { name: "Pricing", signals: { path: "nav", href: "/p" } }),
+      candidate(1, { name: "Pricing", signals: { path: "foot", href: "/q" } }),
+    ];
+    const { page } = recordedPage(items);
+    const model = resolver((options) =>
+      answer(options, "r1", { r0: 0.3, r1: 0.6, none: 0.1 }, 0.6),
+    );
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "click Pricing",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "repeated_member_model_pick" },
+    });
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe("fresh-r1");
   });
 
   it("accepts a repeated member only under an opted-in policy", async () => {
@@ -829,7 +856,11 @@ describe("locator", () => {
         0.9,
       ),
     );
-    const vague = { operation: "click" as const, sentence: "click Pricing" };
+    const vague = {
+      operation: "click" as const,
+      sentence: "click Pricing",
+      repeatedMember: {},
+    };
     expect(await resolveTarget(page, pricing, vague)).toMatchObject({
       kind: "unresolved",
       diagnostic: { gate: "repeated_member_no_evidence" },
@@ -853,6 +884,7 @@ describe("locator", () => {
     );
     const paraphrase = {
       operation: "click" as const,
+      repeatedMember: {},
       sentence: "edit the second team member",
     };
     const trust = { minProbability: 0.7, minLead: 0.3 };
@@ -882,6 +914,7 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, edit, {
         operation: "click",
+        repeatedMember: {},
         sentence: "click the Edit button",
         repeatedMember: { trust },
       }),
@@ -911,6 +944,7 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart for the product",
       }),
     ).toMatchObject({
@@ -922,6 +956,7 @@ describe("locator", () => {
       (
         await resolveTarget(page, model, {
           operation: "click",
+          repeatedMember: {},
           sentence: "Add to cart for Product Camera",
         })
       ).kind,
@@ -980,24 +1015,28 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the comments link for the first story in the list",
       }),
     ).toMatchObject({ kind: "resolved" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the comments link for the first ranked story",
       }),
     ).toMatchObject({ kind: "resolved" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the comments link",
       }),
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the first story link",
       }),
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
