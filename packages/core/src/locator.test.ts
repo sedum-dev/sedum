@@ -803,6 +803,33 @@ describe("locator", () => {
     );
   });
 
+  it("acts on the same-name member in the section the sentence names", async () => {
+    const items = [
+      candidate(0, {
+        name: "Python for Everybody",
+        signals: { path: "a", section: "Trending searches › Python" },
+      }),
+      candidate(1, {
+        name: "Python for Everybody",
+        signals: { path: "b", section: "Most popular › New and popular" },
+      }),
+    ];
+    const { page } = recordedPage(items);
+    const model = resolver((options) =>
+      answer(options, "r0", { r0: 0.8, r1: 0.15, none: 0.05 }, 0.8),
+    );
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "open Python for Everybody under Most popular",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_by_section" },
+    });
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe("fresh-r1");
+  });
+
   it("acts on the model's pick among repeated elements by default", async () => {
     const items = [
       candidate(0, { name: "Pricing", signals: { path: "nav", href: "/p" } }),

@@ -125,6 +125,12 @@ export interface LocatorOptions {
    * lexical rule.
    */
   readonly repeatedMember?: RepeatedMemberPolicy;
+  /**
+   * When the sentence names a section ("under Most popular", "in the See
+   * also box"), act on the one same-name member whose local section labels
+   * hold every qualifying word. On unless set to false.
+   */
+  readonly sectionMatch?: boolean;
 }
 
 export interface RepeatedMemberPolicy {
@@ -766,6 +772,56 @@ function resolveInCode(
   return matching.length === 1 ? matching[0]! : null;
 }
 
+const SECTION_NOUNS = new Set(
+  (
+    "sidebar side section box demo panel area region list banner header " +
+    "footer navigation nav menu bar top bottom left right under inside " +
+    "within below beneath above near page example card block widget part " +
+    "container group dropdown select field input textbox"
+  ).split(" "),
+);
+
+/**
+ * "open Python for Everybody under Most popular", "click Attributes in the
+ * In this article sidebar": among the pick's same-name members (within the
+ * region the sentence names), the one whose section labels hold every word
+ * the sentence adds beyond the label. Null unless exactly one qualifies.
+ */
+function resolveBySection(
+  sentence: string,
+  pick: Candidate,
+  candidates: readonly Candidate[],
+): Candidate | null {
+  const text = sentence.replace(/\{\{[^}]*\}\}/g, " ");
+  if (!/\b(in|under|inside|within|from|below|beneath|of)\b/i.test(text))
+    return null;
+  const stem = (word: string) =>
+    word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
+  const words = (value: string): string[] =>
+    (value.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map(stem);
+  const name = pick.name.trim().toLocaleLowerCase();
+  const group = inNamedRegion(
+    sentence,
+    candidates.filter(
+      (candidate) => candidate.name.trim().toLocaleLowerCase() === name,
+    ),
+  );
+  if (group.length < 2 || !group.includes(pick)) return null;
+  const label = new Set(words(pick.name));
+  const filler = new Set([...FILLER_WORDS, ...SECTION_NOUNS].map(stem));
+  const wanted = [
+    ...new Set(
+      words(text).filter((word) => !label.has(word) && !filler.has(word)),
+    ),
+  ];
+  if (!wanted.length) return null;
+  const matching = group.filter((member) => {
+    const section = new Set(words(member.signals.section ?? ""));
+    return wanted.every((word) => section.has(word));
+  });
+  return matching.length === 1 ? matching[0]! : null;
+}
+
 /**
  * The pick's name shares no meaningful word with the sentence, while another
  * offered element's name holds all of them: "click Sign In" picking a promo
@@ -1159,9 +1215,15 @@ export async function resolveTarget(
     if (decision.selection.kind === "none") return unresolved("none");
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
-    const coded = resolveInCode(options.sentence, selected, candidates);
+    const bySection =
+      options.sectionMatch !== false &&
+      !resolveInCode(options.sentence, selected, candidates)
+        ? resolveBySection(options.sentence, selected, candidates)
+        : null;
+    const coded =
+      bySection ?? resolveInCode(options.sentence, selected, candidates);
     if (coded) {
-      gate = "resolved_in_code";
+      gate = bySection ? "resolved_by_section" : "resolved_in_code";
       if (options.operation === "fill" && !coded.editable)
         return unresolved("not_fillable");
       if (!explicitRegionEvidence(options.sentence, coded))

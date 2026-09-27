@@ -661,6 +661,7 @@ if (!window.__sedum) {
       !inside.some((node) => interactive(node) || node.hasAttribute("role"))
     );
   }
+  type Heading = { text: string; root: Element | null; level: number };
   const SECTIONING = "article,aside,main,nav,section";
   /** The landmark a person would name for an element's place on the page. */
   function landmarkOf(node: Element): string {
@@ -738,6 +739,110 @@ if (!window.__sedum) {
       heading.root === root ? heading.text : "",
     ].filter(Boolean);
     return Array.from(parts.join(" · ")).slice(0, PEER_LIMIT).join("");
+  }
+  const SECTION_TITLE_LIMIT = 60;
+  const titleCache = new Map<
+    Element,
+    { child: Element; text: string } | null
+  >();
+  function shortText(element: Element): string {
+    // Cheap bound first: a long subtree is content, not a title.
+    if ((element.textContent ?? "").length > 400) return "";
+    const text = publicText(element);
+    return Array.from(text).length <= SECTION_TITLE_LIMIT ? text : "";
+  }
+  /**
+   * The title an ancestor gives its later children: a first child that is a
+   * heading or a short non-interactive text block ("Most popular" above a
+   * list, "See also" at the top of a box, a demo's caption).
+   */
+  function containerTitle(
+    container: Element,
+  ): { child: Element; text: string } | null {
+    if (titleCache.has(container)) return titleCache.get(container)!;
+    let found: { child: Element; text: string } | null = null;
+    for (const child of Array.from(container.children)) {
+      if (!(child.textContent ?? "").trim() || !visible(child)) continue;
+      // A title may be a link ("Most popular →" over a carousel), but not
+      // the first entry of a list or menu.
+      const controls = child.querySelectorAll(
+        "button,a[href],input,select,textarea,[role='button'],[role='link']",
+      ).length;
+      if (
+        !child.matches("li,tr,option,[role='listitem'],[role='row']") &&
+        (interactive(child) ? controls === 0 : controls <= 1)
+      ) {
+        const heading = child.matches("h1,h2,h3,h4,h5,h6,[role='heading']")
+          ? child
+          : child.querySelector("h1,h2,h3,h4,h5,h6,[role='heading']");
+        const text = shortText(heading ?? child);
+        // A "Skip to content" link is page chrome, not a section title.
+        if (text && text.split(/\s+/).length <= 8 && !/^skip to\b/i.test(text))
+          found = { child, text };
+      }
+      break;
+    }
+    titleCache.set(container, found);
+    return found;
+  }
+  /**
+   * Local: the labels of the containers around an element, innermost first,
+   * e.g. "Billing address › Checkout". Uses ARIA labels, legends, captions,
+   * summaries, container titles, and the heading outline of its landmark.
+   * Never projected; resolves "under Most popular" or "in the See also box"
+   * in code.
+   */
+  function sectionOf(element: Element, outline: readonly Heading[]): string {
+    const labels: string[] = [];
+    const add = (text: string) => {
+      const clean = text.replace(/\s+/g, " ").trim();
+      if (
+        clean &&
+        Array.from(clean).length <= SECTION_TITLE_LIMIT &&
+        !labels.includes(clean)
+      )
+        labels.push(clean);
+    };
+    let child: Element = element;
+    let depth = 0;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body && depth < 30 && labels.length < 6;
+      child = node, node = composedParent(node), depth++
+    ) {
+      if (!interactive(node)) {
+        const aria = node.getAttribute("aria-label");
+        if (aria) add(aria);
+        const labelledby = node.getAttribute("aria-labelledby");
+        if (labelledby)
+          add(
+            labelledby
+              .split(/\s+/)
+              .map((id) => {
+                const target = document.getElementById(id);
+                return target && target !== element ? publicText(target) : "";
+              })
+              .join(" "),
+          );
+      }
+      const own = (selector: string) => {
+        const title = Array.from(node!.children).find((item) =>
+          item.matches(selector),
+        );
+        return title && title !== child ? shortText(title) : "";
+      };
+      if (node.matches("fieldset")) add(own("legend"));
+      if (node.matches("table")) add(own("caption"));
+      if (node.matches("figure")) add(own("figcaption"));
+      if (node.matches("details")) add(own("summary"));
+      const title = containerTitle(node);
+      if (title && title.child !== child && !title.child.contains(element))
+        add(title.text);
+    }
+    const root = landmarkRoot(element);
+    for (let index = outline.length - 1; index >= 0; index--)
+      if (outline[index]!.root === root) add(outline[index]!.text);
+    return Array.from(labels.slice(0, 6).join(" › ")).slice(0, 300).join("");
   }
   function boundedName(name: string): string {
     const points = Array.from(name);
@@ -984,11 +1089,22 @@ if (!window.__sedum) {
       text: "",
       root: null,
     };
+    const outline: Heading[] = [];
+    titleCache.clear();
     for (const element of elements) {
       if (element.matches("h1,h2,h3,h4,h5,h6,[role='heading']")) {
         const text = visible(element) ? publicText(element) : "";
-        if (text && Array.from(text).length <= 60)
+        if (text && Array.from(text).length <= 60) {
           heading = { text, root: landmarkRoot(element) };
+          const level =
+            Number(
+              /^h([1-6])$/i.exec(element.tagName)?.[1] ??
+                element.getAttribute("aria-level"),
+            ) || 2;
+          while (outline.length && outline[outline.length - 1]!.level >= level)
+            outline.pop();
+          outline.push({ ...heading, level });
+        }
       }
       const proxied = operation === "click" ? toggleLabel(element) : null;
       if (
@@ -1025,6 +1141,7 @@ if (!window.__sedum) {
       }
       const peerData = peers(element, name);
       const location = locationOf(element, heading);
+      const section = sectionOf(element, outline);
       owned.set(element, {
         old: element.getAttribute("data-sedum-ref"),
         ref,
@@ -1062,6 +1179,7 @@ if (!window.__sedum) {
             path: path(element),
             contextComplete: peerData.contextComplete,
             ...(peerData.item ? { item: peerData.item } : {}),
+            ...(section ? { section } : {}),
           }),
         }),
       );

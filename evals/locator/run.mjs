@@ -38,6 +38,7 @@ const { values: args } = parseArgs({
     "duplicate-links": { type: "boolean", default: false },
     "model-pick": { type: "boolean", default: false },
     "accept-low-confidence": { type: "boolean", default: false },
+    "no-section-match": { type: "boolean", default: false },
   },
 });
 
@@ -223,6 +224,7 @@ async function runCase(session, base, resolver, testCase) {
         timeoutMs: 60_000,
         ...(repeatedMember ? { repeatedMember } : {}),
         ...(args["accept-low-confidence"] ? { acceptLowConfidence: true } : {}),
+        ...(args["no-section-match"] ? { sectionMatch: false } : {}),
       },
     );
     const observation =

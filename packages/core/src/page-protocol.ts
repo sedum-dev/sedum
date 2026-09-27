@@ -59,6 +59,8 @@ export interface Candidate {
     readonly contextComplete?: boolean;
     /** Local: the text of the list item, card, or row around the control. Never projected. */
     readonly item?: string;
+    /** Local: labels of the containers around the control, innermost first. Never projected. */
+    readonly section?: string;
     /** Local signal: the model sees only a visibly shortened accessible name. */
     readonly nameTruncated?: boolean;
     /** Full name for same-target checks; never included in provider projection. */
