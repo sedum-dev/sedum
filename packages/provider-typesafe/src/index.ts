@@ -111,6 +111,14 @@ function safeError(error: unknown, attempts: number): ProviderError {
         "TypeSafe authentication failed.",
         attempts,
       );
+    // An empty account is not a problem with the request, and every later
+    // step would fail the same way, so it stops the run like bad credentials.
+    if (error.status === 402)
+      return new ProviderError(
+        "configuration",
+        "The TypeSafe account has no available API credits.",
+        attempts,
+      );
     if (error.status >= 400 && error.status < 500)
       return new ProviderError(
         "invalid-input",
