@@ -57,6 +57,8 @@ export interface Candidate {
     readonly path: string;
     /** True only when the first peer contains the entire non-interactive item context. */
     readonly contextComplete?: boolean;
+    /** Local: the text of the list item, card, or row around the control. Never projected. */
+    readonly item?: string;
     /** Local signal: the model sees only a visibly shortened accessible name. */
     readonly nameTruncated?: boolean;
     /** Full name for same-target checks; never included in provider projection. */

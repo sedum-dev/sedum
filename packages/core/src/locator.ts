@@ -604,6 +604,137 @@ function nearNamesake(
   );
 }
 
+const ORDINALS: Readonly<Record<string, number>> = {
+  first: 1,
+  second: 2,
+  third: 3,
+  fourth: 4,
+  fifth: 5,
+  sixth: 6,
+  seventh: 7,
+  eighth: 8,
+  ninth: 9,
+  tenth: 10,
+  "1st": 1,
+  "2nd": 2,
+  "3rd": 3,
+  "4th": 4,
+  "5th": 5,
+  last: -1,
+};
+const ITEM_NOUNS = new Set(
+  (
+    "story post result product item row card example question comment " +
+    "entry listing article plan option message email file folder review " +
+    "one button link icon checkbox tab field demo form"
+  ).split(" "),
+);
+const MONEY = /(?:[$€£]\s?\d[\d,]*(?:\.\d+)?|\brs\.?\s?\d[\d,]*(?:\.\d+)?)/gi;
+
+/**
+ * Counting, prices, and "which row" are where the model is weakest, so they
+ * are resolved in code among the model's pick and its same-name siblings, in
+ * page order:
+ * - "the second Add to cart", "the first story's comments": the k-th member;
+ * - "Add to cart for the cheapest", "the most expensive": the member whose
+ *   item holds the lowest or highest single price;
+ * - "Edit for Grace Hopper", "the post about DNS": the one member whose item
+ *   text holds every word of the reference.
+ * Returns null unless exactly one member qualifies, so any doubt falls back
+ * to the model and the confidence gate.
+ */
+function resolveInCode(
+  sentence: string,
+  pick: Candidate,
+  candidates: readonly Candidate[],
+): Candidate | null {
+  // Same visible name only, and within the region the sentence names.
+  const name = pick.name.trim().toLocaleLowerCase();
+  const group = inNamedRegion(
+    sentence,
+    candidates.filter(
+      (candidate) => candidate.name.trim().toLocaleLowerCase() === name,
+    ),
+  );
+  if (group.length < 2 || !group.includes(pick)) return null;
+  const items = group.map((member) => member.signals.item ?? "");
+  // Pinned, sponsored, or promoted entries break "the first story".
+  if (
+    items.some((text) =>
+      /\b(sponsored|promoted|pinned|advertisement)\b/i.test(text),
+    )
+  )
+    return null;
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const said = words(sentence.replace(/\{\{[^}]*\}\}/g, " "));
+  const label = new Set(words(pick.name));
+
+  // Ordinals.
+  for (let i = 0; i < said.length; i++) {
+    const k = ORDINALS[said[i]!];
+    if (k === undefined || label.has(said[i]!)) continue;
+    const next = said[i + 1] ?? "";
+    // "the second Add to cart" or "the first story"; anything else, such as
+    // "the first non-sponsored", is a qualifier code cannot check.
+    if (!label.has(next) && !ITEM_NOUNS.has(next)) return null;
+    const index = k === -1 ? group.length - 1 : k - 1;
+    return index < group.length ? group[index]! : null;
+  }
+
+  // Lowest or highest price.
+  const lowest = /\b(cheapest|lowest[- ]priced?|least expensive)\b/i.test(
+    sentence,
+  );
+  const highest = /\b(most expensive|highest[- ]priced?|priciest)\b/i.test(
+    sentence,
+  );
+  if (lowest || highest) {
+    const prices = items.map((text) => {
+      const found = new Set(
+        (text.match(MONEY) ?? []).map((value) =>
+          Number(value.replace(/[^\d.]/g, "")),
+        ),
+      );
+      return found.size === 1 ? [...found][0]! : NaN;
+    });
+    if (prices.some((price) => Number.isNaN(price))) return null;
+    const target = lowest ? Math.min(...prices) : Math.max(...prices);
+    const at = prices.flatMap((price, index) =>
+      price === target ? [index] : [],
+    );
+    return at.length === 1 ? group[at[0]!]! : null;
+  }
+
+  // A reference to the item: "for Grace Hopper", "on the post about DNS".
+  const reference = /\b(?:for|on|about|of|from|under|by)\s+(.+)$/i.exec(
+    sentence.replace(/\{\{[^}]*\}\}/g, " "),
+  );
+  if (!reference) return null;
+  const phrase = reference[0].toLocaleLowerCase();
+  // "Copy for LLM" is a label, not a reference.
+  if (
+    candidates.some((candidate) =>
+      candidate.name.toLocaleLowerCase().includes(phrase),
+    )
+  )
+    return null;
+  const wanted = words(reference[1]!).filter(
+    (word) =>
+      word.length > 1 &&
+      !FILLER_WORDS.has(word) &&
+      !ITEM_NOUNS.has(word) &&
+      !label.has(word),
+  );
+  if (!wanted.length) return null;
+  const matching = group.filter((member, index) => {
+    const own = new Set(words(member.name));
+    const text = new Set(words(items[index]!).filter((word) => !own.has(word)));
+    return wanted.every((word) => text.has(word));
+  });
+  return matching.length === 1 ? matching[0]! : null;
+}
+
 function sameIdentity(a: Candidate, b: Candidate): boolean {
   if (
     a.signals.nodeId !== b.signals.nodeId ||
@@ -971,6 +1102,15 @@ export async function resolveTarget(
     if (decision.selection.kind === "none") return unresolved("none");
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
+    const coded = resolveInCode(options.sentence, selected, candidates);
+    if (coded) {
+      gate = "resolved_in_code";
+      if (options.operation === "fill" && !coded.editable)
+        return unresolved("not_fillable");
+      if (!explicitRegionEvidence(options.sentence, coded))
+        return unresolved("ambiguous");
+      return await refresh(coded);
+    }
     const group = repeatedGroup(selected, candidates);
     const low =
       (decision.confidence !== null && decision.confidence < MIN_CONFIDENCE) ||

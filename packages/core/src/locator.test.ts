@@ -749,6 +749,54 @@ describe("locator", () => {
     ).toBe("resolved");
   });
 
+  it("resolves ordinals, prices, and row references in code", async () => {
+    const items = [
+      candidate(0, {
+        name: "Add to cart",
+        peers: ["Trail Light"],
+        signals: { path: "a", item: "Trail Light $49.00 Add to cart" },
+      }),
+      candidate(1, {
+        name: "Add to cart",
+        peers: ["Camp Mug"],
+        signals: { path: "b", item: "Camp Mug $12.00 Add to cart" },
+      }),
+      candidate(2, {
+        name: "Add to cart",
+        peers: ["Grace Hopper"],
+        signals: { path: "c", item: "Grace Hopper Mug $20.00 Add to cart" },
+      }),
+    ];
+    const { page } = recordedPage(items);
+    // The model always prefers the first card; code overrides it.
+    const model = resolver((options) =>
+      answer(options, "r0", { r0: 0.9, r1: 0.04, r2: 0.03, none: 0.03 }, 0.9),
+    );
+    const picked = async (sentence: string) => {
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence,
+      });
+      return result.kind === "resolved"
+        ? result.target.driverTarget().ref
+        : result.reason;
+    };
+    expect(await picked("click the second Add to cart button")).toBe(
+      "fresh-r1",
+    );
+    expect(await picked("click the last Add to cart button")).toBe("fresh-r2");
+    expect(await picked("click Add to cart for the cheapest product")).toBe(
+      "fresh-r1",
+    );
+    expect(await picked("click Add to cart for Grace Hopper")).toBe("fresh-r2");
+    // A reference no item holds, or a qualifier code cannot check, falls
+    // back to the model and the gate.
+    expect(await picked("click Add to cart for Wool Socks")).toBe("ambiguous");
+    expect(await picked("click the first non-sponsored Add to cart")).toBe(
+      "ambiguous",
+    );
+  });
+
   it("accepts a repeated member only under an opted-in policy", async () => {
     const items = [
       candidate(0, {

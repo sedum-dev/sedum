@@ -704,7 +704,7 @@ if (!window.__sedum) {
   function peers(
     element: Element,
     name: string,
-  ): { texts: string[]; contextComplete: boolean } {
+  ): { texts: string[]; contextComplete: boolean; item?: string } {
     // Some ranked tables place story metadata in the row immediately after
     // the ranked title row. Include the visible rank and title so "first
     // story comments" can be distinguished from the site navigation link.
@@ -750,6 +750,13 @@ if (!window.__sedum) {
       return { texts: rankedPeer ? [rankedPeer] : [], contextComplete: false };
     const result: string[] = [];
     if (rankedPeer) result.push(rankedPeer);
+    // The whole item's text, for resolving "the cheapest" or "for Grace
+    // Hopper" in code. Local only: it is never sent to the model.
+    const item = Array.from(
+      `${rankedPeer} ${publicText(region)}`.replace(/\s+/g, " ").trim(),
+    )
+      .slice(0, 300)
+      .join("");
     const context = itemContext(region);
     if (context.text && result.length < 2) result.push(context.text);
     const named = Array.from(
@@ -787,6 +794,7 @@ if (!window.__sedum) {
     return {
       texts: result,
       contextComplete: !rankedPeer && context.complete && !!context.text,
+      ...(item ? { item } : {}),
     };
   }
   function scan(operation: Operation): {
@@ -881,6 +889,7 @@ if (!window.__sedum) {
             nodeId,
             path: path(element),
             contextComplete: peerData.contextComplete,
+            ...(peerData.item ? { item: peerData.item } : {}),
           }),
         }),
       );
