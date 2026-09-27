@@ -113,6 +113,11 @@ export interface LocatorOptions {
   /** Redact sensitive page-derived text only at the Resolver boundary. */
   readonly projectText?: (text: string) => string;
   /**
+   * Experimental: act on the model's top pick even when its probability or
+   * lead is low, so the locator gives up only when the model answers none.
+   */
+  readonly acceptLowConfidence?: boolean;
+  /**
    * Experimental: when to accept the model's pick among repeated elements
    * (same name or destination) whose sentence words do not single it out.
    * Unset keeps the lexical rule: the sentence must name the member.
@@ -129,6 +134,11 @@ export interface RepeatedMemberPolicy {
    * Pricing link, when the sentence names only that text.
    */
   readonly duplicateLinks?: boolean;
+  /**
+   * Act on the model's pick among repeated elements with no further gate:
+   * no sentence evidence, no group or member confidence, no narrowing call.
+   */
+  readonly modelPick?: boolean;
   /** Accept the model's pick at or above this probability and lead. */
   readonly trust?: {
     readonly minProbability: number;
@@ -420,6 +430,7 @@ function repeatedMemberAccepted(
   decision: ResolverDecision,
 ): string | null {
   if (!policy) return null;
+  if (policy.modelPick) return "repeated_member_model_pick";
   const href = member.signals.href?.trim();
   if (
     policy.sameDestination &&
@@ -1118,7 +1129,11 @@ export async function resolveTarget(
     const low =
       (decision.confidence !== null && decision.confidence < MIN_CONFIDENCE) ||
       comparableLead(decision, selected.ref) < MIN_LEAD;
-    if (low) {
+    if (low && group.length >= 2 && options.repeatedMember?.modelPick)
+      gate = "repeated_member_model_pick";
+    else if (low && group.length < 2 && options.acceptLowConfidence)
+      gate = "low_confidence_accepted";
+    else if (low) {
       gate = "low_confidence_or_margin";
       if (group.length < 2) return unresolved("ambiguous");
       const groupProbability = group.reduce(

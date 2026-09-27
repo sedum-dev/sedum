@@ -35,6 +35,8 @@ const { values: args } = parseArgs({
     trust: { type: "string" },
     "same-destination": { type: "boolean", default: false },
     "duplicate-links": { type: "boolean", default: false },
+    "model-pick": { type: "boolean", default: false },
+    "accept-low-confidence": { type: "boolean", default: false },
   },
 });
 
@@ -42,6 +44,7 @@ function repeatedMemberPolicy() {
   const policy = {};
   if (args["same-destination"]) policy.sameDestination = true;
   if (args["duplicate-links"]) policy.duplicateLinks = true;
+  if (args["model-pick"]) policy.modelPick = true;
   if (args.trust) {
     const [minProbability, minLead] = args.trust.split(",").map(Number);
     if (!(minProbability >= 0 && minLead >= 0))
@@ -215,6 +218,7 @@ async function runCase(session, base, resolver, testCase) {
         sentence: testCase.sentence,
         timeoutMs: 60_000,
         ...(repeatedMember ? { repeatedMember } : {}),
+        ...(args["accept-low-confidence"] ? { acceptLowConfidence: true } : {}),
       },
     );
     const observation =
