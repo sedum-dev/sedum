@@ -69,6 +69,11 @@ export function loadSuites(root) {
         problems.push(`${label}: missing sentence`);
       if (!Array.isArray(testCase.tags) || testCase.tags.length === 0)
         problems.push(`${label}: needs at least one tag`);
+      if (
+        testCase.excluded !== undefined &&
+        (typeof testCase.excluded !== "string" || !testCase.excluded.trim())
+      )
+        problems.push(`${label}: excluded must be a reason`);
       if (Array.isArray(testCase.gold)) {
         if (testCase.gold.length === 0)
           problems.push(`${label}: gold list is empty`);
@@ -138,6 +143,11 @@ export function loadRealSuites(realRoot, store) {
         problems.push(`${label}: missing sentence`);
       if (!Array.isArray(testCase.tags) || testCase.tags.length === 0)
         problems.push(`${label}: needs at least one tag`);
+      if (
+        testCase.excluded !== undefined &&
+        (typeof testCase.excluded !== "string" || !testCase.excluded.trim())
+      )
+        problems.push(`${label}: excluded must be a reason`);
       if (Array.isArray(testCase.gold)) {
         if (testCase.gold.length === 0)
           problems.push(`${label}: gold list is empty`);

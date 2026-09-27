@@ -259,6 +259,11 @@ function report(summary, results) {
     `  false rejects           ${summary.outcomes.false_reject}`,
     `  model calls             ${summary.usage.calls}, ${summary.usage.inputTokens} input tokens, ${summary.usage.costUsd === null ? "unknown" : "$" + summary.usage.costUsd.toFixed(5)}`,
     "",
+    "Split (answerable, operational failures left out):",
+    `  extraction              ${percent(summary.split.extraction)}  (${summary.split.offered}/${summary.split.cases} offered to the model)`,
+    `  choice                  ${percent(summary.split.choice)}  (acted on the gold when it was offered)`,
+    `  top pick                ${percent(summary.split.topPick)}  (model ranked the gold first; the gap to choice is the gate)`,
+    "",
     "Failures by stage:",
     ...Object.entries(summary.stages).map(
       ([stage, n]) => `  ${stage.padEnd(28)} ${n}`,
@@ -304,11 +309,14 @@ function report(summary, results) {
   return lines.join("\n");
 }
 
-const cases = loadCases();
+const loaded = loadCases();
 if (args.validate) {
-  console.log(`${cases.length} cases are valid.`);
+  console.log(`${loaded.length} cases are valid.`);
   process.exit(0);
 }
+// A case judged unfair stays in its file with the reason, out of the score.
+const excluded = loaded.filter((testCase) => testCase.excluded);
+const cases = loaded.filter((testCase) => !testCase.excluded);
 if (cases.length === 0) throw new Error("No cases match the filters.");
 const { resolver, cache } = await makeResolver();
 const { server, base } = real
@@ -340,6 +348,12 @@ if (skipped.length)
       .concat(skipped.map((item) => `  ${item.case.id}: ${item.skipped}`))
       .join("\n"),
   );
+if (excluded.length)
+  console.log(
+    [`\nExcluded ${excluded.length} case(s) from the score:`]
+      .concat(excluded.map((item) => `  ${item.id}: ${item.excluded}`))
+      .join("\n"),
+  );
 if (cache)
   console.log(`\nReply cache: ${cache.hits} hits, ${cache.misses} misses`);
 const out =
@@ -352,6 +366,15 @@ const out =
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(
   out,
-  JSON.stringify({ summary, results: scored, skipped }, null, 2) + "\n",
+  JSON.stringify(
+    {
+      summary,
+      results: scored,
+      skipped,
+      excluded: excluded.map(({ id, excluded: reason }) => ({ id, reason })),
+    },
+    null,
+    2,
+  ) + "\n",
 );
 console.log(`\nResults: ${out}`);

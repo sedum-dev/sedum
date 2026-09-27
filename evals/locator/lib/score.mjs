@@ -108,6 +108,36 @@ function rate(part, whole) {
   return whole === 0 ? null : part / whole;
 }
 
+/**
+ * Success on answerable cases mixes two layers, so it is split in two.
+ * Extraction: the share of answerable cases where a gold element was offered
+ * to the model at all. Choice: of those, the share where the locator acted on
+ * it; top pick is the share where the model ranked a gold element first, so
+ * the gap between top pick and choice is the gate. Operational failures are
+ * left out of both. Success is roughly extraction times choice.
+ */
+export function split(results) {
+  const scored = results.filter(
+    (item) =>
+      Array.isArray(item.case.gold) &&
+      !item.score.stage?.startsWith("operational:"),
+  );
+  const seen = scored.filter((item) => item.score.goldSeen);
+  return {
+    cases: scored.length,
+    offered: seen.length,
+    extraction: rate(seen.length, scored.length),
+    choice: rate(
+      seen.filter((item) => item.score.outcome === "correct").length,
+      seen.length,
+    ),
+    topPick: rate(
+      seen.filter((item) => item.score.goldTop).length,
+      seen.length,
+    ),
+  };
+}
+
 /** Aggregate scored results into the headline metrics and breakdowns. */
 export function summarize(results) {
   const count = (items, outcome) =>
@@ -161,6 +191,7 @@ export function summarize(results) {
       unanswerable.length,
     ),
     stages,
+    split: split(results),
     tags: Object.fromEntries(
       [...byTag.entries()]
         .sort(([a], [b]) => a.localeCompare(b))

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { cachedResolver, lexicalResolver } from "./resolvers.mjs";
-import { scoreCase, summarize } from "./score.mjs";
+import { scoreCase, split, summarize } from "./score.mjs";
 
 const option = (id, gold, name = id) => ({
   id,
@@ -118,6 +118,31 @@ describe("summarize", () => {
       abstainRate: 0.5,
       stages: { rank: 3 },
       tags: { x: { cases: 2, ok: 1, wrong: 1 } },
+    });
+  });
+});
+
+describe("split", () => {
+  it("separates extraction from choice and leaves operational failures out", () => {
+    const item = (outcome, stage, goldSeen, goldTop) => ({
+      case: { gold: ["a"] },
+      score: { outcome, stage, goldSeen, goldTop },
+    });
+    expect(
+      split([
+        item("correct", null, true, true),
+        item("false_reject", "gate", true, true),
+        item("false_reject", "rank", true, false),
+        item("false_reject", "recall", false, false),
+        item("false_reject", "operational:stale", true, true),
+        { case: { gold: "none" }, score: { outcome: "correct_abstain" } },
+      ]),
+    ).toEqual({
+      cases: 4,
+      offered: 3,
+      extraction: 0.75,
+      choice: 1 / 3,
+      topPick: 2 / 3,
     });
   });
 });

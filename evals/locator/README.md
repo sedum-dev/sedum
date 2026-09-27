@@ -106,6 +106,39 @@ Each failure is also attributed to a stage:
 `indistinguishable` marks a gold element whose projection (tag, role, name,
 peers) is identical to another option's, so no model could tell them apart.
 
+### Split score
+
+Success on answerable cases mixes two layers, so it is split in two:
+
+- **Extraction**: the share of answerable cases where a gold element was
+  offered to the model at all (`goldSeen`). Misses are `recall` failures and
+  point at the extractor.
+- **Choice**: of the cases where a gold element was offered, the share where
+  the locator acted on it. Misses are `rank` (the model preferred another
+  option) and `gate` (the model ranked the gold first but the confidence gate
+  rejected it). **Top pick** is the share where the model ranked a gold
+  element first; the gap between top pick and choice is the gate.
+
+Operational failures are left out of both. Success is roughly extraction
+times choice. Choice is the number to hold to a high target; extraction on
+markup such as clickable `div`s or closed shadow roots is expected to stay
+below it. Every run prints the split, `summary.split` holds it, and
+`node evals/locator/triage.mjs split <run.json>...` computes it for stored
+runs.
+
+### Excluding a case
+
+A case judged unfair (for example, a real site changed so the sentence no
+longer describes anything on the captured page) is not deleted. Give it an
+`excluded` field with the reason:
+
+```json
+{ "id": "hn-hide-anthropic", "excluded": "story not on the 2026-09-26 capture", ... }
+```
+
+It stays in the file and is still validated, but runs leave it out of the
+score and list it with its reason.
+
 ## Resolvers
 
 - `lexical` scores word overlap between the sentence and each candidate. It
