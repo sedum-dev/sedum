@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+run_step() {
+  local name="$1"
+  shift
+  local started=$SECONDS
+  printf '\n==> %s\n' "$name"
+  "$@"
+  printf '<== %s (%ss)\n' "$name" "$((SECONDS - started))"
+}
+
+check_node() {
+  node <<'NODE'
+const [major, minor] = process.versions.node.split(".").map(Number);
+if (major < 20 || (major === 20 && minor < 19)) {
+  console.error(`Node.js ${process.versions.node} is too old; Sedum requires Node.js 20.19 or newer.`);
+  process.exit(1);
+}
+console.log(`Node.js ${process.versions.node}`);
+NODE
+}
+
+enable_pinned_pnpm() {
+  corepack enable
+  local expected actual
+  expected="$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+  actual="$(corepack pnpm --version)"
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'Expected pnpm %s, found %s.\n' "$expected" "$actual" >&2
+    return 1
+  fi
+  printf 'pnpm %s\n' "$actual"
+}
+
+install_dependencies() {
+  corepack pnpm install --frozen-lockfile
+}
+
+build_workspace() {
+  corepack pnpm build
+}
+
+ensure_chromium() {
+  if node --input-type=module -e '
+    import("./packages/core/dist/index.js")
+      .then(({ findBrowserExecutable }) => process.exit(findBrowserExecutable("chromium") ? 0 : 1))
+      .catch(() => process.exit(1));
+  '; then
+    printf 'Managed Chromium is already installed.\n'
+    return
+  fi
+
+  node packages/cli/dist/cli.js browsers install chromium --with-deps
+}
+
+run_step 'Check Node.js' check_node
+run_step 'Enable pinned pnpm' enable_pinned_pnpm
+run_step 'Install workspace dependencies' install_dependencies
+run_step 'Build the workspace' build_workspace
+run_step 'Install Chromium and Linux dependencies when missing' ensure_chromium
+
+printf '\nOrb setup complete.\n'

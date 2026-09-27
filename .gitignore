@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .turbo/
+.amp/portals/*
 .sedum/
 .env
 *.tsbuildinfo
