@@ -794,7 +794,9 @@ if (!window.__sedum) {
     return {
       texts: result,
       contextComplete: !rankedPeer && context.complete && !!context.text,
-      ...(item ? { item } : {}),
+      // An item holding nothing but controls, such as the action bar of a
+      // comment with nested replies, is only part of the real item.
+      ...(item && (context.text || rankedPeer) ? { item } : {}),
     };
   }
   function scan(operation: Operation): {

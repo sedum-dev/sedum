@@ -658,6 +658,8 @@ function resolveInCode(
   );
   if (group.length < 2 || !group.includes(pick)) return null;
   const items = group.map((member) => member.signals.item ?? "");
+  // Prices and references need every member's whole item to compare.
+  const complete = group.every((member) => !!member.signals.item);
   // Pinned, sponsored, or promoted entries break "the first story".
   if (
     items.some((text) =>
@@ -689,6 +691,7 @@ function resolveInCode(
   const highest = /\b(most expensive|highest[- ]priced?|priciest)\b/i.test(
     sentence,
   );
+  if ((lowest || highest) && !complete) return null;
   if (lowest || highest) {
     const prices = items.map((text) => {
       const found = new Set(
@@ -710,7 +713,7 @@ function resolveInCode(
   const reference = /\b(?:for|on|about|of|from|under|by)\s+(.+)$/i.exec(
     sentence.replace(/\{\{[^}]*\}\}/g, " "),
   );
-  if (!reference) return null;
+  if (!reference || !complete) return null;
   const phrase = reference[0].toLocaleLowerCase();
   // "Copy for LLM" is a label, not a reference.
   if (
