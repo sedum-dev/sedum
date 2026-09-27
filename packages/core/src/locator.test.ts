@@ -914,7 +914,6 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, edit, {
         operation: "click",
-        repeatedMember: {},
         sentence: "click the Edit button",
         repeatedMember: { trust },
       }),
