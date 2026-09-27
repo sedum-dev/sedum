@@ -24,6 +24,18 @@ console.log(`Node.js ${process.versions.node}`);
 NODE
 }
 
+ensure_swamp() {
+  export PATH="$HOME/.local/bin:$PATH"
+  if command -v swamp >/dev/null 2>&1; then
+    swamp version
+    return
+  fi
+
+  curl -fsSL https://swamp-club.com/install.sh \
+    | SWAMP_NONINTERACTIVE=1 sh -s -- --destination="$HOME/.local/bin"
+  swamp version
+}
+
 enable_pinned_pnpm() {
   corepack enable
   local expected actual
@@ -58,6 +70,7 @@ ensure_chromium() {
 }
 
 run_step 'Check Node.js' check_node
+run_step 'Install Swamp CLI' ensure_swamp
 run_step 'Enable pinned pnpm' enable_pinned_pnpm
 run_step 'Install workspace dependencies' install_dependencies
 run_step 'Build the workspace' build_workspace
