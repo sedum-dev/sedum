@@ -717,7 +717,6 @@ if (!window.__sedum) {
   function locationOf(
     element: Element,
     heading: { text: string; root: Element | null },
-    section = "",
   ): string {
     const marks: string[] = [];
     let root: Element | null = null;
@@ -737,13 +736,7 @@ if (!window.__sedum) {
     // footer, would mislabel the control.
     const parts = [
       kept.join(", "),
-      // The two innermost section labels ("Most popular › New and popular")
-      // say where a control sits better than the last heading above it.
-      section
-        ? section.split(" › ").slice(0, 2).join(" › ")
-        : heading.root === root
-          ? heading.text
-          : "",
+      heading.root === root ? heading.text : "",
     ].filter(Boolean);
     return Array.from(parts.join(" · ")).slice(0, PEER_LIMIT).join("");
   }
@@ -1147,8 +1140,8 @@ if (!window.__sedum) {
         nodeIds.set(element, nodeId);
       }
       const peerData = peers(element, name);
+      const location = locationOf(element, heading);
       const section = sectionOf(element, outline);
-      const location = locationOf(element, heading, section);
       owned.set(element, {
         old: element.getAttribute("data-sedum-ref"),
         ref,
