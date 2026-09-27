@@ -39,6 +39,12 @@ const { values: args } = parseArgs({
     "model-pick": { type: "boolean", default: false },
     "accept-low-confidence": { type: "boolean", default: false },
     "no-section-match": { type: "boolean", default: false },
+    // Experimental locator flags (see LocatorOptions).
+    "no-name-hints": { type: "boolean", default: false },
+    "no-verify-items": { type: "boolean", default: false },
+    "no-code-fallback": { type: "boolean", default: false },
+    // Reply cache file; defaults to <store>/replies or replies/<model>.json.
+    replies: { type: "string" },
   },
 });
 
@@ -92,15 +98,19 @@ async function makeResolver() {
       await import("../../packages/provider-typesafe/dist/index.js");
     const model = process.env.TYPESAFE_DEFAULT_MODEL ?? "jev-latest";
     const inner = args.offline
-      ? { choose: () => Promise.reject(new Error("offline")) }
+      ? {
+          choose: () => Promise.reject(new Error("offline")),
+          verifyItems: () => Promise.reject(new Error("offline")),
+        }
       : new TypeSafeAdapter();
     const cache = cachedResolver(
       inner,
       // Real-site replies quote page text, so they stay in the store.
-      join(
-        real ? join(store, "replies") : join(root, "replies"),
-        `${model}.json`,
-      ),
+      args.replies ??
+        join(
+          real ? join(store, "replies") : join(root, "replies"),
+          `${model}.json`,
+        ),
       { model, offline: args.offline },
     );
     return { resolver: cache, cache };
@@ -170,8 +180,40 @@ async function markTargets(page, targets) {
 }
 
 /** Record each model decision with the gold label of every offered option. */
-function recording(inner, page, decisions) {
+function recording(inner, page, decisions, itemChecks = []) {
   return {
+    ...(typeof inner.verifyItems === "function"
+      ? {
+          async verifyItems(sentence, items, options) {
+            const golds = await goldOf(
+              page,
+              items.map((item) => item.id),
+            );
+            let verdict;
+            try {
+              verdict = await inner.verifyItems(sentence, items, options);
+            } catch (error) {
+              // Offline replays report the questions they could not answer.
+              itemChecks.push({
+                error: String(error?.message ?? error).slice(0, 80),
+                items: items.map((item, index) => ({
+                  gold: golds[index],
+                  text: item.text.slice(0, 80),
+                })),
+              });
+              throw error;
+            }
+            itemChecks.push({
+              items: items.map((item, index) => ({
+                gold: golds[index],
+                text: item.text.slice(0, 80),
+                score: verdict.scores[item.id],
+              })),
+            });
+            return verdict;
+          },
+        }
+      : {}),
     async choose(sentence, candidates, options) {
       const offered = candidates.options.filter(
         (option) => option.kind === "candidate",
@@ -215,9 +257,10 @@ async function runCase(session, base, resolver, testCase) {
       if (failure) return { case: testCase, skipped: failure };
     }
     const decisions = [];
+    const itemChecks = [];
     const result = await resolveTarget(
       page,
-      recording(resolver, page, decisions),
+      recording(resolver, page, decisions, itemChecks),
       {
         operation: testCase.op,
         sentence: testCase.sentence,
@@ -225,6 +268,9 @@ async function runCase(session, base, resolver, testCase) {
         ...(repeatedMember ? { repeatedMember } : {}),
         ...(args["accept-low-confidence"] ? { acceptLowConfidence: true } : {}),
         ...(args["no-section-match"] ? { sectionMatch: false } : {}),
+        ...(args["no-name-hints"] ? { nameHints: false } : {}),
+        ...(args["no-verify-items"] ? { verifyItems: false } : {}),
+        ...(args["no-code-fallback"] ? { codeFallback: false } : {}),
       },
     );
     const observation =
@@ -246,6 +292,7 @@ async function runCase(session, base, resolver, testCase) {
         gate: result.diagnostic.gate ?? null,
         candidateCount: result.diagnostic.candidateCount,
         topOptions: result.diagnostic.topOptions,
+        ...(itemChecks.length ? { itemChecks } : {}),
       },
       score: scoreCase(testCase, observation),
       calls: result.calls,

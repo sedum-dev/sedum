@@ -15,6 +15,7 @@ import {
 } from "./page-bridge.js";
 import {
   CANDIDATE_LIMIT,
+  NAME_LIMIT,
   PAGE_PROTOCOL,
   codePoints,
   projectCandidates,
@@ -25,6 +26,7 @@ import {
 } from "./page-protocol.js";
 import {
   unknownCostCall,
+  type ItemVerdict,
   type ProviderCall,
   type Resolver,
   type ResolverDecision,
@@ -131,6 +133,44 @@ export interface LocatorOptions {
    * hold every qualifying word. On unless set to false.
    */
   readonly sectionMatch?: boolean;
+  /**
+   * Show the model what a person sees that the accessible name leaves out
+   * (visible text beside an aria-label, a placeholder, a logo, an icon's
+   * kind). On unless set to false.
+   */
+  readonly nameHints?: boolean;
+  /**
+   * When the sentence refers to an item ("on the post about DNS") and code
+   * cannot match it, ask the Resolver one yes/no question per same-name
+   * member's item and act on a clear winner. Needs Resolver.verifyItems.
+   * On unless set to false.
+   */
+  readonly verifyItems?: boolean;
+  /**
+   * Looser code rules for ordinals and item references (counts masked in
+   * names, prepositions ignored), also applied when the model answers none.
+   * On unless set to false.
+   */
+  readonly codeFallback?: boolean;
+}
+
+/** Counts do not tell members apart: "306 comments" and "12 comments". */
+function maskedName(name: string): string {
+  return name
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\d[\d.,]*[km]?(?=\s+\p{L})/gu, "#");
+}
+
+function hintedCandidate(candidate: Candidate): Candidate {
+  const hint = candidate.signals.nameHint;
+  if (!hint) return candidate;
+  const points = Array.from(`${candidate.name} (${hint})`);
+  const name =
+    points.length <= NAME_LIMIT
+      ? points.join("")
+      : points.slice(0, NAME_LIMIT - 1).join("") + "…";
+  return { ...candidate, name };
 }
 
 export interface RepeatedMemberPolicy {
@@ -679,14 +719,17 @@ function resolveInCode(
   sentence: string,
   pick: Candidate,
   candidates: readonly Candidate[],
+  loose = false,
 ): Candidate | null {
   // Same visible name only, and within the region the sentence names.
-  const name = pick.name.trim().toLocaleLowerCase();
+  const key = (candidate: Candidate) =>
+    loose
+      ? maskedName(candidate.name)
+      : candidate.name.trim().toLocaleLowerCase();
+  const name = key(pick);
   const group = inNamedRegion(
     sentence,
-    candidates.filter(
-      (candidate) => candidate.name.trim().toLocaleLowerCase() === name,
-    ),
+    candidates.filter((candidate) => key(candidate) === name),
   );
   if (group.length < 2 || !group.includes(pick)) return null;
   const items = group.map((member) => member.signals.item ?? "");
@@ -710,8 +753,12 @@ function resolveInCode(
     if (k === undefined || label.has(said[i]!)) continue;
     const next = said[i + 1] ?? "";
     // "the second Add to cart" or "the first story"; anything else, such as
-    // "the first non-sponsored", is a qualifier code cannot check.
-    if (!label.has(next) && !ITEM_NOUNS.has(next)) return null;
+    // "the first non-sponsored", is a qualifier code cannot check. Loosely,
+    // an ordinal inside a reference ("first released in 1993") is skipped.
+    if (!label.has(next) && !ITEM_NOUNS.has(next)) {
+      if (loose) continue;
+      return null;
+    }
     // "the first story" alone does not say which of the story's controls.
     if (!label.has(next) && !said.some((word) => label.has(word))) return null;
     const index = k === -1 ? group.length - 1 : k - 1;
@@ -747,7 +794,13 @@ function resolveInCode(
   const reference = /\b(?:for|on|about|of|from|under|by)\s+(.+)$/i.exec(
     sentence.replace(/\{\{[^}]*\}\}/g, " "),
   );
-  if (!reference || !complete) return null;
+  // Loosely, members without item text (a sidebar copy) are left out, as
+  // long as at least two members can be compared.
+  if (
+    !reference ||
+    (!complete && !(loose && items.filter((text) => !!text).length >= 2))
+  )
+    return null;
   const phrase = reference[0].toLocaleLowerCase();
   // "Copy for LLM" is a label, not a reference.
   if (
@@ -761,15 +814,123 @@ function resolveInCode(
       word.length > 1 &&
       !FILLER_WORDS.has(word) &&
       !ITEM_NOUNS.has(word) &&
-      !label.has(word),
+      !label.has(word) &&
+      !(loose && REFERENCE_WORDS.has(word)),
   );
   if (!wanted.length) return null;
   const matching = group.filter((member, index) => {
+    if (!items[index]) return false;
     const own = new Set(words(member.name));
     const text = new Set(words(items[index]!).filter((word) => !own.has(word)));
     return wanted.every((word) => text.has(word));
   });
   return matching.length === 1 ? matching[0]! : null;
+}
+
+/** "Go to comments" is named by "the comments". */
+const NAVIGATION_VERBS = new Set("go view see show visit".split(" "));
+
+/**
+ * The one repeated control the sentence names outright, counts ignored:
+ * "Share" in "click Share on the post about ...", "# Go to comments" in "open
+ * the comments for ...". Every content word of its name is in the sentence,
+ * and no other stated name is longer. Null unless exactly one such name has
+ * at least two members.
+ */
+function statedGroupPick(
+  sentence: string,
+  candidates: readonly Candidate[],
+): Candidate | null {
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const said = new Set(words(sentence.replace(/\{\{[^}]*\}\}/g, " ")));
+  const content = (name: string) =>
+    words(name.replace("#", " ")).filter(
+      (word) => !FILLER_WORDS.has(word) && !NAVIGATION_VERBS.has(word),
+    );
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const key = maskedName(candidate.name);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let best: { key: string; size: number; pick: Candidate }[] = [];
+  for (const candidate of candidates) {
+    if (candidate.signals.nameTruncated) continue;
+    const key = maskedName(candidate.name);
+    const own = content(key);
+    if (!own.length || !own.every((word) => said.has(word))) continue;
+    if ((counts.get(key) ?? 0) < 2) continue;
+    if (best.length && own.length < best[0]!.size) continue;
+    if (best.length && own.length > best[0]!.size) best = [];
+    if (!best.some((entry) => entry.key === key))
+      best.push({ key, size: own.length, pick: candidate });
+  }
+  return best.length === 1 ? best[0]!.pick : null;
+}
+
+/** Whether every content word of the element's name is in the sentence. */
+function nameStated(sentence: string, candidate: Candidate): boolean {
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const said = new Set(words(sentence));
+  const own = words(maskedName(candidate.name).replace("#", " ")).filter(
+    (word) => !FILLER_WORDS.has(word) && !NAVIGATION_VERBS.has(word),
+  );
+  return own.length > 0 && own.every((word) => said.has(word));
+}
+
+/**
+ * After the model answers none, or picks an element the sentence does not
+ * name: the stated repeated control, resolved by ordinal, price, or item
+ * reference in code. Null unless exactly one member qualifies.
+ */
+function codeAfterNone(
+  sentence: string,
+  candidates: readonly Candidate[],
+): Candidate | null {
+  const pick = statedGroupPick(sentence, candidates);
+  return pick ? resolveInCode(sentence, pick, candidates, true) : null;
+}
+
+const REFERENCE_WORDS = new Set(
+  "about from by under with in is was were that which whose where".split(" "),
+);
+
+const REFERENCE_PHRASE =
+  /\b(?:on|for|about|of)\s+(?:the|a|an|this|that)\s+(.+)$/i;
+const ORDINAL_OR_PRICE =
+  /\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|\d+(?:st|nd|rd|th)|cheapest|lowest|highest|most expensive|least expensive|priciest)\b/i;
+const MAX_VERIFIED_ITEMS = 40;
+const ITEM_TEXT_LIMIT = 300;
+
+/**
+ * Members of the pick's same-name group worth one yes/no question each, when
+ * the sentence refers to an item and code could not match it.
+ */
+function itemQuestionGroup(
+  sentence: string,
+  pick: Candidate,
+  candidates: readonly Candidate[],
+): Candidate[] | null {
+  const text = sentence.replace(/\{\{[^}]*\}\}/g, " ");
+  const reference = REFERENCE_PHRASE.exec(text);
+  if (!reference || ORDINAL_OR_PRICE.test(reference[1]!)) return null;
+  const phrase = reference[0].toLocaleLowerCase();
+  if (
+    candidates.some((candidate) =>
+      candidate.name.toLocaleLowerCase().includes(phrase),
+    )
+  )
+    return null;
+  const name = maskedName(pick.name);
+  const group = inNamedRegion(
+    sentence,
+    candidates.filter((candidate) => maskedName(candidate.name) === name),
+  );
+  if (!group.includes(pick) || !pick.signals.item) return null;
+  const members = group.filter((member) => !!member.signals.item?.trim());
+  if (members.length < 2 || members.length > MAX_VERIFIED_ITEMS) return null;
+  return members;
 }
 
 const SECTION_NOUNS = new Set(
@@ -953,6 +1114,9 @@ export async function resolveTarget(
 ): Promise<LocatorResult> {
   const calls: ProviderCall[] = [];
   const repeatedMember = options.repeatedMember ?? { modelPick: true };
+  const nameHints = options.nameHints !== false;
+  const verifyItems = options.verifyItems !== false;
+  const codeFallback = options.codeFallback !== false;
   let candidateCount = 0;
   let rounds = 0;
   let top: LocatorOptionDiagnostic[] = [];
@@ -1126,7 +1290,9 @@ export async function resolveTarget(
           {
             complete: true,
             options: [
-              ...projectCandidates(requestOptions(pool)).map((candidate) => ({
+              ...projectCandidates(
+                requestOptions(nameHints ? pool.map(hintedCandidate) : pool),
+              ).map((candidate) => ({
                 kind: "candidate" as const,
                 candidate: options.projectText
                   ? {
@@ -1212,16 +1378,38 @@ export async function resolveTarget(
       return unresolved("stale");
     top = topOptions(decision, finalists);
     confidence = decision.confidence;
-    if (decision.selection.kind === "none") return unresolved("none");
+    if (decision.selection.kind === "none") {
+      // Counting and item references are code's job even when the model
+      // found nothing: "click View Product on the third product".
+      const fallback = codeFallback
+        ? codeAfterNone(options.sentence, candidates)
+        : null;
+      if (!fallback) return unresolved("none");
+      gate = "resolved_in_code_after_none";
+      if (options.operation === "fill" && !fallback.editable)
+        return unresolved("not_fillable");
+      if (!explicitRegionEvidence(options.sentence, fallback))
+        return unresolved("none");
+      return await refresh(fallback);
+    }
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
+    // The pick may be the item's title while the sentence names a control
+    // on it ("click Share on the post about ..."): anchor on the named one.
+    const anchor =
+      codeFallback && !nameStated(options.sentence, selected)
+        ? (statedGroupPick(options.sentence, candidates) ?? selected)
+        : selected;
+    const inCode = (pick: Candidate) =>
+      resolveInCode(options.sentence, pick, candidates) ??
+      (codeFallback
+        ? resolveInCode(options.sentence, anchor, candidates, true)
+        : null);
     const bySection =
-      options.sectionMatch !== false &&
-      !resolveInCode(options.sentence, selected, candidates)
+      options.sectionMatch !== false && !inCode(selected)
         ? resolveBySection(options.sentence, selected, candidates)
         : null;
-    const coded =
-      bySection ?? resolveInCode(options.sentence, selected, candidates);
+    const coded = bySection ?? inCode(selected);
     if (coded) {
       gate = bySection ? "resolved_by_section" : "resolved_in_code";
       if (options.operation === "fill" && !coded.editable)
@@ -1229,6 +1417,27 @@ export async function resolveTarget(
       if (!explicitRegionEvidence(options.sentence, coded))
         return unresolved("ambiguous");
       return await refresh(coded);
+    }
+    const itemMembers =
+      verifyItems && resolver.verifyItems
+        ? itemQuestionGroup(
+            options.sentence,
+            nameStated(options.sentence, selected)
+              ? selected
+              : (statedGroupPick(options.sentence, candidates) ?? selected),
+            candidates,
+          )
+        : null;
+    if (itemMembers) {
+      const verified = await verifyByItems(itemMembers);
+      if (verified) {
+        gate = "resolved_by_items";
+        if (options.operation === "fill" && !verified.editable)
+          return unresolved("not_fillable");
+        if (!explicitRegionEvidence(options.sentence, verified))
+          return unresolved("ambiguous");
+        return await refresh(verified);
+      }
     }
     const group = repeatedGroup(selected, candidates);
     const low =
@@ -1338,6 +1547,54 @@ export async function resolveTarget(
       return unresolved("ambiguous");
     }
     return await refresh(selected);
+
+    /** One yes/no question per member's item; a clear winner or null. */
+    async function verifyByItems(
+      members: readonly Candidate[],
+    ): Promise<Candidate | null> {
+      ensureActive();
+      const project = options.projectText ?? ((text: string) => text);
+      let verdict: ItemVerdict;
+      try {
+        verdict = await resolver.verifyItems!(
+          options.sentence,
+          members.map((member) => ({
+            id: member.ref,
+            text: project(
+              Array.from(member.signals.item!.replace(/\s+/g, " ").trim())
+                .slice(0, ITEM_TEXT_LIMIT)
+                .join(""),
+            ),
+          })),
+          { signal: controller.signal },
+        );
+      } catch (error) {
+        calls.push(unknownCostCall(error));
+        ensureActive();
+        return null;
+      }
+      calls.push(verdict.call);
+      ensureActive();
+      const ranked = members
+        .map((member) => ({
+          member,
+          score: verdict.scores[member.ref],
+        }))
+        .filter(
+          (entry): entry is { member: Candidate; score: number } =>
+            typeof entry.score === "number" &&
+            Number.isFinite(entry.score) &&
+            entry.score >= 0 &&
+            entry.score <= 1,
+        )
+        .sort((a, b) => b.score - a.score);
+      if (ranked.length !== members.length) return null;
+      const [best, second] = ranked;
+      if (!best || best.score < 0.6 || best.score - (second?.score ?? 0) < 0.2)
+        return null;
+      if (!sameVersion(await pageVersion(page), source.version)) return null;
+      return best.member;
+    }
 
     async function refresh(
       selectedCandidate: Candidate,

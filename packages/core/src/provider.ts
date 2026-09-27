@@ -75,12 +75,33 @@ export interface JudgeDecision {
   readonly call: ProviderCall;
 }
 
+/** One repeated member's surrounding item text, for per-item verification. */
+export interface ResolverItem {
+  readonly id: string;
+  readonly text: string;
+}
+
+export interface ItemVerdict {
+  /** Per item id: the probability that the sentence refers to that item. */
+  readonly scores: Readonly<Record<string, number>>;
+  readonly call: ProviderCall;
+}
+
 export interface Resolver {
   choose(
     sentence: string,
     candidates: ResolverCandidates,
     options?: ProviderCallOptions,
   ): Promise<ResolverDecision>;
+  /**
+   * Experimental: judge each item independently ("is this the one the
+   * sentence describes?"), one yes/no question per item in one request.
+   */
+  verifyItems?(
+    sentence: string,
+    items: readonly ResolverItem[],
+    options?: ProviderCallOptions,
+  ): Promise<ItemVerdict>;
 }
 
 export interface Judge {

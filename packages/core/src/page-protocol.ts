@@ -61,6 +61,12 @@ export interface Candidate {
     readonly item?: string;
     /** Local: labels of the containers around the control, innermost first. Never projected. */
     readonly section?: string;
+    /**
+     * Local: what a person sees that the name leaves out (visible text beside
+     * an aria-label, placeholder, logo, icon kind). Projected only when the
+     * locator's nameHints option is on.
+     */
+    readonly nameHint?: string;
     /** Local signal: the model sees only a visibly shortened accessible name. */
     readonly nameTruncated?: boolean;
     /** Full name for same-target checks; never included in provider projection. */

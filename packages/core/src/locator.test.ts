@@ -1288,3 +1288,198 @@ describe("locator", () => {
     expect(idle.choose).not.toHaveBeenCalled();
   });
 });
+
+describe("name hints, item checks, and code fallback", () => {
+  const post = (index: number, title: string, name = "Share") =>
+    candidate(index, {
+      name,
+      signals: {
+        path: `body/article:${index}/button`,
+        item: `${title} u/author ${index} hr. ago`,
+      },
+    });
+
+  it("projects name hints by default and not when turned off", async () => {
+    const items = [
+      candidate(0, {
+        name: "Stripe Assistant",
+        signals: { path: "body/a:0", nameHint: 'shows "Ask AI"' },
+      }),
+      candidate(1, { name: "Docs" }),
+    ];
+    const seen: string[][] = [];
+    const model = resolver((options) => {
+      seen.push(
+        options.options.flatMap((option) =>
+          option.kind === "candidate" ? [option.candidate.name] : [],
+        ),
+      );
+      return answer(options, "r0");
+    });
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Ask AI",
+      nameHints: false,
+    });
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Ask AI",
+    });
+    expect(seen[0]).toEqual(["Stripe Assistant", "Docs"]);
+    expect(seen[1]).toEqual(['Stripe Assistant (shows "Ask AI")', "Docs"]);
+  });
+
+  it("acts on a clear per-item winner and falls back otherwise", async () => {
+    const items = [
+      post(0, "Microservices are organizational debt"),
+      post(1, "We still maintain a development tool first released in 1993"),
+      post(2, "How we saved memory in a DNS cache"),
+    ];
+    const sentence =
+      "click Share on the post about a tool that has been around for decades";
+    const verify = vi.fn(
+      async (_s: string, list: readonly { id: string }[]) => ({
+        scores: Object.fromEntries(
+          list.map((item) => [item.id, item.id === "r1" ? 0.9 : 0.1]),
+        ),
+        call,
+      }),
+    );
+    const model: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: verify,
+    };
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+      verifyItems: true,
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_by_items" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(verify.mock.calls[0]![1].map((item) => item.id)).toEqual([
+      "r0",
+      "r1",
+      "r2",
+    ]);
+
+    const unsure: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: vi.fn(
+        async (_s: string, list: readonly { id: string }[]) => ({
+          scores: Object.fromEntries(list.map((item) => [item.id, 0.5])),
+          call,
+        }),
+      ),
+    };
+    const fallback = await resolveTarget(recordedPage(items).page, unsure, {
+      operation: "click",
+      sentence,
+      verifyItems: true,
+    });
+    expect(fallback.kind === "resolved" && fallback.diagnostic.gate).toBe(
+      "repeated_member_model_pick",
+    );
+
+    const failing: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: vi.fn(async () => {
+        throw new ProviderError("connection", "down");
+      }),
+    };
+    expect(
+      await resolveTarget(recordedPage(items).page, failing, {
+        operation: "click",
+        sentence,
+        verifyItems: true,
+      }),
+    ).toMatchObject({ kind: "resolved" });
+  });
+
+  it("does not ask about items for ordinals or without the flag", async () => {
+    const items = [post(0, "Alpha story"), post(1, "Beta story")];
+    const verify = vi.fn();
+    const model: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: verify,
+    };
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Share on the first post",
+      verifyItems: true,
+    });
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Share on the post about beta",
+    });
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it("matches counted names and references loosely unless codeFallback is off", async () => {
+    const items = [
+      post(0, "Microservices are organizational debt", "131 Go to comments"),
+      post(
+        1,
+        "How we saved 100 terabytes by optimizing DNS cache",
+        "53 Go to comments",
+      ),
+    ];
+    const model = resolver((options) => answer(options, "r0"));
+    const sentence = "open the comments for the DNS cache post";
+    const strict = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+      codeFallback: false,
+    });
+    expect(strict.kind === "resolved" && strict.target.driverTarget().ref).toBe(
+      "fresh-r0",
+    );
+    const loose = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+    });
+    expect(loose).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code" },
+    });
+    expect(loose.kind === "resolved" && loose.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+
+  it("counts in code after the model answers none unless codeFallback is off", async () => {
+    const items = [0, 1, 2, 3].map((index) =>
+      candidate(index, {
+        name: "View Product",
+        tag: "a",
+        role: "link",
+        signals: { path: `body/li:${index}/a`, href: `/p/${index}` },
+      }),
+    );
+    const model = resolver((options) => answer(options, "none"));
+    const sentence = "click View Product on the third product";
+    expect(
+      await resolveTarget(recordedPage(items).page, model, {
+        operation: "click",
+        sentence,
+        codeFallback: false,
+      }),
+    ).toMatchObject({ kind: "unresolved", reason: "none" });
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code_after_none" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r2",
+    );
+  });
+});

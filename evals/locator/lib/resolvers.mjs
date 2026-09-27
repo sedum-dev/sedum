@@ -132,6 +132,44 @@ export function cachedResolver(inner, file, { model, offline = false } = {}) {
       };
       return decision;
     },
+    /**
+     * Per-item verification replies are stored under their own key kind, by
+     * item position, so they never collide with Choice replies.
+     */
+    async verifyItems(sentence, items, options) {
+      if (typeof inner.verifyItems !== "function")
+        throw new Error("Resolver has no verifyItems");
+      const key = createHash("sha256")
+        .update(
+          JSON.stringify({
+            kind: "verifyItems",
+            model,
+            sentence,
+            items: items.map((item) => item.text),
+          }),
+        )
+        .digest("hex");
+      const saved = store[key];
+      if (saved) {
+        this.hits++;
+        return {
+          scores: Object.fromEntries(
+            items.map((item, index) => [item.id, saved.scores[index]]),
+          ),
+          call: saved.call,
+        };
+      }
+      if (offline) throw new Error(`No recorded item reply for ${key}`);
+      this.misses++;
+      const verdict = await inner.verifyItems(sentence, items, options);
+      store[key] = {
+        kind: "verifyItems",
+        sentence,
+        scores: items.map((item) => verdict.scores[item.id]),
+        call: verdict.call,
+      };
+      return verdict;
+    },
     save() {
       if (this.misses === 0) return;
       const sorted = Object.fromEntries(

@@ -10,6 +10,7 @@ import {
 import { ClassificationBatchError, ProviderError } from "@sedum-dev/core";
 import type {
   ClassificationProvider,
+  ItemVerdict,
   ModelClassification,
   Judge,
   JudgeDecision,
@@ -18,10 +19,12 @@ import type {
   Resolver,
   ResolverCandidates,
   ResolverDecision,
+  ResolverItem,
 } from "@sedum-dev/core";
 import { MODEL_CHOICES } from "@sedum-dev/core";
 import {
   buildClassificationRequests,
+  buildItemsRequest,
   buildJudgeRequest,
   buildResolverRequest,
   MODEL,
@@ -415,6 +418,28 @@ export class TypeSafeAdapter
       confidence: answer.confidence,
       call,
     };
+  }
+
+  async verifyItems(
+    sentence: string,
+    items: readonly ResolverItem[],
+    options?: ProviderCallOptions,
+  ): Promise<ItemVerdict> {
+    const built = buildItemsRequest(sentence, items, this.model);
+    const { response, meta } = await this.ask(built.request, options);
+    const call = validateCall(response, meta, this.model, this.estimateJevCost);
+    const scores: Record<string, number> = Object.create(null) as Record<
+      string,
+      number
+    >;
+    try {
+      const answers = answersOf(response);
+      for (const [id, key] of built.keys)
+        scores[id] = validateNoul(answers[key]);
+    } catch (error) {
+      throw responseError(error, call.attempts, call);
+    }
+    return { scores, call };
   }
 
   async holds(

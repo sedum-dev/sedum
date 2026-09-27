@@ -568,6 +568,148 @@ if (!window.__sedum) {
       rowLabel(element)
     );
   }
+  // Word-level patterns over class, id, and icon tokens split at - _ : / #.
+  const ICON_KINDS: readonly [RegExp, string][] = [
+    [/(?:^|-)(?:up-?vote|vote-?up|votearrow)(?:$|-)/, "upvote arrow"],
+    [/(?:^|-)(?:down-?vote|vote-?down)(?:$|-)/, "downvote arrow"],
+    [/(?:^|-)(?:search|magnifier|magnifying|loupe)(?:$|-)/, "search"],
+    [/(?:^|-)(?:hamburger|burger|menu|bars)(?:$|-)/, "menu"],
+    [/(?:^|-)(?:close|dismiss|xmark|x-mark|times)(?:$|-)/, "close"],
+    [
+      /(?:^|-)(?:(?:arrow|chevron|caret|angle|paddlenav)-?(?:right|next|forward)|(?:right|next|forward)-?(?:arrow|chevron|caret))(?:$|-)/,
+      "right arrow",
+    ],
+    [
+      /(?:^|-)(?:(?:arrow|chevron|caret|angle|paddlenav)-?(?:left|prev|previous|back)|(?:left|prev|previous|back)-?(?:arrow|chevron|caret))(?:$|-)/,
+      "left arrow",
+    ],
+    [/(?:^|-)(?:terminal|shell|console|prompt)(?:$|-)/, "terminal"],
+    [/(?:^|-)(?:cart|basket)(?:$|-)/, "cart"],
+    [/(?:^|-)(?:kebab|ellipsis|more|dots)(?:$|-)/, "more"],
+    [/(?:^|-)(?:settings|gear|cog)(?:$|-)/, "settings"],
+    [/(?:^|-)share(?:$|-)/, "share"],
+    [/(?:^|-)(?:copy|clipboard)(?:$|-)/, "copy"],
+    [/(?:^|-)(?:bell|notifications?)(?:$|-)/, "notifications"],
+    [/(?:^|-)(?:avatar|account|profile|user)(?:$|-)/, "account"],
+    [/(?:^|-)play(?:$|-)/, "play"],
+    [/(?:^|-)pause(?:$|-)/, "pause"],
+  ];
+  function hintWords(text: string): string[] {
+    return text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  }
+  /** Whether `text` says something the name does not, word for word. */
+  function addsWords(text: string, name: string): boolean {
+    const own = new Set(hintWords(name));
+    return hintWords(text).some(
+      (word) => word.length > 1 && /\p{L}/u.test(word) && !own.has(word),
+    );
+  }
+  function siteRootLink(element: Element): boolean {
+    const href = element.getAttribute("href")?.trim();
+    if (!href) return false;
+    if (/^(?:\/|\.\/|\/index\.html?|\/home(?:page)?\/?)$/i.test(href))
+      return true;
+    try {
+      const url = new URL(href, location.href);
+      if (url.pathname !== "/" || url.search) return false;
+      if (url.host === location.host) return true;
+      const canonical =
+        document.querySelector("link[rel='canonical']")?.getAttribute("href") ??
+        document
+          .querySelector("meta[property='og:url']")
+          ?.getAttribute("content");
+      return !!canonical && new URL(canonical, location.href).host === url.host;
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * Local, experimental: what a person sees that the accessible name leaves
+   * out, such as visible text beside an aria-label, a field's placeholder, a
+   * logo image, or an icon's kind. Never projected unless the locator asks.
+   */
+  function nameHint(element: Element, name: string): string {
+    const parts: string[] = [];
+    const clip = (text: string, limit = 48) =>
+      text.length > limit ? text.slice(0, limit - 1) + "…" : text;
+    // A part is added only when its own text says something new.
+    const addPart = (text: string, payload = text) => {
+      if (payload && addsWords(payload, [name, ...parts].join(" ")))
+        parts.push(text);
+    };
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      const placeholder = element.getAttribute("placeholder")?.trim() ?? "";
+      if (placeholder && placeholder !== name)
+        addPart(`placeholder "${clip(placeholder)}"`, placeholder);
+    }
+    const named =
+      element.hasAttribute("aria-label") ||
+      element.hasAttribute("aria-labelledby");
+    const shown = publicText(element, true);
+    if (named && shown) addPart(`shows "${clip(shown)}"`, shown);
+    if (!/\p{L}/u.test(name)) {
+      const hidden = referencedLabelText(element);
+      if (/\p{L}/u.test(hidden)) addPart(`text "${clip(hidden)}"`, hidden);
+    }
+    const inside = Array.from(
+      element.querySelectorAll("img,svg,i,span:empty,div:empty,use,kbd"),
+    ).slice(0, 12);
+    const media = inside.filter((node) => node.matches("img,svg"));
+    const raw = [element, ...inside].flatMap((node) => [
+      node.getAttribute("class") ?? "",
+      node.id,
+      node.getAttribute("data-icon") ?? "",
+      node === element ? "" : (node.getAttribute("title") ?? ""),
+      node.matches("use") ? (node.getAttribute("href") ?? "") : "",
+      node.matches("use") ? (node.getAttribute("xlink:href") ?? "") : "",
+      node instanceof HTMLImageElement ? node.alt : "",
+      node === element ? "" : (node.getAttribute("aria-label") ?? ""),
+    ]);
+    const tokens = raw
+      .join(" ")
+      .toLocaleLowerCase()
+      .split(/\s+/)
+      .map((token) => token.replace(/[_:#/.]+/g, "-"))
+      .filter(Boolean);
+    const isLink = element.matches("a[href]") || role(element) === "link";
+    const rootLink = isLink && siteRootLink(element);
+    const kbdText = Array.from(element.querySelectorAll("kbd"))
+      .map((node) => publicText(node, true))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    // An icon-only control: no visible words of its own beyond key caps.
+    const iconOnly = !/\p{L}/u.test(shown) || (!!kbdText && kbdText === shown);
+    if (
+      media.length &&
+      (rootLink || tokens.some((token) => /logo|brand/.test(token)))
+    ) {
+      const mediaLabel = media
+        .map((node) =>
+          node instanceof HTMLImageElement
+            ? node.alt
+            : (node.getAttribute("aria-label") ??
+              node.querySelector("title")?.textContent ??
+              ""),
+        )
+        .map((text) => text.replace(/\s+/g, " ").trim())
+        .find(Boolean);
+      if (mediaLabel) addPart(`${clip(mediaLabel, 32)} logo`, mediaLabel);
+      if (!hintWords([name, ...parts].join(" ")).includes("logo"))
+        parts.push("logo");
+      if (rootLink && !/\bhome/i.test(name)) addPart("home link");
+    } else if (iconOnly && (inside.length || !/\p{L}/u.test(name))) {
+      const kind = ICON_KINDS.find(([pattern]) =>
+        tokens.some((token) => pattern.test(token)),
+      );
+      if (kind) addPart(`${kind[1]} icon`, kind[1]);
+    }
+    if (kbdText && kbdText === shown) addPart("keyboard shortcut");
+    return parts.join(", ");
+  }
   function clippedAway(element: Element): boolean {
     const box = element.getBoundingClientRect();
     const x = box.left + box.width / 2;
@@ -1142,6 +1284,7 @@ if (!window.__sedum) {
       const peerData = peers(element, name);
       const location = locationOf(element, heading);
       const section = sectionOf(element, outline);
+      const hint = operation === "read" ? "" : nameHint(element, rawName);
       owned.set(element, {
         old: element.getAttribute("data-sedum-ref"),
         ref,
@@ -1180,6 +1323,7 @@ if (!window.__sedum) {
             contextComplete: peerData.contextComplete,
             ...(peerData.item ? { item: peerData.item } : {}),
             ...(section ? { section } : {}),
+            ...(hint ? { nameHint: hint } : {}),
           }),
         }),
       );
