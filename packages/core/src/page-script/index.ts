@@ -362,7 +362,10 @@ if (!window.__sedum) {
     if (element instanceof HTMLElement && "labels" in element) {
       const labels = (element as HTMLInputElement).labels;
       const text = labels?.length
-        ? Array.from(labels).map((node) => publicText(node)).join(" ").trim()
+        ? Array.from(labels)
+            .map((node) => publicText(node))
+            .join(" ")
+            .trim()
         : "";
       if (text) return text;
     }
