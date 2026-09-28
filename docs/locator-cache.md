@@ -63,3 +63,21 @@ Each action's `RunResult.locator.cache` records `hit`, `miss`, or `bypassed`,
 the reason, whether fallback called the locator model, and proven target-change
 evidence. Terminal output shows the same outcome. A changed or stale recipe
 remains visible even when the subsequent model-selected action succeeds.
+
+Name checks also apply to warm recipes. When another control supplies clear
+lexical counterevidence, conflicts with an explicitly requested number, or has
+a competing near-name, Sedum asks the resolver again rather than trusting the
+recipe. Near-name acceptance needs fresh model probabilities. Upgrading to these
+name checks invalidates recipes written under the previous matching rules once.
+
+Repeated-name comparisons ignore incidental counts (for example, “306 comments”
+and “12 comments”), but preserve a number explicitly requested in the step.
+Different labels pointing to the same URL do not count as the same name.
+The model can still choose among repeated names; decisions that depend on that
+choice remain uncached and are reported as “picked 1 of N similar elements.”
+
+Near-name checks exempt ordinary links with identical HTTP(S) or root-relative
+destinations, even when their captions differ. This exemption does not bypass
+confidence or margin checks. Different query strings or fragments, fragment-only
+links, script links, and non-link controls still count as competitors. Relative
+and absolute spellings are not assumed equivalent.

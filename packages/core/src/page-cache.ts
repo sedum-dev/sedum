@@ -11,7 +11,8 @@ import {
 } from "./page-protocol.js";
 
 export const CACHE_FORMAT = 1;
-export const MATCHER_VERSION = 1;
+// Name guards changed which model decisions may seed a reusable target.
+export const MATCHER_VERSION = 2;
 export type CacheMissReason =
   | "absent"
   | "disabled"

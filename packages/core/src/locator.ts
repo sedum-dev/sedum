@@ -346,17 +346,105 @@ function comparableLead(decision: ResolverDecision, id: string): number {
   );
 }
 
+const FILLER_WORDS = new Set(
+  "a an the click tap press open close select choose check uncheck toggle type fill enter in into on at to for of with and button link field input control icon please".split(
+    " ",
+  ),
+);
+const words = (text: string): string[] =>
+  text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+const targetText = (sentence: string): string =>
+  sentence.replace(/\{\{[^}]*\}\}/g, " ");
+const numbers = (text: string): string[] =>
+  (text.toLocaleLowerCase().match(/\d[\d.,]*[km]?/g) ?? []).map((value) =>
+    value.replace(/,/g, ""),
+  );
+
+function sameName(
+  name: string,
+  requestedNumbers: readonly string[] = [],
+): string {
+  return name
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\d[\d.,]*[km]?(?=\s+\p{L})/gu, (count) =>
+      requestedNumbers.includes(count.replace(/,/g, "")) ? count : "#",
+    );
+}
+
 function repeatedGroup(
+  sentence: string,
   selected: Candidate,
   candidates: readonly Candidate[],
 ): Candidate[] {
-  const name = selected.name.trim().toLocaleLowerCase();
+  const requested = numbers(targetText(sentence));
+  const name = sameName(selected.name, requested);
   return candidates.filter(
-    (candidate) =>
-      candidate.name.trim().toLocaleLowerCase() === name ||
-      (!!selected.signals.href &&
-        candidate.signals.href === selected.signals.href),
+    (candidate) => sameName(candidate.name, requested) === name,
   );
+}
+
+function numericConflict(
+  sentence: string,
+  selected: Candidate,
+  candidates: readonly Candidate[],
+): boolean {
+  const requested = numbers(targetText(sentence));
+  const picked = numbers(selected.name);
+  if (!requested.length || requested.every((number) => picked.includes(number)))
+    return false;
+  return candidates.some(
+    (candidate) =>
+      sameName(candidate.name) === sameName(selected.name) &&
+      requested.every((number) => numbers(candidate.name).includes(number)),
+  );
+}
+
+/** Only lexical counterevidence, not a replacement resolver. */
+function nameGuard(
+  sentence: string,
+  selected: Candidate,
+  offered: readonly Candidate[],
+  decision?: ResolverDecision,
+): "lexical_miss" | "near_namesake" | undefined {
+  const names = offered.map((candidate) => new Set(words(candidate.name)));
+  const text = targetText(sentence).replace(
+    /^\s*(?:click|tap|press|open|close|select|choose|check|uncheck|toggle|type|fill|enter)\s+(?=\S)/i,
+    "",
+  );
+  const content = words(text).filter(
+    (word) => !FILLER_WORDS.has(word) || names.some((name) => name.has(word)),
+  );
+  if (!content.length) return undefined;
+  const picked = new Set(words(selected.name));
+  const holdsAll = (name: Set<string>) =>
+    content.every((word) => name.has(word));
+  if (!content.some((word) => picked.has(word)) && names.some(holdsAll))
+    return "lexical_miss";
+  const requested = numbers(targetText(sentence));
+  if (
+    holdsAll(picked) &&
+    offered.some(
+      (candidate, index) =>
+        sameName(candidate.name, requested) !==
+          sameName(selected.name, requested) &&
+        holdsAll(names[index]!) &&
+        // Different captions for the same navigation are not counterevidence.
+        // Keep fragment-only/script links and non-link controls conservative.
+        !(
+          selected.tag === "a" &&
+          candidate.tag === "a" &&
+          selected.role === "link" &&
+          candidate.role === "link" &&
+          /^(?:https?:\/\/|\/(?!\/))\S/i.test(selected.signals.href ?? "") &&
+          selected.signals.href === candidate.signals.href
+        ) &&
+        (!decision || decision.probabilities[candidate.ref]! >= 0.05),
+    )
+  )
+    return "near_namesake";
+  return undefined;
 }
 
 function sentenceEvidence(
@@ -627,7 +715,7 @@ export async function resolveTarget(
           .lookup(digest)
           .catch(() => ({ reason: "storage_error" as const }));
         storedEntry = "entry" in lookup ? lookup.entry : undefined;
-        const matched =
+        let matched =
           "reason" in lookup
             ? { hit: false as const, reason: lookup.reason }
             : matchEntry(
@@ -640,6 +728,18 @@ export async function resolveTarget(
                 true,
                 options.runtimeDependent,
               );
+        // Cached entries have no probability distribution. Any near-name
+        // competitor requires a new Choice before the threshold can be checked.
+        if (
+          matched.hit &&
+          (numericConflict(
+            options.sentence,
+            matched.candidate,
+            source.candidates,
+          ) ||
+            nameGuard(options.sentence, matched.candidate, source.candidates))
+        )
+          matched = { hit: false, reason: "near_tie" };
         if (matched.hit) {
           if (!sameVersion(await pageVersion(page), source.version)) {
             cacheOutcome = {
@@ -782,7 +882,16 @@ export async function resolveTarget(
     if (decision.selection.kind === "none") return unresolved("none");
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
-    const group = repeatedGroup(selected, candidates);
+    if (numericConflict(options.sentence, selected, candidates)) {
+      gate = "numeric_name_conflict";
+      return unresolved("ambiguous");
+    }
+    const guarded = nameGuard(options.sentence, selected, finalists, decision);
+    if (guarded) {
+      gate = guarded;
+      return unresolved("ambiguous");
+    }
+    const group = repeatedGroup(options.sentence, selected, candidates);
     let repeatedPickCandidates: number | undefined;
     const low =
       (decision.confidence !== null && decision.confidence < MIN_CONFIDENCE) ||
@@ -841,6 +950,17 @@ export async function resolveTarget(
         sameIdentity(selectedCandidate, candidate),
       );
       if (!surfaceStable) {
+        // A newly appearing competitor has no probability in the old Choice.
+        // Do not apply the unique-target rerender exception to changed names.
+        if (
+          fresh.candidates.some(
+            (candidate) =>
+              !source.candidates.some(
+                (original) => original.name === candidate.name,
+              ),
+          )
+        )
+          return unresolved("stale");
         const uniqueBefore =
           source.candidates.filter(
             (candidate) =>

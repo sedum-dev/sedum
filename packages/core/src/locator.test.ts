@@ -141,7 +141,7 @@ function resolver(
 }
 
 describe("locator", () => {
-  it("accepts a uniquely named same-node target after unrelated page churn", async () => {
+  it("requires a fresh choice when page churn introduces a new name", async () => {
     const target = candidate(1, {
       name: "Go to file",
       peers: ["Branches"],
@@ -165,10 +165,349 @@ describe("locator", () => {
       operation: "click",
       sentence: "click the Go to file control",
     });
-    expect(result.kind).toBe("resolved");
-    if (result.kind === "resolved")
-      expect(result.target.driverTarget().ref).toBe(`fresh-${target.ref}`);
+    expect(result).toMatchObject({ kind: "unresolved", reason: "stale" });
   });
+
+  it.each([
+    ["click Open", "Open settings", "Open", 0.0499, undefined],
+    ["click Open", "Open settings", "Open", 0.05, "near_namesake"],
+    ["click Open", "Open settings", "Open", 0.0501, "near_namesake"],
+    ["click Hide", "Hide contents", "Hide appearance", 0.05, "near_namesake"],
+    ["click Hide contents", "Hide contents", "Hide appearance", 0.1, undefined],
+    ["click Sign In", "Promotions", "Sign In", 0.01, "lexical_miss"],
+    ["click Account settings", "Promotions", "Account", 0.1, undefined],
+    ["click Sign In", "Sign up", "Sign In", 0.1, undefined],
+    ["click the", "Save", "Load", 0.1, undefined],
+    ["!!!", "Save", "Load", 0.1, undefined],
+    ["click Open", "Open", "Closed", 0.1, undefined],
+    ["click Éditer", "Effacer", "Éditer", 0.1, "lexical_miss"],
+    ["type {{secret}} in Email", "Promotions", "Email", 0.1, "lexical_miss"],
+  ])(
+    "guards %s against %s / %s at %s",
+    async (sentence, selected, other, probability, gate) => {
+      const items = [
+        candidate(0, { name: selected }),
+        candidate(1, { name: other }),
+      ];
+      const result = await resolveTarget(
+        recordedPage(items).page,
+        resolver((offered) =>
+          answer(offered, "r0", {
+            r0: 0.9,
+            r1: probability,
+            none: 0.1 - probability,
+          }),
+        ),
+        { operation: "click", sentence },
+      );
+      expect(result.kind).toBe(gate ? "unresolved" : "resolved");
+      if (gate)
+        expect(result).toMatchObject({
+          reason: "ambiguous",
+          diagnostic: { gate },
+        });
+    },
+  );
+
+  it.each([
+    ["/benefits", "/benefits", "a", "link", true],
+    [
+      "https://example.test/benefits",
+      "https://example.test/benefits",
+      "a",
+      "link",
+      true,
+    ],
+    ["/benefits", "/benefits#eligibility", "a", "link", false],
+    ["/benefits", "/benefits?audience=business", "a", "link", false],
+    [
+      "https://one.test/benefits",
+      "https://two.test/benefits",
+      "a",
+      "link",
+      false,
+    ],
+    ["#", "#", "a", "link", false],
+    ["javascript:void(0)", "javascript:void(0)", "a", "link", false],
+    [undefined, undefined, "a", "link", false],
+    ["/benefits", "/benefits", "button", "button", false],
+    ["/benefits", "/benefits", "a", "button", false],
+  ] as const)(
+    "only exempts matching navigation links: %s / %s (%s, %s)",
+    async (href, alternativeHref, tag, role, accepted) => {
+      const items = [
+        candidate(0, {
+          tag: "a",
+          role: "link",
+          name: "Government benefits",
+          signals: { path: "nav/a", ...(href ? { href } : {}) },
+        }),
+        candidate(1, {
+          tag,
+          role,
+          name: "Government benefits Find programs",
+          signals: {
+            path: "main/a",
+            ...(alternativeHref ? { href: alternativeHref } : {}),
+          },
+        }),
+      ];
+      for (const selected of ["r0", "r1"]) {
+        const result = await resolveTarget(
+          recordedPage(items).page,
+          resolver((offered) =>
+            answer(offered, selected, {
+              r0: selected === "r0" ? 0.74 : 0.26,
+              r1: selected === "r1" ? 0.74 : 0.26,
+              none: 0,
+            }),
+          ),
+          { operation: "click", sentence: "click Government benefits" },
+        );
+        expect(result.kind).toBe(accepted ? "resolved" : "unresolved");
+        if (!accepted)
+          expect(result).toMatchObject({
+            diagnostic: { gate: "near_namesake" },
+          });
+      }
+    },
+  );
+
+  it("keeps a uniquely matched cached target when an equivalent link appears", async () => {
+    const key = new Uint8Array(32).fill(25);
+    const sentence = "click Government benefits";
+    const items = [
+      candidate(0, {
+        tag: "a",
+        role: "link",
+        name: "Government benefits",
+        signals: {
+          path: "nav/a",
+          id: "benefits",
+          href: "/benefits",
+          contextComplete: true,
+        },
+      }),
+      candidate(1, {
+        tag: "a",
+        role: "link",
+        name: "Government benefits Find programs",
+        signals: { path: "main/a", href: "/benefits" },
+      }),
+    ];
+    const entry = stageEntry(key, initial.route, "click", sentence, items[0]!, {
+      protocol: 1,
+      version: initial,
+      total: 1,
+      offset: 0,
+      next: null,
+      complete: true,
+      candidates: [items[0]!],
+    });
+    expect(entry).not.toBeNull();
+    const store: CacheStore = {
+      key,
+      lookup: vi.fn(async () => ({ entry })),
+      put: vi.fn(async () => {}),
+      invalidate: vi.fn(async () => {}),
+      clear: vi.fn(async () => {}),
+    };
+    const model = resolver((offered) => answer(offered, "r0"));
+    expect(
+      await resolveTarget(recordedPage(items).page, model, {
+        operation: "click",
+        sentence,
+        cache: store,
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      cache: { outcome: "hit", fallbackCalledModel: false },
+    });
+    expect(model.choose).not.toHaveBeenCalled();
+  });
+
+  it("keeps unique-confidence gates for different names sharing a destination", async () => {
+    const items = [
+      candidate(0, {
+        tag: "a",
+        role: "link",
+        name: "Government benefits",
+        signals: { path: "nav/a", href: "/benefits" },
+      }),
+      candidate(1, {
+        tag: "a",
+        role: "link",
+        name: "Government benefits Find programs",
+        signals: { path: "main/a", href: "/benefits" },
+      }),
+    ];
+    expect(
+      await resolveTarget(
+        recordedPage(items).page,
+        resolver((offered) =>
+          answer(offered, "r0", { r0: 0.48, r1: 0.46, none: 0.06 }),
+        ),
+        { operation: "click", sentence: "click Government benefits" },
+      ),
+    ).toMatchObject({
+      kind: "unresolved",
+      diagnostic: { gate: "low_confidence_or_margin" },
+    });
+  });
+
+  it.each([
+    ["306 comments", "12 comments"],
+    ["1,200 comments", "2.5k comments"],
+  ])(
+    "groups count variants %s / %s without inventing member evidence",
+    async (first, second) => {
+      const items = [
+        candidate(0, { name: first }),
+        candidate(1, { name: second }),
+        candidate(2, {
+          name: "Elsewhere",
+          signals: { path: "x", href: "/same" },
+        }),
+      ];
+      const result = await resolveTarget(
+        recordedPage(items).page,
+        resolver((offered) =>
+          answer(offered, "r0", { r0: 0.45, r1: 0.44, r2: 0.01, none: 0.1 }),
+        ),
+        { operation: "click", sentence: "click comments" },
+      );
+      expect(result).toMatchObject({
+        kind: "resolved",
+        diagnostic: {
+          decision: {
+            gate: "repeated_member_model_pick",
+            similarCandidates: 2,
+          },
+        },
+      });
+    },
+  );
+
+  it.each([
+    ["12", "24"],
+    ["1,200", "1,300"],
+    ["2.5", "3.5"],
+  ])(
+    "preserves explicitly requested numeric label %s versus %s",
+    async (wanted, other) => {
+      const items = [
+        candidate(0, { name: `${wanted} month plan` }),
+        candidate(1, { name: `${other} month plan` }),
+      ];
+      const options = {
+        operation: "click" as const,
+        sentence: `choose ${wanted} month plan`,
+      };
+      expect(
+        await resolveTarget(
+          recordedPage(items).page,
+          resolver((offered) => answer(offered, "r1")),
+          options,
+        ),
+      ).toMatchObject({
+        kind: "unresolved",
+        reason: "ambiguous",
+        diagnostic: { gate: "numeric_name_conflict" },
+      });
+      expect(
+        await resolveTarget(
+          recordedPage(items).page,
+          resolver((offered) => answer(offered, "r0")),
+          options,
+        ),
+      ).toMatchObject({ kind: "resolved" });
+    },
+  );
+
+  it("does not use a shared destination as same-name confidence evidence", async () => {
+    const items = [
+      candidate(0, { name: "Star", signals: { path: "a", href: "/login" } }),
+      candidate(1, { name: "Fork", signals: { path: "b", href: "/login" } }),
+    ];
+    expect(
+      await resolveTarget(
+        recordedPage(items).page,
+        resolver((offered) =>
+          answer(offered, "r0", { r0: 0.46, r1: 0.44, none: 0.1 }),
+        ),
+        { operation: "click", sentence: "click Star" },
+      ),
+    ).toMatchObject({
+      kind: "unresolved",
+      diagnostic: { gate: "low_confidence_or_margin" },
+    });
+  });
+
+  it.each([
+    ["click Open", "Open settings", "Open", "near_namesake"],
+    ["click Sign In", "Promotions", "Sign In", "lexical_miss"],
+    [
+      "choose 12 month plan",
+      "24 month plan",
+      "12 month plan",
+      "numeric_name_conflict",
+    ],
+  ])(
+    "does not let a warm cache bypass %s",
+    async (sentence, picked, other, gate) => {
+      const key = new Uint8Array(32).fill(25);
+      const items = [
+        candidate(0, {
+          name: picked,
+          peers: [sentence],
+          signals: { path: "a", id: "selected", contextComplete: true },
+        }),
+        candidate(1, { name: other }),
+      ];
+      const entry = stageEntry(
+        key,
+        initial.route,
+        "click",
+        sentence,
+        items[0]!,
+        {
+          protocol: 1,
+          version: initial,
+          total: 2,
+          offset: 0,
+          next: null,
+          complete: true,
+          candidates: items,
+        },
+      );
+      expect(entry).not.toBeNull();
+      const store: CacheStore = {
+        key,
+        lookup: vi.fn(async () => ({ entry })),
+        put: vi.fn(async () => {}),
+        invalidate: vi.fn(async () => {}),
+        clear: vi.fn(async () => {}),
+      };
+      const model = resolver((offered) => answer(offered, "r0"));
+      expect(
+        await resolveTarget(recordedPage(items).page, model, {
+          operation: "click",
+          sentence,
+          cache: store,
+        }),
+      ).toMatchObject({
+        kind: "unresolved",
+        diagnostic: { gate },
+        cache: {
+          outcome: "miss",
+          reason: "near_tie",
+          fallbackCalledModel: true,
+        },
+      });
+      expect(model.choose).toHaveBeenCalledOnce();
+      expect(store.invalidate).toHaveBeenCalledOnce();
+    },
+  );
 
   it("rejects a same-name competitor or replacement node after a model choice", async () => {
     const target = candidate(1, {

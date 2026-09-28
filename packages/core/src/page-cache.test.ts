@@ -37,6 +37,30 @@ const eligible = (items: Candidate[], complete = true): CandidatePage => ({
 });
 
 describe("page cache matching", () => {
+  it("invalidates recipes accepted before the name guards", () => {
+    const entry = stageEntry(
+      key,
+      route,
+      "click",
+      "Buy Camera",
+      target,
+      eligible([target]),
+    );
+    expect(
+      matchEntry(
+        { ...entry, matcher: 1 },
+        key,
+        route,
+        "click",
+        "Buy Camera",
+        [target],
+        true,
+      ),
+    ).toEqual({ hit: false, reason: "matcher_mismatch" });
+    expect(
+      matchEntry(entry, key, route, "click", "Buy Camera", [target], true).hit,
+    ).toBe(true);
+  });
   it("normalizes NFC and whitespace but preserves case and route components", () => {
     expect(normalizeSignal(" e\u0301  x ")).toBe("é x");
     expect(pageKey(key, route, "click", "Buy  Camera")).toBe(
