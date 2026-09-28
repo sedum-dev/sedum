@@ -109,6 +109,159 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ]);
       await context.close();
     });
+    it("uses bounded nameless-control fallbacks without overriding accessible names", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<button id="icon"><i class="fa fa-search fa-lg"></i></button>' +
+        '<button id="conflict"><i class="fa-search bi-trash"></i></button>' +
+        '<button aria-label="Explicit"><i class="fa-trash"></i></button>' +
+        '<span id="prompt">Select State</span><div id="combo" role="combobox" tabindex="0" aria-describedby="prompt"></div>' +
+        '<span id="secret" contenteditable>Private draft</span><div role="combobox" tabindex="0" aria-describedby="secret"></div>' +
+        '<div style="display:flex;align-items:center;gap:8px"><span>Date of Birth</span><input id="dob"></div>' +
+        '<div><span>Ambiguous</span><input id="one"><input id="two"></div>'`);
+      const click = await collectCandidates(page, "click");
+      expect(click.candidates.map(({ name }) => name)).toEqual(
+        expect.arrayContaining(["search", "Explicit", "Select State"]),
+      );
+      expect(click.candidates.map(({ name }) => name)).not.toContain("trash");
+      expect(click.candidates.map(({ name }) => name)).not.toContain(
+        "Private draft",
+      );
+      const fill = await collectCandidates(page, "fill");
+      const dob = fill.candidates.find(({ name }) => name === "Date of Birth");
+      expect(dob).toBeDefined();
+      expect(fill.candidates.some(({ name }) => name === "Ambiguous")).toBe(
+        false,
+      );
+      await page.evaluate(
+        `window.__sedum.fillElement(${JSON.stringify({
+          ref: dob?.ref,
+          tag: "input",
+          name: "Date of Birth",
+          version: fill.version,
+        })}).value = '2000-01-02'`,
+      );
+      expect(await page.evaluate("document.querySelector('#dob').value")).toBe(
+        "2000-01-02",
+      );
+      await context.close();
+    });
+    it("rejects hidden, ambiguous and over-budget fallback evidence", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<button id="hidden-icon"><i hidden class="fa-search"></i></button>' +
+        '<button id="modifier"><i class="fa-lg fa-spin"></i></button>' +
+        '<button id="icon-budget">' + '<span></span>'.repeat(401) + '<i class="fa-search"></i></button>' +
+        '<span hidden id="hidden-description">Private description</span><div id="hidden-combo" role="combobox" tabindex="0" aria-describedby="hidden-description"></div>' +
+        '<span id="huge-description">' + '<span>word</span>'.repeat(401) + '</span><div id="huge-combo" role="combobox" tabindex="0" aria-describedby="huge-description"></div>' +
+        '<div style="display:flex;gap:401px"><span>Too far</span><input id="far"></div>' +
+        '<div><span contenteditable>Draft value</span><input id="private"></div>' +
+        '<div><span>Budget caption</span>' + '<span></span>'.repeat(401) + '<input id="budget"></div>';
+      `);
+      const click = await collectCandidates(page, "click");
+      const fill = await collectCandidates(page, "fill");
+      const rejected = new Set([
+        "hidden-icon",
+        "modifier",
+        "icon-budget",
+        "hidden-combo",
+        "huge-combo",
+        "far",
+        "private",
+        "budget",
+      ]);
+      expect(
+        [...click.candidates, ...fill.candidates].filter((candidate) =>
+          rejected.has(candidate.signals.id ?? ""),
+        ),
+      ).toEqual([]);
+      expect(JSON.stringify(projectCandidates(click))).not.toContain(
+        "Private description",
+      );
+      expect(JSON.stringify(projectCandidates(fill))).not.toContain(
+        "Draft value",
+      );
+      await context.close();
+    });
+    it("does not broaden hidden or disabled actions, digest or fill eligibility", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<button aria-hidden="true" hidden>Hidden</button>' +
+        '<div inert><button aria-hidden="true">Inert</button></div>' +
+        '<div style="opacity:0"><button aria-hidden="true">Transparent</button></div>' +
+        '<div style="overflow:hidden;width:1px;height:1px"><button aria-hidden="true">Clipped</button></div>' +
+        '<button disabled aria-hidden="true">Disabled</button>' +
+        '<button aria-hidden="true">Drawn only</button>' +
+        '<input aria-hidden="true" aria-label="Secret field" value="private-value">';`);
+      const click = await collectCandidates(page, "click");
+      expect(click.candidates.map(({ name }) => name)).toEqual([
+        "Disabled",
+        "Drawn only",
+      ]);
+      expect(
+        (await clickTarget(page, click.candidates[0]!.ref)).actionable,
+      ).toBe(false);
+      expect((await collectCandidates(page, "fill")).candidates).toEqual([]);
+      const digest = await pageDigest(page);
+      expect(JSON.stringify(digest)).not.toContain("Drawn only");
+      expect(JSON.stringify(digest)).not.toContain("private-value");
+      await context.close();
+    });
+    it("clicks drawn aria-hidden controls but rejects occluded ones and fill", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<button id="drawn" aria-hidden="true">Learn more</button>' +
+        '<button id="covered" aria-hidden="true">Covered</button><div style="position:absolute;left:0;top:0;width:100%;height:100%;z-index:2"></div>';
+        document.querySelector('#drawn').addEventListener('click', event => event.currentTarget.dataset.clicked = 'yes')`);
+      const click = await collectCandidates(page, "click");
+      const drawn = click.candidates.find(({ name }) => name === "Learn more");
+      expect(drawn).toBeDefined();
+      expect((await clickTarget(page, drawn!.ref)).actionable).toBe(false);
+      await page.evaluate(
+        "document.querySelector('div[style*=z-index]').remove()",
+      );
+      const refreshed = await collectCandidates(page, "click");
+      const target = refreshed.candidates.find(
+        ({ name }) => name === "Learn more",
+      );
+      expect(target).toBeDefined();
+      const aimed = await clickTarget(page, target!.ref);
+      expect(aimed.actionable).toBe(true);
+      if (aimed.actionable) await page.clickRef(aimed.aim);
+      expect(
+        await page.evaluate("document.querySelector('#drawn').dataset.clicked"),
+      ).toBe("yes");
+      expect((await collectCandidates(page, "fill")).candidates).toEqual([]);
+      await context.close();
+    });
+    it("prunes oversized decorative SVG but preserves SVG and foreignObject controls", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<svg id="art" style="display:none"></svg><svg width="300" height="100"><a href="#ok"><text x="0" y="15">SVG link</text></a><foreignObject x="0" y="25" width="200" height="50"><button id="foreign">Foreign action</button></foreignObject></svg>';
+        document.querySelector('#art').innerHTML = '<g><circle></circle></g>'.repeat(20001);
+        document.querySelector('#foreign').addEventListener('click', event => event.currentTarget.dataset.clicked = 'yes')`);
+      const click = await collectCandidates(page, "click");
+      expect(click.complete).toBe(true);
+      expect(click.candidates.map(({ name }) => name)).toEqual(
+        expect.arrayContaining(["SVG link", "Foreign action"]),
+      );
+      const foreign = click.candidates.find(
+        ({ name }) => name === "Foreign action",
+      );
+      const aimed = await clickTarget(page, foreign!.ref);
+      expect(aimed.actionable).toBe(true);
+      if (aimed.actionable) await page.clickRef(aimed.aim);
+      expect(
+        await page.evaluate(
+          "document.querySelector('#foreign').dataset.clicked",
+        ),
+      ).toBe("yes");
+      await page.evaluate(
+        `document.querySelector('#app').innerHTML = '<svg role="button"><g><circle></circle></g>'.repeat(20001) + '</svg>'`,
+      );
+      expect((await collectCandidates(page, "click")).complete).toBe(false);
+      await context.close();
+    });
     it("keeps long controls available without losing their full-name guard", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =

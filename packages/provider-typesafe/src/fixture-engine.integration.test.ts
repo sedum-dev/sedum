@@ -112,6 +112,7 @@ describe.skipIf(!browserIntegration)("keyless fixture engine", () => {
         const result = await runFlow(file, {
           repoRoot: folder,
           browser: new PlaywrightBrowserDriver(),
+          browserKind: "chromium",
           provider: adapter,
           classificationCache: new NoopClassificationCache(),
           env: { FIXTURE_PASSWORD: "fixture_password" },

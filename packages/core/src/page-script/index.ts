@@ -42,6 +42,7 @@ if (!window.__sedum) {
   let nodeSequence = 0;
   const MAX_ELEMENTS = 20_000;
   const MAX_TEXT_NODES = 20_000;
+  const FALLBACK_TEXT_NODES = 400;
   const FILLABLE_INPUT_TYPES = new Set([
     "text",
     "email",
@@ -211,6 +212,22 @@ if (!window.__sedum) {
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
+  function boundedPublicText(element: Element, visualOnly = false): string {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    let count = 0;
+    while (walker.nextNode()) {
+      if (++count > FALLBACK_TEXT_NODES) return "";
+      const parent = walker.currentNode.parentElement;
+      if (
+        parent &&
+        visible(parent, visualOnly) &&
+        !excludedTextAncestor(parent)
+      )
+        parts.push(walker.currentNode.textContent ?? "");
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
   function referencedLabelText(element: Element): string {
     // ARIA names may explicitly reference visually hidden text inside the
     // control. That text is part of its accessible name even though it is not
@@ -266,6 +283,154 @@ if (!window.__sedum) {
       if (value) return value;
     }
     return publicText(element) || element.getAttribute("title")?.trim() || "";
+  }
+  function iconName(element: Element): string {
+    const hints = new Set<string>();
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT);
+    let count = 0;
+    while (walker.nextNode()) {
+      if (++count > 400) return "";
+      const icon = walker.currentNode as Element;
+      if (
+        !icon.matches("i,span,em") ||
+        !visible(icon, true) ||
+        icon.textContent?.trim()
+      )
+        continue;
+      for (const token of Array.from(icon.classList)) {
+        const match =
+          /^(?:fa|bi|glyphicon|icon|mdi|ti|ri)-([a-z][a-z0-9-]*)$/.exec(token);
+        if (!match) continue;
+        const hint = match[1]!;
+        if (
+          /^(?:xs|sm|lg|xl|[0-9]+x|fw|ul|li|border|pull-(?:left|right)|spin|pulse|rotate-.*|flip-.*|stack.*|inverse|fixed-width|solid|regular|light|thin|duotone|brands)$/.test(
+            hint,
+          )
+        )
+          continue;
+        hints.add(hint.replace(/-/g, " "));
+      }
+    }
+    return hints.size === 1 ? [...hints][0]! : "";
+  }
+  function describedText(element: Element): string {
+    const ids = element.getAttribute("aria-describedby");
+    if (!ids || role(element) !== "combobox") return "";
+    const references = ids.trim().split(/\s+/);
+    if (references.length > 8) return "";
+    const parts: string[] = [];
+    for (const id of references) {
+      const node = document.getElementById(id);
+      if (!node || !visible(node)) continue;
+      const text = boundedPublicText(node);
+      if (!text) return "";
+      parts.push(text);
+    }
+    return parts.join(" ");
+  }
+  function rowLabel(element: Element): string {
+    if (!element.matches("input,textarea,select,[role='combobox']")) return "";
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height) return "";
+    let row: Element | null = null;
+    let ancestor = element.parentElement;
+    for (
+      let level = 0;
+      ancestor && ancestor !== document.body && level < 7;
+      level++
+    ) {
+      const walker = document.createTreeWalker(
+        ancestor,
+        NodeFilter.SHOW_ELEMENT,
+      );
+      let count = 0;
+      let competing = false;
+      while (walker.nextNode()) {
+        if (++count > 400) break;
+        const other = walker.currentNode as Element;
+        if (other !== element && interactive(other) && visible(other)) {
+          competing = true;
+          break;
+        }
+      }
+      if (count > 400 || competing) break;
+      row = ancestor;
+      ancestor = ancestor.parentElement;
+    }
+    if (!row) return "";
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    const middle = box.top + box.height / 2;
+    let best: { text: string; distance: number } | undefined;
+    let count = 0;
+    while (walker.nextNode()) {
+      if (++count > FALLBACK_TEXT_NODES) return "";
+      const parent = walker.currentNode.parentElement;
+      const text = (walker.currentNode.textContent ?? "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (
+        !parent ||
+        !text ||
+        element.contains(parent) ||
+        excludedTextAncestor(parent, true) ||
+        !visible(parent)
+      )
+        continue;
+      const range = document.createRange();
+      range.selectNodeContents(walker.currentNode);
+      const rect = range.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      const sameLine =
+        Math.abs(rect.top + rect.height / 2 - middle) <
+        Math.max(box.height, rect.height) / 2;
+      let distance = Infinity;
+      if (sameLine && rect.right <= box.left + 2)
+        distance = box.left - rect.right;
+      else if (rect.bottom <= box.top + 2 && rect.left < box.right)
+        distance = box.top - rect.bottom;
+      if (distance <= 400 && (!best || distance < best.distance))
+        best = { text, distance };
+    }
+    return best?.text ?? "";
+  }
+  function clippedAway(element: Element): boolean {
+    const box = element.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      if (style.overflowX === "visible" && style.overflowY === "visible")
+        continue;
+      const bounds = node.getBoundingClientRect();
+      if (
+        x < bounds.left ||
+        x > bounds.right ||
+        y < bounds.top ||
+        y > bounds.bottom
+      )
+        return true;
+    }
+    return false;
+  }
+  function ariaHiddenOnly(element: Element): boolean {
+    if (!interactive(element) || visible(element) || !visible(element, true))
+      return false;
+    const box = element.getBoundingClientRect();
+    return (
+      box.width >= 8 &&
+      box.height >= 8 &&
+      !clippedAway(element) &&
+      !!boundedPublicText(element, true)
+    );
+  }
+  function candidateName(element: Element): string {
+    const existing = label(element);
+    if (existing) return existing;
+    if (ariaHiddenOnly(element)) {
+      const visualText = boundedPublicText(element, true);
+      if (visualText) return visualText;
+    }
+    return iconName(element) || describedText(element) || rowLabel(element);
   }
   function boundedName(name: string): string {
     const points = Array.from(name);
@@ -488,12 +653,37 @@ if (!window.__sedum) {
       return { candidates, refs, complete: false };
     const root = selectedModal ?? document.body;
     if (!root) return { candidates, refs, complete: true };
-    const elements = root.querySelectorAll("*");
-    if (elements.length > MAX_ELEMENTS)
-      return { candidates, refs, complete: false };
-    for (const element of Array.from(elements)) {
+    const enumerate = (pruneDecorativeSvg: boolean): Element[] | null => {
+      const result: Element[] = [];
+      // Follow siblings instead of materializing every child of a huge node.
+      let element = root.firstElementChild;
+      while (element) {
+        result.push(element);
+        if (result.length > MAX_ELEMENTS) return null;
+        const decorativeSvg =
+          pruneDecorativeSvg &&
+          element instanceof SVGSVGElement &&
+          !element.matches("a[href],[role]") &&
+          !element.querySelector("foreignObject,a[href],[role]");
+        if (!decorativeSvg && element.firstElementChild) {
+          element = element.firstElementChild;
+          continue;
+        }
+        while (element && element !== root && !element.nextElementSibling)
+          element = element.parentElement;
+        if (!element || element === root) break;
+        element = element.nextElementSibling;
+      }
+      return result;
+    };
+    const elements = enumerate(false) ?? enumerate(true);
+    if (!elements) return { candidates, refs, complete: false };
+    for (const element of elements) {
       if (
-        !visible(element) ||
+        !(
+          visible(element) ||
+          (operation === "click" && ariaHiddenOnly(element))
+        ) ||
         (operation === "read" ? !readable(element) : !interactive(element))
       )
         continue;
@@ -504,7 +694,7 @@ if (!window.__sedum) {
         !element.matches("input[type='checkbox'],input[type='radio']")
       )
         continue;
-      const rawName = label(element);
+      const rawName = candidateName(element);
       if (!rawName) continue;
       const name = boundedName(rawName);
       const ref = `${documentId}-${++sequence}`;
@@ -779,7 +969,7 @@ if (!window.__sedum) {
         (element instanceof HTMLElement && element.isContentEditable)
       ) ||
       candidate.name !== target.name ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       !editable(element) ||
@@ -809,7 +999,7 @@ if (!window.__sedum) {
       candidate.name !== target.name ||
       !readable(element) ||
       !visible(element) ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers)
     )
@@ -837,13 +1027,13 @@ if (!window.__sedum) {
     const candidate = snapshot?.candidates.find((item) => item.ref === ref);
     if (
       !candidate ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       (expected && expected.name !== candidate.name)
     )
       return { actionable: false, reason: "stale" };
-    if (!visible(element) || disabled(element))
+    if (!(visible(element) || ariaHiddenOnly(element)) || disabled(element))
       return { actionable: false, reason: "not_actionable" };
     const enclosingLink = element.closest("a[href]");
     if (enclosingLink) {
