@@ -803,6 +803,203 @@ describe("locator", () => {
     );
   });
 
+  it.each([
+    "cheapest red mug",
+    "click Add to cart for the cheapest red mug",
+    "click the second Add to cart button that is red",
+    "click Add to cart for the cheapest product with free shipping",
+    "click the second Add to cart in Missing section",
+    "do not click the first Add to cart button",
+  ])(
+    "does not override a model pick from a partial request: %s",
+    async (sentence) => {
+      const items = [
+        candidate(0, {
+          name: "Add to cart",
+          signals: { path: "a", item: "Red mug $10 Add to cart" },
+        }),
+        candidate(1, {
+          name: "Add to cart",
+          signals: { path: "b", item: "Blue mug $5 Add to cart" },
+        }),
+      ];
+      const { page } = recordedPage(items);
+      const model = resolver((options) =>
+        answer(options, "r0", { r0: 0.9, r1: 0.08, none: 0.02 }, 0.9),
+      );
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence,
+      });
+      expect(result.kind).toBe("resolved");
+      if (result.kind === "resolved") {
+        expect(result.target.driverTarget().ref).toBe("fresh-r0");
+        expect(result.diagnostic.gate).not.toBe("resolved_in_code");
+      }
+    },
+  );
+
+  it.each([
+    "click Add to cart for the cheapest red mug",
+    "click the second Add to cart in Missing section",
+  ])(
+    "does not rescue model abstention with a partial match: %s",
+    async (sentence) => {
+      const { page } = recordedPage([
+        candidate(0, {
+          name: "Add to cart",
+          signals: { path: "a", item: "Red mug $10" },
+        }),
+        candidate(1, {
+          name: "Add to cart",
+          signals: { path: "b", item: "Blue mug $5" },
+        }),
+      ]);
+      const model = resolver((options) =>
+        answer(options, "none", { r0: 0.04, r1: 0.04, none: 0.92 }, 0.92),
+      );
+      expect(
+        await resolveTarget(page, model, { operation: "click", sentence }),
+      ).toMatchObject({ kind: "unresolved", reason: "none" });
+    },
+  );
+
+  it.each([
+    ["click the second Edit in Billing", "fresh-r2"],
+    ["click Edit for the cheapest item in Billing", "fresh-r2"],
+    ["click the last Edit under Billing", "fresh-r2"],
+  ])(
+    "applies the section before counting or comparing: %s",
+    async (sentence, expected) => {
+      const items = [
+        candidate(0, {
+          name: "Edit",
+          signals: { path: "a", section: "Account", item: "Account $1" },
+        }),
+        candidate(1, {
+          name: "Edit",
+          signals: {
+            path: "b",
+            section: "Settings › Billing",
+            item: "Billing $20",
+          },
+        }),
+        candidate(2, {
+          name: "Edit",
+          signals: {
+            path: "c",
+            section: "Settings › Billing",
+            item: "Billing $10",
+          },
+        }),
+      ];
+      const { page } = recordedPage(items);
+      const model = resolver((options) =>
+        answer(options, "r0", { r0: 0.9, r1: 0.04, r2: 0.04, none: 0.02 }, 0.9),
+      );
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence,
+      });
+      expect(result.kind).toBe("resolved");
+      if (result.kind === "resolved")
+        expect(result.target.driverTarget().ref).toBe(expected);
+    },
+  );
+
+  it("counts only article-body members for an explicit article scope", async () => {
+    const items = [
+      candidate(0, {
+        name: "Charles Babbage",
+        tag: "a",
+        role: "link",
+        signals: { path: "sidebar" },
+      }),
+      candidate(1, {
+        name: "Charles Babbage",
+        tag: "a",
+        role: "link",
+        signals: { path: "body/1", region: "article-body" },
+      }),
+      candidate(2, {
+        name: "Charles Babbage",
+        tag: "a",
+        role: "link",
+        signals: { path: "body/2", region: "article-body" },
+      }),
+    ];
+    const model = resolver((options) => answer(options, "r2"));
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click the first Charles Babbage link in the article",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+
+  it("applies an explicit control kind before counting", async () => {
+    const { page } = recordedPage([
+      candidate(0, { name: "Edit", tag: "a", role: "link" }),
+      candidate(1, { name: "Edit" }),
+      candidate(2, { name: "Edit" }),
+    ]);
+    const model = resolver((options) => answer(options, "r2"));
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "click the second Edit button",
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r2",
+    );
+  });
+
+  it.each(["item", "section"] as const)(
+    "rejects changed %s evidence before returning a code pick",
+    async (signal) => {
+      const items = [
+        candidate(0, {
+          name: "Edit",
+          signals: { path: "a", section: "Billing", item: "$20" },
+        }),
+        candidate(1, {
+          name: "Edit",
+          signals: { path: "b", section: "Billing", item: "$10" },
+        }),
+      ];
+      const { page } = recordedPage(items, {
+        live: () =>
+          items.map((item, index) =>
+            index === 0
+              ? {
+                  ...item,
+                  signals: {
+                    ...item.signals,
+                    [signal]: signal === "item" ? "$1" : "Account",
+                  },
+                }
+              : item,
+          ),
+      });
+      const model = resolver((options) =>
+        answer(options, "r0", { r0: 0.9, r1: 0.08, none: 0.02 }, 0.9),
+      );
+      expect(
+        await resolveTarget(page, model, {
+          operation: "click",
+          sentence:
+            signal === "item"
+              ? "click Edit for the cheapest item"
+              : "click the second Edit in Billing",
+        }),
+      ).toMatchObject({ kind: "unresolved", reason: "stale" });
+    },
+  );
+
   it("acts on the same-name member in the section the sentence names", async () => {
     const items = [
       candidate(0, {
@@ -1448,6 +1645,29 @@ describe("name hints, item checks, and code fallback", () => {
       diagnostic: { gate: "resolved_in_code" },
     });
     expect(loose.kind === "resolved" && loose.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+
+  it("counts all masked siblings, not only identical numeric labels", async () => {
+    const items = [84, 62, 62].map((count, index) =>
+      candidate(index, {
+        name: `${count} comments`,
+        tag: "a",
+        role: "link",
+        signals: { path: `story/${index}` },
+      }),
+    );
+    const model = resolver((options) => answer(options, "r1"));
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click the comments link for the second story",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
       "fresh-r1",
     );
   });
