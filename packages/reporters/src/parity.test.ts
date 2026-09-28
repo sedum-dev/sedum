@@ -56,6 +56,10 @@ describe("PoC report capability contract", () => {
     });
     expect(action!.locator).toMatchObject({
       confidence: 0.48,
+      decision: {
+        gate: "repeated_member_model_pick",
+        similarCandidates: 3,
+      },
       cache: {
         outcome: "miss",
         fallbackCalledModel: true,

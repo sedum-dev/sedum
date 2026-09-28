@@ -466,6 +466,7 @@ async function executeSentence(
                 : locator.kind === "resolved" && locator.calls.length
                   ? "model"
                   : "none",
+            decision: locator.diagnostic.decision ?? null,
             options: (sensitive
               ? []
               : locator.diagnostic.topOptions.slice(0, 5)

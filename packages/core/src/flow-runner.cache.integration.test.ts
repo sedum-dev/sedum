@@ -140,6 +140,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         const flow = await runFlow(file, {
           repoRoot: root,
           browser: new PlaywrightBrowserDriver(),
+          browserKind: "chromium",
           classificationCache: new NoopClassificationCache(),
           locatorCache: store,
           provider: {
@@ -198,6 +199,29 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         stale.result.tests[0]?.attempts[0]?.steps[0]?.locator?.source,
       ).toBe("none");
       expect(store.put).toHaveBeenCalledTimes(1);
+
+      cards = true;
+      entries.clear();
+      chosen.length = 0;
+      await writeFile(file, `url: ${base}/\nsteps:\n  - click Add to cart\n`);
+      vi.mocked(store.put).mockClear();
+      const callsBeforeRepeatedPick = choose.mock.calls.length;
+      const firstRepeatedPick = await run("repeated-pick-1");
+      const secondRepeatedPick = await run("repeated-pick-2");
+      expect(firstRepeatedPick.flow.status).toBe("passed");
+      expect(secondRepeatedPick.flow.status).toBe("passed");
+      expect(chosen).toEqual(["Camera", "Camera"]);
+      expect(choose).toHaveBeenCalledTimes(callsBeforeRepeatedPick + 2);
+      expect(store.put).not.toHaveBeenCalled();
+      expect(
+        firstRepeatedPick.result.tests[0]?.attempts[0]?.steps[0]?.locator,
+      ).toMatchObject({
+        source: "model",
+        decision: {
+          gate: "repeated_member_model_pick",
+          similarCandidates: 2,
+        },
+      });
     }, 15_000);
 
     it("records a lost cache write race as a conflict and keeps the model result", async () => {
@@ -222,6 +246,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const flow = await runFlow(file, {
         repoRoot: root,
         browser: new PlaywrightBrowserDriver(),
+        browserKind: "chromium",
         classificationCache: new NoopClassificationCache(),
         locatorCache: store,
         provider: {
@@ -347,6 +372,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         const flow = await runFlow(scenarioFile, {
           repoRoot: root,
           browser: new PlaywrightBrowserDriver(),
+          browserKind: "chromium",
           classificationCache: new NoopClassificationCache(),
           locatorCache: store,
           provider: { classifyBatch: vi.fn(), choose, holds: vi.fn() },

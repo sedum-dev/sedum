@@ -24,6 +24,7 @@ describe("cache outcome in terminal summary", () => {
       locator: {
         confidence: null,
         source: "model",
+        decision: null,
         options: [],
         cache: {
           outcome: "miss",

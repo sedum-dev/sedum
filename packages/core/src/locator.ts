@@ -104,6 +104,10 @@ export interface LocatorOptionDiagnostic {
   readonly role: string;
   readonly probability: number;
 }
+export interface LocatorDecisionDiagnostic {
+  readonly gate: "repeated_member_model_pick";
+  readonly similarCandidates: number;
+}
 export interface LocatorDiagnostic {
   readonly candidateCount: number;
   readonly rounds: number;
@@ -113,6 +117,7 @@ export interface LocatorDiagnostic {
   /** Probabilities come only from the final comparable Choice. */
   readonly topOptions: readonly LocatorOptionDiagnostic[];
   readonly gate?: string;
+  readonly decision?: LocatorDecisionDiagnostic;
 }
 export interface LocatorCacheDiagnostic {
   readonly outcome: "hit" | "miss" | "bypassed";
@@ -778,62 +783,23 @@ export async function resolveTarget(
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
     const group = repeatedGroup(selected, candidates);
+    let repeatedPickCandidates: number | undefined;
     const low =
       (decision.confidence !== null && decision.confidence < MIN_CONFIDENCE) ||
       decision.probabilities[selected.ref]! < MIN_CONFIDENCE ||
       comparableLead(decision, selected.ref) < MIN_LEAD;
-    if (low) {
+    if (low && group.length > 1) {
+      gate = "repeated_member_model_pick";
+      repeatedPickCandidates = group.length;
+    } else if (low) {
       gate = "low_confidence_or_margin";
-      if (group.length < 2) return unresolved("ambiguous");
-      const groupProbability = group.reduce(
-        (sum, candidate) => sum + (decision.probabilities[candidate.ref] ?? 0),
-        0,
-      );
-      if (
-        groupProbability < 0.75 ||
-        groupProbability - (1 - groupProbability) < 0.2
-      ) {
-        gate = "repeated_group_weak";
-        return unresolved("ambiguous");
-      }
-      if (batches(options.sentence, group).length !== 1)
-        return unresolved("ambiguous");
-      if (!sameVersion(await pageVersion(page), source.version))
-        return unresolved("stale");
-      const narrower = await choose(group);
-      if (!sameVersion(await pageVersion(page), source.version))
-        return unresolved("stale");
-      top = topOptions(narrower, group);
-      confidence = narrower.confidence;
-      if (narrower.selection.kind === "none") return unresolved("none");
-      const member = byId.get(narrower.selection.id);
-      if (
-        !member ||
-        narrower.probabilities[member.ref]! < 0.6 ||
-        comparableLead(narrower, member.ref) < 0.2
-      ) {
-        gate = "repeated_member_weak";
-        return unresolved("ambiguous");
-      }
-      if (!sentenceEvidence(options.sentence, member, group)) {
-        gate = "repeated_member_no_evidence";
-        return unresolved("ambiguous");
-      }
-      if (!explicitRegionEvidence(options.sentence, member)) {
-        gate = "explicit_region_unproven";
-        return unresolved("ambiguous");
-      }
-      gate = "repeated_member_proven";
-      if (options.operation === "fill" && !member.editable)
-        return unresolved("not_fillable");
-      return await refresh(member);
-    }
-    if (
+      return unresolved("ambiguous");
+    } else if (
       group.length > 1 &&
       !sentenceEvidence(options.sentence, selected, group)
     ) {
-      gate = "repeated_member_no_evidence";
-      return unresolved("ambiguous");
+      gate = "repeated_member_model_pick";
+      repeatedPickCandidates = group.length;
     }
     if (options.operation === "fill" && !selected.editable)
       return unresolved("not_fillable");
@@ -841,10 +807,19 @@ export async function resolveTarget(
       gate = "explicit_region_unproven";
       return unresolved("ambiguous");
     }
-    return await refresh(selected);
+    return await refresh(
+      selected,
+      repeatedPickCandidates === undefined
+        ? undefined
+        : {
+            gate: "repeated_member_model_pick",
+            similarCandidates: repeatedPickCandidates,
+          },
+    );
 
     async function refresh(
       selectedCandidate: Candidate,
+      acceptedDecision?: LocatorDecisionDiagnostic,
     ): Promise<LocatorResult> {
       ensureActive();
       const fresh = await liveCandidates(page, options.operation);
@@ -921,6 +896,7 @@ export async function resolveTarget(
           observationVersion: source.version,
           topOptions: top,
           ...(gate ? { gate } : {}),
+          ...(acceptedDecision ? { decision: acceptedDecision } : {}),
         },
         calls,
         ...(cacheOutcome
@@ -930,6 +906,7 @@ export async function resolveTarget(
           : {}),
         ...(options.cache?.key &&
         !options.runtimeDependent &&
+        !acceptedDecision &&
         cacheOutcome?.outcome === "miss"
           ? {
               cacheSeed: {

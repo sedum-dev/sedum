@@ -1,4 +1,4 @@
-import type { RunResult } from "@sedum-dev/core";
+import type { ResultStep, RunResult } from "@sedum-dev/core";
 import path from "node:path";
 import type { ReporterEvent } from "./lifecycle.js";
 import { needsAttention, selectedAttempt, shellArg } from "./shared.js";
@@ -60,6 +60,14 @@ function flags(value: readonly string[]): string {
   return value.length ? ` [${value.join(", ")}]` : "";
 }
 
+function locatorDecision(
+  decision: NonNullable<ResultStep["locator"]>["decision"],
+): string {
+  return decision
+    ? `picked 1 of ${decision.similarCandidates} similar elements`
+    : "";
+}
+
 function source(
   stack: readonly { file: string; line: number; col: number }[],
 ): string {
@@ -70,9 +78,17 @@ function attention(result: RunResult, context: ReporterContext): string {
   const lines: string[] = [];
   const reruns = new Set<string>();
   const evidence = new Set<string>();
+  const locatorDecisions: string[] = [];
   for (const test of result.tests) {
     const attempt = selectedAttempt(test);
     if (!attempt) continue;
+    for (const step of attempt.steps) {
+      const picked = step.locator ? locatorDecision(step.locator.decision) : "";
+      if (picked)
+        locatorDecisions.push(
+          `  ${test.file}:${step.sourceStack[0]?.line ?? 1} step ${step.index}: ${picked}`,
+        );
+    }
     const affectedSteps = attempt.steps.filter(needsAttention);
     const bindingProblems = attempt.problems.filter(
       (problem) => problem.stepId === null,
@@ -145,6 +161,8 @@ function attention(result: RunResult, context: ReporterContext): string {
         `  test error ${attempt.error.code}: ${attempt.error.message}`,
       );
   }
+  if (locatorDecisions.length)
+    lines.push("\nlocator decisions", ...locatorDecisions);
   if (
     reruns.size > 0 ||
     result.state === "error" ||
@@ -178,7 +196,8 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
     context: ReporterContext,
   ) => {
     const { step, test } = event;
-    return `${test.file}:${step.sourceStack[0]?.line ?? 1} ${coloredLabel(step.state, step.verdict, context)}${flags(step.flags)} ${step.phase} step ${step.index}: ${step.sentence}\n`;
+    const picked = step.locator ? locatorDecision(step.locator.decision) : "";
+    return `${test.file}:${step.sourceStack[0]?.line ?? 1} ${coloredLabel(step.state, step.verdict, context)}${flags(step.flags)} ${step.phase} step ${step.index}: ${step.sentence}${picked ? ` · ${picked}` : ""}\n`;
   };
   const flush = (testId: string) => {
     const lines = buffered.get(testId) ?? [];

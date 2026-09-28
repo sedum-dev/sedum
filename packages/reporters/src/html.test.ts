@@ -30,7 +30,19 @@ function step(
       url: "https://shop.test/checkout",
       title: "Checkout",
     },
-    locator: null,
+    locator:
+      verdict === "failed"
+        ? {
+            confidence: 0.58,
+            source: "model",
+            decision: {
+              gate: "repeated_member_model_pick",
+              similarCandidates: 3,
+            },
+            options: [],
+            cache: null,
+          }
+        : null,
     judgement: {
       holds: index === 1 ? 0.58 : 0.66,
       contradicted: 0.2,
@@ -106,6 +118,7 @@ describe("HTML report", () => {
     expect(html).toContain("all attempts");
     expect(html).toContain("provider total");
     expect(html).toContain("Sedum markup");
+    expect(html).toContain("picked 1 of 3 similar elements");
     expect(html).toContain('<div class="r-total-band"><span>total</span>');
     expect(html).toContain("input</span><span>160 tk</span><span>$0.000032");
     expect(html).toContain("output</span><span>24 tk</span><span>$0.000019");

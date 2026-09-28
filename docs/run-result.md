@@ -32,7 +32,7 @@ earlier progress file as an authoritative final result. This is the sole case
 where terminal artifact persistence cannot be promised through the failed
 destination.
 
-The model has ordered tests, whole-test attempts, steps, and observation attempts. Only the selected terminal attempt contributes to final test/step outcome counts; all attempts contribute to model usage and cost. Unknown actual cost is `null`, not zero. Each model call carries its model ID, tokens, rate provenance, and actual cost when known. Whole-test retries from `--retries` create separate attempts. Locator cache outcomes are recorded explicitly; no cache hit is inferred from an absence of model calls.
+The model has ordered tests, whole-test attempts, steps, and observation attempts. Only the selected terminal attempt contributes to final test/step outcome counts; all attempts contribute to model usage and cost. Unknown actual cost is `null`, not zero. Each model call carries its model ID, tokens, rate provenance, and actual cost when known. Whole-test retries from `--retries` create separate attempts. Locator cache outcomes are recorded explicitly; no cache hit is inferred from an absence of model calls. When the locator acts on the model's pick among repeated elements, `locator.decision` records the `repeated_member_model_pick` gate and the number of similar candidates. This is informational provenance, not a flag: it does not change verdicts or `--strict` exits. Picks accepted through this gate are not cached.
 
 `execution`, when present, records how the run was scheduled:
 

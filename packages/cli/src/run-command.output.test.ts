@@ -319,6 +319,7 @@ describe("run output failure contract", () => {
         locator: {
           confidence: 0.2,
           source: "model",
+          decision: null,
           options: [{ label: "(no match)", role: "", probability: 0.8 }],
           cache: null,
         },

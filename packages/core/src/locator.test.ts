@@ -621,7 +621,7 @@ describe("locator", () => {
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
   });
 
-  it("requires member-specific evidence for repeated labels and hrefs", async () => {
+  it("acts on a low-confidence repeated pick without narrowing or caching it", async () => {
     const items = [
       candidate(0, {
         name: "Add to cart",
@@ -636,50 +636,70 @@ describe("locator", () => {
       candidate(2),
     ];
     const { page } = recordedPage(items);
-    let rounds = 0;
-    const model = resolver((options) => {
-      rounds++;
-      return rounds % 2 === 1
-        ? answer(options, "r0", { r0: 0.43, r1: 0.42, r2: 0.05, none: 0.1 })
-        : answer(options, "r0", { r0: 0.8, r1: 0.1, none: 0.1 });
-    });
-    const clear = await resolveTarget(page, model, {
-      operation: "click",
-      sentence: "Add Camera to cart",
-    });
-    expect(clear.kind).toBe("resolved");
-    expect(clear.calls).toHaveLength(2);
-    const vague = await resolveTarget(page, model, {
+    const model = resolver((options) =>
+      answer(options, "r0", { r0: 0.43, r1: 0.42, r2: 0.05, none: 0.1 }),
+    );
+    const store: CacheStore = {
+      key: new Uint8Array(32).fill(17),
+      lookup: vi.fn(async () => ({ reason: "absent" as const })),
+      put: vi.fn(async () => {}),
+      invalidate: vi.fn(async () => {}),
+      clear: vi.fn(async () => {}),
+    };
+    const result = await resolveTarget(page, model, {
       operation: "click",
       sentence: "Add to cart",
+      cache: store,
     });
-    expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: {
+        gate: "repeated_member_model_pick",
+        decision: {
+          gate: "repeated_member_model_pick",
+          similarCandidates: 2,
+        },
+      },
+      calls: [call],
+    });
+    if (result.kind === "resolved") {
+      expect(result.target.driverTarget().ref).toBe("fresh-r0");
+      expect(result.cacheSeed).toBeUndefined();
+    }
   });
 
-  it("lets a narrower Choice select the named member after a different preliminary winner", async () => {
+  it("keeps a context-proven repeated pick eligible for caching", async () => {
     const items = [
       candidate(0, { name: "Add to cart", peers: ["Camera"] }),
       candidate(1, { name: "Add to cart", peers: ["Phone"] }),
     ];
-    const { page } = recordedPage(items);
-    let choices = 0;
-    const model = resolver((offered) => {
-      choices++;
-      return choices === 1
-        ? answer(offered, "r0", { r0: 0.43, r1: 0.42, none: 0.15 })
-        : answer(offered, "r1", { r0: 0.1, r1: 0.85, none: 0.05 });
-    });
-    const result = await resolveTarget(page, model, {
+    const model = resolver((offered) =>
+      answer(offered, "r1", { r0: 0.1, r1: 0.85, none: 0.05 }),
+    );
+    const store: CacheStore = {
+      key: new Uint8Array(32).fill(18),
+      lookup: vi.fn(async () => ({ reason: "absent" as const })),
+      put: vi.fn(async () => {}),
+      invalidate: vi.fn(async () => {}),
+      clear: vi.fn(async () => {}),
+    };
+    const result = await resolveTarget(recordedPage(items).page, model, {
       operation: "click",
       sentence: "Add Phone to cart",
+      cache: store,
     });
-    expect(result.kind).toBe("resolved");
-    expect(result.calls).toHaveLength(2);
-    if (result.kind === "resolved")
+    expect(result).toMatchObject({
+      kind: "resolved",
+      calls: [call],
+    });
+    if (result.kind === "resolved") {
+      expect(result.diagnostic.decision).toBeUndefined();
       expect(result.target.driverTarget().ref).toBe("fresh-r1");
+      expect(result.cacheSeed).toBeDefined();
+    }
   });
 
-  it("rejects a confident choice among same-label controls when the sentence is vague", async () => {
+  it("acts on a confident choice among same-label controls when the sentence is vague", async () => {
     const items = [
       candidate(0, {
         name: "Add to cart",
@@ -702,9 +722,14 @@ describe("locator", () => {
         sentence: "Add to cart",
       }),
     ).toMatchObject({
-      kind: "unresolved",
-      reason: "ambiguous",
-      diagnostic: { gate: "repeated_member_no_evidence" },
+      kind: "resolved",
+      diagnostic: {
+        gate: "repeated_member_model_pick",
+        decision: {
+          gate: "repeated_member_model_pick",
+          similarCandidates: 2,
+        },
+      },
     });
     expect(
       (
@@ -716,7 +741,7 @@ describe("locator", () => {
     ).toBe("resolved");
   });
 
-  it("does not treat a generic category word as evidence for one product", async () => {
+  it("reports model-pick provenance when only a generic category names the item", async () => {
     const items = [
       candidate(0, {
         name: "Add to cart",
@@ -739,9 +764,13 @@ describe("locator", () => {
         sentence: "Add to cart for the product",
       }),
     ).toMatchObject({
-      kind: "unresolved",
-      reason: "ambiguous",
-      diagnostic: { gate: "repeated_member_no_evidence" },
+      kind: "resolved",
+      diagnostic: {
+        decision: {
+          gate: "repeated_member_model_pick",
+          similarCandidates: 2,
+        },
+      },
     });
     expect(
       (
@@ -791,25 +820,33 @@ describe("locator", () => {
         operation: "click",
         sentence: "the comments link",
       }),
-    ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+    ).toMatchObject({ kind: "resolved" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
         sentence: "the first story link",
       }),
-    ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+    ).toMatchObject({ kind: "resolved" });
   });
 
   it("never hands a fallback label to fill and accepts an executable field", async () => {
     const label = candidate(0, { tag: "label", role: "", name: "Email" });
-    const fallback = recordedPage([label], { fill: [] });
+    const otherLabel = candidate(1, {
+      tag: "label",
+      role: "",
+      name: "Email",
+    });
+    const fallback = recordedPage([label, otherLabel], { fill: [] });
     const model = resolver((options) => answer(options, "r0"));
-    expect(
-      await resolveTarget(fallback.page, model, {
-        operation: "fill",
-        sentence: "Email",
-      }),
-    ).toMatchObject({ kind: "unresolved", reason: "not_fillable" });
+    const unfillable = await resolveTarget(fallback.page, model, {
+      operation: "fill",
+      sentence: "Email",
+    });
+    expect(unfillable).toMatchObject({
+      kind: "unresolved",
+      reason: "not_fillable",
+    });
+    expect(unfillable.diagnostic.decision).toBeUndefined();
     const field = candidate(0, {
       tag: "input",
       role: "textbox",
@@ -859,22 +896,22 @@ describe("locator", () => {
     const story = candidate(1, {
       tag: "a",
       role: "link",
-      name: "20 comments",
+      name: "comments",
       peers: ["1. Story One"],
       signals: { path: "story" },
     });
     const { page } = recordedPage([navigation, story]);
     const wrong = resolver((options) => answer(options, "r0"));
-    expect(
-      await resolveTarget(page, wrong, {
-        operation: "click",
-        sentence: "comments for the first story",
-      }),
-    ).toMatchObject({
+    const wrongResult = await resolveTarget(page, wrong, {
+      operation: "click",
+      sentence: "comments for the first story",
+    });
+    expect(wrongResult).toMatchObject({
       kind: "unresolved",
       reason: "ambiguous",
       diagnostic: { gate: "explicit_region_unproven" },
     });
+    expect(wrongResult.diagnostic.decision).toBeUndefined();
     const correct = resolver((options) => answer(options, "r1"));
     expect(
       (

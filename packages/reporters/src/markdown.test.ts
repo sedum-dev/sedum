@@ -67,6 +67,10 @@ const failedClick = (id: string, index: number): ResultStep =>
     locator: {
       confidence: 0.31,
       source: "model",
+      decision: {
+        gate: "repeated_member_model_pick",
+        similarCandidates: 2,
+      },
       options: [
         { label: "Continue shopping", role: "button", probability: 0.31 },
         { label: "(no match)", role: "", probability: 0.52 },
@@ -220,6 +224,9 @@ describe("markdown report", () => {
     expect(attention).toContain("- **where**: `flows/checkout.test.yaml:4:5`");
     expect(attention).toContain(
       "- **locator**: model · confidence 0.31 · cache miss (validation\\_changed)",
+    );
+    expect(attention).toContain(
+      "- **locator decision**: picked 1 of 2 similar elements",
     );
     expect(attention).toContain("  - (no match): 0.52");
     expect(attention).toContain("  - Continue shopping (button): 0.31");
@@ -415,6 +422,7 @@ describe("markdown report", () => {
         locator: {
           confidence: null,
           source: "none",
+          decision: null,
           options: [],
           cache: null,
         },

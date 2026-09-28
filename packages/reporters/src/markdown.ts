@@ -154,6 +154,10 @@ function stepSection(
     out.push(
       `- **locator**: ${locator.source} · confidence ${score(locator.confidence)}${cache}`,
     );
+    if (locator.decision)
+      out.push(
+        `- **locator decision**: picked 1 of ${locator.decision.similarCandidates} similar elements`,
+      );
     if (locator.options.length)
       for (const option of locator.options)
         out.push(

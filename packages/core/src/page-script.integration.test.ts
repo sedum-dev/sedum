@@ -262,12 +262,12 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(await page.evaluate("window.clicked")).toBe(259);
       await context.close();
     });
-    it("does not select one of three same-destination article links without a distinguishing clue", async () => {
+    it("acts on the model's pick among same-destination article links", async () => {
       const { page, context } = await fresh();
       const html = [
-        '<p>First mention <a href="/babbage" onclick="window.clicked=1">Charles Babbage</a></p>',
-        '<p>Second mention <a href="/babbage" onclick="window.clicked=2">Charles Babbage</a></p>',
-        '<p>Third mention <a href="/babbage" onclick="window.clicked=3">Charles Babbage</a></p>',
+        '<p>First mention <a href="/babbage" onclick="window.clicked=1; return false">Charles Babbage</a></p>',
+        '<p>Second mention <a href="/babbage" onclick="window.clicked=2; return false">Charles Babbage</a></p>',
+        '<p>Third mention <a href="/babbage" onclick="window.clicked=3; return false">Charles Babbage</a></p>',
       ].join("");
       await page.evaluate(
         `document.querySelector('#app').innerHTML = ${JSON.stringify(html)}`,
@@ -289,14 +289,20 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         sentence: "the link to the Charles Babbage article in the article body",
       });
       expect(result).toMatchObject({
-        kind: "unresolved",
-        reason: "ambiguous",
-        diagnostic: { gate: "repeated_member_no_evidence" },
+        kind: "resolved",
+        diagnostic: {
+          decision: {
+            gate: "repeated_member_model_pick",
+            similarCandidates: 3,
+          },
+        },
       });
-      expect(await page.evaluate("window.clicked")).toBeUndefined();
+      if (result.kind === "resolved")
+        await executeStep(page, { op: "click", target: result.target });
+      expect(await page.evaluate("window.clicked")).toBe(1);
       await context.close();
     });
-    it("requires the specific product clue before clicking a repeated cart button", async () => {
+    it("reports when a generic product clue leaves the repeated cart choice to the model", async () => {
       const { page, context } = await fresh();
       const html = [
         '<article><h2>Product Camera</h2><button onclick="window.clicked=1">Add to cart</button></article>',
@@ -315,8 +321,18 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         operation: "click",
         sentence: "Add to cart for the product",
       });
-      expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
-      expect(await page.evaluate("window.clicked")).toBeUndefined();
+      expect(vague).toMatchObject({
+        kind: "resolved",
+        diagnostic: {
+          decision: {
+            gate: "repeated_member_model_pick",
+            similarCandidates: 2,
+          },
+        },
+      });
+      if (vague.kind === "resolved")
+        await executeStep(page, { op: "click", target: vague.target });
+      expect(await page.evaluate("window.clicked")).toBe(1);
       const specific = await resolveTarget(page, model, {
         operation: "click",
         sentence: "Add to cart for Product Camera",

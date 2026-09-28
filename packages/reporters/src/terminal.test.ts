@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { RunRecorder, type ResultStep, type RunResult } from "@sedum-dev/core";
 import { ReporterLifecycle } from "./lifecycle.js";
+import { reportStep } from "./test-fixtures.js";
 import { createTerminalReporter, type ReporterContext } from "./terminal.js";
 
 const context: ReporterContext = {
@@ -142,6 +143,25 @@ describe("terminal reporters", () => {
     expect(end).toContain("rerun sedum run 'tests/checkout.test.yaml'");
     expect(`${live}${end}`).not.toContain(String.fromCharCode(27));
     expect(`${live}${end}`).not.toContain("…");
+  });
+
+  it("reports repeated model picks in live and final terminal output", async () => {
+    const recorder = new RunRecorder(async () => {}, "repeated-pick");
+    await recorder.start();
+    await recorder.startTest({ id: "checkout", file: "checkout.test.yaml" });
+    await recorder.addStep(reportStep("action", 1, "action"));
+    await recorder.finishTest("failed");
+    await recorder.finish();
+    const result = recorder.snapshot;
+    const lifecycle = new ReporterLifecycle();
+    const reporter = createTerminalReporter("steps");
+    const live = lifecycle
+      .feed(result)
+      .map((event) => reporter.onEvent(event, context))
+      .join("");
+    const final = reporter.onResult(result, context);
+    expect(live).toContain("picked 1 of 3 similar elements");
+    expect(final).toContain("picked 1 of 3 similar elements");
   });
 
   it("does not claim an unavailable artifact is readable", async () => {

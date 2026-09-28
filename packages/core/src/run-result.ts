@@ -75,6 +75,12 @@ export const ResultObservationSchema = z.strictObject({
 export const ResultLocatorSchema = z.strictObject({
   confidence: probability.nullable(),
   source: z.enum(["model", "cache", "none"]),
+  decision: z
+    .strictObject({
+      gate: z.literal("repeated_member_model_pick"),
+      similarCandidates: z.number().int().positive(),
+    })
+    .nullable(),
   options: z
     .array(
       z.strictObject({

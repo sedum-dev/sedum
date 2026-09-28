@@ -62,6 +62,10 @@ export function reportStep(
         ? {
             confidence: 0.48,
             source: "model",
+            decision: {
+              gate: "repeated_member_model_pick",
+              similarCandidates: 3,
+            },
             options: [
               { label: "Checkout", role: "button", probability: 0.48 },
               { label: "(no match)", role: "", probability: 0.32 },

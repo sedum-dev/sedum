@@ -166,7 +166,13 @@ function stepDetails(step: ResultStep): string {
               (locator.cache.targetChanged ? ", target changed" : ""),
           )
         : "") +
-      "</div><div><b>candidates</b> " +
+      "</div>" +
+      (locator.decision
+        ? "<div><b>locator decision</b> picked 1 of " +
+          locator.decision.similarCandidates +
+          " similar elements</div>"
+        : "") +
+      "<div><b>candidates</b> " +
       (locator.options.length
         ? locator.options
             .map((option) =>
