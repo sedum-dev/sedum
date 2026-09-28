@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test as propertyTest } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { RunRecorder } from "./run-recorder.js";
 import {
   resultTotals,
@@ -9,6 +11,12 @@ import {
 import { safeText, safeUrl } from "./report-privacy.js";
 
 const frame = { status: "omitted" as const, reason: "clean_step" };
+const propertySettings = {
+  database: { kind: "disabled" },
+  derandomize: true,
+  testCases: 1000,
+  verbosity: hegel.Verbosity.Quiet,
+} satisfies Partial<hegel.Settings>;
 function step(
   id: string,
   verdict: "passed" | "failed",
@@ -319,6 +327,22 @@ describe("canonical RunResult", () => {
 });
 
 describe("report privacy", () => {
+  propertyTest(
+    "report text uses literal replacement for generated secrets",
+    () => {
+      hegel.test((tc) => {
+        const secret = tc.draw(gs.text({ minSize: 1, maxSize: 24 }));
+        const prefix = tc.draw(gs.text({ maxSize: 24 }));
+        const suffix = tc.draw(gs.text({ maxSize: 24 }));
+        const input = `${prefix}${secret}${suffix}`;
+        const expected = input.split(secret).join("[REDACTED]");
+        const redacted = safeText(input, { secretValues: [secret] }, 512);
+        if (redacted !== expected)
+          throw new Error("Report text did not use literal secret replacement");
+      }, propertySettings);
+    },
+  );
+
   it("redacts values, strips URL secrets and bounds Unicode display", () => {
     const privacy = {
       secretValues: ["secret-123"],

@@ -1,9 +1,13 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, test as propertyTest } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import {
   MODEL_CHOICES,
+  MIN_MODEL_PROBABILITY,
+  canonicalSentence,
   classifySteps,
   evaluateModelAnswer,
   patternOperation,
@@ -34,6 +38,12 @@ async function cacheFile() {
   return join(folder, ".sedum", "classifications.json");
 }
 const source = { file: "tests/login.test.yaml", line: 7, col: 5 };
+const propertySettings = {
+  database: { kind: "disabled" },
+  derandomize: true,
+  testCases: 1000,
+  verbosity: hegel.Verbosity.Quiet,
+} satisfies Partial<hegel.Settings>;
 function step(sentence: string, line = 7): ClassificationInput {
   return { sentence, source: { ...source, line } };
 }
@@ -77,6 +87,109 @@ function fakeProvider(op: ModelChoice): {
 }
 
 describe("sentence classification", () => {
+  propertyTest("canonical sentences are idempotent", () => {
+    hegel.test((tc) => {
+      const sentence = tc.draw(gs.text({ maxSize: 96 }));
+      const canonical = canonicalSentence(sentence);
+      if (canonicalSentence(canonical) !== canonical)
+        throw new Error("Canonical sentence changed on the second pass");
+    }, propertySettings);
+  });
+
+  propertyTest(
+    "high-confidence model answers pass the classification gate",
+    () => {
+      hegel.test((tc) => {
+        const op = tc.draw(
+          gs.sampledFrom([
+            "click",
+            "type",
+            "press",
+            "goto",
+            "verify",
+            "measure",
+            "scroll",
+            "wait",
+            "remember",
+          ] as const),
+        );
+        const probability = tc.draw(
+          gs.floats({ minValue: MIN_MODEL_PROBABILITY, maxValue: 1 }),
+        );
+        const decision = evaluateModelAnswer({
+          op,
+          probabilities: distribution(op, probability),
+          model: "model",
+          requestedModel: "model",
+        });
+        if (!decision.accepted || decision.probability !== probability)
+          throw new Error("A high-confidence model answer was rejected");
+      }, propertySettings);
+    },
+  );
+  propertyTest(
+    "confidence below the threshold is rejected as ambiguous",
+    () => {
+      hegel.test((tc) => {
+        const op = tc.draw(
+          gs.sampledFrom([
+            "click",
+            "type",
+            "press",
+            "goto",
+            "verify",
+            "measure",
+            "scroll",
+            "wait",
+            "remember",
+          ] as const),
+        );
+        const probability = tc.draw(gs.floats({ minValue: 0.1, maxValue: 1 }));
+        const decision = evaluateModelAnswer({
+          op,
+          probabilities: distribution(op, probability),
+          model: "model",
+          requestedModel: "model",
+        });
+        const expectedAccepted = probability >= MIN_MODEL_PROBABILITY;
+        if (decision.accepted !== expectedAccepted) {
+          throw new Error(
+            "Classification confidence threshold was not enforced",
+          );
+        }
+        if (!decision.accepted && decision.reason !== "ambiguous")
+          throw new Error(
+            "A low-confidence executable answer had the wrong reason",
+          );
+      }, propertySettings);
+    },
+  );
+  propertyTest(
+    "non-executable model choices retain their rejection reasons",
+    () => {
+      hegel.test((tc) => {
+        const op = tc.draw(
+          gs.sampledFrom([
+            "unsupported_or_unclear",
+            "multiple_actions",
+          ] as const),
+        );
+        const decision = evaluateModelAnswer({
+          op,
+          probabilities: distribution(op, 0.9),
+          model: "model",
+          requestedModel: "model",
+        });
+        const expectedReason =
+          op === "unsupported_or_unclear" ? "unsupported" : "multiple_actions";
+        if (decision.accepted || decision.reason !== expectedReason)
+          throw new Error(
+            "A non-executable model choice changed its rejection reason",
+          );
+      }, propertySettings);
+    },
+  );
+
   it("classifies the labeled PoC login and checkout corpus offline", async () => {
     const corpus = JSON.parse(
       await readFile(

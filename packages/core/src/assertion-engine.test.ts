@@ -1,5 +1,7 @@
 import { inspect } from "node:util";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, test as propertyTest, vi } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import type { BrowserPage } from "./browser-driver.js";
 import type { DigestResult, PageVersion } from "./page-protocol.js";
 import type { Judge, ProviderCall } from "./provider.js";
@@ -9,6 +11,13 @@ import {
   measure,
   verify,
 } from "./assertion-engine.js";
+
+const propertySettings = {
+  database: { kind: "disabled" },
+  derandomize: true,
+  testCases: 1000,
+  verbosity: hegel.Verbosity.Quiet,
+} satisfies Partial<hegel.Settings>;
 
 const firstVersion: PageVersion = {
   document: "one",
@@ -102,6 +111,37 @@ function fakeJudge(holds = 0.9, contradicted = 0.1) {
 }
 
 describe("SED-13 verify policy", () => {
+  propertyTest("verify policy partitions generated scores consistently", () => {
+    hegel.test((tc) => {
+      const holds = tc.draw(gs.floats({ minValue: 0, maxValue: 1 }));
+      const contradicted = tc.draw(gs.floats({ minValue: 0, maxValue: 1 }));
+      const minP = tc.draw(gs.floats({ minValue: 0, maxValue: 1 }));
+      const band = tc.draw(gs.floats({ minValue: 0, maxValue: 1 }));
+      const contradictionCutoff = tc.draw(
+        gs.floats({ minValue: 0, maxValue: 1 }),
+      );
+      const result = evaluateVerifyScores(holds, contradicted, {
+        minP,
+        band,
+        contradictionCutoff,
+      });
+      const expectedFlags =
+        holds < minP - band
+          ? []
+          : [
+              ...(holds < minP ? (["low_confidence"] as const) : []),
+              ...(contradicted >= contradictionCutoff
+                ? (["contradiction"] as const)
+                : []),
+            ];
+      if (
+        result.verdict !== (holds < minP - band ? "failed" : "passed") ||
+        JSON.stringify(result.flags) !== JSON.stringify(expectedFlags)
+      )
+        throw new Error("Generated verify scores crossed a policy boundary");
+    }, propertySettings);
+  });
+
   it.each([
     [0.75, 0.499999, "passed", []],
     [0.75, 0.5, "passed", ["contradiction"]],
