@@ -38,48 +38,6 @@ const MAX_SENTENCE_POINTS = 512;
 const MAX_PARALLEL_CHOICES = 4;
 const MIN_CONFIDENCE = 0.3;
 const MIN_LEAD = 0.1;
-const WEAK_MEMBER_WORDS = new Set([
-  "a",
-  "add",
-  "an",
-  "and",
-  "article",
-  "at",
-  "body",
-  "button",
-  "by",
-  "cart",
-  "control",
-  "entry",
-  "field",
-  "first",
-  "for",
-  "from",
-  "in",
-  "input",
-  "item",
-  "label",
-  "last",
-  "link",
-  "list",
-  "more",
-  "of",
-  "on",
-  "option",
-  "or",
-  "page",
-  "post",
-  "product",
-  "result",
-  "results",
-  "story",
-  "that",
-  "the",
-  "thing",
-  "this",
-  "to",
-  "with",
-]);
 
 function excerpt(value: string, limit: number): string {
   const points = Array.from(value);
@@ -372,9 +330,7 @@ function sentenceEvidence(
   const firstStory = (candidate: Candidate): boolean =>
     candidate.peers.some((peer) => /^1[.)]\s/.test(peer));
   const namesRequestedPurpose = (candidate: Candidate): boolean =>
-    words(candidate.name).some(
-      (word) => !WEAK_MEMBER_WORDS.has(word) && sentenceWords.includes(word),
-    );
+    words(candidate.name).some((word) => sentenceWords.includes(word));
   if (
     /\b(first|top)(?:\s+ranked)?\s+story\b/i.test(sentence) &&
     firstStory(selected) &&
@@ -398,28 +354,10 @@ function sentenceEvidence(
   return [selected.name, ...selected.peers].some((text) => {
     const phrase = words(text);
     return (
-      phrase.some((word) => !WEAK_MEMBER_WORDS.has(word)) &&
       containsPhrase(sentenceWords, phrase) &&
       !otherTexts.some((other) => containsPhrase(other, phrase))
     );
   });
-}
-
-function explicitRegionEvidence(
-  sentence: string,
-  candidate: Candidate,
-): boolean {
-  if (
-    /\barticle body\b/i.test(sentence) &&
-    candidate.signals.region !== "article-body"
-  )
-    return false;
-  if (
-    /\b(first|top)(?:\s+ranked)?\s+story\b/i.test(sentence) &&
-    !candidate.peers.some((peer) => /^1[.)]\s/.test(peer))
-  )
-    return false;
-  return true;
 }
 
 function sameIdentity(a: Candidate, b: Candidate): boolean {
@@ -780,7 +718,6 @@ export async function resolveTarget(
     const group = repeatedGroup(selected, candidates);
     const low =
       (decision.confidence !== null && decision.confidence < MIN_CONFIDENCE) ||
-      decision.probabilities[selected.ref]! < MIN_CONFIDENCE ||
       comparableLead(decision, selected.ref) < MIN_LEAD;
     if (low) {
       gate = "low_confidence_or_margin";
@@ -789,10 +726,7 @@ export async function resolveTarget(
         (sum, candidate) => sum + (decision.probabilities[candidate.ref] ?? 0),
         0,
       );
-      if (
-        groupProbability < 0.75 ||
-        groupProbability - (1 - groupProbability) < 0.2
-      ) {
+      if (groupProbability < 0.75) {
         gate = "repeated_group_weak";
         return unresolved("ambiguous");
       }
@@ -819,10 +753,6 @@ export async function resolveTarget(
         gate = "repeated_member_no_evidence";
         return unresolved("ambiguous");
       }
-      if (!explicitRegionEvidence(options.sentence, member)) {
-        gate = "explicit_region_unproven";
-        return unresolved("ambiguous");
-      }
       gate = "repeated_member_proven";
       if (options.operation === "fill" && !member.editable)
         return unresolved("not_fillable");
@@ -837,10 +767,6 @@ export async function resolveTarget(
     }
     if (options.operation === "fill" && !selected.editable)
       return unresolved("not_fillable");
-    if (!explicitRegionEvidence(options.sentence, selected)) {
-      gate = "explicit_region_unproven";
-      return unresolved("ambiguous");
-    }
     return await refresh(selected);
 
     async function refresh(
@@ -889,10 +815,6 @@ export async function resolveTarget(
         );
       }
       if (matches.length !== 1) return unresolved("stale");
-      if (!explicitRegionEvidence(options.sentence, matches[0]!)) {
-        gate = "explicit_region_unproven";
-        return unresolved("ambiguous");
-      }
       ensureActive();
       if (
         cacheOutcome?.outcome === "miss" &&
