@@ -478,7 +478,14 @@ function repeatedMemberAccepted(
   decision: ResolverDecision,
 ): string | null {
   if (!policy) return null;
-  if (policy.modelPick) return "repeated_member_model_pick";
+  if (policy.modelPick)
+    // Act on the model's pick unless the sentence itself singles out a
+    // different member ("in the article body" against a sidebar pick).
+    return group.some(
+      (other) => other !== member && sentenceEvidence(sentence, other, group),
+    )
+      ? null
+      : "repeated_member_model_pick";
   const href = member.signals.href?.trim();
   if (
     policy.sameDestination &&
@@ -1388,8 +1395,6 @@ export async function resolveTarget(
       gate = "resolved_in_code_after_none";
       if (options.operation === "fill" && !fallback.editable)
         return unresolved("not_fillable");
-      if (!explicitRegionEvidence(options.sentence, fallback))
-        return unresolved("none");
       return await refresh(fallback);
     }
     const selected = byId.get(decision.selection.id);
@@ -1414,8 +1419,6 @@ export async function resolveTarget(
       gate = bySection ? "resolved_by_section" : "resolved_in_code";
       if (options.operation === "fill" && !coded.editable)
         return unresolved("not_fillable");
-      if (!explicitRegionEvidence(options.sentence, coded))
-        return unresolved("ambiguous");
       return await refresh(coded);
     }
     const itemMembers =
@@ -1434,8 +1437,6 @@ export async function resolveTarget(
         gate = "resolved_by_items";
         if (options.operation === "fill" && !verified.editable)
           return unresolved("not_fillable");
-        if (!explicitRegionEvidence(options.sentence, verified))
-          return unresolved("ambiguous");
         return await refresh(verified);
       }
     }
