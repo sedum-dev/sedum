@@ -621,6 +621,39 @@ describe("locator", () => {
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
   });
 
+  it("accepts a below-30% winner only when its lead is sufficient", async () => {
+    const { page } = recordedPage(
+      Array.from({ length: 5 }, (_, index) => candidate(index)),
+    );
+    for (const [runnerUp, fifth, accepted] of [
+      [0.17, 0.13, true],
+      [0.2, 0.1, false],
+    ] as const) {
+      const model = resolver((options) =>
+        answer(
+          options,
+          "r0",
+          { r0: 0.29, r1: runnerUp, r2: 0.16, r3: 0.15, r4: fifth, none: 0.1 },
+          0.8,
+        ),
+      );
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence: "Item 0",
+      });
+      if (accepted) {
+        expect(result.kind).toBe("resolved");
+        if (result.kind === "resolved")
+          expect(result.target.driverTarget().ref).toBe("fresh-r0");
+      } else {
+        expect(result).toMatchObject({
+          kind: "unresolved",
+          reason: "ambiguous",
+        });
+      }
+    }
+  });
+
   it("requires member-specific evidence for repeated labels and hrefs", async () => {
     const items = [
       candidate(0, {
@@ -753,6 +786,27 @@ describe("locator", () => {
     ).toBe("resolved");
   });
 
+  it("accepts an explicitly named generic label among repeated destinations", async () => {
+    const { page } = recordedPage([
+      candidate(0, {
+        name: "More",
+        signals: { path: "more", href: "/article" },
+      }),
+      candidate(1, {
+        name: "Read article",
+        signals: { path: "read", href: "/article" },
+      }),
+    ]);
+    const model = resolver((options) => answer(options, "r0"));
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "click More",
+    });
+    expect(result.kind).toBe("resolved");
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe("fresh-r0");
+  });
+
   it("combines first-story rank and link purpose for repeated destinations", async () => {
     const items = [
       candidate(0, {
@@ -848,7 +902,7 @@ describe("locator", () => {
     expect(model.choose).not.toHaveBeenCalled();
   });
 
-  it("requires local evidence for explicit article and first-story regions", async () => {
+  it("delegates region interpretation to the resolver but still disambiguates repeated labels", async () => {
     const navigation = candidate(0, {
       tag: "a",
       role: "link",
@@ -865,16 +919,14 @@ describe("locator", () => {
     });
     const { page } = recordedPage([navigation, story]);
     const wrong = resolver((options) => answer(options, "r0"));
-    expect(
-      await resolveTarget(page, wrong, {
-        operation: "click",
-        sentence: "comments for the first story",
-      }),
-    ).toMatchObject({
-      kind: "unresolved",
-      reason: "ambiguous",
-      diagnostic: { gate: "explicit_region_unproven" },
+    // Semantic correctness belongs to the resolver, not a phrase-specific veto.
+    const selected = await resolveTarget(page, wrong, {
+      operation: "click",
+      sentence: "comments for the first story",
     });
+    expect(selected.kind).toBe("resolved");
+    if (selected.kind === "resolved")
+      expect(selected.target.driverTarget().ref).toBe("fresh-r0");
     const correct = resolver((options) => answer(options, "r1"));
     expect(
       (
