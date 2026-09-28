@@ -743,9 +743,23 @@ function resolveInCode(
     text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
   const said = words(sentence.replace(/\{\{[^}]*\}\}/g, " "));
   const label = new Set(words(pick.name));
-  const ordinal = said.find(
-    (word) => ORDINALS[word] !== undefined && !label.has(word),
+  const referenceAt = said.findIndex((word) =>
+    /^(for|on|about|of|from|under|by)$/.test(word),
   );
+  const ordinal = said.find((word, index) => {
+    if (ORDINALS[word] === undefined || label.has(word)) return false;
+    // Preserve literal item references such as "first released in 1993".
+    // An ordinal before the reference still has to pass the whole-request
+    // check, even when a later reference uniquely names an item.
+    const next = said[index + 1] ?? "";
+    return !(
+      loose &&
+      referenceAt >= 0 &&
+      index > referenceAt &&
+      !label.has(next) &&
+      /^(released|published|created|updated|modified)$/.test(next)
+    );
+  });
   const lowest = /\b(cheapest|lowest[- ]priced?|least expensive)\b/i.test(
     sentence,
   );
@@ -786,6 +800,7 @@ function resolveInCode(
       `^(?:(?:please )?(?:click|tap|press|open|select|choose) )?(?:` +
         `${ranked} ${target}|` +
         `${target} (?:for|on|of) ${ranked}(?: ${noun})?|` +
+        `${target} ${ranked} ${noun}|` +
         `${ranked} ${noun}(?: s)? ${target})$`,
     );
     if (!form.test(request) || (lowest && highest)) return null;

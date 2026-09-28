@@ -1672,6 +1672,67 @@ describe("name hints, item checks, and code fallback", () => {
     );
   });
 
+  it("counts when the control name is used as the action", async () => {
+    const { page } = recordedPage([
+      candidate(0, { name: "Upvote" }),
+      candidate(1, { name: "Upvote" }),
+    ]);
+    const result = await resolveTarget(
+      page,
+      resolver((options) => answer(options, "none")),
+      {
+        operation: "click",
+        sentence: "upvote the first post",
+      },
+    );
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r0",
+    );
+  });
+
+  it.each([
+    [
+      "click Share on the post about a development tool first released in 1993",
+      "fresh-r0",
+    ],
+    [
+      "click the first red Share on the post about a development tool first released in 1993",
+      "fresh-r1",
+    ],
+    [
+      "click Share on the first red post about a development tool released in 1993",
+      "fresh-r1",
+    ],
+  ])(
+    "distinguishes an item reference from a target ordinal: %s",
+    async (sentence, expected) => {
+      const { page } = recordedPage([
+        candidate(0, {
+          name: "Share",
+          signals: {
+            path: "a",
+            item: "A red development tool first released in 1993",
+          },
+        }),
+        candidate(1, {
+          name: "Share",
+          signals: { path: "b", item: "A different development tool" },
+        }),
+      ]);
+      const result = await resolveTarget(
+        page,
+        resolver((options) => answer(options, "r1")),
+        {
+          operation: "click",
+          sentence,
+        },
+      );
+      expect(
+        result.kind === "resolved" && result.target.driverTarget().ref,
+      ).toBe(expected);
+    },
+  );
+
   it("counts in code after the model answers none unless codeFallback is off", async () => {
     const items = [0, 1, 2, 3].map((index) =>
       candidate(index, {
