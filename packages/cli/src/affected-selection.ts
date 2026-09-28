@@ -133,6 +133,7 @@ export async function selectAffectedTests(options: {
   const config = await loadProjectConfig(options.cwd, process.env, {
     ...(options.environment ? { environment: options.environment } : {}),
   });
+  const canonicalProjectRoot = await realpath(config.projectRoot);
   const selection = await discoverRunTests(
     config,
     options.paths,
@@ -184,7 +185,7 @@ export async function selectAffectedTests(options: {
       modules: await Promise.all(
         resolved.moduleFiles.map(async (module) => ({
           file: path
-            .relative(config.projectRoot, module)
+            .relative(canonicalProjectRoot, module)
             .split(path.sep)
             .join("/"),
           source: await readFile(module, "utf8"),

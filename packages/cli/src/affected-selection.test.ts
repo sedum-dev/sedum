@@ -141,6 +141,50 @@ it("includes complete test and module source, selects the exact threshold, and s
   );
 });
 
+it("keeps module paths project-relative when the project root is symlinked", async () => {
+  await fixture();
+  const aliasDirectory = await mkdtemp(
+    path.join(tmpdir(), "sedum-root-alias-"),
+  );
+  try {
+    const alias = path.join(aliasDirectory, "project");
+    await symlink(root, alias, "junction");
+    await write("app.ts", "changed\n");
+    const scoreRelevance = vi.fn(async () => ({
+      probabilities: [0.9, 0],
+      calls: [],
+    }));
+    await selectAffectedTests({
+      cwd: alias,
+      paths: [],
+      filters: {},
+      threshold: 0.1,
+      createProvider: () => ({ scoreRelevance }),
+    });
+    expect(scoreRelevance).toHaveBeenCalledWith(
+      expect.any(String),
+      [
+        expect.objectContaining({
+          file: "tests/cart.test.yaml",
+          modules: [
+            {
+              file: "tests/login.module.yaml",
+              source: "parameters: []\nsteps: [click sign in]\n",
+            },
+          ],
+        }),
+        expect.objectContaining({
+          file: "tests/profile.test.yaml",
+          modules: [],
+        }),
+      ],
+      undefined,
+    );
+  } finally {
+    await rm(aliasDirectory, { recursive: true, force: true });
+  }
+});
+
 it("always includes changed tests and module dependents even when Jev returns zero", async () => {
   await fixture();
   await write(
