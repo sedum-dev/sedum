@@ -734,11 +734,84 @@ function resolveInCode(
       ? maskedName(candidate.name)
       : candidate.name.trim().toLocaleLowerCase();
   const name = key(pick);
-  const group = inNamedRegion(
+  let group = inNamedRegion(
     sentence,
     candidates.filter((candidate) => key(candidate) === name),
   );
   if (group.length < 2 || !group.includes(pick)) return null;
+  const words = (text: string): string[] =>
+    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const said = words(sentence.replace(/\{\{[^}]*\}\}/g, " "));
+  const label = new Set(words(pick.name));
+  const referenceAt = said.findIndex((word) =>
+    /^(for|on|about|of|from|under|by)$/.test(word),
+  );
+  const ordinal = said.find((word, index) => {
+    if (ORDINALS[word] === undefined || label.has(word)) return false;
+    // Preserve literal item references such as "first released in 1993".
+    // An ordinal before the reference still has to pass the whole-request
+    // check, even when a later reference uniquely names an item.
+    const next = said[index + 1] ?? "";
+    return !(
+      loose &&
+      referenceAt >= 0 &&
+      index > referenceAt &&
+      !label.has(next) &&
+      /^(released|published|created|updated|modified)$/.test(next)
+    );
+  });
+  const lowest = /\b(cheapest|lowest[- ]priced?|least expensive)\b/i.test(
+    sentence,
+  );
+  const highest = /\b(most expensive|highest[- ]priced?|priciest)\b/i.test(
+    sentence,
+  );
+  if (ordinal || lowest || highest) {
+    // Recognize whole, deliberately small request forms, not just an ordinal
+    // or price word somewhere in a sentence. Unknown qualifiers belong to the
+    // model/evidence path; they must never turn into a global comparison.
+    let request = said.join(" ");
+    const scope = /\s+(?:in|under|inside|within) (?:the )?(.+)$/.exec(request);
+    if (scope) {
+      const wanted = scope[1]!.replace(/ (?:section|region)$/, "");
+      group = group.filter((member) =>
+        /^article(?: body)?$/.test(wanted)
+          ? member.signals.region === "article-body"
+          : [member.signals.section, member.location].some((value) =>
+              value
+                ?.split("›")
+                .some((part) => words(part).join(" ") === wanted),
+            ),
+      );
+      if (!group.length) return null;
+      request = request.slice(0, scope.index);
+    }
+    const control = words(loose ? maskedName(pick.name) : pick.name).join(" ");
+    if (!control) return null;
+    const relation =
+      ordinal ??
+      (lowest
+        ? "(?:cheapest|lowest price(?:d)?|least expensive)"
+        : "(?:most expensive|highest price(?:d)?|priciest)");
+    const noun = `(?:${[...ITEM_NOUNS].join("|")})`;
+    const target = `(?:the )?${control}(?: button| link)?`;
+    const ranked = `(?:the )?${relation}`;
+    const form = new RegExp(
+      `^(?:(?:please )?(?:click|tap|press|open|select|choose) )?(?:` +
+        `${ranked} ${target}|` +
+        `${target} (?:for|on|of) ${ranked}(?: ${noun})?|` +
+        `${target} ${ranked} ${noun}|` +
+        `${ranked} ${noun}(?: s)? ${target})$`,
+    );
+    if (!form.test(request) || (lowest && highest)) return null;
+    const kind = new RegExp(`${control} (button|link)(?: |$)`).exec(
+      request,
+    )?.[1];
+    if (kind) {
+      group = group.filter((member) => member.role === kind);
+      if (!group.length) return null;
+    }
+  }
   const items = group.map((member) => member.signals.item ?? "");
   // Prices and references need every member's whole item to compare.
   const complete = group.every((member) => !!member.signals.item);
@@ -749,36 +822,14 @@ function resolveInCode(
     )
   )
     return null;
-  const words = (text: string): string[] =>
-    text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  const said = words(sentence.replace(/\{\{[^}]*\}\}/g, " "));
-  const label = new Set(words(pick.name));
-
   // Ordinals.
-  for (let i = 0; i < said.length; i++) {
-    const k = ORDINALS[said[i]!];
-    if (k === undefined || label.has(said[i]!)) continue;
-    const next = said[i + 1] ?? "";
-    // "the second Add to cart" or "the first story"; anything else, such as
-    // "the first non-sponsored", is a qualifier code cannot check. Loosely,
-    // an ordinal inside a reference ("first released in 1993") is skipped.
-    if (!label.has(next) && !ITEM_NOUNS.has(next)) {
-      if (loose) continue;
-      return null;
-    }
-    // "the first story" alone does not say which of the story's controls.
-    if (!label.has(next) && !said.some((word) => label.has(word))) return null;
+  if (ordinal) {
+    const k = ORDINALS[ordinal]!;
     const index = k === -1 ? group.length - 1 : k - 1;
     return index < group.length ? group[index]! : null;
   }
 
   // Lowest or highest price.
-  const lowest = /\b(cheapest|lowest[- ]priced?|least expensive)\b/i.test(
-    sentence,
-  );
-  const highest = /\b(most expensive|highest[- ]priced?|priciest)\b/i.test(
-    sentence,
-  );
   if ((lowest || highest) && !complete) return null;
   if (lowest || highest) {
     const prices = items.map((text) => {
@@ -1028,6 +1079,8 @@ function sameIdentity(a: Candidate, b: Candidate): boolean {
     a.signals.nameTruncated !== b.signals.nameTruncated ||
     a.signals.region !== b.signals.region ||
     a.signals.path !== b.signals.path ||
+    a.signals.item !== b.signals.item ||
+    a.signals.section !== b.signals.section ||
     JSON.stringify(a.peers) !== JSON.stringify(b.peers) ||
     a.location !== b.location
   )
