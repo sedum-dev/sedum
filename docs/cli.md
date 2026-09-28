@@ -69,6 +69,86 @@ Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` f
 
 `--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
+### Experimental Git-diff selection with Jev
+
+```sh
+# Preview probabilities and selection as JSON; calls Jev but starts no browser.
+sedum run --affected --selection-only
+
+# Score the suite, then run selected tests with the normal runner.
+sedum run --affected
+sedum run --affected --base origin/main --threshold 0.05 --parallel 4
+```
+
+This opt-in proof of concept sends the **tracked Git diff and complete test/module
+sources** to the configured TypeSafe provider. Review those files for secrets
+before using it. Environment placeholders are not expanded for selection, but
+literal secrets in source or the diff are not redacted. It uses the same
+`TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`, and `TYPESAFE_DEFAULT_MODEL` settings as
+the runner. Selection makes additional billable calls.
+
+The default base is the first available ref in this order: local `main`,
+`origin/main`, local `master`, `origin/master`. `--base` accepts another ref.
+The comparison starts at its merge base with `HEAD` and ends at the current
+working tree, including committed branch work, staged changes, and tracked
+unstaged changes across the Git repository. No fetch happens automatically.
+Untracked, non-ignored files cause an error: stage intended files or ignore
+unrelated files first. Shallow clones need enough history to find a merge base.
+
+Each discovered test becomes one independent Jev **Noul** question: could the
+changed code affect behavior exercised by this test? Its question contains the
+YAML source and all referenced module sources; the diff is shared state. Normal
+path/name/tag filters apply before relevance selection.
+Large suites are batched without truncating inputs. Changed test files and tests
+using changed modules are always selected, even when their model probability is 0.
+
+`--affected` rejects `--shard-count` greater than 1 with exit 3 before any
+provider call, including with `--selection-only`. Independent relevance decisions
+in different shards could leave tests unexecuted. Remove the shard options or
+run without `--affected`. A single shard (`--shard-index 1 --shard-count 1`)
+and parallel execution with `--parallel` remain supported.
+
+The provisional default keeps probabilities **≥ 0.1**. This favors running
+uncertain tests over skipping them; it is not an empirically calibrated cutoff.
+`--threshold` accepts 0–1, with 0 keeping every candidate for a nonempty diff.
+A Noul near 0 means likely unrelated, near 1 means likely relevant, and near
+0.5 means uncertain. It is not a probability that the test will fail.
+
+The normal command prints each probability and RUN/SKIP decision to stderr.
+`--selection-only` instead writes JSON to stdout, including the base, merge-base
+commit, threshold, per-test decisions, and provider receipts with model versions,
+token usage, and cost estimates. These selection costs are separate from the
+runner's execution cost totals. Save preview output outside the repository or
+under an ignored directory to avoid introducing an untracked file.
+
+No diff means no API call and no test execution. An empty relevance selection
+also executes nothing; both exit 0 with explicit output and create no run result.
+Invalid tests/modules, Git errors, binary/submodule changes, oversized inputs,
+or provider failures stop selection with exit 3, never silently becoming a
+successful empty selection. The current conservative input limits are 28,000
+serialized UTF-8 bytes for a diff plus one question and 56,000 per batch.
+Run without `--affected` when these limits are exceeded. The run deadline starts
+after selection; Ctrl-C can cancel selection itself.
+
+**Keep full-suite CI.** Jev can miss indirect dependencies, lacks unchanged
+application source, and can be influenced by adversarial source text. Before
+tuning the cutoff, compare selected tests against full runs on representative
+changes and measure missed failing tests as well as tests avoided. Pin a model
+version when collecting comparable results.
+
+An opt-in smoke evaluation builds a disposable Git repository and scores cart,
+profile, and documentation changes against two synthetic tests. It checks ideal
+selection, so false positives also fail the evaluation; this is not a calibrated
+benchmark. Run it with a configured API key (three billable requests):
+
+```sh
+SEDUM_TYPESAFE_LIVE=1 pnpm exec vitest run packages/cli/src/affected-selection.test.ts -t 'live Jev'
+```
+
+Design references: TypeSafe's [Noul documentation](https://docs.typesafe.ai/primitives/noul),
+[model limits](https://docs.typesafe.ai/models), and
+[known failure modes](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
+
 ### Parallel runs and sharding
 
 `--parallel <n|auto>` runs selected tests in up to `n` lanes at once (1 to 64). `auto` uses half the logical CPU cores, as Playwright Test does. The default is `1`, so behavior and provider cost only change when you ask. Each lane keeps one browser. Every attempt gets a fresh browser context, and a lane restarts its browser after a browser or operational error. A lane runs a test's retries before it takes the next test. The result lists tests in selection order, whatever order they finish in, and records each attempt's `lane`.

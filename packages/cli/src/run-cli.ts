@@ -22,6 +22,7 @@ import {
   type OutputCapabilities,
 } from "./output.js";
 import type { RunCommandExecution, RunCommandOptions } from "./run-command.js";
+import type { RelevanceProviderFactory } from "./affected-selection.js";
 import type { DoctorProbes } from "./doctor-command.js";
 import {
   createTypeSafeClassifier,
@@ -59,6 +60,7 @@ export interface CliRuntime {
   readonly cwd?: string;
   /** Used only by `validate --online`. */
   readonly createClassificationProvider?: ClassificationProviderFactory;
+  readonly createRelevanceProvider?: RelevanceProviderFactory;
   readonly doctorProbes?: DoctorProbes;
   readonly confirmInit?: (question: string) => Promise<boolean>;
 }
@@ -168,6 +170,13 @@ function positiveMinutes(value: string): number {
   return number;
 }
 
+function relevanceThreshold(value: string): number {
+  const number = Number(value);
+  if (!value.trim() || !Number.isFinite(number) || number < 0 || number > 1)
+    throw new InvalidArgumentError("Expected a probability from 0 to 1.");
+  return number;
+}
+
 function commandHelp(command: Command, writeErr: (value: string) => void) {
   command.outputHelp({ error: true });
   const commandPath: string[] = [];
@@ -274,6 +283,22 @@ export async function runCli(
       "test files or directories relative to the project root",
     )
     .option(
+      "--affected",
+      "experimental: send Git diff and test sources to Jev; run relevant tests",
+      false,
+    )
+    .option("--base <ref>", "base ref for --affected (default main or master)")
+    .option(
+      "--threshold <probability>",
+      "minimum relevance probability for --affected (default 0.1)",
+      relevanceThreshold,
+    )
+    .option(
+      "--selection-only",
+      "with --affected, print selection JSON without running tests (calls Jev)",
+      false,
+    )
+    .option(
       "--include <glob>",
       "include matching project-relative paths (repeatable)",
       collectGlob,
@@ -372,6 +397,10 @@ export async function runCli(
       async (
         paths: string[],
         options: {
+          affected: boolean;
+          base?: string;
+          threshold?: number;
+          selectionOnly: boolean;
           include: string[];
           exclude: string[];
           labels: string[];
@@ -415,6 +444,83 @@ export async function runCli(
           );
           exitCode = 3;
           return;
+        }
+        if (options.affected && (options.shardCount ?? 1) > 1) {
+          writeErr(
+            renderDiagnostic({
+              code: "affected_sharding_unsupported",
+              message:
+                "--affected cannot be combined with multiple shards: independent relevance selections can leave tests unexecuted.",
+              fix: "Remove the shard options, or run without --affected. --parallel is supported.",
+            }),
+          );
+          exitCode = 3;
+          return;
+        }
+        if (
+          !options.affected &&
+          (options.base !== undefined ||
+            options.threshold !== undefined ||
+            options.selectionOnly)
+        ) {
+          writeErr(
+            "--base, --threshold, and --selection-only require --affected.\n",
+          );
+          exitCode = 3;
+          return;
+        }
+        if (options.affected) {
+          const { selectAffectedTests, AffectedSelectionError } =
+            await import("./affected-selection.js");
+          const { ProviderError } = await import("@sedum-dev/core");
+          writeErr(
+            "Experimental selection sends the tracked Git diff and test/module sources to the configured TypeSafe provider. Full CI is still recommended.\n",
+          );
+          try {
+            const selection = await selectAffectedTests({
+              cwd,
+              paths,
+              filters: {
+                include: options.include,
+                exclude: options.exclude,
+                labels: options.labels,
+                names: options.name,
+              },
+              threshold: options.threshold ?? 0.1,
+              ...(options.base !== undefined ? { base: options.base } : {}),
+              ...(options.env ? { environment: options.env } : {}),
+              ...(runtime.signal ? { signal: runtime.signal } : {}),
+              ...(runtime.createRelevanceProvider
+                ? { createProvider: runtime.createRelevanceProvider }
+                : {}),
+            });
+            paths = selection.tests
+              .filter((test) => test.selected)
+              .map((test) => test.file);
+            if (options.selectionOnly) {
+              writeOut(`${JSON.stringify(selection, null, 2)}\n`);
+              exitCode = 0;
+              return;
+            }
+            writeErr(
+              `Affected selection: ${paths.length}/${selection.tests.length} tests, threshold ${selection.threshold}, base ${selection.base}.\n`,
+            );
+            for (const test of selection.tests)
+              writeErr(
+                `${test.selected ? "RUN " : "SKIP"} ${test.probability.toFixed(4)} ${JSON.stringify(test.file)} (${test.reason})\n`,
+              );
+            if (!paths.length) {
+              writeErr("No relevant tests selected; no tests were executed.\n");
+              exitCode = 0;
+              return;
+            }
+          } catch (error) {
+            writeErr(
+              `${error instanceof AffectedSelectionError || error instanceof ProviderError ? error.message : "Affected selection could not complete."}\nNo tests were run. Fix the selection error or run without --affected.\n`,
+            );
+            exitCode = 3;
+            return;
+          }
         }
         const lifecycle = new ReporterLifecycle();
         const terminalNames = options.reporter.length

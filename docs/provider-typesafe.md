@@ -9,6 +9,13 @@ environment are replaced by placeholders. Other visible page text is sent as
 it is. Use `--sensitive-origin <url>` to keep a page's details and screenshots
 out of saved results.
 
+**Exception: experimental `run --affected`.** Test selection sends the tracked
+Git diff, test YAML, and referenced module YAML as source text. It does not
+expand environment variables, but literal secrets in those files or the diff
+are sent as-is. `--sensitive-origin` protects browser evidence, not these source
+inputs. Review source before opting in. See [Git-diff selection](cli.md#experimental-git-diff-selection-with-jev)
+for selection probabilities, input limits, and separate selection costs.
+
 In a terminal, Sedum shows token use and cost after each run. A
 [local locator cache](locator-cache.md) skips repeat lookups during
 development.
