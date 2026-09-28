@@ -77,6 +77,16 @@ const fixtureCandidatePeers = new Set([
   "Sign in",
   "Products Canvas Backpack Price $29 Trail Light Price $9",
 ]);
+const fixtureCandidateLocations = new Set([
+  "main · Canvas Backpack",
+  "main · Cart",
+  "main · Checkout",
+  "main · Rerendering list",
+  "main · Returns",
+  "main · Shipping",
+  "main · Sign in",
+  "main · Trail Light",
+]);
 const fixtureClassificationSentences = new Set([
   "press Enter in the search field",
   "observe the current product count",
@@ -206,11 +216,14 @@ function canonicalize(
           "peers",
           "editable",
           "disabled",
+          ...(Object.hasOwn(candidate, "location") ? ["location"] : []),
         ]);
         if (
           ![candidate.tag, candidate.role, candidate.name].every(
             (v) => typeof v === "string",
           ) ||
+          (candidate.location !== undefined &&
+            typeof candidate.location !== "string") ||
           !Array.isArray(candidate.peers) ||
           !candidate.peers.every((v: unknown) => typeof v === "string") ||
           typeof candidate.editable !== "boolean" ||
@@ -222,7 +235,9 @@ function canonicalize(
           (!fixtureCandidateNames.has(candidate.name as string) ||
             !(candidate.peers as string[]).every((peer) =>
               fixtureCandidatePeers.has(peer),
-            ))
+            ) ||
+            (candidate.location !== undefined &&
+              !fixtureCandidateLocations.has(candidate.location as string)))
         )
           throw new Error("Nonfixture candidate text in provider request");
       }
