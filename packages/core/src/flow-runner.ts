@@ -36,6 +36,7 @@ import {
 } from "./flow-values.js";
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
+import type { VisionResolver } from "./vision.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
@@ -90,6 +91,7 @@ export interface FlowRunnerDependencies {
   /** Parallel lanes pass a `ReusableBrowserDriver` so attempts share one browser. */
   readonly browser: BrowserDriver;
   readonly provider: ClassificationProvider & Resolver & Judge;
+  readonly visionResolver?: VisionResolver;
   readonly classificationCache: ClassificationCache;
   readonly locatorCache?: CacheStore;
   readonly env: Readonly<Record<string, string | undefined>>;
@@ -758,8 +760,21 @@ async function executeSentence(
           .replace(/\s+/gu, " ")
           .trim()
       : step.text;
+  let visionAttempted = false;
   const locate = () =>
     resolveTarget(page, dependencies.provider, {
+      ...(dependencies.visionResolver &&
+      !visionAttempted &&
+      !(report && safeUrl(page.url, report.privacy).sensitive)
+        ? {
+            visionResolver: {
+              choose: (...args: Parameters<VisionResolver["choose"]>) => {
+                visionAttempted = true;
+                return dependencies.visionResolver!.choose(...args);
+              },
+            },
+          }
+        : {}),
       operation: step.op === "type" ? "fill" : "click",
       sentence: step.text,
       cacheSentence,

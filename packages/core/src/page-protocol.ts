@@ -130,6 +130,18 @@ export type AimResult =
     };
 export interface PageBridge {
   readonly protocol: number;
+  visualCandidates(): {
+    version: PageVersion;
+    width: number;
+    height: number;
+    boxes: {
+      ref: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }[];
+  };
   collect(input: {
     operation: Operation;
     offset?: number;

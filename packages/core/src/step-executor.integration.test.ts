@@ -8,6 +8,7 @@ import {
 } from "./browser-driver.js";
 import { collectCandidates, pageVersion } from "./page-bridge.js";
 import type { CandidatePage } from "./page-protocol.js";
+import { captureVisionObservation } from "./vision.js";
 import {
   executeStep,
   ResolvedStepTarget,
@@ -71,6 +72,40 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         name: candidate.name,
       });
     }
+
+    it("captures labeled visible candidates without changing the DOM or scroll", async () => {
+      const { page, context } = await fresh();
+      try {
+        await page.evaluate(
+          `document.querySelector('#app').innerHTML = '<button>Edit</button><button style="margin-left:120px">Edit</button><button disabled>Edit</button><button style="position:absolute;top:2000px">Edit</button>'`,
+        );
+        const snapshot = await collectCandidates(page, "click");
+        const before = await pageVersion(page);
+        const captured = await captureVisionObservation(
+          page,
+          snapshot.candidates,
+          before,
+          "click the right Edit",
+        );
+        expect(captured?.observation.candidates).toHaveLength(2);
+        expect(
+          captured?.observation.candidates.map((candidate) => candidate.id),
+        ).toEqual(["C1", "C2"]);
+        expect(captured?.observation.image.byteLength).toBeGreaterThan(100);
+        expect(await pageVersion(page)).toEqual(before);
+        expect(await page.evaluate("scrollY")).toBe(0);
+        expect(
+          await captureVisionObservation(
+            page,
+            snapshot.candidates,
+            { ...before, revision: before.revision + 1 },
+            "Edit",
+          ),
+        ).toBeNull();
+      } finally {
+        await context.close();
+      }
+    });
 
     it("clicks a native link, observes navigation, and does not replay a canceled link", async () => {
       const { page, context } = await fresh();

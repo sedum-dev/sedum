@@ -367,6 +367,9 @@ describe("CLI command framework", () => {
         "--no-evidence",
         "--no-locator-cache",
         "--locator-cache-ci",
+        "--vision",
+        "--vision-model",
+        "openrouter/vision-test",
         "--sensitive-origin=https://example.com/private",
         "--sensitive-origin",
         "https://two.test/path",
@@ -381,8 +384,23 @@ describe("CLI command framework", () => {
         evidence: false,
         locatorCacheDisabled: true,
         locatorCacheCi: true,
+        vision: true,
+        visionModel: "openrouter/vision-test",
         sensitiveOrigins: ["https://example.com", "https://two.test"],
       }),
+    );
+  });
+
+  it("passes --no-vision as an explicit config override", async () => {
+    const canonical = await result([
+      { file: "x.test.yaml", verdict: "passed" },
+    ]);
+    const executeRun = vi.fn(async () => execution(canonical));
+    await runCli(["run", "x.test.yaml", "--no-vision"], "1.2.3", {
+      executeRun,
+    });
+    expect(executeRun).toHaveBeenCalledWith(
+      expect.objectContaining({ vision: false }),
     );
   });
 
