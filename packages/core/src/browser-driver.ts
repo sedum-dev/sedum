@@ -83,6 +83,11 @@ export interface BrowserLaunchOptions {
 export interface BrowserContextOptions {
   readonly viewport?: { readonly width: number; readonly height: number };
   readonly locale?: string;
+  /** Opt-in continuous diagnostic video; callers own consent and privacy. */
+  readonly recordVideo?: {
+    readonly dir: string;
+    readonly size?: { readonly width: number; readonly height: number };
+  };
 }
 
 export interface NavigationOptions {
@@ -741,6 +746,9 @@ class PlaywrightSession implements BrowserSession {
           ? {}
           : { viewport: options.viewport }),
         ...(options.locale === undefined ? {} : { locale: options.locale }),
+        ...(options.recordVideo === undefined
+          ? {}
+          : { recordVideo: options.recordVideo }),
       });
       const installed = fileURLToPath(
         new URL("./page-script/index.global.js", import.meta.url),
