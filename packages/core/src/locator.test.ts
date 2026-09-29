@@ -1780,14 +1780,15 @@ describe("vision fallback boundaries", () => {
     candidate(0, { name: "Edit" }),
     candidate(1, { name: "Edit" }),
   ];
-  function setup() {
-    const page = recordedPage(items);
+  function setup(observed = items) {
+    const page = recordedPage(observed);
+    vi.mocked(captureVisionObservation).mockClear();
     vi.mocked(captureVisionObservation).mockResolvedValue({
-      candidates: items,
+      candidates: observed,
       observation: {
         instruction: "click the right Edit",
         image: new Uint8Array(),
-        candidates: items.map((item, i) => ({
+        candidates: observed.map((item, i) => ({
           id: `C${i + 1}`,
           name: item.name,
           role: item.role,
@@ -1803,6 +1804,75 @@ describe("vision fallback boundaries", () => {
     const jev = resolver((options) => answer(options, "r0"));
     return { ...page, vision, jev };
   }
+  it.each([false, true])(
+    "distinguishes inconclusive item verification from failure=%s",
+    async (fails) => {
+      const cards = items.map((item, index) => ({
+        ...item,
+        signals: {
+          ...item.signals,
+          item: index
+            ? "A development tool maintained since 1993"
+            : "An article about DNS caches",
+        },
+      }));
+      const { vision, jev } = setup(cards);
+      const verifyItems = vi.fn(async () => {
+        if (fails)
+          throw new ProviderError(
+            "connection",
+            "private upstream body",
+            1,
+            call,
+          );
+        return { scores: { r0: 0.5, r1: 0.5 }, call };
+      });
+      const result = await resolveTarget(
+        recordedPage(cards).page,
+        { ...jev, verifyItems },
+        {
+          operation: "click",
+          sentence:
+            "click Edit on the card about a tool that has been around for decades",
+          visionResolver: vision,
+        },
+      );
+      expect(verifyItems).toHaveBeenCalledTimes(1);
+      if (fails) {
+        expect(result).toMatchObject({
+          kind: "unresolved",
+          reason: "provider_error",
+          calls: [call, call],
+        });
+        expect(captureVisionObservation).not.toHaveBeenCalled();
+        expect(vision.choose).not.toHaveBeenCalled();
+      } else {
+        expect(
+          result.kind === "resolved" && result.target.driverTarget().ref,
+        ).toBe("fresh-r1");
+        expect(vision.choose).toHaveBeenCalledTimes(1);
+      }
+    },
+  );
+  it("offers count-varying controls with distinct destinations to vision", async () => {
+    const links = items.map((item, index) => ({
+      ...item,
+      tag: "a",
+      role: "link",
+      name: index ? "12 comments" : "306 comments",
+      signals: { ...item.signals, href: `/story/${index}` },
+    }));
+    const { vision, jev } = setup(links);
+    const result = await resolveTarget(recordedPage(links).page, jev, {
+      operation: "click",
+      sentence: "open comments for the article with the mountain photo",
+      visionResolver: vision,
+    });
+    expect(vision.choose).toHaveBeenCalledTimes(1);
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
   it("preserves permissive picks without vision and explicit core policy precedence", async () => {
     const { vision, jev } = setup();
     for (const options of [

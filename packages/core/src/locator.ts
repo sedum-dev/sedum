@@ -1598,7 +1598,7 @@ export async function resolveTarget(
       );
       if (!accepted) {
         gate = "repeated_member_no_evidence";
-        return await ambiguous();
+        return await ambiguous(sameName);
       }
       gate = accepted;
     }
@@ -1644,6 +1644,10 @@ export async function resolveTarget(
       } catch (error) {
         calls.push(unknownCostCall(error));
         ensureActive();
+        // A failed item request is not an inconclusive answer. Preserve legacy
+        // non-vision behavior without recovering through the vision provider.
+        if (options.visionResolver && options.operation === "click")
+          throw new LocatorError("provider_error");
         return null;
       }
       calls.push(verdict.call);
@@ -1669,11 +1673,13 @@ export async function resolveTarget(
       return best.member;
     }
 
-    async function ambiguous(): Promise<LocatorResult> {
+    async function ambiguous(
+      members: readonly Candidate[] = group,
+    ): Promise<LocatorResult> {
       if (
         !options.visionResolver ||
         options.operation !== "click" ||
-        group.length < 2
+        members.length < 2
       )
         return unresolved("ambiguous");
       try {

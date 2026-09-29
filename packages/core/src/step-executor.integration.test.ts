@@ -108,6 +108,39 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       // Allow cold native image/SVG initialization on Windows CI.
     }, 30_000);
 
+    it("includes unobscured shadow-root controls but excludes covered ones", async () => {
+      const { page, context } = await fresh();
+      try {
+        await page.evaluate(`(() => {
+          for (let i = 0; i < 3; i++) {
+            const host = document.createElement('div');
+            host.style.cssText = 'position:absolute;top:50px;left:' + (50 + i * 150) + 'px';
+            host.attachShadow({mode:'open'}).innerHTML = '<button style="width:100px;height:50px"><span>Edit</span></button>';
+            document.querySelector('#app').append(host);
+          }
+          const cover = document.createElement('div');
+          cover.style.cssText = 'position:absolute;left:350px;top:50px;width:100px;height:50px;background:black;z-index:10';
+          document.body.append(cover);
+        })()`);
+        const snapshot = await collectCandidates(page, "click");
+        const captured = await captureVisionObservation(
+          page,
+          snapshot.candidates,
+          snapshot.version,
+          "click the right Edit",
+        );
+        expect(captured?.candidates.map((c) => c.ref)).toEqual(
+          snapshot.candidates.slice(0, 2).map((c) => c.ref),
+        );
+        expect(captured?.observation.candidates.map((c) => c.id)).toEqual([
+          "C1",
+          "C2",
+        ]);
+      } finally {
+        await context.close();
+      }
+    }, 30_000);
+
     it("clicks a native link, observes navigation, and does not replay a canceled link", async () => {
       const { page, context } = await fresh();
       await page.evaluate(

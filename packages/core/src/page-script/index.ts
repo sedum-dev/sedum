@@ -1716,11 +1716,11 @@ if (!window.__sedum) {
             rect.bottom > innerHeight
           )
             return [];
-          const hit = document.elementFromPoint(
+          const hit = deepElementFromPoint(
             rect.left + rect.width / 2,
             rect.top + rect.height / 2,
           );
-          if (!hit || (hit !== element && !element.contains(hit))) return [];
+          if (!hit || !deepContains(element, hit)) return [];
           return [
             {
               ref: candidate.ref,

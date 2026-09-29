@@ -118,10 +118,14 @@ detected. Only fully visible, unobscured controls are offered; fewer than two
 or more than 40 visible controls leave the step unresolved.
 
 There is at most one vision call per step, with no recovery after failure.
+After vision is attempted, a stale action target fails without re-resolving.
+Suppressing screenshots on sensitive pages does not restore permissive picks.
 Existing Jev caching is unchanged; vision-selected targets are not cached.
 Model usage is included in existing locator calls, without a new report UI.
 Locator diagnostics include vision request duration and a safe failure category
 (HTTP error/status, timeout, cancellation, connection, malformed response,
-invalid selection, or truncation). Upstream error bodies are not retained.
+invalid selection, or truncation). These fields are preserved in the canonical
+run result at `steps[].locator.vision`; failures also appear in the step error
+message. Upstream error bodies are not retained.
 An HTTP 429 means rate limiting, not a model abstention; the step remains
 unresolved and is not retried.

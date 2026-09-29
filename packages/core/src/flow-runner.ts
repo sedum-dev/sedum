@@ -477,6 +477,9 @@ async function executeSentence(
               probability: option.probability,
             })),
             cache: locator.cache ?? null,
+            ...(locator.diagnostic.vision
+              ? { vision: locator.diagnostic.vision }
+              : {}),
           }
         : null,
       judgement,
@@ -763,6 +766,11 @@ async function executeSentence(
   let visionAttempted = false;
   const locate = () =>
     resolveTarget(page, dependencies.provider, {
+      // Disabling transmission or exhausting the request budget must not
+      // restore permissive repeated-member picks.
+      ...(dependencies.visionResolver && step.op === "click"
+        ? { repeatedMember: {} }
+        : {}),
       ...(dependencies.visionResolver &&
       !visionAttempted &&
       !(report && safeUrl(page.url, report.privacy).sensitive)
@@ -806,7 +814,11 @@ async function executeSentence(
   // A resolver response can arrive during an unrelated DOM revision. One fresh
   // read after a longer quiet period is safe: it reuses neither a target nor a
   // prior action.
-  if (resolved.kind === "unresolved" && resolved.reason === "stale") {
+  if (
+    !visionAttempted &&
+    resolved.kind === "unresolved" &&
+    resolved.reason === "stale"
+  ) {
     const priorCalls = resolved.calls;
     const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
       quiet: false,
@@ -868,7 +880,9 @@ async function executeSentence(
         locator: resolved,
         error: {
           code: resolved.reason,
-          message: `Could not resolve this ${step.op} step.`,
+          message: resolved.diagnostic.vision?.failure
+            ? `Could not resolve this ${step.op} step: vision ${resolved.diagnostic.vision.failure}${resolved.diagnostic.vision.httpStatus ? ` (HTTP ${resolved.diagnostic.vision.httpStatus})` : ""}.`
+            : `Could not resolve this ${step.op} step.`,
         },
       });
     return record(
@@ -933,7 +947,8 @@ async function executeSentence(
       if (
         !(error instanceof StepExecutionError) ||
         error.code !== "stale" ||
-        !error.retryable
+        !error.retryable ||
+        visionAttempted
       )
         throw error;
       // The first attempt provably did not dispatch input. Re-observe and
