@@ -4,6 +4,24 @@ import path from "node:path";
 import { verifyCandidate } from "./verify-candidate.mjs";
 import { assert } from "./packages.mjs";
 
+async function fetchWithRetry(url, maxAttempts = 12, delaySeconds = 5) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(url, {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (response.ok) {
+      return response;
+    }
+    if (attempt < maxAttempts) {
+      console.log(
+        `Registry not ready (attempt ${attempt}/${maxAttempts}); retrying in ${delaySeconds} seconds`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delaySeconds * 1000));
+    }
+  }
+  return null;
+}
+
 const directory = path.resolve(
   process.env.CANDIDATE_DIR ?? "release-candidate",
 );
@@ -13,11 +31,9 @@ const { manifest } = await verifyCandidate(
 );
 for (const entry of manifest.packages) {
   const metadataUrl = `https://registry.npmjs.org/${encodeURIComponent(entry.name)}/${encodeURIComponent(entry.version)}`;
-  const response = await fetch(metadataUrl, {
-    headers: { "Cache-Control": "no-cache" },
-  });
+  const response = await fetchWithRetry(metadataUrl);
   assert(
-    response.ok,
+    response,
     `Registry metadata unavailable for ${entry.name}@${entry.version}`,
   );
   const metadata = await response.json();
@@ -29,8 +45,11 @@ for (const entry of manifest.packages) {
     metadata.dist.attestations?.provenance,
     `Provenance is missing for ${entry.name}`,
   );
-  const tarballResponse = await fetch(metadata.dist.tarball);
-  assert(tarballResponse.ok, `Published tarball unavailable for ${entry.name}`);
+  const tarballResponse = await fetchWithRetry(metadata.dist.tarball);
+  assert(
+    tarballResponse,
+    `Published tarball unavailable for ${entry.name}`,
+  );
   const published = Buffer.from(await tarballResponse.arrayBuffer());
   const candidate = await readFile(path.join(directory, entry.filename));
   assert(
