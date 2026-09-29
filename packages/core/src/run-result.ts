@@ -45,6 +45,7 @@ export const ResultFrameSchema = z.discriminatedUnion("status", [
   }),
 ]);
 export const ResultCallSchema = z.strictObject({
+  modality: z.literal("vision").optional(),
   purpose: z.enum(["classification", "locator", "judge", "planner"]),
   requestedModel: z.string().max(120),
   model: z.string().max(120),
@@ -73,6 +74,27 @@ export const ResultObservationSchema = z.strictObject({
   timeoutReason: z.string().max(120).nullable(),
 });
 export const ResultLocatorSchema = z.strictObject({
+  vision: z
+    .strictObject({
+      outcome: z.enum(["selected", "abstained", "failed"]).optional(),
+      reason: z.string().max(120).optional(),
+      elapsedMs: nonnegative,
+      failure: z
+        .enum([
+          "timeout",
+          "canceled",
+          "http_error",
+          "connection",
+          "invalid_envelope",
+          "invalid_json",
+          "invalid_selection",
+          "truncated_response",
+          "unknown",
+        ])
+        .optional(),
+      httpStatus: z.number().int().min(100).max(599).optional(),
+    })
+    .optional(),
   confidence: probability.nullable(),
   source: z.enum(["model", "cache", "none"]),
   options: z

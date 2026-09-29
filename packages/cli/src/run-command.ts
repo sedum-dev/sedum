@@ -3,6 +3,7 @@ import {
   PlaywrightBrowserDriver,
   ReusableBrowserDriver,
   RunRecorder,
+  OpenRouterVisionResolver,
   runFlow,
   safeText,
   validateRunResult,
@@ -43,6 +44,8 @@ export interface RunCommandOptions {
   readonly filters?: RunFilters;
   readonly environment?: string;
   readonly browser?: string;
+  readonly vision?: boolean;
+  readonly visionModel?: string;
   readonly urlOverride?: string;
   readonly outputDir?: string;
   readonly reporterDir?: string;
@@ -455,7 +458,31 @@ export async function executeRunCommand(
       ...(options.browser ? { browser: options.browser as BrowserKind } : {}),
       ...(options.outputDir ? { outputDir: options.outputDir } : {}),
       ...(options.reporterDir ? { reporterDir: options.reporterDir } : {}),
+      ...(options.vision !== undefined || options.visionModel !== undefined
+        ? {
+            vision: {
+              ...(options.vision !== undefined
+                ? { enabled: options.vision }
+                : {}),
+              ...(options.visionModel !== undefined
+                ? { model: options.visionModel }
+                : {}),
+            },
+          }
+        : {}),
     });
+    if (config.vision.enabled && !config.visionApiKey)
+      throw new ProjectConfigError([
+        {
+          code: "missing_vision_api_key",
+          file: path.join(config.projectRoot, ".env"),
+          line: 1,
+          col: 1,
+          key: "OPEN_ROUTER_API_KEY",
+          message: "Vision fallback requires OPEN_ROUTER_API_KEY.",
+          fix: "Set OPEN_ROUTER_API_KEY in the invoking process or project-root .env, or disable vision.",
+        },
+      ]);
   } catch (error) {
     const diagnostic = setupDiagnostic(error);
     const fallbackRoot =
@@ -825,6 +852,13 @@ export async function executeRunCommand(
         ciOptIn: options.locatorCacheCi ?? false,
         env: process.env,
       });
+      const visionResolver = config.vision.enabled
+        ? new OpenRouterVisionResolver({
+            apiKey: config.visionApiKey!,
+            model: config.vision.model,
+            timeoutMs: config.vision.timeoutMs,
+          })
+        : undefined;
       let operational: ReturnType<typeof flowDiagnostic> | null = null;
       const driver = new PlaywrightBrowserDriver();
       const browsers = Array.from(
@@ -851,6 +885,7 @@ export async function executeRunCommand(
                 provider,
                 classificationCache: cache,
                 locatorCache,
+                ...(visionResolver ? { visionResolver } : {}),
                 // Per-attempt values let tests keep backend data apart, like
                 // Playwright's TEST_PARALLEL_INDEX. They are env-derived, so
                 // they stay opaque in model input and reports.

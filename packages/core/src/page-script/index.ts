@@ -1695,6 +1695,44 @@ if (!window.__sedum) {
   }
   const bridge: PageBridge = {
     protocol: PAGE_PROTOCOL,
+    visualCandidates: () => {
+      const current = version();
+      if (!snapshot || !same(snapshot.version, current))
+        throw new Error("stale visual observation");
+      return {
+        version: current,
+        width: innerWidth,
+        height: innerHeight,
+        boxes: snapshot.candidates.flatMap((candidate) => {
+          const element = refElement(candidate.ref);
+          if (!element || !visible(element) || disabled(element)) return [];
+          const rect = element.getBoundingClientRect();
+          if (
+            rect.width <= 0 ||
+            rect.height <= 0 ||
+            rect.left < 0 ||
+            rect.top < 0 ||
+            rect.right > innerWidth ||
+            rect.bottom > innerHeight
+          )
+            return [];
+          const hit = deepElementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          if (!hit || !deepContains(element, hit)) return [];
+          return [
+            {
+              ref: candidate.ref,
+              x: rect.left,
+              y: rect.top,
+              width: rect.width,
+              height: rect.height,
+            },
+          ];
+        }),
+      };
+    },
     collect,
     digest,
     pageVersion: version,

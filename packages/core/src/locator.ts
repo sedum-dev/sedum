@@ -32,6 +32,12 @@ import {
   type ResolverDecision,
 } from "./provider.js";
 import { ResolvedStepTarget } from "./step-executor.js";
+import {
+  captureVisionObservation,
+  VisionRequestError,
+  type VisionResolver,
+  type VisionFailure,
+} from "./vision.js";
 
 const MAX_CANDIDATES = 4096;
 // Leave room for the adapter's question, model, and criteria wrapper.
@@ -65,6 +71,13 @@ export interface LocatorOptionDiagnostic {
   readonly probability: number;
 }
 export interface LocatorDiagnostic {
+  readonly vision?: {
+    readonly outcome?: "selected" | "abstained" | "failed";
+    readonly reason?: string;
+    readonly elapsedMs: number;
+    readonly failure?: VisionFailure | "unknown";
+    readonly httpStatus?: number;
+  };
   readonly candidateCount: number;
   readonly rounds: number;
   readonly confidence?: number | null;
@@ -104,6 +117,7 @@ export type LocatorResult =
     };
 
 export interface LocatorOptions {
+  readonly visionResolver?: VisionResolver;
   readonly operation: Operation;
   readonly sentence: string;
   /** Target-only sentence for cache keys; Resolver still receives sentence. */
@@ -124,7 +138,8 @@ export interface LocatorOptions {
    * destination) whose sentence words do not single it out. Unset acts on
    * the model's pick ({ modelPick: true }): a vague step clicks the likely
    * element, and the test author can add detail. Pass {} for the strict
-   * lexical rule.
+   * lexical rule. For clicks with a visionResolver, unset uses the strict
+   * rule before visual fallback instead. Explicit policies take precedence.
    */
   readonly repeatedMember?: RepeatedMemberPolicy;
   /**
@@ -1173,7 +1188,11 @@ export async function resolveTarget(
   options: LocatorOptions,
 ): Promise<LocatorResult> {
   const calls: ProviderCall[] = [];
-  const repeatedMember = options.repeatedMember ?? { modelPick: true };
+  // Vision resolves ambiguous clicks instead of the default permissive pick.
+  // Explicit core policies and all non-vision behavior retain their precedence.
+  const repeatedMember = options.repeatedMember ?? {
+    modelPick: !(options.visionResolver && options.operation === "click"),
+  };
   const nameHints = options.nameHints !== false;
   const verifyItems = options.verifyItems !== false;
   const codeFallback = options.codeFallback !== false;
@@ -1183,6 +1202,7 @@ export async function resolveTarget(
   let confidence: number | null = null;
   let observationVersion: PageVersion | undefined;
   let gate: string | undefined;
+  let visionDiagnostic: LocatorDiagnostic["vision"];
   let cacheOutcome: LocatorCacheDiagnostic | undefined;
   let storedEntry: CacheEntry | undefined;
   const cacheSentence = options.cacheSentence ?? options.sentence;
@@ -1196,6 +1216,7 @@ export async function resolveTarget(
       ...(observationVersion ? { observationVersion } : {}),
       topOptions: top,
       ...(gate ? { gate } : {}),
+      ...(visionDiagnostic ? { vision: visionDiagnostic } : {}),
     },
     calls,
     ...(cacheOutcome
@@ -1510,10 +1531,10 @@ export async function resolveTarget(
       );
       if (groupProbability < 0.75) {
         gate = "repeated_group_weak";
-        return unresolved("ambiguous");
+        return await ambiguous();
       }
       if (batches(options.sentence, group).length !== 1)
-        return unresolved("ambiguous");
+        return await ambiguous();
       if (!sameVersion(await pageVersion(page), source.version))
         return unresolved("stale");
       const narrower = await choose(group);
@@ -1529,7 +1550,7 @@ export async function resolveTarget(
         comparableLead(narrower, member.ref) < 0.2
       ) {
         gate = "repeated_member_weak";
-        return unresolved("ambiguous");
+        return await ambiguous();
       }
       if (!sentenceEvidence(options.sentence, member, group)) {
         const accepted = repeatedMemberAccepted(
@@ -1541,7 +1562,7 @@ export async function resolveTarget(
         );
         if (!accepted) {
           gate = "repeated_member_no_evidence";
-          return unresolved("ambiguous");
+          return await ambiguous();
         }
         gate = accepted;
       }
@@ -1579,7 +1600,7 @@ export async function resolveTarget(
       );
       if (!accepted) {
         gate = "repeated_member_no_evidence";
-        return unresolved("ambiguous");
+        return await ambiguous(sameName);
       }
       gate = accepted;
     }
@@ -1625,6 +1646,10 @@ export async function resolveTarget(
       } catch (error) {
         calls.push(unknownCostCall(error));
         ensureActive();
+        // A failed item request is not an inconclusive answer. Preserve legacy
+        // non-vision behavior without recovering through the vision provider.
+        if (options.visionResolver && options.operation === "click")
+          throw new LocatorError("provider_error");
         return null;
       }
       calls.push(verdict.call);
@@ -1650,12 +1675,103 @@ export async function resolveTarget(
       return best.member;
     }
 
+    async function ambiguous(
+      members: readonly Candidate[] = group,
+    ): Promise<LocatorResult> {
+      if (
+        !options.visionResolver ||
+        options.operation !== "click" ||
+        members.length < 2
+      )
+        return unresolved("ambiguous");
+      try {
+        ensureActive();
+        const captured = await captureVisionObservation(
+          page,
+          candidates,
+          source.version,
+          options.sentence,
+          options.projectText,
+        );
+        ensureActive();
+        if (!captured) return unresolved("ambiguous");
+        let answer;
+        const visionStarted = performance.now();
+        try {
+          answer = await options.visionResolver.choose(captured.observation, {
+            signal: controller.signal,
+          });
+        } catch (error) {
+          calls.push({ ...unknownCostCall(error), modality: "vision" });
+          visionDiagnostic =
+            error instanceof VisionRequestError
+              ? {
+                  elapsedMs: error.elapsedMs,
+                  failure: error.failure,
+                  ...(error.httpStatus !== undefined
+                    ? { httpStatus: error.httpStatus }
+                    : {}),
+                }
+              : {
+                  elapsedMs: performance.now() - visionStarted,
+                  failure: "unknown",
+                };
+          visionDiagnostic = {
+            ...visionDiagnostic,
+            outcome: "failed",
+            reason: gate ?? "ambiguous",
+          };
+          gate = `${gate}:vision_error`;
+          return unresolved("ambiguous");
+        }
+        calls.push({ ...answer.call, modality: "vision" });
+        visionDiagnostic = {
+          elapsedMs: performance.now() - visionStarted,
+          outcome: "failed",
+          reason: gate ?? "ambiguous",
+        };
+        ensureActive();
+        if (!sameVersion(await pageVersion(page), source.version)) {
+          gate = `${gate}:vision_stale`;
+          return unresolved("ambiguous");
+        }
+        if (answer.decision.kind !== "candidate") {
+          visionDiagnostic = { ...visionDiagnostic, outcome: "abstained" };
+          gate = `${gate}:vision_abstained`;
+          return unresolved("ambiguous");
+        }
+        const selectedId = answer.decision.id;
+        const index = captured.observation.candidates.findIndex(
+          (candidate) => candidate.id === selectedId,
+        );
+        const target = captured.candidates[index];
+        if (!target || target.disabled) return unresolved("ambiguous");
+        gate = `${gate}:vision_selected`;
+        const result = await refresh(target, true);
+        if (result.kind === "resolved") {
+          visionDiagnostic = { ...visionDiagnostic, outcome: "selected" };
+          return {
+            ...result,
+            diagnostic: { ...result.diagnostic, vision: visionDiagnostic },
+          };
+        }
+        // Failed visual validation must not activate the runner's stale retry.
+        return unresolved("ambiguous");
+      } catch {
+        gate = `${gate}:vision_unavailable`;
+        return unresolved("ambiguous");
+      }
+    }
+
     async function refresh(
       selectedCandidate: Candidate,
+      visual = false,
     ): Promise<LocatorResult> {
       ensureActive();
       const fresh = await liveCandidates(page, options.operation);
       ensureActive();
+      if (visual && !sameVersion(fresh.version, source.version))
+        return unresolved("stale");
       if (
         !fresh.complete ||
         fresh.total > MAX_CANDIDATES ||
@@ -1724,6 +1840,7 @@ export async function resolveTarget(
           observationVersion: source.version,
           topOptions: top,
           ...(gate ? { gate } : {}),
+          ...(visionDiagnostic ? { vision: visionDiagnostic } : {}),
         },
         calls,
         ...(cacheOutcome
@@ -1731,7 +1848,8 @@ export async function resolveTarget(
               cache: { ...cacheOutcome, fallbackCalledModel: calls.length > 0 },
             }
           : {}),
-        ...(options.cache?.key &&
+        ...(!visual &&
+        options.cache?.key &&
         !options.runtimeDependent &&
         cacheOutcome?.outcome === "miss"
           ? {

@@ -11,6 +11,16 @@ import type {
   ResolverDecision,
 } from "./provider.js";
 import { ProviderError } from "./provider.js";
+import {
+  captureVisionObservation,
+  VisionRequestError,
+  type VisionResolver,
+} from "./vision.js";
+
+vi.mock("./vision.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./vision.js")>()),
+  captureVisionObservation: vi.fn(),
+}));
 
 const call: ProviderCall = {
   requestedModel: "recorded",
@@ -1762,5 +1772,248 @@ describe("name hints, item checks, and code fallback", () => {
     expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
       "fresh-r2",
     );
+  });
+});
+
+describe("vision fallback boundaries", () => {
+  const items = [
+    candidate(0, { name: "Edit" }),
+    candidate(1, { name: "Edit" }),
+  ];
+  function setup(observed = items) {
+    const page = recordedPage(observed);
+    vi.mocked(captureVisionObservation).mockClear();
+    vi.mocked(captureVisionObservation).mockResolvedValue({
+      candidates: observed,
+      observation: {
+        instruction: "click the right Edit",
+        image: new Uint8Array(),
+        candidates: observed.map((item, i) => ({
+          id: `C${i + 1}`,
+          name: item.name,
+          role: item.role,
+        })),
+      },
+    });
+    const vision: VisionResolver = {
+      choose: vi.fn(async () => ({
+        decision: { kind: "candidate" as const, id: "C2" },
+        call,
+      })),
+    };
+    const jev = resolver((options) => answer(options, "r0"));
+    return { ...page, vision, jev };
+  }
+  it.each([false, true])(
+    "distinguishes inconclusive item verification from failure=%s",
+    async (fails) => {
+      const cards = items.map((item, index) => ({
+        ...item,
+        signals: {
+          ...item.signals,
+          item: index
+            ? "A development tool maintained since 1993"
+            : "An article about DNS caches",
+        },
+      }));
+      const { vision, jev } = setup(cards);
+      const verifyItems = vi.fn(async () => {
+        if (fails)
+          throw new ProviderError(
+            "connection",
+            "private upstream body",
+            1,
+            call,
+          );
+        return { scores: { r0: 0.5, r1: 0.5 }, call };
+      });
+      const result = await resolveTarget(
+        recordedPage(cards).page,
+        { ...jev, verifyItems },
+        {
+          operation: "click",
+          sentence:
+            "click Edit on the card about a tool that has been around for decades",
+          visionResolver: vision,
+        },
+      );
+      expect(verifyItems).toHaveBeenCalledTimes(1);
+      if (fails) {
+        expect(result).toMatchObject({
+          kind: "unresolved",
+          reason: "provider_error",
+          calls: [call, call],
+        });
+        expect(captureVisionObservation).not.toHaveBeenCalled();
+        expect(vision.choose).not.toHaveBeenCalled();
+      } else {
+        expect(
+          result.kind === "resolved" && result.target.driverTarget().ref,
+        ).toBe("fresh-r1");
+        expect(vision.choose).toHaveBeenCalledTimes(1);
+      }
+    },
+  );
+  it("offers count-varying controls with distinct destinations to vision", async () => {
+    const links = items.map((item, index) => ({
+      ...item,
+      tag: "a",
+      role: "link",
+      name: index ? "12 comments" : "306 comments",
+      signals: { ...item.signals, href: `/story/${index}` },
+    }));
+    const { vision, jev } = setup(links);
+    const result = await resolveTarget(recordedPage(links).page, jev, {
+      operation: "click",
+      sentence: "open comments for the article with the mountain photo",
+      visionResolver: vision,
+    });
+    expect(vision.choose).toHaveBeenCalledTimes(1);
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+  it("preserves permissive picks without vision and explicit core policy precedence", async () => {
+    const { vision, jev } = setup();
+    for (const options of [
+      {},
+      { visionResolver: vision, repeatedMember: { modelPick: true } },
+    ]) {
+      const result = await resolveTarget(recordedPage(items).page, jev, {
+        operation: "click",
+        sentence: "click Edit",
+        ...options,
+      });
+      expect(
+        result.kind === "resolved" && result.target.driverTarget().ref,
+      ).toBe("fresh-r0");
+    }
+    expect(vision.choose).not.toHaveBeenCalled();
+  });
+  it("uses vision after a low-confidence repeated group is narrowed without evidence", async () => {
+    const { page, vision } = setup();
+    let calls = 0;
+    const jev = resolver((options) =>
+      ++calls === 1
+        ? answer(options, "r0", { r0: 0.5, r1: 0.4, none: 0.1 }, 0.1)
+        : answer(options, "r0"),
+    );
+    const result = await resolveTarget(page, jev, {
+      operation: "click",
+      sentence: "click the right Edit",
+      visionResolver: vision,
+    });
+    expect(calls).toBe(2);
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+    expect(vision.choose).toHaveBeenCalledTimes(1);
+  });
+  it("accepts the second visual candidate, keeps Jev calls and never seeds the cache", async () => {
+    const { page, vision, jev } = setup();
+    const cache: CacheStore = {
+      key: new Uint8Array(32).fill(9),
+      lookup: async () => ({ reason: "absent" }),
+      put: vi.fn(),
+      invalidate: vi.fn(),
+      clear: vi.fn(),
+    };
+    const result = await resolveTarget(page, jev, {
+      operation: "click",
+      sentence: "click the right Edit",
+      visionResolver: vision,
+      cache,
+    });
+    expect(result.kind).toBe("resolved");
+    if (result.kind !== "resolved") throw new Error("not resolved");
+    expect(result.target.driverTarget().ref).toBe("fresh-r1");
+    expect(result.cacheSeed).toBeUndefined();
+    expect(result.calls).toHaveLength(2);
+    expect(result.diagnostic.gate).toBe(
+      "repeated_member_no_evidence:vision_selected",
+    );
+    expect(vision.choose).toHaveBeenCalledTimes(1);
+  });
+  it.each(["unknown", "abstain", "error", "stale"])(
+    "fails closed without retry after %s",
+    async (mode) => {
+      const { page, setVersion, vision, jev } = setup();
+      vi.mocked(vision.choose).mockImplementation(async () => {
+        if (mode === "error") throw new Error("provider failed");
+        if (mode === "stale") setVersion({ ...initial, revision: 2 });
+        return {
+          decision:
+            mode === "abstain"
+              ? { kind: "abstain", reason: "ambiguous" }
+              : { kind: "candidate", id: mode === "unknown" ? "C99" : "C2" },
+          call,
+        };
+      });
+      expect(
+        await resolveTarget(page, jev, {
+          operation: "click",
+          sentence: "click the right Edit",
+          visionResolver: vision,
+        }),
+      ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+      expect(vision.choose).toHaveBeenCalledTimes(1);
+    },
+  );
+  it("never invokes vision for fills or none decisions", async () => {
+    const { page, vision, jev } = setup();
+    await resolveTarget(page, jev, {
+      operation: "fill",
+      sentence: "Edit",
+      visionResolver: vision,
+    });
+    await resolveTarget(
+      page,
+      resolver((options) => answer(options, "none")),
+      { operation: "click", sentence: "Edit", visionResolver: vision },
+    );
+    expect(vision.choose).not.toHaveBeenCalled();
+  });
+  it("preserves safe vision failure details and billed usage", async () => {
+    const { page, vision, jev } = setup();
+    vi.mocked(vision.choose).mockRejectedValue(
+      new VisionRequestError(
+        "invalid-response",
+        "truncated_response",
+        1234,
+        call,
+        200,
+      ),
+    );
+    const result = await resolveTarget(page, jev, {
+      operation: "click",
+      sentence: "click the right Edit",
+      visionResolver: vision,
+    });
+    expect(result).toMatchObject({
+      kind: "unresolved",
+      reason: "ambiguous",
+      diagnostic: {
+        gate: "repeated_member_no_evidence:vision_error",
+        vision: {
+          failure: "truncated_response",
+          elapsedMs: 1234,
+          httpStatus: 200,
+        },
+      },
+      calls: [call, call],
+    });
+    expect(vision.choose).toHaveBeenCalledTimes(1);
+  });
+  it("does not capture or call vision for confident unique targets", async () => {
+    const { vision } = setup();
+    vi.mocked(captureVisionObservation).mockClear();
+    const result = await resolveTarget(
+      recordedPage([candidate(0)]).page,
+      resolver((options) => answer(options, "r0")),
+      { operation: "click", sentence: "Item 0", visionResolver: vision },
+    );
+    expect(result.kind).toBe("resolved");
+    expect(captureVisionObservation).not.toHaveBeenCalled();
+    expect(vision.choose).not.toHaveBeenCalled();
   });
 });

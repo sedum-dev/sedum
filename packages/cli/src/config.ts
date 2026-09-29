@@ -32,6 +32,10 @@ export interface ProjectConfigOverrides {
   readonly outputDir?: string;
   readonly reporterDir?: string;
   readonly baseUrl?: string;
+  readonly vision?: {
+    readonly enabled?: boolean;
+    readonly model?: string;
+  };
 }
 
 export interface ResolvedProjectConfig {
@@ -51,6 +55,12 @@ export interface ResolvedProjectConfig {
   readonly apiKey: string | undefined;
   readonly providerBaseUrl: string;
   readonly providerModel: string;
+  readonly vision: {
+    readonly enabled: boolean;
+    readonly model: string;
+    readonly timeoutMs: number;
+  };
+  readonly visionApiKey: string | undefined;
 }
 
 interface RawEnvironment {
@@ -67,6 +77,7 @@ interface RawConfig extends RawEnvironment {
   readonly reporterDir?: unknown;
   readonly environment?: unknown;
   readonly environments?: unknown;
+  readonly vision?: unknown;
 }
 
 const DEFAULTS = {
@@ -82,6 +93,11 @@ const DEFAULTS = {
   },
   outputDir: ".sedum/runs",
   reporterDir: ".sedum/reports",
+  vision: {
+    enabled: false,
+    model: "google/gemini-3.8-flash",
+    timeoutMs: 10_000,
+  },
 };
 
 export const DEFAULT_PROVIDER_BASE_URL = "https://api.typesafe.ai";
@@ -99,11 +115,13 @@ const allowed = {
     "environment",
     "variables",
     "environments",
+    "vision",
   ]),
   tests: new Set(["directory", "include", "exclude"]),
   viewport: new Set(["width", "height"]),
   thresholds: new Set(["verify", "lowConfidenceBand", "contradiction"]),
   environment: new Set(["baseUrl", "variables"]),
+  vision: new Set(["enabled", "model", "timeoutMs"]),
 };
 
 function source(
@@ -187,7 +205,7 @@ function scalarVariables(
   }
   const result: Record<string, string> = {};
   for (const [name, item] of Object.entries(value)) {
-    if (name === "TYPESAFE_API_KEY") {
+    if (name === "TYPESAFE_API_KEY" || name === "OPEN_ROUTER_API_KEY") {
       diagnostic(
         diagnostics,
         file,
@@ -430,6 +448,7 @@ function freeze(config: ResolvedProjectConfig): ResolvedProjectConfig {
   Object.freeze(config.exclude);
   Object.freeze(config.viewport);
   Object.freeze(config.thresholds);
+  Object.freeze(config.vision);
   Object.freeze(config.variables);
   return Object.freeze(config);
 }
@@ -543,6 +562,7 @@ export async function loadProjectConfig(
       ["tests", allowed.tests],
       ["viewport", allowed.viewport],
       ["thresholds", allowed.thresholds],
+      ["vision", allowed.vision],
     ] as const;
     for (const [key, names] of maps)
       mapUnknownKeys(
@@ -584,6 +604,7 @@ export async function loadProjectConfig(
     ["viewport", raw.viewport],
     ["thresholds", raw.thresholds],
     ["environments", raw.environments],
+    ["vision", raw.vision],
   ] as const)
     if (value !== undefined && !object(value))
       diagnostic(
@@ -599,6 +620,7 @@ export async function loadProjectConfig(
   const viewport = object(raw.viewport) ? raw.viewport : {};
   const thresholds = object(raw.thresholds) ? raw.thresholds : {};
   const environments = object(raw.environments) ? raw.environments : {};
+  const vision = object(raw.vision) ? raw.vision : {};
   for (const [name, value] of Object.entries(environments)) {
     if (!object(value)) {
       diagnostic(
@@ -827,6 +849,51 @@ export async function loadProjectConfig(
   }
   const providerModel = customProvider.model ?? DEFAULT_PROVIDER_MODEL;
   const apiKey = providerValue("TYPESAFE_API_KEY");
+  const visionApiKey = providerValue("OPEN_ROUTER_API_KEY");
+  // Credentials configure integrations; they are not test variables and must
+  // not be forwarded through the flow environment.
+  variables.OPEN_ROUTER_API_KEY = undefined;
+  const visionEnabledValue = overrides.vision?.enabled ?? vision.enabled;
+  const visionEnabled = visionEnabledValue ?? DEFAULTS.vision.enabled;
+  if (typeof visionEnabled !== "boolean")
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("vision.enabled"),
+      "vision.enabled",
+      "invalid_config_type",
+      "Configuration key `vision.enabled` must be a boolean.",
+      "Use `vision.enabled: true` or `vision.enabled: false`.",
+    );
+  const visionModelValue = overrides.vision?.model ?? vision.model;
+  const visionModel = visionModelValue ?? DEFAULTS.vision.model;
+  if (typeof visionModel !== "string" || !visionModel.trim())
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("vision.model"),
+      "vision.model",
+      "invalid_config_type",
+      "Configuration key `vision.model` must be nonempty text.",
+      `Use a model such as \`${DEFAULTS.vision.model}\`.`,
+    );
+  const visionTimeoutValue = vision.timeoutMs ?? DEFAULTS.vision.timeoutMs;
+  if (
+    !Number.isSafeInteger(visionTimeoutValue) ||
+    (visionTimeoutValue as number) < 1
+  )
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("vision.timeoutMs"),
+      "vision.timeoutMs",
+      "invalid_config_type",
+      "Configuration key `vision.timeoutMs` must be a positive integer.",
+      "Use a timeout such as `10000`.",
+    );
   const testDirectory = relativePath(
     found.root,
     tests.directory,
@@ -894,6 +961,19 @@ export async function loadProjectConfig(
     apiKey,
     providerBaseUrl,
     providerModel,
+    vision: {
+      enabled: visionEnabled === true,
+      model:
+        typeof visionModel === "string" && visionModel.trim()
+          ? visionModel
+          : DEFAULTS.vision.model,
+      timeoutMs:
+        Number.isSafeInteger(visionTimeoutValue) &&
+        (visionTimeoutValue as number) > 0
+          ? (visionTimeoutValue as number)
+          : DEFAULTS.vision.timeoutMs,
+    },
+    visionApiKey,
   });
 }
 

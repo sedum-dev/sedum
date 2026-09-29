@@ -1,9 +1,63 @@
 import type {
+  ResultCall,
   ResultAttempt,
   ResultStep,
   ResultTest,
   RunResult,
 } from "@sedum-dev/core";
+
+/** Raw text; each renderer escapes it for its output format. */
+export function visionSummary(step: ResultStep): string | null {
+  const vision = step.locator?.vision;
+  if (!vision) return null;
+  const models = [
+    ...new Set(
+      step.calls.filter((c) => c.modality === "vision").map((c) => c.model),
+    ),
+  ];
+  return (
+    `Vision fallback: ${vision.outcome ?? (vision.failure ? "failed" : "outcome unrecorded")} · ${models.join(", ") || "model unrecorded"} · ${Math.round(vision.elapsedMs)} ms` +
+    (vision.reason ? ` · trigger: ${vision.reason}` : "") +
+    (vision.failure ? ` · ${vision.failure}` : "") +
+    (vision.httpStatus ? ` · HTTP ${vision.httpStatus}` : "")
+  );
+}
+
+export function usageLines(result: RunResult): string[] {
+  const steps = result.tests.flatMap((t) => t.attempts.flatMap((a) => a.steps));
+  const all = [
+    ...result.setupCalls,
+    ...result.tests.flatMap((t) =>
+      t.attempts.flatMap((a) => [
+        ...(a.calls ?? []),
+        ...a.steps.flatMap((s) => s.calls),
+      ]),
+    ),
+  ];
+  const line = (label: string, calls: ResultCall[]) => {
+    const known = calls.reduce((sum, c) => sum + (c.costUsd ?? 0), 0);
+    const unknown = calls.filter((c) => c.costUsd === null).length;
+    return `${label}: ${calls.reduce((sum, c) => sum + c.attempts, 0)} calls · ${calls.reduce((sum, c) => sum + c.inputTokens, 0)} input tokens · ${calls.reduce((sum, c) => sum + c.outputTokens, 0)} output tokens · ${unknown ? "known subtotal" : "recorded cost"} $${known.toFixed(6)}${unknown ? `; ${unknown} ${unknown === 1 ? "call" : "calls"} with unknown cost` : ""}`;
+  };
+  const vision = all.filter((c) => c.modality === "vision");
+  const lines = [
+    line(
+      "Text models",
+      all.filter((c) => c.modality !== "vision"),
+    ),
+  ];
+  if (vision.length) {
+    lines.push(line("Vision models", vision));
+    const outcomes = steps
+      .map((s) => s.locator?.vision)
+      .filter((v) => v !== undefined);
+    lines.push(
+      `Vision outcomes: ${outcomes.filter((v) => v.outcome === "selected").length} selected · ${outcomes.filter((v) => v.outcome === "abstained").length} abstained · ${outcomes.filter((v) => v.outcome === "failed" || (!v.outcome && v.failure)).length} failed`,
+    );
+  }
+  lines.push(line("All models (all attempts)", all));
+  return lines;
+}
 
 /** How a test reads in a report, from most to least urgent. */
 export type TestStatus = "failed" | "incomplete" | "flagged" | "passed";

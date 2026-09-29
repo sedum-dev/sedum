@@ -46,6 +46,12 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     apiKey: "SECRET-KEY",
     providerBaseUrl: "https://api.typesafe.ai",
     providerModel: "jev-latest",
+    vision: {
+      enabled: false,
+      model: "google/gemini-3.8-flash",
+      timeoutMs: 10_000,
+    },
+    visionApiKey: undefined,
   };
 }
 

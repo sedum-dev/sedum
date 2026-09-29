@@ -40,6 +40,7 @@ import {
 } from "./flow-values.js";
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
+import type { VisionResolver } from "./vision.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
@@ -99,6 +100,7 @@ export interface FlowRunnerDependencies {
     Resolver &
     Judge &
     Partial<GoalPlanner>;
+  readonly visionResolver?: VisionResolver;
   readonly classificationCache: ClassificationCache;
   readonly locatorCache?: CacheStore;
   readonly env: Readonly<Record<string, string | undefined>>;
@@ -149,6 +151,7 @@ function resultCall(
 ): ResultCall {
   return {
     purpose,
+    ...(call.modality ? { modality: call.modality } : {}),
     requestedModel: call.requestedModel,
     model: call.model,
     attempts: call.attempts,
@@ -484,6 +487,9 @@ async function executeSentence(
               probability: option.probability,
             })),
             cache: locator.cache ?? null,
+            ...(locator.diagnostic.vision
+              ? { vision: locator.diagnostic.vision }
+              : {}),
           }
         : null,
       judgement,
@@ -767,8 +773,26 @@ async function executeSentence(
           .replace(/\s+/gu, " ")
           .trim()
       : step.text;
+  let visionAttempted = false;
   const locate = () =>
     resolveTarget(page, dependencies.provider, {
+      // Disabling transmission or exhausting the request budget must not
+      // restore permissive repeated-member picks.
+      ...(dependencies.visionResolver && step.op === "click"
+        ? { repeatedMember: {} }
+        : {}),
+      ...(dependencies.visionResolver &&
+      !visionAttempted &&
+      !(report && safeUrl(page.url, report.privacy).sensitive)
+        ? {
+            visionResolver: {
+              choose: (...args: Parameters<VisionResolver["choose"]>) => {
+                visionAttempted = true;
+                return dependencies.visionResolver!.choose(...args);
+              },
+            },
+          }
+        : {}),
       operation: step.op === "type" ? "fill" : "click",
       sentence: step.text,
       cacheSentence,
@@ -800,7 +824,11 @@ async function executeSentence(
   // A resolver response can arrive during an unrelated DOM revision. One fresh
   // read after a longer quiet period is safe: it reuses neither a target nor a
   // prior action.
-  if (resolved.kind === "unresolved" && resolved.reason === "stale") {
+  if (
+    !visionAttempted &&
+    resolved.kind === "unresolved" &&
+    resolved.reason === "stale"
+  ) {
     const priorCalls = resolved.calls;
     const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
       quiet: false,
@@ -862,7 +890,9 @@ async function executeSentence(
         locator: resolved,
         error: {
           code: resolved.reason,
-          message: `Could not resolve this ${step.op} step.`,
+          message: resolved.diagnostic.vision?.failure
+            ? `Could not resolve this ${step.op} step: vision ${resolved.diagnostic.vision.failure}${resolved.diagnostic.vision.httpStatus ? ` (HTTP ${resolved.diagnostic.vision.httpStatus})` : ""}.`
+            : `Could not resolve this ${step.op} step.`,
         },
       });
     return record(
@@ -927,7 +957,8 @@ async function executeSentence(
       if (
         !(error instanceof StepExecutionError) ||
         error.code !== "stale" ||
-        !error.retryable
+        !error.retryable ||
+        visionAttempted
       )
         throw error;
       // The first attempt provably did not dispatch input. Re-observe and

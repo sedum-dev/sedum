@@ -18,6 +18,11 @@ thresholds:
   lowConfidenceBand: 0.15
   contradiction: 0.5
 
+vision:
+  enabled: false
+  model: google/gemini-3.8-flash
+  timeoutMs: 10000
+
 outputDir: .sedum/runs
 reporterDir: .sedum/reports
 baseUrl: http://127.0.0.1:3000
@@ -69,8 +74,8 @@ TYPESAFE_API_KEY=...
 The base URL must use HTTPS and must not contain credentials, a query, or a
 fragment. Sedum's TypeSafe SDK appends `/v1/systemone`; the service must accept
 that request and return the TypeSafe System One response shape. The URL defaults
-to TypeSafe and the model to `jev-latest`; the API key is read from 
-`TYPESAFE_API_KEY`. 
+to TypeSafe and the model to `jev-latest`; the API key is read from
+`TYPESAFE_API_KEY`.
 Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
 from `sedum.config.yaml`.
 
@@ -84,3 +89,52 @@ The `thresholds` settings control assertion verdicts. Locator and step
 classification safety gates are deliberately not configurable. An explicit
 JSON reporter writes to `reporterDir/<run-id>/result.json`; canonical progress
 and result artifacts are always written under `outputDir/<run-id>/`.
+
+## Vision fallback (opt-in)
+
+Vision fallback is disabled by default. Enable it with `vision.enabled: true`
+or `sedum run --vision`; `--no-vision` disables it, and `--vision-model`
+overrides the configured model. An enabled run requires the exact credential
+`OPEN_ROUTER_API_KEY` from the invoking process or project-root `.env`. The
+credential is never accepted in YAML. The default model is
+`google/gemini-3.8-flash`, with a 10-second request timeout.
+
+Enabling vision sends **unredacted viewport screenshots** to OpenRouter and the
+configured model. Use non-sensitive pages. Text redaction does
+not redact screenshot pixels.
+
+With vision enabled, ambiguous clicks use visual evidence instead of the
+default permissive Jev repeated-member pick. Existing deterministic resolution
+still runs first. With vision disabled, Jev's behavior is unchanged. Core API
+callers can explicitly override this via `repeatedMember`; an explicit
+`modelPick: true` takes precedence over vision.
+
+Only Jev's ambiguous repeated-control **clicks** can invoke vision. `none`,
+missing controls, fills, assertions, and provider failures do not activate it.
+The model selects a labeled existing candidate or abstains. Unknown IDs and
+changed page versions are rejected; execution still uses Sedum's normal target
+and actionability checks. Visual layout changes without a DOM revision are not
+detected. Only fully visible, unobscured controls are offered; fewer than two
+or more than 40 visible controls leave the step unresolved.
+
+There is at most one vision call per step, with no recovery after failure.
+After vision is attempted, a stale action target fails without re-resolving.
+Suppressing screenshots on sensitive pages does not restore permissive picks.
+Existing Jev caching is unchanged; vision-selected targets are not cached.
+HTML, Markdown, and CLI summaries identify vision fallback outcomes, the model,
+trigger, and duration. A selected candidate is not a guarantee that its action
+succeeded: the step verdict still reports execution separately. Text-model
+confidence is not presented as vision confidence.
+Usage summaries separate text and vision calls across all attempts, including
+earlier retries. CLI usage is shown in interactive terminals or with `--costs`;
+fallback details are also shown in non-interactive output.
+Vision costs use OpenRouter's reported `usage.cost`, without inventing separate
+input/output dollar charges. Missing costs keep the total incomplete while the
+known subtotal remains visible. These are spend reports, not budget limits.
+Locator diagnostics include vision request duration and a safe failure category
+(HTTP error/status, timeout, cancellation, connection, malformed response,
+invalid selection, or truncation). These fields are preserved in the canonical
+run result at `steps[].locator.vision`; failures also appear in the step error
+message. Upstream error bodies are not retained.
+An HTTP 429 means rate limiting, not a model abstention; the step remains
+unresolved and is not retried.

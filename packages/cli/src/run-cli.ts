@@ -324,6 +324,9 @@ export async function runCli(
     )
     .option("--env <name>", "select a named environment")
     .option("--browser <kind>", "chrome or chromium")
+    .option("--vision", "enable vision fallback for ambiguous clicks")
+    .option("--no-vision", "disable vision fallback")
+    .option("--vision-model <model>", "override the OpenRouter vision model")
     .option(
       "--url-override <url>",
       "replace entry URL origin for preview deployments",
@@ -407,6 +410,8 @@ export async function runCli(
           name: string[];
           env?: string;
           browser?: string;
+          vision?: boolean;
+          visionModel?: string;
           urlOverride?: string;
           outputDir?: string;
           reporterDir?: string;
@@ -575,6 +580,10 @@ export async function runCli(
           },
           ...(options.env ? { environment: options.env } : {}),
           ...(options.browser ? { browser: options.browser } : {}),
+          ...(options.vision !== undefined ? { vision: options.vision } : {}),
+          ...(options.visionModel !== undefined
+            ? { visionModel: options.visionModel }
+            : {}),
           ...(options.urlOverride ? { urlOverride: options.urlOverride } : {}),
           ...(options.outputDir ? { outputDir: options.outputDir } : {}),
           ...(options.reporterDir ? { reporterDir: options.reporterDir } : {}),

@@ -36,11 +36,61 @@ describe("project configuration", () => {
       baseUrl: null,
       providerBaseUrl: "https://api.typesafe.ai",
       providerModel: "jev-latest",
+      vision: {
+        enabled: false,
+        model: "google/gemini-3.8-flash",
+        timeoutMs: 10000,
+      },
     });
     expect(config.testDirectory).toBe(path.join(root, "tests"));
     expect(config.outputDir).toBe(path.join(root, ".sedum", "runs"));
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.thresholds)).toBe(true);
+  });
+
+  it("validates vision settings and reads its credential only from the environment", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      `vision:
+  enabled: true
+  model: openrouter/example
+  timeoutMs: 2500
+`,
+    );
+    await writeFile(path.join(root, ".env"), "OPEN_ROUTER_API_KEY=file-key\n");
+    await expect(loadProjectConfig(root, {})).resolves.toMatchObject({
+      vision: { enabled: true, model: "openrouter/example", timeoutMs: 2500 },
+      visionApiKey: "file-key",
+      variables: { OPEN_ROUTER_API_KEY: undefined },
+    });
+
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      `vision:
+  enabled: yes
+  model: ""
+  timeoutMs: 0
+  retry: true
+variables:
+  OPEN_ROUTER_API_KEY: forbidden
+`,
+    );
+    await expect(loadProjectConfig(root, {})).rejects.toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          key: "vision.retry",
+          code: "unknown_config_key",
+        }),
+        expect.objectContaining({ key: "vision.enabled" }),
+        expect.objectContaining({ key: "vision.model" }),
+        expect.objectContaining({ key: "vision.timeoutMs" }),
+        expect.objectContaining({
+          key: "variables.OPEN_ROUTER_API_KEY",
+          code: "api_key_in_config",
+        }),
+      ]),
+    });
   });
 
   it("discovers the nearest ancestor and applies every precedence layer", async () => {

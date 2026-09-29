@@ -46,6 +46,8 @@ export interface ProviderRate {
 }
 
 export interface ProviderCall {
+  /** Set by the locator for visual fallback calls, independent of model name. */
+  readonly modality?: "vision";
   readonly requestedModel: string;
   readonly model: string;
   readonly attempts: number;

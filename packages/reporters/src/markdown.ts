@@ -7,6 +7,8 @@ import {
   type RunResult,
 } from "@sedum-dev/core";
 import {
+  usageLines,
+  visionSummary,
   decisionLines,
   duration,
   needsAttention,
@@ -152,7 +154,7 @@ function stepSection(
         (locator.cache.targetChanged ? ", target changed" : "")
       : "";
     out.push(
-      `- **locator**: ${locator.source} · confidence ${score(locator.confidence)}${cache}`,
+      `- **locator**: ${locator.source} · ${locator.vision ? "text-model " : ""}confidence ${score(locator.confidence)}${cache}`,
     );
     if (locator.options.length)
       for (const option of locator.options)
@@ -436,6 +438,22 @@ export function renderMarkdown(input: RunResult): string {
   if (sections.length) out.push("## Needs attention", "", ...sections);
 
   out.push("## Flow detail", "");
+  out.push(
+    "### Model usage (all attempts)",
+    "",
+    ...usageLines(result).map((line) => `- ${inline(line)}`),
+    "",
+  );
+  for (const test of tests)
+    for (const attempt of test.attempts)
+      for (const step of attempt.steps) {
+        const vision = visionSummary(step);
+        if (vision)
+          out.push(
+            `- ${code(test.file)} · attempt ${attempt.ordinal} · step ${step.index}: ${inline(vision)}`,
+          );
+      }
+  out.push("");
   for (const test of tests) out.push(...flowDetail(test));
 
   const reruns = [

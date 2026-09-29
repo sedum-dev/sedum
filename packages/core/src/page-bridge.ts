@@ -8,6 +8,7 @@ import {
   type PageVersion,
   type FillTarget,
   type ReadTargetResult,
+  type PageBridge,
 } from "./page-protocol.js";
 import { matchEntry, type CacheEntry, type MatchResult } from "./page-cache.js";
 
@@ -21,6 +22,7 @@ export class PageScriptError extends Error {
   }
 }
 type Method =
+  | "visualCandidates"
   | "collect"
   | "digest"
   | "pageVersion"
@@ -181,6 +183,12 @@ export async function readTarget(
 }
 export function clearPageRefs(page: BrowserPage): Promise<void> {
   return call(page, "clearRefs");
+}
+
+export function visualCandidates(
+  page: BrowserPage,
+): Promise<ReturnType<PageBridge["visualCandidates"]>> {
+  return call(page, "visualCandidates");
 }
 
 /** Match a store entry against every current candidate; the HMAC key never crosses the page bridge. */

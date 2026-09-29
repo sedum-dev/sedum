@@ -310,6 +310,70 @@ const cart = "tests/cart.test.yaml";
 const login = "tests/login.test.yaml";
 const checkout = "tests/checkout.test.yaml";
 
+export async function visionReport(): Promise<RunResult> {
+  const visualStep = (
+    index: number,
+    outcome: "selected" | "abstained" | "failed",
+  ): ResultStep =>
+    step(cart, index, outcome === "selected" ? "passed" : "failed_action", {
+      kind: "action",
+      operation: "click",
+      sentence: "click Edit on the blue card",
+      judgement: null,
+      detail:
+        outcome === "selected"
+          ? "Clicked the blue card."
+          : "No click dispatched.",
+      locator: {
+        source: "model",
+        confidence: 0.8,
+        options: [],
+        cache: null,
+        vision: {
+          outcome,
+          reason: "repeated_member_no_evidence",
+          elapsedMs: 2345,
+          ...(outcome === "failed"
+            ? { failure: "http_error", httpStatus: 429 }
+            : {}),
+        },
+      },
+      calls: [
+        modelCall,
+        {
+          ...modelCall,
+          modality: "vision",
+          model: "google/gemini-3.8-flash",
+          requestedModel: "google/gemini-3.8-flash",
+          inputTokens: index === 1 ? 100 : index === 2 ? 170 : 230,
+          outputTokens: index === 1 ? 11 : index === 2 ? 0 : 23,
+          inputUsdPerMillion: null,
+          outputUsdPerMillion: null,
+          rateSource: null,
+          rateCheckedAt: null,
+          costUsd: outcome === "failed" ? null : index === 1 ? 0.002 : 0.003,
+        },
+      ],
+      error:
+        outcome === "failed"
+          ? { code: "ambiguous", message: "Vision HTTP 429" }
+          : null,
+      evidence: { status: "omitted", reason: "disabled" },
+      replayFrame: null,
+      targetBox: null,
+    });
+  return record("vision-report", [
+    {
+      file: cart,
+      description: "Visual fallback across attempts",
+      attempts: [
+        [visualStep(1, "abstained"), visualStep(2, "failed")],
+        [visualStep(3, "selected")],
+      ],
+    },
+  ]);
+}
+
 export const fixtures = {
   clean: () =>
     record("run-clean", [
