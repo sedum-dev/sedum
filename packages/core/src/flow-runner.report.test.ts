@@ -152,9 +152,61 @@ async function reportRun(
 }
 
 describe("runner report facts", () => {
+  it("records complete redacted goal context before browser execution", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "sedum-goal-context-"));
+    try {
+      const file = path.join(root, "goal.test.yaml");
+      const text =
+        "Follow the checkout instructions. ".repeat(30) + "secret-123 end-goal";
+      const verify =
+        "Check the completed order. ".repeat(30) + "secret-123 end-verify";
+      await writeFile(
+        file,
+        `url: https://shop.test\ndata:\n  password: $PASSWORD\ngoal: ${JSON.stringify(text)}\nverify: ${JSON.stringify(verify)}\n`,
+      );
+      const snapshots: RunResult[] = [];
+      const recorder = new RunRecorder(async (snapshot) => {
+        snapshots.push(snapshot);
+      });
+      await recorder.start();
+      const result = await runFlow(file, {
+        repoRoot: root,
+        browser: {
+          launch: vi.fn(async () => {
+            throw new Error("Browser unavailable");
+          }),
+        },
+        provider: {
+          chooseGoal: vi.fn(),
+          choose: vi.fn(),
+          holds: vi.fn(),
+          classifyBatch: vi.fn(),
+        },
+        classificationCache: new NoopClassificationCache(),
+        env: { PASSWORD: "secret-123" },
+        report: {
+          recorder,
+          privacy: { secretValues: [] },
+          evidenceEnabled: false,
+          replay: false,
+          saveFrame: vi.fn(),
+        },
+      });
+      expect(result.status).toBe("could_not_run");
+      expect(recorder.snapshot.tests[0]?.goal).toEqual({
+        text: text.replace("secret-123", "[REDACTED]"),
+        verify: verify.replace("secret-123", "[REDACTED]"),
+      });
+      expect(JSON.stringify(snapshots)).not.toContain("secret-123");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("publishes a failed verify with exact scores, safe page and default frame", async () => {
     const { result, final, snapshots, saveFrame } = await reportRun();
     expect(result.status).toBe("failed");
+    expect(final.tests[0]?.goal).toBeUndefined();
     expect(final.tests[0]?.id).toBe("cart.test.yaml");
     expect(
       snapshots.some(

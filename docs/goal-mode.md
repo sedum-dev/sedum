@@ -1,9 +1,46 @@
-# Experimental goal-mode API
+# Goal-based tests
 
-The goal-mode API provides `runGoal(page, planner, judge, options)` and
-`TypeSafeAdapter.chooseGoal`. It does **not** enable the planned YAML syntax:
-top-level `goal` and `verify` remain reserved, and authored-step execution is
-unchanged. It is not a production agent or a speed benchmark.
+Use `goal` and an independent `verify` claim instead of a `steps` list:
+
+```yaml
+url: https://www.saucedemo.com/
+data:
+  username: standard_user
+  password: $SAUCE_PASSWORD
+  first_name: Ada
+  last_name: Lovelace
+  postcode: "94016"
+goal: >
+  Sign in with {{username}} and {{password}}, select a Sauce Labs Backpack,
+  and complete checkout using the supplied customer details.
+verify: Thank you for your order! is visible
+```
+
+Save as `checkout.test.yaml`, then use `sedum validate checkout.test.yaml` and
+`sedum run checkout.test.yaml`. Validation checks syntax and declared bindings;
+it does not predict whether a goal can be achieved. Both `goal` and `verify`
+must be nonblank strings; mixing them with `steps` is invalid. Module files
+remain authored steps. Existing `before`/`after` hooks and module calls work:
+failed setup skips the goal, and teardown runs after ordinary goal failures.
+
+Goals type only supplied `data` or values remembered by setup, not generated
+text. Environment-derived values remain opaque. A goal must earn an unflagged
+independent verification pass using configured assertion thresholds. The
+planner's DONE is never itself a passing verdict. Goal execution retains
+24-request, 18-action and 120-second defaults; global CLI cancellation also
+applies. YAML does not expose gate or budget overrides. Automatic whole-test
+`--retries` do not restart failed goal tests.
+
+HTML reports show the full, secret-redacted **Goal** and **Verify** above the
+replay and action list. Step-based reports have no goal section.
+Reports list each dispatched click or type action, followed by a `goal`
+verification step with action/request counts, failure reason and Judge scores.
+Typed values appear as binding names such as `{{password}}`, never resolved
+values. Run with `--replay` to inspect post-action frames in the HTML player;
+sensitive pages remain excluded. Replay is a visual review of the recorded run,
+not a re-execution of its actions. Planner/Judge usage is counted only once.
+The underlying API remains `runGoal(page, planner, judge, options)` with
+`TypeSafeAdapter.chooseGoal`. Authored-step execution is unchanged.
 
 ## Decision and execution boundaries
 
@@ -116,12 +153,12 @@ Reproduce one lower-margin run with:
 bun scripts/goal-experiments.ts sauce saucedemo-checkout --credentials --demo --lower-operation-margin
 ```
 
-| Margin | Seconds | Final choice | Confidence | Lead | Result |
-| --- | ---: | --- | ---: | ---: | --- |
-| 0.1 | 4.346 | CLICK | 0.25 | 0.01 | operation_abstention |
-| 0.03 | 4.383 | BLOCKED | 0.28 | 0.05 | operation_abstention |
-| 0.1 | 4.334 | BLOCKED | 0.24 | 0.01 | operation_abstention |
-| 0.03 | 4.397 | BLOCKED | 0.26 | 0.02 | operation_abstention |
+| Margin | Seconds | Final choice | Confidence | Lead | Result               |
+| ------ | ------: | ------------ | ---------: | ---: | -------------------- |
+| 0.1    |   4.346 | CLICK        |       0.25 | 0.01 | operation_abstention |
+| 0.03   |   4.383 | BLOCKED      |       0.28 | 0.05 | operation_abstention |
+| 0.1    |   4.334 | BLOCKED      |       0.24 | 0.01 | operation_abstention |
+| 0.03   |   4.397 | BLOCKED      |       0.26 | 0.02 | operation_abstention |
 
 Each run signed in (3 actions, 4 requests) then stopped on Products. Each used
 9,082 input tokens and estimated $0.000381444; output tokens were 795 for the
@@ -168,11 +205,11 @@ Reports record `contextVariant`; baseline requests omit all optional fields.
 3. `completion`: the existing verification claim is visible in planner state.
    No speculative stop head was added; DONE still invokes the separate Judge.
 
-| Variant | Results | Seconds (runs 1 / 2) | Input/output tokens per run | Estimated USD per run |
-| --- | --- | --- | --- | --- |
-| data | 2 passed | 18.472 / 18.529 | 43,945 / 3,361 | 0.001845690 |
-| instructions | 2 passed | 18.316 / 18.390 | 44,319 / 3,361 | 0.001861398 |
-| completion | 2 passed | 18.570 / 18.504 | 43,996 / 3,362 | 0.001847832 |
+| Variant      | Results  | Seconds (runs 1 / 2) | Input/output tokens per run | Estimated USD per run |
+| ------------ | -------- | -------------------- | --------------------------- | --------------------- |
+| data         | 2 passed | 18.472 / 18.529      | 43,945 / 3,361              | 0.001845690           |
+| instructions | 2 passed | 18.316 / 18.390      | 44,319 / 3,361              | 0.001861398           |
+| completion   | 2 passed | 18.570 / 18.504      | 43,996 / 3,362              | 0.001847832           |
 
 All used `jev-1.13.0`, 11 actions and 18 requests each, selected one Backpack,
 passed DOM/customer/summary/route checks and independent Judge holds=0.97,
@@ -221,7 +258,7 @@ pnpm fixtures:verify
 SEDUM_BROWSER_INTEGRATION=1 pnpm exec vitest run packages/core/src/goal-runner.integration.test.ts
 ```
 
-No CLI/YAML/report-schema integration, general select/scroll/wait support,
+No general select/scroll/wait support,
 semantic freshness optimization, broad real-site coverage, or production
 security claim is included. The 4,096-character complete-digest requirement
 blocks long pages such as the reached Wikipedia article. Model abstention and

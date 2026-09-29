@@ -89,6 +89,29 @@ async function example() {
 }
 
 describe("HTML report", () => {
+  it("shows full escaped goal and verify before attempts without altering authored-step reports", async () => {
+    const result = await example();
+    const before = renderHtml(result);
+    expect(before).not.toContain('aria-label="Goal and verification"');
+    const goal = {
+      text: "Follow checkout instructions. ".repeat(30) + "<goal-end>",
+      verify: "Inspect the completed order. ".repeat(30) + "<verify-end>",
+    };
+    const html = renderHtml({
+      ...result,
+      tests: result.tests.map((test) => ({ ...test, goal })),
+    });
+    expect(html).toContain(goal.text.replace("<goal-end>", "&lt;goal-end&gt;"));
+    expect(html).toContain(
+      goal.verify.replace("<verify-end>", "&lt;verify-end&gt;"),
+    );
+    expect(html).not.toContain("<goal-end>");
+    expect(html.indexOf('aria-label="Goal and verification"')).toBeLessThan(
+      html.indexOf('<details class="attempt"'),
+    );
+    expect(renderHtml(result)).toBe(before);
+  });
+
   it("sorts failures, shows exact per-step lines, escapes data and keeps unknown cost honest", async () => {
     const result = await example();
     const html = renderHtml(result);

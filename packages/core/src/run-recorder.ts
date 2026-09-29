@@ -70,6 +70,9 @@ export class TestRecording {
   startAttempt(lane?: number): Promise<void> {
     return this.recorder.startAttemptFor(this.testId, lane);
   }
+  setGoal(goal: NonNullable<ResultTest["goal"]>): Promise<void> {
+    return this.recorder.setGoalFor(this.testId, goal);
+  }
   addStep(step: ResultStep): Promise<void> {
     return this.recorder.addStepFor(this.testId, step);
   }
@@ -300,6 +303,15 @@ export class RunRecorder {
 
   async startTest(input: TestStartInput): Promise<void> {
     await this.beginTest(input);
+  }
+
+  /** @internal Use `TestRecording.setGoal` after resolving secret bindings. */
+  async setGoalFor(
+    testId: string,
+    goal: NonNullable<ResultTest["goal"]>,
+  ): Promise<void> {
+    this.replaceTest(testId, (test) => ({ ...test, goal }));
+    await this.publish();
   }
 
   /** @internal Use `TestRecording.addAttemptCalls`. */
