@@ -1,6 +1,6 @@
 # Experimental goal-mode API
 
-This local PoC adds `runGoal(page, planner, judge, options)` and
+The goal-mode API provides `runGoal(page, planner, judge, options)` and
 `TypeSafeAdapter.chooseGoal`. It does **not** enable the planned YAML syntax:
 top-level `goal` and `verify` remain reserved, and authored-step execution is
 unchanged. It is not a production agent or a speed benchmark.
@@ -28,7 +28,7 @@ The design follows `model.py` (`action_space`, `choose`), `agent.py`, and
 6. Record before dispatch. Stop on every executor error, including pre-dispatch
    errors; an uncertain dispatched action is never replayed.
 7. `DONE` calls the existing independent assertion engine with separately
-   authored claims. The PoC requires **unflagged** passes: stricter than authored
+   authored claims. The runner requires **unflagged** passes: stricter than authored
    steps' normal passed-with-warning policy. `DONE` alone cannot pass.
 
 `resolveData` and `RuntimeValue` keep environment-derived values opaque.
@@ -153,7 +153,7 @@ tokens, estimated $0.000078162; no Judge check was reached. Both used
 `jev-1.13.0`; both continuous videos were inspected and both reports retained.
 This demonstrates a successful full flow, not reliable completion.
 
-### Python PoC context experiments
+### Python implementation context experiments
 
 Six fresh sessions tested three additions separately, in order data,
 instructions, completion, then the same order again. Goal, supplied values,

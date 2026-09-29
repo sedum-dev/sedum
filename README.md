@@ -169,7 +169,7 @@ Coming soon after that:
   ```
 
   Until then, write each step as a sentence. An [experimental goal-mode API
-  and bounded experiments](docs/goal-mode-poc.md) are available for development;
+  and bounded experiments](docs/goal-mode.md) are available for development;
   they do not enable this YAML syntax.
 
 ## Contributing
