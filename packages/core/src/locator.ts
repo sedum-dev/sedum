@@ -1458,16 +1458,16 @@ export async function resolveTarget(
       codeFallback && !nameStated(options.sentence, selected)
         ? (statedGroupPick(options.sentence, candidates) ?? selected)
         : selected;
-    const inCode = (pick: Candidate) =>
-      resolveInCode(options.sentence, pick, candidates) ??
+    const inCode =
+      resolveInCode(options.sentence, selected, candidates) ??
       (codeFallback
         ? resolveInCode(options.sentence, anchor, candidates, true)
         : null);
     const bySection =
-      options.sectionMatch !== false && !inCode(selected)
+      options.sectionMatch !== false && !inCode
         ? resolveBySection(options.sentence, selected, candidates)
         : null;
-    const coded = bySection ?? inCode(selected);
+    const coded = bySection ?? inCode;
     if (coded) {
       gate = bySection ? "resolved_by_section" : "resolved_in_code";
       if (options.operation === "fill" && !coded.editable)
