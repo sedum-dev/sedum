@@ -4,7 +4,9 @@ import {
   DEFAULT_MIN_P,
   DEFAULT_BAND,
   DEFAULT_CONTRADICTION_CUTOFF,
+  measure,
   verify,
+  type MeasureResult,
   type VerifyPolicy,
   type VerifyResult,
 } from "./assertion-engine.js";
@@ -41,6 +43,12 @@ import {
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import type { VisionResolver } from "./vision.js";
+import {
+  gotoUrlParts,
+  pressKey,
+  scrollDirection,
+  waitDurationMs,
+} from "./step-operands.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
@@ -278,7 +286,7 @@ function claim(
 ): string {
   return step.text
     .replace(
-      /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:that\s+)?/iu,
+      /^\s*(?:verify|assert|check|confirm|ensure|expect|measure|note|observe)\b\s*(?:that\s+|whether\s+|if\s+)?/iu,
       "",
     )
     .trim()
@@ -368,7 +376,7 @@ async function executeSentence(
     }
   };
   type StepFacts = {
-    verify?: VerifyResult;
+    verify?: VerifyResult | MeasureResult;
     locator?: LocatorResult;
     error?: {
       code: string;
@@ -404,7 +412,7 @@ async function executeSentence(
     const failed =
       outcome === "failed" ||
       (typeof outcome === "object" && outcome.status === "failed");
-    const flags = facts.verify?.flags ?? [];
+    const flags = facts.verify?.kind === "verify" ? facts.verify.flags : [];
     const needsEvidence = failed || isError || flags.length > 0;
     const evidence: ResultFrame = !needsEvidence
       ? { status: "omitted", reason: "clean_step" }
@@ -439,13 +447,14 @@ async function executeSentence(
         ? [resultCall(facts.verify.call, "judge", facts.verify.elapsedMs)]
         : []),
     ];
+    const policy = facts.verify?.kind === "verify" ? facts.verify : null;
     const judgement = facts.verify
       ? {
           holds: facts.verify.holds,
           contradicted: facts.verify.contradicted,
-          threshold: facts.verify.minP,
-          band: facts.verify.band,
-          contradictionCutoff: facts.verify.contradictionCutoff,
+          threshold: policy?.minP ?? null,
+          band: policy?.band ?? null,
+          contradictionCutoff: policy?.contradictionCutoff ?? null,
           judgedExcerpt:
             !sensitive && facts.verify.judgedExcerpt
               ? safeText(facts.verify.judgedExcerpt, privacy, 1500)
@@ -658,19 +667,29 @@ async function executeSentence(
       );
     }
   }
-  if (step.op === "verify") {
-    const judge = () =>
-      verify(page, dependencies.provider, claim(step, data), {
-        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-        projectText: (text) => redactOpaqueText(text, opaqueEntries),
-        ...(dependencies.verifyPolicy ?? {}),
-      });
+  if (step.op === "verify" || step.op === "measure") {
+    const assertion = {
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      projectText: (text: string) => redactOpaqueText(text, opaqueEntries),
+    };
+    // A measure records both scores and never gates the test.
+    const judge = (): Promise<VerifyResult | MeasureResult> =>
+      step.op === "measure"
+        ? measure(page, dependencies.provider, claim(step, data), assertion)
+        : verify(page, dependencies.provider, claim(step, data), {
+            ...assertion,
+            ...(dependencies.verifyPolicy ?? {}),
+          });
+    const outcome = (result: VerifyResult | MeasureResult) =>
+      result.kind === "verify" && result.verdict === "failed"
+        ? "failed"
+        : "continue";
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider
       // request, take exactly one fresh settled observation rather than
       // reporting a verdict about an old page.
-      return record(result.verdict === "failed" ? "failed" : "continue", {
+      return record(outcome(result), {
         verify: result,
       });
     } catch (error) {
@@ -688,7 +707,7 @@ async function executeSentence(
         if (settled.quiet) {
           try {
             const result = await judge();
-            return record(result.verdict === "failed" ? "failed" : "continue", {
+            return record(outcome(result), {
               verify: result,
               failedCalls: priorCalls,
             });
@@ -743,20 +762,97 @@ async function executeSentence(
       );
     }
   }
-  if (step.op !== "click" && step.op !== "type")
-    return record(
-      unsupported(
-        step.source.file,
-        step.source,
-        `The ${step.op} operation is not part of this walking skeleton.`,
-      ),
-      {
-        error: {
-          code: "unsupported_operation",
-          message: `The ${step.op} operation is not supported.`,
+  if (
+    step.op === "wait" ||
+    step.op === "press" ||
+    step.op === "scroll" ||
+    step.op === "goto"
+  ) {
+    let command: StepCommand;
+    let detail = "";
+    const invalid = (message: string) =>
+      record(
+        {
+          status: "could_not_run",
+          file: step.source.file,
+          code: "invalid_test",
+          source: step.source,
+          message,
         },
-      },
-    );
+        { error: { code: "invalid_operand", message } },
+      );
+    if (step.op === "wait") {
+      const durationMs = waitDurationMs(step.text);
+      if (durationMs === null)
+        return invalid("Use a positive wait duration of at most 30 seconds.");
+      command = { op: "wait", durationMs };
+    } else if (step.op === "press") {
+      const key = pressKey(step.text);
+      if (key === null)
+        return invalid(
+          'Name one key to press, such as Enter, Tab, Escape, or "Control+A".',
+        );
+      command = { op: "press", key };
+      detail = `Pressed ${key}.`;
+    } else if (step.op === "scroll") {
+      const direction = scrollDirection(step.text);
+      if (direction === null) return invalid("Say scroll up or scroll down.");
+      // One screenful, keeping some overlap so content is not skipped.
+      const height = await page
+        .evaluate<number>("window.innerHeight")
+        .catch(() => 800);
+      const deltaY = Math.round(Math.max(200, height * 0.8));
+      command = {
+        op: "scroll",
+        deltaY: direction === "down" ? deltaY : -deltaY,
+      };
+    } else {
+      const parts = gotoUrlParts(step.text);
+      if (parts === null) return invalid("Name exactly one http(s) address.");
+      const values = parts.names.map((name) => data[name]?.value);
+      if (values.some((value) => value === undefined))
+        return record("failed", {
+          error: {
+            code: "missing_remembered_binding",
+            message:
+              "This step needs a value that is unavailable in this attempt.",
+          },
+        });
+      const url = new RuntimeUrl(parts.literals, values as RuntimeValue[]);
+      try {
+        new URL(url.reveal());
+      } catch {
+        return invalid("The goto address is not a valid URL.");
+      }
+      command = { op: "goto", url };
+      detail = `Opened ${url.toString()}.`;
+    }
+    try {
+      await executeStep(page, command, {
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      return record("continue", detail ? { detail } : {});
+    } catch (error) {
+      const actionError = error instanceof StepExecutionError ? error : null;
+      const facts = {
+        error: {
+          code: actionError?.code ?? "action_error",
+          message: actionError?.message ?? "The action could not complete.",
+          callLog: actionError?.callLog,
+        },
+      };
+      return actionError?.code === "invalid_input"
+        ? record("failed", facts)
+        : record(
+            unsupported(
+              step.source.file,
+              step.source,
+              `The ${step.op} step could not complete.`,
+            ),
+            facts,
+          );
+    }
+  }
   const typeOperand = step.op === "type" ? validateTypeOperand(step) : null;
   const runtimeDependent = step.tokens.some(
     (token) =>
