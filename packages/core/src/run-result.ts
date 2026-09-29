@@ -163,6 +163,7 @@ export const ResultTestSchema = z.strictObject({
   id: z.string().min(1),
   file: z.string().min(1),
   description: z.string().max(512),
+  goal: z.strictObject({ text: z.string(), verify: z.string() }).optional(),
   tags: z.array(z.string().max(120)),
   state,
   verdict: verdict.nullable(),

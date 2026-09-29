@@ -1,5 +1,10 @@
 # RunResult v1 and live progress
 
+Goal tests populate optional `tests[].goal` with complete, secret-redacted
+`text` and `verify` strings after data resolution, before browser execution.
+HTML reports display these above the replay and steps. Authored-step tests omit
+this field. Existing result files without it remain supported.
+
 Goal tests publish an action step after each dispatched click or type, then an
 aggregate step (`kind: verify`, `operation: goal`) when the bounded loop ends.
 Action steps use data-binding names instead of typed values and include target

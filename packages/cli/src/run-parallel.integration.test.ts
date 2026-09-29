@@ -247,6 +247,10 @@ describe.skipIf(!browserIntegration)(
           expect(output.diagnostic).toBeNull();
           expect(runExitCode(output.result, false)).toBe(passes ? 0 : 1);
           expect(output.result.tests[0]!.attempts).toHaveLength(1);
+          expect(output.result.tests[0]!.goal).toEqual({
+            text: "Sign in and complete checkout with a Canvas Backpack",
+            verify: passes ? "Order placed is shown" : "An error is shown",
+          });
           const steps = output.result.tests[0]!.attempts[0]!.steps;
           expect(steps.map((step) => step.operation)).toEqual([
             ...actions.map((action) => action[0]!.toLowerCase()),

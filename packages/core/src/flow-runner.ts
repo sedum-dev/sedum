@@ -1215,6 +1215,13 @@ export async function runFlow(
         .filter((entry) => entry.sensitive)
         .map((entry) => entry.value.reveal()),
     );
+  if (dependencies.report && classified.value.goal) {
+    const { test, privacy } = dependencies.report;
+    await test.setGoal({
+      text: safeText(classified.value.goal.text, privacy, Infinity),
+      verify: safeText(classified.value.goal.verify, privacy, Infinity),
+    });
+  }
   let session: BrowserSession | undefined;
   let context: Awaited<ReturnType<BrowserSession["newContext"]>> | undefined;
   let page: BrowserPage | undefined;

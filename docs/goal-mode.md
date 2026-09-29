@@ -31,6 +31,8 @@ planner's DONE is never itself a passing verdict. Goal execution retains
 applies. YAML does not expose gate or budget overrides. Automatic whole-test
 `--retries` do not restart failed goal tests.
 
+HTML reports show the full, secret-redacted **Goal** and **Verify** above the
+replay and action list. Step-based reports have no goal section.
 Reports list each dispatched click or type action, followed by a `goal`
 verification step with action/request counts, failure reason and Judge scores.
 Typed values appear as binding names such as `{{password}}`, never resolved
