@@ -20,6 +20,7 @@ import type { CacheStore } from "./cache-store.js";
 import { projectCandidates } from "./page-protocol.js";
 import { resolveTarget } from "./locator.js";
 import { executeStep, RuntimeValue } from "./step-executor.js";
+import { chooseOption } from "./dropdown-option.js";
 import type {
   Resolver,
   ResolverCandidates,
@@ -312,6 +313,46 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         );
         expect(await readTarget(page, target)).toEqual({ status: "stale" });
       }
+      await context.close();
+    });
+    it("chooses the named option of a native dropdown instead of clicking it", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<label>Sort <select aria-label="Sort products" onchange="window.sorted=this.value"><option value="az">Name (A to Z)</option><option value="lohi">Price (low to high)</option><option value="hilo" disabled>Price (high to low)</option></select></label>'`);
+      const model = recordedResolver((options) => {
+        const select = options.options.find(
+          (option) =>
+            option.kind === "candidate" && option.candidate.role === "combobox",
+        );
+        return select?.kind === "candidate" ? select.candidate.id : "none";
+      });
+      const click = async (sentence: string) => {
+        const result = await resolveTarget(page, model, {
+          operation: "click",
+          sentence,
+        });
+        if (result.kind !== "resolved") throw new Error(result.reason);
+        return executeStep(page, {
+          op: "click",
+          target: result.target,
+          chooseOption: (labels) => chooseOption(sentence, labels),
+        });
+      };
+      await click(
+        'click the "Price (low to high)" option in the sort dropdown',
+      );
+      expect(await page.evaluate("window.sorted")).toBe("lohi");
+      await expect(click("click the sort dropdown")).rejects.toMatchObject({
+        code: "invalid_input",
+        message:
+          'This is a dropdown. Name the option to choose, one of: "Name (A to Z)", "Price (low to high)".',
+      });
+      await expect(
+        click('select "Price (high to low)" in the sort dropdown'),
+      ).rejects.toMatchObject({ code: "not_actionable" });
+      expect(
+        await page.evaluate("document.querySelector('select').value"),
+      ).toBe("lohi");
       await context.close();
     });
     it("resolves a repeated product button on a dense local page without a wrong click", async () => {

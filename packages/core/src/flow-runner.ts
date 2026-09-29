@@ -41,6 +41,7 @@ import {
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import type { VisionResolver } from "./vision.js";
+import { chooseOption } from "./dropdown-option.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
@@ -910,9 +911,15 @@ async function executeSentence(
       },
     );
   }
+  let chosenOption: string | null = null;
   const commandFor = (target: ResolvedStepTarget): StepCommand =>
     step.op === "click"
-      ? { op: "click", target }
+      ? {
+          op: "click",
+          target,
+          chooseOption: (labels) =>
+            (chosenOption = chooseOption(step.text, labels)),
+        }
       : { op: "type", target, value: typeValue! };
   let command = commandFor(resolved.target);
   // An action may navigate or rerender. Preserve metadata from the accepted
@@ -1025,6 +1032,9 @@ async function executeSentence(
       replayFrame,
       targetBox,
       page: locatedPage,
+      ...(chosenOption === null
+        ? {}
+        : { detail: `Chose "${chosenOption}" in the dropdown.` }),
     });
   } catch (error) {
     const actionError = error instanceof StepExecutionError ? error : null;

@@ -7,7 +7,7 @@ The core API takes `{ sentence, source: { file, line, col, moduleStack? } }` ite
 ## Decision order
 
 1. Reject empty, known unsupported, or explicit multiple-action text.
-2. Apply conservative leading-verb rules. A `remember` rule requires a final `as {{name}}`. A `goto` rule requires an explicit http(s) address. A wait requires a positive duration of at most 30 seconds. A type value can be `{{key}}` or a quoted expression containing placeholders, such as `"{{user}}@example.com"`.
+2. Apply conservative leading-verb rules. A `remember` rule requires a final `as {{name}}`. A `goto` rule requires an explicit http(s) address. A wait requires a positive duration of at most 30 seconds. A type value can be `{{key}}` or a quoted expression containing placeholders, such as `"{{user}}@example.com"`. `select "Price (low to high)" in the sort dropdown` (or `choose`/`pick ... from`) is a click on the dropdown. When a click lands on a native `<select>`, Sedum chooses the option the sentence names, quoted or as whole words, instead of clicking the control, which would change nothing. A click on a native dropdown that names no option, or more than one, fails and lists the options it could choose.
 3. Read a model answer from `.sedum/classifications.json`, if present and compatible.
 4. In online mode, send unresolved unique sentences as independent TypeSafe Choices in one request for an ordinary file. Long files split at the 64 KiB serialized request bound. Choices include `unsupported_or_unclear` and `multiple_actions` so the model can refuse an unsafe operation.
 

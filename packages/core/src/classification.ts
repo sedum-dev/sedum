@@ -207,7 +207,7 @@ export function patternOperation(sentence: string): StepOperationKind | null {
   if (preflightSentence(text)) return null;
   // Side-effecting fast paths require an unambiguous single clause.
   if (
-    /^(?:click|type|enter|fill|press|goto|go\s+to|navigate\s+to|scroll|wait|remember)\b/iu.test(
+    /^(?:click|type|enter|fill|press|goto|go\s+to|navigate\s+to|scroll|wait|remember|select|choose|pick)\b/iu.test(
       text,
     ) &&
     (withoutQuotes(text).match(SECOND_ACTION_CONNECTOR) !== null ||
@@ -216,6 +216,14 @@ export function patternOperation(sentence: string): StepOperationKind | null {
     return null;
   if (/^remember\b/iu.test(text) && BINDING.test(text)) return "remember";
   if (/^click\s+\S/iu.test(text)) return "click";
+  // Choosing a quoted option in a dropdown is a click on that dropdown; the
+  // executor selects the named option of a native <select>.
+  if (
+    /^(?:select|choose|pick)\s+(?:"[^"]+"|“[^”]+”)\s+(?:in|from)\s+\S/iu.test(
+      text,
+    )
+  )
+    return "click";
   if (VALUE.test(text)) return "type";
   if (/^press\s+(?:the\s+)?(?:"[^"]+"|\S+)/iu.test(text)) return "press";
   if (/^(?:goto|go\s+to|navigate\s+to)\s+https?:\/\/\S+/iu.test(text))
