@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test as propertyTest } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import {
+  keyedDigest,
   matchEntry,
   normalizeSignal,
   pageKey,
@@ -14,6 +17,24 @@ import {
 
 const key = new Uint8Array(32).fill(7);
 const route = "https://example.test/items?q=a#one";
+const propertySettings = {
+  database: { kind: "disabled" },
+  derandomize: true,
+  testCases: 1000,
+  verbosity: hegel.Verbosity.Quiet,
+} satisfies Partial<hegel.Settings>;
+const cacheCandidateGenerator = gs.record({
+  ref: gs.text({ minSize: 1, maxSize: 16 }),
+  name: gs.text({ minSize: 1, maxSize: 24 }),
+  peer: gs.text({ minSize: 1, maxSize: 16 }),
+  hook: gs.sampledFrom(["cart-action", "save-action", "open-action"]),
+});
+type GeneratedCacheCandidate = {
+  readonly ref: string;
+  readonly name: string;
+  readonly peer: string;
+  readonly hook: string;
+};
 const candidate = (name: string, peer: string, ref = name): Candidate => ({
   ref,
   tag: "button",
@@ -35,8 +56,99 @@ const eligible = (items: Candidate[], complete = true): CandidatePage => ({
   complete,
   candidates: items,
 });
+function stagedGeneratedCandidate(generated: GeneratedCacheCandidate) {
+  const base = candidate(generated.name, generated.peer, generated.ref);
+  const target: Candidate = {
+    ...base,
+    signals: {
+      ...base.signals,
+      hook: generated.hook,
+      contextComplete: false,
+    },
+  };
+  const sentence = `Click ${generated.name}`;
+  return {
+    target,
+    sentence,
+    entry: stageEntry(
+      key,
+      route,
+      "click",
+      sentence,
+      target,
+      eligible([target]),
+    ),
+  };
+}
 
 describe("page cache matching", () => {
+  propertyTest("staged identity signals match their original target", () => {
+    hegel.test((tc) => {
+      const generated = tc.draw(cacheCandidateGenerator);
+      const { target, sentence, entry } = stagedGeneratedCandidate(generated);
+      const matched = matchEntry(
+        entry,
+        key,
+        route,
+        "click",
+        sentence,
+        [target],
+        true,
+      );
+      if (
+        !matched.hit ||
+        matched.candidate.ref !== target.ref ||
+        entry.digests.hook !== keyedDigest(key, generated.hook)
+      )
+        throw new Error("A staged candidate did not preserve its identity");
+    }, propertySettings);
+  });
+  propertyTest("same-score candidates are rejected as near ties", () => {
+    hegel.test((tc) => {
+      const generated = tc.draw(cacheCandidateGenerator);
+      const { target, sentence, entry } = stagedGeneratedCandidate(generated);
+      const result = matchEntry(
+        entry,
+        key,
+        route,
+        "click",
+        sentence,
+        [target, { ...target, ref: `${target.ref}-clone` }],
+        true,
+      );
+      if (result.hit || result.reason !== "near_tie")
+        throw new Error("A same-score candidate bypassed the near-tie guard");
+    }, propertySettings);
+  });
+  propertyTest("changed sentences do not reuse staged page identity", () => {
+    hegel.test((tc) => {
+      const generated = tc.draw(cacheCandidateGenerator);
+      const { target, sentence, entry } = stagedGeneratedCandidate(generated);
+      const result = matchEntry(
+        entry,
+        key,
+        route,
+        "click",
+        `${sentence} later`,
+        [target],
+        true,
+      );
+      if (result.hit || result.reason !== "target_missing")
+        throw new Error("A changed sentence reused the staged page identity");
+    }, propertySettings);
+  });
+  propertyTest("page identity is stable under whitespace normalization", () => {
+    hegel.test((tc) => {
+      const sentence = tc.draw(gs.text({ minSize: 1, maxSize: 48 }));
+      const whitespaceVariant = `\t ${sentence.replaceAll(" ", "  ")} \n`;
+      if (
+        pageKey(key, route, "click", sentence) !==
+        pageKey(key, route, "click", whitespaceVariant)
+      )
+        throw new Error("Page identity changed under whitespace normalization");
+    }, propertySettings);
+  });
+
   it("normalizes NFC and whitespace but preserves case and route components", () => {
     expect(normalizeSignal(" e\u0301  x ")).toBe("é x");
     expect(pageKey(key, route, "click", "Buy  Camera")).toBe(

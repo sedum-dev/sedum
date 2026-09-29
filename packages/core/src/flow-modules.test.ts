@@ -1,7 +1,9 @@
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, test as propertyTest, vi } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { NoopClassificationCache } from "./classification-cache.js";
 import { classifyParsedFlow } from "./flow-classification.js";
 import { loadFlowFile, parseModule } from "./flow-loader.js";
@@ -12,6 +14,13 @@ import {
   resolveModuleBindings,
 } from "./flow-values.js";
 import { RuntimeValue } from "./step-executor.js";
+
+const propertySettings = {
+  database: { kind: "disabled" },
+  derandomize: true,
+  testCases: 1000,
+  verbosity: hegel.Verbosity.Quiet,
+} satisfies Partial<hegel.Settings>;
 
 describe("module definitions and graph", () => {
   it("accepts only parameters and steps with precise source positions", () => {
@@ -244,6 +253,89 @@ describe("module definitions and graph", () => {
 
 describe("module occurrence bindings", () => {
   const source = { file: "test.yaml", line: 3, col: 15 };
+  const callerEntry = (
+    name: string,
+    sensitive: boolean,
+    modelVisible: boolean,
+  ) => ({
+    value: new RuntimeValue(`${name}-value`, `{{${name}}}`),
+    sensitive,
+    ...(modelVisible ? { modelVisible: true } : {}),
+    opaqueValues: sensitive
+      ? [new RuntimeValue(`${name}-opaque`, `{{${name}}}`)]
+      : [],
+  });
+  propertyTest(
+    "propagates caller taint, visibility, and opaque components",
+    () => {
+      hegel.test((tc) => {
+        const flags = tc.draw(
+          gs.record({
+            firstSensitive: gs.booleans(),
+            firstVisible: gs.booleans(),
+            secondSensitive: gs.booleans(),
+            secondVisible: gs.booleans(),
+          }),
+        );
+        const resolved = resolveModuleBindings(
+          ["value"],
+          { value: { value: "{{first}}/{{second}}", source } },
+          {
+            first: callerEntry(
+              "first",
+              flags.firstSensitive,
+              flags.firstVisible,
+            ),
+            second: callerEntry(
+              "second",
+              flags.secondSensitive,
+              flags.secondVisible,
+            ),
+          },
+          {},
+        ).value;
+        if (!resolved) throw new Error("Module binding was not resolved");
+        const expectedSensitive = flags.firstSensitive || flags.secondSensitive;
+        const expectedVisible =
+          (!flags.firstSensitive || flags.firstVisible) &&
+          (!flags.secondSensitive || flags.secondVisible) &&
+          (flags.firstVisible || flags.secondVisible);
+        const expectedOpaque = [
+          ...(flags.firstSensitive ? ["first-opaque"] : []),
+          ...(flags.secondSensitive ? ["second-opaque"] : []),
+        ];
+        if (
+          resolved.value.reveal() !== "first-value/second-value" ||
+          resolved.sensitive !== expectedSensitive ||
+          resolved.modelVisible !== expectedVisible ||
+          resolved.opaqueValues?.map((value) => value.reveal()).join("/") !==
+            expectedOpaque.join("/")
+        )
+          throw new Error("Module binding provenance was not conserved");
+      }, propertySettings);
+    },
+  );
+  propertyTest("environment bindings remain opaque and model-hidden", () => {
+    hegel.test((tc) => {
+      const environmentValue = tc.draw(gs.text({ minSize: 1, maxSize: 24 }));
+      const resolved = resolveModuleBindings(
+        ["secret"],
+        { secret: { value: "prefix-$SECRET", source } },
+        {},
+        { SECRET: environmentValue },
+      ).secret;
+      if (
+        !resolved ||
+        resolved.value.reveal() !== `prefix-${environmentValue}` ||
+        !resolved.sensitive ||
+        resolved.modelVisible ||
+        resolved.opaqueValues?.length !== 1 ||
+        resolved.opaqueValues[0]?.reveal() !== environmentValue
+      )
+        throw new Error("Environment-derived binding lost its opaque taint");
+    }, propertySettings);
+  });
+
   it("resolves live caller and environment values with secret provenance", () => {
     const values = resolveModuleBindings(
       ["user", "password"],

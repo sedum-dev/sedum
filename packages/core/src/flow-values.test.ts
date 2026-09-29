@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, test as propertyTest } from "vitest";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { parseFlow } from "./flow-loader.js";
 import { isFullyValidated } from "./flow-types.js";
 import {
@@ -11,8 +13,60 @@ import {
 } from "./flow-values.js";
 
 const options = { repoRoot: "/project" };
+const propertySettings = {
+  database: { kind: "disabled" },
+  derandomize: true,
+  testCases: 1000,
+  verbosity: hegel.Verbosity.Quiet,
+} satisfies Partial<hegel.Settings>;
+const safeTextGenerator = gs
+  .text({ maxSize: 48 })
+  .map((value) => value.replaceAll("$", ""));
 
 describe("runtime flow data", () => {
+  propertyTest(
+    "flow templates preserve literals and resolve environment values with taint metadata",
+    () => {
+      hegel.test((tc) => {
+        const prefix = tc.draw(safeTextGenerator);
+        const suffix = tc.draw(safeTextGenerator);
+        const variable = tc.draw(
+          gs.sampledFrom(["VALUE", "OTHER_VALUE", "_1"]),
+        );
+        const replacement = tc.draw(gs.text({ maxSize: 48 }));
+        const template = `${prefix}$${variable}$$${suffix}`;
+        const parsed = parseDataTemplate(template);
+        if ("error" in parsed) throw new Error(parsed.error);
+
+        let resolved = "";
+        for (const part of parsed.parts) {
+          if (part.literal !== undefined) resolved += part.literal;
+          if (part.variable !== undefined) {
+            if (part.variable !== variable)
+              throw new Error("Template variable was parsed incorrectly");
+            resolved += replacement;
+          }
+        }
+        if (resolved !== `${prefix}${replacement}$${suffix}`)
+          throw new Error("Template did not preserve its source semantics");
+
+        const resolvedData = resolveData(
+          {
+            value: {
+              value: template,
+              source: { file: "property.test.yaml", line: 1, col: 1 },
+            },
+          },
+          { [variable]: replacement },
+        ).value;
+        if (!resolvedData || resolvedData.value.reveal() !== resolved)
+          throw new Error("Resolved flow data changed template semantics");
+        if (!resolvedData.sensitive || resolvedData.opaqueValues?.length !== 1)
+          throw new Error("Resolved environment data lost its taint metadata");
+      }, propertySettings);
+    },
+  );
+
   it("resolves environment values only when selected to run, with safe display", () => {
     const source = `data:
   user: Ada
