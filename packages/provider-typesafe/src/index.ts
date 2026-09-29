@@ -33,6 +33,8 @@ import {
   validateNoul,
   type CallMeta,
 } from "./validation.js";
+import { buildRelevanceRequests, type RelevanceTest } from "./relevance.js";
+export type { RelevanceTest } from "./relevance.js";
 import {
   GateWaitExceeded,
   ProviderGate,
@@ -428,6 +430,44 @@ export class TypeSafeAdapter
       throw responseError(error, attempts, call);
     }
     return { holds, contradicted, call };
+  }
+
+  /** Experimental test-impact scoring; one independent Noul per complete test. */
+  async scoreRelevance(
+    diff: string,
+    tests: readonly RelevanceTest[],
+    options?: ProviderCallOptions,
+  ) {
+    const chunks = buildRelevanceRequests(diff, tests, this.model);
+    const probabilities: number[] = [];
+    const calls: ReturnType<typeof validateCall>[] = [];
+    for (const { request, indexes } of chunks) {
+      const { response, meta } = await this.ask(request, options);
+      const call = validateCall(
+        response,
+        meta,
+        this.model,
+        this.estimateJevCost,
+      );
+      calls.push(call);
+      try {
+        const answers = answersOf(response);
+        const keys = indexes.map((index) => `test${index}`);
+        if (
+          Object.keys(answers).length !== keys.length ||
+          Object.keys(answers).some((key) => !keys.includes(key))
+        )
+          throw new ProviderError(
+            "invalid-response",
+            "Relevance answer keys do not match the tests.",
+          );
+        for (const index of indexes)
+          probabilities[index] = validateNoul(answers[`test${index}`]);
+      } catch (error) {
+        throw responseError(error, call.attempts, call);
+      }
+    }
+    return { probabilities, calls };
   }
 
   async classifyBatch(
