@@ -25,6 +25,7 @@ import {
   type PageVersion,
 } from "./page-protocol.js";
 import {
+  isRunWideProviderError,
   unknownCostCall,
   type ItemVerdict,
   type ProviderCall,
@@ -1881,6 +1882,7 @@ export async function resolveTarget(
         targetChanged: false,
       };
     if (controller.signal.aborted) return unresolved("timeout");
+    if (isRunWideProviderError(error)) throw error;
     if (error instanceof LocatorError) return unresolved(error.reason);
     if (error instanceof PageScriptError) return unresolved("incomplete");
     return unresolved("provider_error");
