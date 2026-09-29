@@ -4,6 +4,28 @@ import path from "node:path";
 import { verifyCandidate } from "./verify-candidate.mjs";
 import { assert } from "./packages.mjs";
 
+async function fetchWithRetry(url, maxAttempts = 12, delaySeconds = 5) {
+  let lastResponse = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(url, {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (response.ok) {
+      return response;
+    }
+    lastResponse = response;
+    if (attempt < maxAttempts) {
+      console.log(
+        `Registry not ready (HTTP ${response.status}, attempt ${attempt}/${maxAttempts}); retrying in ${delaySeconds} seconds`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delaySeconds * 1000));
+    }
+  }
+  throw new Error(
+    `Failed to fetch ${url} after ${maxAttempts} attempts (last HTTP ${lastResponse?.status ?? "unknown"})`,
+  );
+}
+
 const directory = path.resolve(
   process.env.CANDIDATE_DIR ?? "release-candidate",
 );
@@ -13,13 +35,7 @@ const { manifest } = await verifyCandidate(
 );
 for (const entry of manifest.packages) {
   const metadataUrl = `https://registry.npmjs.org/${encodeURIComponent(entry.name)}/${encodeURIComponent(entry.version)}`;
-  const response = await fetch(metadataUrl, {
-    headers: { "Cache-Control": "no-cache" },
-  });
-  assert(
-    response.ok,
-    `Registry metadata unavailable for ${entry.name}@${entry.version}`,
-  );
+  const response = await fetchWithRetry(metadataUrl);
   const metadata = await response.json();
   assert(
     metadata.name === entry.name && metadata.version === entry.version,
@@ -29,8 +45,7 @@ for (const entry of manifest.packages) {
     metadata.dist.attestations?.provenance,
     `Provenance is missing for ${entry.name}`,
   );
-  const tarballResponse = await fetch(metadata.dist.tarball);
-  assert(tarballResponse.ok, `Published tarball unavailable for ${entry.name}`);
+  const tarballResponse = await fetchWithRetry(metadata.dist.tarball);
   const published = Buffer.from(await tarballResponse.arrayBuffer());
   const candidate = await readFile(path.join(directory, entry.filename));
   assert(
