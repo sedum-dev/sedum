@@ -74,6 +74,7 @@ export const ResultObservationSchema = z.strictObject({
 });
 export const ResultLocatorSchema = z.strictObject({
   confidence: probability.nullable(),
+  gate: z.string().max(120).optional(),
   source: z.enum(["model", "cache", "none"]),
   options: z
     .array(

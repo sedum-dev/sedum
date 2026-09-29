@@ -141,6 +141,398 @@ function resolver(
 }
 
 describe("locator", () => {
+  describe("explicit ambiguity policy", () => {
+    const duplicates = () => [
+      candidate(9, { name: "Delete", location: "header" }),
+      candidate(2, { name: "Delete", location: "footer" }),
+      candidate(1, { name: "Delete", location: "footer" }),
+    ];
+
+    it.each([undefined, "reject", "first"] as const)(
+      "distinguishes omitted/reject/first for a vague label (%s)",
+      async (ambiguity) => {
+        const { page } = recordedPage(duplicates());
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r1")),
+          {
+            operation: "click",
+            sentence: "click Delete",
+            ...(ambiguity ? { ambiguity } : {}),
+          },
+        );
+        if (ambiguity === "reject") {
+          expect(result).toMatchObject({
+            kind: "unresolved",
+            reason: "ambiguous",
+          });
+        } else {
+          expect(result.kind).toBe("resolved");
+          if (result.kind === "resolved")
+            expect(result.target.driverTarget().ref).toBe(
+              ambiguity === "first" ? "fresh-r9" : "fresh-r1",
+            );
+          expect(result.diagnostic.gate).toBe(
+            ambiguity === "first"
+              ? "ambiguity_first"
+              : "repeated_member_model_pick",
+          );
+        }
+      },
+    );
+
+    it.each([
+      "click Delete in the footer",
+      "click Delete under Orders",
+      "click Delete for Alice",
+    ])(
+      "chooses within the constrained set, not all same-label controls: %s",
+      async (sentence) => {
+        const items = duplicates().map((item, index) => ({
+          ...item,
+          peers: [index ? "Alice" : "Bob"],
+          signals: {
+            ...item.signals,
+            section: index ? "Orders" : "Users",
+            contextComplete: true,
+          },
+        }));
+        const { page } = recordedPage(items);
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r1")),
+          {
+            operation: "click",
+            sentence,
+            ambiguity: "first",
+          },
+        );
+        expect(result.kind).toBe("resolved");
+        if (result.kind === "resolved")
+          expect(result.target.driverTarget().ref).toBe("fresh-r2");
+        expect(result.diagnostic.gate).toBe("ambiguity_first");
+      },
+    );
+
+    it.each(["click the second Delete", "click Delete in the header"])(
+      "preserves explicit unique constraints: %s",
+      async (sentence) => {
+        const { page } = recordedPage(duplicates());
+        const result = await resolveTarget(
+          page,
+          resolver((offered) =>
+            answer(offered, sentence.includes("second") ? "r1" : "r9"),
+          ),
+          {
+            operation: "click",
+            sentence,
+            ambiguity: "first",
+          },
+        );
+        expect(result.kind).toBe("resolved");
+        if (result.kind === "resolved")
+          expect(result.target.driverTarget().ref).toBe(
+            sentence.includes("second") ? "fresh-r2" : "fresh-r9",
+          );
+        expect(result.diagnostic.gate).not.toBe("ambiguity_first");
+      },
+    );
+
+    it.each([
+      "click Delete for Carol",
+      "click Delete except in the footer",
+      "click Delete in the missing section",
+      "click Delete in the header",
+    ])(
+      "does not erase unsupported or unsatisfied constraints: %s",
+      async (sentence) => {
+        const { page } = recordedPage(duplicates());
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r1")),
+          {
+            operation: "click",
+            sentence,
+            ambiguity: "first",
+            repeatedMember: {
+              modelPick: true,
+              sameDestination: true,
+              duplicateLinks: true,
+            },
+          },
+        );
+        expect(result).toMatchObject({
+          kind: "unresolved",
+          reason: "ambiguous",
+        });
+      },
+    );
+
+    it.each([undefined, "reject", "first"] as const)(
+      "does not inherit the low-confidence repeated-group bypass (%s)",
+      async (ambiguity) => {
+        const { page } = recordedPage(duplicates());
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r1", undefined, 0.29)),
+          {
+            operation: "click",
+            sentence: "click Delete",
+            ...(ambiguity ? { ambiguity } : {}),
+            acceptLowConfidence: true,
+            repeatedMember: { modelPick: true },
+          },
+        );
+        expect(result.kind).toBe(ambiguity ? "unresolved" : "resolved");
+      },
+    );
+
+    it.each(["reject", "first"] as const)(
+      "retains confidence checks in a narrower decision under %s",
+      async (ambiguity) => {
+        const { page } = recordedPage(duplicates());
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r9", undefined, 0.29)),
+          {
+            operation: "click",
+            sentence: "click Delete in the header",
+            ambiguity,
+          },
+        );
+        expect(result).toMatchObject({
+          kind: "unresolved",
+          reason: "ambiguous",
+          diagnostic: { rounds: 2, gate: "repeated_member_weak" },
+        });
+      },
+    );
+
+    it.each([
+      [0.75, 0.3, true],
+      [0.749, 0.3, false],
+      [0.75, 0.299, false],
+      [0.75, null, true],
+    ] as const)(
+      "requires matching-set mass %s and confidence %s",
+      async (mass, confidence, accepted) => {
+        const items = [
+          candidate(9, { name: "Delete" }),
+          candidate(1, { name: "Delete" }),
+          candidate(3, { name: "Save" }),
+        ];
+        const { page } = recordedPage(items);
+        const result = await resolveTarget(
+          page,
+          resolver((offered) =>
+            answer(
+              offered,
+              "r1",
+              {
+                r9: mass / 2,
+                r1: mass / 2,
+                r3: (1 - mass) / 2,
+                none: (1 - mass) / 2,
+              },
+              confidence,
+            ),
+          ),
+          { operation: "click", sentence: "click Delete", ambiguity: "first" },
+        );
+        expect(result.kind).toBe(accepted ? "resolved" : "unresolved");
+        if (result.kind === "resolved")
+          expect(result.target.driverTarget().ref).toBe("fresh-r9");
+      },
+    );
+
+    it("respects control kind and skips disabled candidates in collection order", async () => {
+      const items = [
+        candidate(8, { name: "Delete", role: "link", tag: "a" }),
+        candidate(7, { name: "Delete", disabled: true }),
+        candidate(9, { name: "Delete" }),
+        candidate(1, { name: "Delete" }),
+      ];
+      const { page } = recordedPage(items);
+      const result = await resolveTarget(
+        page,
+        resolver((offered) => answer(offered, "r1")),
+        {
+          operation: "click",
+          sentence: "click the Delete button",
+          ambiguity: "first",
+        },
+      );
+      expect(result.kind).toBe("resolved");
+      if (result.kind === "resolved")
+        expect(result.target.driverTarget().ref).toBe("fresh-r9");
+    });
+
+    it.each(["fill", "read"] as const)(
+      "applies the shared policy to %s",
+      async (operation) => {
+        const items = [
+          candidate(9, {
+            name: "Email",
+            editable: true,
+            role: "textbox",
+            tag: "input",
+          }),
+          candidate(1, {
+            name: "Email",
+            editable: true,
+            role: "textbox",
+            tag: "input",
+          }),
+        ];
+        const { page } = recordedPage(items);
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r1")),
+          {
+            operation,
+            sentence:
+              operation === "fill"
+                ? "type {{value}} in the Email field"
+                : "Email",
+            cacheSentence: "type in the Email field",
+            ambiguity: "first",
+          },
+        );
+        expect(result.kind).toBe("resolved");
+        if (result.kind === "resolved")
+          expect(result.target.driverTarget().ref).toBe("fresh-r9");
+      },
+    );
+
+    it.each(["none", "provider_error", "stale", "incomplete"] as const)(
+      "does not turn %s into a permissive target",
+      async (failure) => {
+        const items = duplicates();
+        const { page } = recordedPage(items, {
+          ...(failure === "stale" ? { live: () => [...items].reverse() } : {}),
+          ...(failure === "incomplete"
+            ? {
+                corrupt: (value: CandidatePage) => ({
+                  ...value,
+                  complete: false,
+                }),
+              }
+            : {}),
+        });
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => {
+            if (failure === "provider_error")
+              throw new Error("provider unavailable");
+            return answer(offered, failure === "none" ? "none" : "r1");
+          }),
+          { operation: "click", sentence: "click Delete", ambiguity: "first" },
+        );
+        expect(result).toMatchObject({ kind: "unresolved", reason: failure });
+      },
+    );
+
+    it("does not relax freshness for a uniquely named first role match", async () => {
+      const items = [
+        candidate(9, {
+          name: "Checkbox",
+          role: "checkbox",
+          signals: { path: "body/input:1", nodeId: "node-9" },
+        }),
+        candidate(1, { name: "News", role: "checkbox" }),
+      ];
+      const { page } = recordedPage(items, {
+        live: () => [
+          candidate(3, { name: "Earlier", role: "checkbox" }),
+          ...items,
+        ],
+      });
+      const result = await resolveTarget(
+        page,
+        resolver((offered) => answer(offered, "r9")),
+        {
+          operation: "click",
+          sentence: "click the checkbox",
+          ambiguity: "first",
+        },
+      );
+      expect(result).toMatchObject({
+        kind: "unresolved",
+        reason: "stale",
+        diagnostic: { gate: "ambiguity_first" },
+      });
+    });
+
+    it("uses original collection order after multi-batch elimination", async () => {
+      const items = Array.from({ length: 140 }, (_, index) =>
+        candidate(140 - index, { name: "Delete" }),
+      );
+      const { page } = recordedPage(items);
+      const model = resolver((offered) => {
+        const offeredCandidates = offered.options.filter(
+          (option) => option.kind === "candidate",
+        );
+        return answer(offered, offeredCandidates.at(-1)!.candidate.id);
+      });
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence: "click Delete",
+        ambiguity: "first",
+      });
+      expect(result.kind).toBe("resolved");
+      expect(result.diagnostic.rounds).toBeGreaterThan(1);
+      if (result.kind === "resolved")
+        expect(result.target.driverTarget().ref).toBe("fresh-r140");
+    });
+
+    it("rejects malformed provider responses before applying first", async () => {
+      const { page } = recordedPage(duplicates());
+      const result = await resolveTarget(
+        page,
+        resolver((offered) => ({
+          ...answer(offered, "r1"),
+          probabilities: { r1: 1, none: 0 },
+        })),
+        { operation: "click", sentence: "click Delete", ambiguity: "first" },
+      );
+      expect(result).toMatchObject({
+        kind: "unresolved",
+        reason: "provider_error",
+      });
+    });
+
+    it.each(["reject", "first"] as const)(
+      "bypasses identity-only caches under %s",
+      async (ambiguity) => {
+        const { page } = recordedPage(duplicates());
+        const cache: CacheStore = {
+          key: new Uint8Array(32).fill(7),
+          lookup: async () => ({ reason: "absent" }),
+          put: vi.fn(),
+          invalidate: vi.fn(),
+          clear: vi.fn(),
+        };
+        const lookup = vi.spyOn(cache, "lookup");
+        const result = await resolveTarget(
+          page,
+          resolver((offered) => answer(offered, "r1")),
+          {
+            operation: "click",
+            sentence: "click Delete",
+            ambiguity,
+            cache,
+          },
+        );
+        expect(lookup).not.toHaveBeenCalled();
+        expect(result.cache).toMatchObject({
+          outcome: "bypassed",
+          reason: "ambiguity_policy",
+        });
+        expect(result).not.toHaveProperty("cacheSeed");
+      },
+    );
+  });
+
   it("accepts a uniquely named same-node target after unrelated page churn", async () => {
     const target = candidate(1, {
       name: "Go to file",

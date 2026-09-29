@@ -23,6 +23,54 @@ afterEach(async () => {
 });
 
 describe("project configuration", () => {
+  it.each(["reject", "first"])(
+    "loads locator ambiguity %s",
+    async (ambiguity) => {
+      const root = await temporaryRoot();
+      await writeFile(
+        path.join(root, "sedum.config.yaml"),
+        `locator: { ambiguity: ${ambiguity} }\n`,
+      );
+      const config = await loadProjectConfig(root, {});
+      expect(config.locator).toEqual({ ambiguity });
+      expect(Object.isFrozen(config.locator)).toBe(true);
+    },
+  );
+
+  it.each([
+    ["locator: first", "locator", "invalid_config_type"],
+    ["locator: null", "locator", "invalid_config_type"],
+    [
+      "locator: { ambiguity: all }",
+      "locator.ambiguity",
+      "invalid_config_locator",
+    ],
+    [
+      "locator: { ambiguity: null }",
+      "locator.ambiguity",
+      "invalid_config_locator",
+    ],
+    [
+      "locator: { ambiguity: true }",
+      "locator.ambiguity",
+      "invalid_config_locator",
+    ],
+    [
+      "locator: { ambiguity: [first] }",
+      "locator.ambiguity",
+      "invalid_config_locator",
+    ],
+    ["locator: { ambiguty: first }", "locator.ambiguty", "unknown_config_key"],
+  ])("rejects invalid locator config %s", async (yaml, key, code) => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, "sedum.config.yaml"), `${yaml}\n`);
+    await expect(loadProjectConfig(root, {})).rejects.toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({ key, code, line: 1 }),
+      ]),
+    });
+  });
+
   it("uses documented defaults without a config and freezes the result", async () => {
     const root = await temporaryRoot();
     const config = await loadProjectConfig(root, {});
@@ -33,6 +81,7 @@ describe("project configuration", () => {
       browser: "chrome",
       viewport: { width: 1280, height: 900 },
       thresholds: { minP: 0.75, band: 0.15, contradictionCutoff: 0.5 },
+      locator: {},
       baseUrl: null,
       providerBaseUrl: "https://api.typesafe.ai",
       providerModel: "jev-latest",

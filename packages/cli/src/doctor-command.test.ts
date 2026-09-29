@@ -39,6 +39,7 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     browser: "chrome",
     viewport: { width: 1280, height: 900 },
     thresholds: { minP: 0.75, band: 0.15, contradictionCutoff: 0.5 },
+    locator: {},
     outputDir: path.join(root, ".sedum", "runs"),
     reporterDir: path.join(root, ".sedum", "reports"),
     baseUrl: null,

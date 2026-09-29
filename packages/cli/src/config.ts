@@ -44,6 +44,7 @@ export interface ResolvedProjectConfig {
   readonly browser: BrowserKind;
   readonly viewport: { readonly width: number; readonly height: number };
   readonly thresholds: Required<VerifyPolicy>;
+  readonly locator: { readonly ambiguity?: "reject" | "first" };
   readonly outputDir: string;
   readonly reporterDir: string;
   readonly baseUrl: string | null;
@@ -63,6 +64,7 @@ interface RawConfig extends RawEnvironment {
   readonly browser?: unknown;
   readonly viewport?: unknown;
   readonly thresholds?: unknown;
+  readonly locator?: unknown;
   readonly outputDir?: unknown;
   readonly reporterDir?: unknown;
   readonly environment?: unknown;
@@ -93,6 +95,7 @@ const allowed = {
     "browser",
     "viewport",
     "thresholds",
+    "locator",
     "outputDir",
     "reporterDir",
     "baseUrl",
@@ -103,6 +106,7 @@ const allowed = {
   tests: new Set(["directory", "include", "exclude"]),
   viewport: new Set(["width", "height"]),
   thresholds: new Set(["verify", "lowConfidenceBand", "contradiction"]),
+  locator: new Set(["ambiguity"]),
   environment: new Set(["baseUrl", "variables"]),
 };
 
@@ -430,6 +434,7 @@ function freeze(config: ResolvedProjectConfig): ResolvedProjectConfig {
   Object.freeze(config.exclude);
   Object.freeze(config.viewport);
   Object.freeze(config.thresholds);
+  Object.freeze(config.locator);
   Object.freeze(config.variables);
   return Object.freeze(config);
 }
@@ -543,6 +548,7 @@ export async function loadProjectConfig(
       ["tests", allowed.tests],
       ["viewport", allowed.viewport],
       ["thresholds", allowed.thresholds],
+      ["locator", allowed.locator],
     ] as const;
     for (const [key, names] of maps)
       mapUnknownKeys(
@@ -583,6 +589,7 @@ export async function loadProjectConfig(
   for (const [key, value] of [
     ["viewport", raw.viewport],
     ["thresholds", raw.thresholds],
+    ["locator", raw.locator],
     ["environments", raw.environments],
   ] as const)
     if (value !== undefined && !object(value))
@@ -598,6 +605,23 @@ export async function loadProjectConfig(
       );
   const viewport = object(raw.viewport) ? raw.viewport : {};
   const thresholds = object(raw.thresholds) ? raw.thresholds : {};
+  const locator = object(raw.locator) ? raw.locator : {};
+  const ambiguity = locator.ambiguity;
+  if (
+    ambiguity !== undefined &&
+    ambiguity !== "reject" &&
+    ambiguity !== "first"
+  )
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("locator.ambiguity"),
+      "locator.ambiguity",
+      "invalid_config_locator",
+      "Configuration key `locator.ambiguity` must be `reject` or `first`.",
+      "Use `locator: { ambiguity: reject }` or `locator: { ambiguity: first }`.",
+    );
   const environments = object(raw.environments) ? raw.environments : {};
   for (const [name, value] of Object.entries(environments)) {
     if (!object(value)) {
@@ -887,6 +911,8 @@ export async function loadProjectConfig(
     browser,
     viewport: { width, height },
     thresholds: { minP: verify, band, contradictionCutoff },
+    locator:
+      ambiguity === "reject" || ambiguity === "first" ? { ambiguity } : {},
     outputDir,
     reporterDir,
     baseUrl,

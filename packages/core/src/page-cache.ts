@@ -18,6 +18,7 @@ export type CacheMissReason =
   | "ci_default"
   | "outside_git"
   | "runtime_dependent"
+  | "ambiguity_policy"
   | "format_mismatch"
   | "matcher_mismatch"
   | "corrupt"

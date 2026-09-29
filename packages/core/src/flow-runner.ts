@@ -35,7 +35,11 @@ import {
   type ResolvedDataEntry,
 } from "./flow-values.js";
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
-import { resolveTarget, type LocatorResult } from "./locator.js";
+import {
+  resolveTarget,
+  type LocatorOptions,
+  type LocatorResult,
+} from "./locator.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
@@ -92,6 +96,7 @@ export interface FlowRunnerDependencies {
   readonly provider: ClassificationProvider & Resolver & Judge;
   readonly classificationCache: ClassificationCache;
   readonly locatorCache?: CacheStore;
+  readonly locator?: Pick<LocatorOptions, "ambiguity">;
   readonly env: Readonly<Record<string, string | undefined>>;
   /** Temporary debug switch; the final CLI/config surface owns launch policy. */
   readonly headless?: boolean;
@@ -460,6 +465,9 @@ async function executeSentence(
       locator: locator
         ? {
             confidence: locator.diagnostic.confidence ?? null,
+            ...(locator.diagnostic.gate
+              ? { gate: locator.diagnostic.gate }
+              : {}),
             source:
               locator.cache?.outcome === "hit"
                 ? "cache"
@@ -579,6 +587,7 @@ async function executeSentence(
         remembered = await page.text();
       } else {
         locator = await resolveTarget(page, dependencies.provider, {
+          ...dependencies.locator,
           operation: "read",
           sentence: match[1]!,
           projectText: (text) => redactOpaqueText(text, opaqueEntries),
@@ -760,6 +769,7 @@ async function executeSentence(
       : step.text;
   const locate = () =>
     resolveTarget(page, dependencies.provider, {
+      ...dependencies.locator,
       operation: step.op === "type" ? "fill" : "click",
       sentence: step.text,
       cacheSentence,

@@ -106,6 +106,8 @@ export type LocatorResult =
 export interface LocatorOptions {
   readonly operation: Operation;
   readonly sentence: string;
+  /** Omitted preserves legacy model picks; explicit policies disable them. */
+  readonly ambiguity?: "reject" | "first";
   /** Target-only sentence for cache keys; Resolver still receives sentence. */
   readonly cacheSentence?: string;
   readonly signal?: AbortSignal;
@@ -544,6 +546,61 @@ function qualifiesMember(sentence: string, member: Candidate): boolean {
   return words(sentence.replace(/\{\{[^}]*\}\}/g, " ")).some(
     (word) => !label.has(word) && !FILLER_WORDS.has(word),
   );
+}
+
+/**
+ * A deliberately bounded matching contract, not a bag-of-words similarity:
+ * literal name (or control kind), optionally scoped by an exact section,
+ * landmark, or complete peer label. Every part of the request must be consumed.
+ * Keep collection order, never provider ranking or candidate-ref order.
+ */
+function literalMatches(
+  sentence: string,
+  candidates: readonly Candidate[],
+): Candidate[] {
+  const normalized = (text: string) =>
+    text.normalize("NFC").toLocaleLowerCase().replace(/\s+/gu, " ").trim();
+  const request = normalized(sentence).replace(
+    /^(?:please )?(?:click|tap|press|open|select|choose|check|tick|uncheck|toggle|type|fill|enter)\s+(?:in\s+)?/u,
+    "",
+  );
+  return candidates.filter((member) => {
+    if (member.disabled || member.signals.nameTruncated) return false;
+    const name = normalized(member.name);
+    const kind = member.role || member.tag;
+    const kinds = [
+      kind,
+      ...(member.editable ? ["field", "input", "textbox"] : []),
+    ];
+    const labels = [
+      ...(name ? [name, ...kinds.map((role) => `${name} ${role}`)] : []),
+      ...kinds,
+    ];
+    return labels.some((label) =>
+      [label, `the ${label}`].some((target) => {
+        if (request === target) return true;
+        if (!request.startsWith(`${target} `)) return false;
+        const rest = request.slice(target.length + 1);
+        const scope = /^(?:in|under|inside|within) (?:the )?(.+)$/u.exec(rest);
+        if (scope) {
+          const wanted = scope[1]!;
+          return [
+            member.signals.section,
+            member.location,
+            member.signals.region,
+          ].some((value) =>
+            value?.split(/[›,·]/u).some((part) => normalized(part) === wanted),
+          );
+        }
+        const item = /^for (?:the )?(.+)$/u.exec(rest);
+        return (
+          !!item &&
+          member.signals.contextComplete === true &&
+          member.peers.some((peer) => normalized(peer) === item[1])
+        );
+      }),
+    );
+  });
 }
 
 const REGIONS: readonly {
@@ -1173,7 +1230,10 @@ export async function resolveTarget(
   options: LocatorOptions,
 ): Promise<LocatorResult> {
   const calls: ProviderCall[] = [];
-  const repeatedMember = options.repeatedMember ?? { modelPick: true };
+  const repeatedMember =
+    options.ambiguity === undefined
+      ? (options.repeatedMember ?? { modelPick: true })
+      : {};
   const nameHints = options.nameHints !== false;
   const verifyItems = options.verifyItems !== false;
   const codeFallback = options.codeFallback !== false;
@@ -1204,6 +1264,9 @@ export async function resolveTarget(
   });
   if (
     !options.sentence.trim() ||
+    (options.ambiguity !== undefined &&
+      options.ambiguity !== "reject" &&
+      options.ambiguity !== "first") ||
     codePoints(options.sentence) > MAX_SENTENCE_POINTS ||
     (options.timeoutMs !== undefined &&
       (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0))
@@ -1241,7 +1304,16 @@ export async function resolveTarget(
     ensureActive();
     if (options.cache) {
       const store = options.cache;
-      if (!store.key) {
+      // Cache entries prove identity, not that the request uniquely identifies
+      // that control or that it is still the first matching control.
+      if (options.ambiguity !== undefined) {
+        cacheOutcome = {
+          outcome: "bypassed",
+          reason: "ambiguity_policy",
+          fallbackCalledModel: false,
+          targetChanged: false,
+        };
+      } else if (!store.key) {
         const bypass = await store
           .lookup("")
           .catch(() => ({ reason: "storage_error" as const }));
@@ -1452,6 +1524,32 @@ export async function resolveTarget(
     }
     const selected = byId.get(decision.selection.id);
     if (!selected) return unresolved("provider_error");
+    if (options.ambiguity !== undefined) {
+      const matching = literalMatches(
+        options.operation === "fill" ? cacheSentence : options.sentence,
+        candidates,
+      );
+      if (matching.length > 1) {
+        const probability = matching.reduce(
+          (sum, member) => sum + (decision.probabilities[member.ref] ?? 0),
+          0,
+        );
+        if (
+          options.ambiguity === "first" &&
+          matching.includes(selected) &&
+          (decision.confidence === null ||
+            decision.confidence >= MIN_CONFIDENCE) &&
+          probability >= 0.75
+        ) {
+          gate = "ambiguity_first";
+          if (options.operation === "fill" && !matching[0]!.editable)
+            return unresolved("not_fillable");
+          return await refresh(matching[0]!);
+        }
+        gate = "ambiguity_rejected";
+        return unresolved("ambiguous");
+      }
+    }
     // The pick may be the item's title while the sentence names a control
     // on it ("click Share on the post about ..."): anchor on the named one.
     const anchor =
@@ -1499,7 +1597,12 @@ export async function resolveTarget(
       comparableLead(decision, selected.ref) < MIN_LEAD;
     if (low && group.length >= 2 && repeatedMember.modelPick)
       gate = "repeated_member_model_pick";
-    else if (low && group.length < 2 && options.acceptLowConfidence)
+    else if (
+      low &&
+      group.length < 2 &&
+      options.acceptLowConfidence &&
+      options.ambiguity === undefined
+    )
       gate = "low_confidence_accepted";
     else if (low) {
       gate = "low_confidence_or_margin";
@@ -1525,6 +1628,9 @@ export async function resolveTarget(
       const member = byId.get(narrower.selection.id);
       if (
         !member ||
+        (options.ambiguity !== undefined &&
+          narrower.confidence !== null &&
+          narrower.confidence < MIN_CONFIDENCE) ||
         narrower.probabilities[member.ref]! < 0.6 ||
         comparableLead(narrower, member.ref) < 0.2
       ) {
@@ -1669,6 +1775,10 @@ export async function resolveTarget(
         source.candidates,
         fresh.candidates,
       );
+      // A still-identical target may no longer be first after any surface
+      // change. The unique-name relaxation below cannot establish ordering.
+      if (gate === "ambiguity_first" && !surfaceStable)
+        return unresolved("stale");
       let matches = fresh.candidates.filter((candidate) =>
         sameIdentity(selectedCandidate, candidate),
       );

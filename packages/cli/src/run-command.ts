@@ -851,6 +851,7 @@ export async function executeRunCommand(
                 provider,
                 classificationCache: cache,
                 locatorCache,
+                locator: config.locator,
                 // Per-attempt values let tests keep backend data apart, like
                 // Playwright's TEST_PARALLEL_INDEX. They are env-derived, so
                 // they stay opaque in model input and reports.

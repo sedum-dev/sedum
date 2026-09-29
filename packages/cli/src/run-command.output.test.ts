@@ -1143,6 +1143,7 @@ describe("run output failure contract", () => {
 browser: chromium
 viewport: { width: 900, height: 600 }
 thresholds: { verify: 0.8, lowConfidenceBand: 0.1, contradiction: 0.4 }
+locator: { ambiguity: first }
 outputDir: artifacts/runs
 baseUrl: https://example.com/app/
 `,
@@ -1179,6 +1180,7 @@ baseUrl: https://example.com/app/
       browserKind: "chromium",
       viewport: { width: 900, height: 600 },
       verifyPolicy: { minP: 0.8, band: 0.1, contradictionCutoff: 0.4 },
+      locator: { ambiguity: "first" },
       baseUrl: "https://example.com/app/",
     });
     expect(vi.mocked(runFlow).mock.calls[0]?.[1].repoRoot).toMatch(

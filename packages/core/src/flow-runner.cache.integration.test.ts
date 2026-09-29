@@ -59,7 +59,11 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
             (cards
               ? "<article><h2>Camera</h2><button onclick=\"location.href='/chosen?item=Camera'\">Add to cart</button></article><article><h2>Phone</h2><button onclick=\"location.href='/chosen?item=Phone'\">Add to cart</button></article>"
               : "<article><h2>Unknown</h2><button onclick=\"location.href='/chosen?item=Unknown'\">Add to cart</button></article><article><h2>Phone</h2><button onclick=\"location.href='/chosen?item=Phone'\">Add to cart</button></article>") +
-            "</main></body></html>",
+            "</main>" +
+            (request.url === "/blocked"
+              ? '<div style="position:fixed;inset:0;z-index:99"></div>'
+              : "") +
+            "</body></html>",
         );
       });
       await new Promise<void>((resolve) =>
@@ -199,6 +203,89 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ).toBe("none");
       expect(store.put).toHaveBeenCalledTimes(1);
     }, 15_000);
+
+    it.each([
+      [undefined, false, "Phone"],
+      ["reject", false, null],
+      ["first", false, "Camera"],
+      ["first", true, null],
+    ] as const)(
+      "executes ambiguity policy %s with actionability blocking=%s",
+      async (ambiguity, blocked, expected) => {
+        cards = true;
+        chosen.length = 0;
+        const file = path.join(root, "ambiguity.test.yaml");
+        await writeFile(
+          file,
+          `url: ${base}/${blocked ? "blocked" : ""}\nsteps:\n  - click Add to cart\n`,
+        );
+        const recorder = new RunRecorder(async () => undefined, "ambiguity");
+        await recorder.start();
+        const result = await runFlow(file, {
+          repoRoot: root,
+          browser: new PlaywrightBrowserDriver(),
+          classificationCache: new NoopClassificationCache(),
+          locator: ambiguity ? { ambiguity } : {},
+          provider: {
+            classifyBatch: vi.fn(),
+            holds: vi.fn(),
+            choose: async (_sentence, offered) => {
+              const candidates = offered.options.filter(
+                (option) => option.kind === "candidate",
+              );
+              const selected = candidates.find((option) =>
+                option.candidate.peers.some((peer) => peer.includes("Phone")),
+              )!.candidate.id;
+              return {
+                selection: { kind: "candidate", id: selected },
+                probabilities: Object.fromEntries([
+                  ...candidates.map((option) => [
+                    option.candidate.id,
+                    ambiguity === "first"
+                      ? 0.45
+                      : option.candidate.id === selected
+                        ? 0.8
+                        : 0.1,
+                  ]),
+                  ["none", 0.1],
+                ]),
+                confidence: 0.9,
+                call: {
+                  requestedModel: "recorded",
+                  model: "recorded",
+                  attempts: 1,
+                  usage: { inputTokens: 10, outputTokens: 2 },
+                  rate: null,
+                  successfulResponseCostUsd: null,
+                  totalCostUsd: null,
+                },
+              };
+            },
+          },
+          env: {},
+          report: {
+            recorder,
+            privacy: { secretValues: [], sensitiveOrigins: [] },
+            evidenceEnabled: false,
+            replay: false,
+            saveFrame: async () => ({ status: "omitted", reason: "disabled" }),
+          },
+        });
+        await recorder.finish();
+        expect(result.status).toBe(expected ? "passed" : "failed");
+        expect(chosen).toEqual(expected ? [expected] : []);
+        const step = recorder.snapshot.tests[0]?.attempts[0]?.steps[0];
+        expect(step?.locator?.gate).toBe(
+          ambiguity === "first"
+            ? "ambiguity_first"
+            : ambiguity === "reject"
+              ? "ambiguity_rejected"
+              : "repeated_member_model_pick",
+        );
+        if (blocked) expect(step?.error?.code).toBe("not_actionable");
+      },
+      15_000,
+    );
 
     it("records a lost cache write race as a conflict and keeps the model result", async () => {
       cards = true;
