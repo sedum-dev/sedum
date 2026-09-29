@@ -328,6 +328,75 @@ async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
   await resource?.close().catch(() => undefined);
 }
 
+/** A fresh resolution threw; carries the calls already made for the report. */
+class LocateRetryError extends Error {
+  constructor(readonly priorCalls: readonly ProviderCall[]) {
+    super("The target could not be resolved.");
+  }
+}
+
+/**
+ * Re-observe a resolution that failed only because the page moved under it.
+ * Nothing has been acted on yet, so a fresh read is safe for any operation.
+ */
+async function reobserve(
+  page: BrowserPage,
+  first: LocatorResult,
+  locate: () => Promise<LocatorResult>,
+  options: { readonly staleRetry: boolean; readonly signal?: AbortSignal },
+): Promise<LocatorResult> {
+  let resolved = first;
+  // A resolver response can arrive during an unrelated DOM revision. One fresh
+  // read after a longer quiet period is safe: it reuses neither a target nor a
+  // prior action.
+  if (
+    options.staleRetry &&
+    resolved.kind === "unresolved" &&
+    resolved.reason === "stale"
+  ) {
+    const priorCalls = resolved.calls;
+    const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
+      quiet: false,
+    }));
+    if (settled.quiet) {
+      try {
+        const retried = await locate();
+        resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+      } catch (error) {
+        if (isRunWideProviderError(error)) throw error;
+        throw new LocateRetryError(priorCalls);
+      }
+    }
+  }
+  // A navigation can briefly leave a quiet, empty document before the real
+  // page commits. Re-observe only an empty candidate set within a deadline;
+  // no model choice or action has happened, and an actually empty page still
+  // ends with no_candidates.
+  if (resolved.kind === "unresolved" && resolved.reason === "no_candidates") {
+    const deadline = performance.now() + 8_000;
+    while (performance.now() < deadline && !options.signal?.aborted) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      const settled = await quietPage(page, 80, 1_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!settled.quiet) continue;
+      try {
+        const fresh = await locate();
+        resolved = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
+        if (
+          resolved.kind !== "unresolved" ||
+          resolved.reason !== "no_candidates"
+        )
+          break;
+      } catch (error) {
+        if (isRunWideProviderError(error)) throw error;
+        // A redirect can invalidate the read-only execution context.
+      }
+    }
+  }
+  return resolved;
+}
+
 async function executeSentence(
   page: BrowserPage,
   step: ClassifiedFlowSentence,
@@ -594,10 +663,17 @@ async function executeSentence(
       if (/^(?:the\s+)?page\s+text$/iu.test(match[1]!.trim())) {
         remembered = await page.text();
       } else {
-        locator = await resolveTarget(page, dependencies.provider, {
-          operation: "read",
-          sentence: match[1]!,
-          projectText: (text) => redactOpaqueText(text, opaqueEntries),
+        const locateRead = () =>
+          resolveTarget(page, dependencies.provider, {
+            operation: "read",
+            sentence: match[1]!,
+            projectText: (text) => redactOpaqueText(text, opaqueEntries),
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+          });
+        // A read right after a navigation races the page settling, exactly
+        // as a click does; give it the same single fresh observation.
+        locator = await reobserve(page, await locateRead(), locateRead, {
+          staleRetry: true,
           ...(dependencies.signal ? { signal: dependencies.signal } : {}),
         });
         if (locator.kind !== "resolved")
@@ -826,66 +902,29 @@ async function executeSentence(
       },
     );
   }
-  // A resolver response can arrive during an unrelated DOM revision. One fresh
-  // read after a longer quiet period is safe: it reuses neither a target nor a
-  // prior action.
-  if (
-    !visionAttempted &&
-    resolved.kind === "unresolved" &&
-    resolved.reason === "stale"
-  ) {
-    const priorCalls = resolved.calls;
-    const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
-      quiet: false,
-    }));
-    if (settled.quiet) {
-      try {
-        const retried = await locate();
-        resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
-      } catch (error) {
-        if (isRunWideProviderError(error)) throw error;
-        return record(
-          unsupported(
-            step.source.file,
-            step.source,
-            "The target could not be resolved.",
-          ),
-          {
-            failedCalls: priorCalls.map((call) => resultCall(call, "locator")),
-            error: {
-              code: "locator_error",
-              message: "The target could not be resolved.",
-            },
-          },
-        );
-      }
-    }
-  }
-  // A navigation can briefly leave a quiet, empty document before the real
-  // page commits. Re-observe only an empty candidate set within a deadline;
-  // no model choice or action has happened, and an actually empty page still
-  // ends with no_candidates.
-  if (resolved.kind === "unresolved" && resolved.reason === "no_candidates") {
-    const deadline = performance.now() + 8_000;
-    while (performance.now() < deadline && !dependencies.signal?.aborted) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 400));
-      const settled = await quietPage(page, 80, 1_000).catch(() => ({
-        quiet: false,
-      }));
-      if (!settled.quiet) continue;
-      try {
-        const fresh = await locate();
-        resolved = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
-        if (
-          resolved.kind !== "unresolved" ||
-          resolved.reason !== "no_candidates"
-        )
-          break;
-      } catch (error) {
-        if (isRunWideProviderError(error)) throw error;
-        // A redirect can invalidate the read-only execution context.
-      }
-    }
+  try {
+    resolved = await reobserve(page, resolved, locate, {
+      staleRetry: !visionAttempted,
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+    });
+  } catch (error) {
+    if (!(error instanceof LocateRetryError)) throw error;
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        "The target could not be resolved.",
+      ),
+      {
+        failedCalls: error.priorCalls.map((call) =>
+          resultCall(call, "locator"),
+        ),
+        error: {
+          code: "locator_error",
+          message: "The target could not be resolved.",
+        },
+      },
+    );
   }
   if (resolved.kind !== "resolved") {
     if (

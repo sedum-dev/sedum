@@ -381,6 +381,57 @@ describe("hook and module attempt lifecycle", () => {
     expect(JSON.stringify(run.report)).not.toContain("$42");
   });
 
+  it("re-observes a remember target that went stale while it was resolved", async () => {
+    const stale = {
+      kind: "unresolved" as const,
+      reason: "stale" as const,
+      calls: [],
+      diagnostic: { candidateCount: 0, rounds: 0, topOptions: [] },
+    };
+    const resolve = vi
+      .spyOn(locatorModule, "resolveTarget")
+      .mockResolvedValueOnce(stale);
+    try {
+      const run = await runHooks(
+        "steps:\n  - remember the price as {{price}}\n  - verify the price is {{price}}\n",
+        { readText: "$29.99" },
+      );
+      expect(run.result.status, JSON.stringify(run.result)).toBe("passed");
+      expect(resolve).toHaveBeenCalledTimes(2);
+      expect(run.holds.mock.calls[0]?.[0]).toBe("the price is $29.99");
+    } finally {
+      resolve.mockRestore();
+    }
+  });
+
+  it("still fails a remember target that stays stale", async () => {
+    const stale = {
+      kind: "unresolved" as const,
+      reason: "stale" as const,
+      calls: [],
+      diagnostic: { candidateCount: 0, rounds: 0, topOptions: [] },
+    };
+    const resolve = vi
+      .spyOn(locatorModule, "resolveTarget")
+      .mockResolvedValue(stale);
+    try {
+      const run = await runHooks(
+        "steps:\n  - remember the price as {{price}}\n",
+        {
+          readText: "$29.99",
+        },
+      );
+      expect(run.result.status).toBe("failed");
+      // One fresh observation, never an unbounded loop.
+      expect(resolve).toHaveBeenCalledTimes(2);
+      expect(run.report.tests[0]?.attempts[0]?.steps[0]?.error?.code).toBe(
+        "stale",
+      );
+    } finally {
+      resolve.mockRestore();
+    }
+  });
+
   it("keeps an environment-derived module argument out of Judge claims", async () => {
     const run = await runHooks(
       "steps:\n  - use: ./shared.module.yaml\n    with: {text: $SECRET}\n",
