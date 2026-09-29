@@ -22,6 +22,8 @@ export type {
 } from "./terminal.js";
 export { renderMarkdown } from "./markdown.js";
 export {
+  usageLines,
+  visionSummary,
   needsAttention,
   runIsTrustworthy,
   score,

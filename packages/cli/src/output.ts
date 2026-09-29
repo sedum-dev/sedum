@@ -1,4 +1,5 @@
 import { validateRunResult, type RunResult } from "@sedum-dev/core";
+import { usageLines, visionSummary } from "@sedum-dev/reporters";
 
 export interface OutputCapabilities {
   readonly stdoutIsTTY: boolean;
@@ -148,6 +149,20 @@ export function renderRunSummary(
     `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}`,
   );
   lines.push(...executionLines(value));
+  for (const test of value.tests)
+    for (const attempt of test.attempts)
+      for (const step of attempt.steps) {
+        const vision = visionSummary(step);
+        if (vision)
+          lines.push(
+            `${test.file} · attempt ${attempt.ordinal} · step ${step.index}: ${vision}`.replace(
+              // Strip terminal control characters from provider metadata.
+              // eslint-disable-next-line no-control-regex
+              /[\u0000-\u001f\u007f-\u009f]/g,
+              " ",
+            ),
+          );
+      }
   if (artifacts.authoritative) {
     lines.push(`progress ${artifacts.progressPath}`);
     lines.push(`result ${artifacts.resultPath}`);
@@ -161,6 +176,7 @@ export function renderRunSummary(
     lines.push(`result unavailable (intended ${artifacts.resultPath})`);
   }
   if (capabilities.stdoutIsTTY || showCosts) {
+    lines.push(...usageLines(value));
     lines.push(
       `model ${value.totals.modelCalls} call(s), ${value.totals.inputTokens} input tokens, ${value.totals.outputTokens} output tokens`,
     );

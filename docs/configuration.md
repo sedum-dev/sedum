@@ -121,7 +121,16 @@ There is at most one vision call per step, with no recovery after failure.
 After vision is attempted, a stale action target fails without re-resolving.
 Suppressing screenshots on sensitive pages does not restore permissive picks.
 Existing Jev caching is unchanged; vision-selected targets are not cached.
-Model usage is included in existing locator calls, without a new report UI.
+HTML, Markdown, and CLI summaries identify vision fallback outcomes, the model,
+trigger, and duration. A selected candidate is not a guarantee that its action
+succeeded: the step verdict still reports execution separately. Text-model
+confidence is not presented as vision confidence.
+Usage summaries separate text and vision calls across all attempts, including
+earlier retries. CLI usage is shown in interactive terminals or with `--costs`;
+fallback details are also shown in non-interactive output.
+Vision costs use OpenRouter's reported `usage.cost`, without inventing separate
+input/output dollar charges. Missing costs keep the total incomplete while the
+known subtotal remains visible. These are spend reports, not budget limits.
 Locator diagnostics include vision request duration and a safe failure category
 (HTTP error/status, timeout, cancellation, connection, malformed response,
 invalid selection, or truncation). These fields are preserved in the canonical

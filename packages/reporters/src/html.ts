@@ -8,6 +8,8 @@ import {
 } from "@sedum-dev/core";
 import { REPORT_CSS } from "./html-styles.js";
 import {
+  usageLines,
+  visionSummary,
   decisionLines,
   duration,
   score,
@@ -156,7 +158,7 @@ function stepDetails(step: ResultStep): string {
   const choices = locator
     ? "<div><b>locator</b> " +
       esc(locator.source) +
-      " · confidence " +
+      " · text-model confidence " +
       score(locator.confidence) +
       (locator.cache
         ? " · cache " +
@@ -227,6 +229,9 @@ function stepDetails(step: ResultStep): string {
     page +
     scores +
     choices +
+    (visionSummary(step)
+      ? "<div><b>vision</b> " + esc(visionSummary(step)!) + "</div>"
+      : "") +
     observations +
     error +
     evidence +
@@ -261,7 +266,9 @@ function stepRow(step: ResultStep, attemptId: string): string {
   const detail = step.detail
     ? '<span class="detail">' + esc(step.detail) + "</span>"
     : "";
-  const locator = step.locator?.source ?? (step.calls.length ? "model" : "—");
+  const locator = step.locator?.vision
+    ? "vision"
+    : (step.locator?.source ?? (step.calls.length ? "model" : "—"));
   return (
     '<tr class="s-' +
     tone +
@@ -297,7 +304,11 @@ function stepRow(step: ResultStep, attemptId: string): string {
     bar(step) +
     "</td>" +
     '<td class="num soft">' +
-    (step.locator ? score(step.locator.confidence) : "") +
+    (step.locator?.vision
+      ? "—"
+      : step.locator
+        ? score(step.locator.confidence)
+        : "") +
     "</td>" +
     '<td class="num soft">' +
     duration(step.elapsedMs) +
@@ -497,6 +508,7 @@ function receipt(result: RunResult): string {
     string,
     {
       model: string;
+      vision: boolean;
       input: number | null;
       output: number | null;
       source: string | null;
@@ -510,6 +522,7 @@ function receipt(result: RunResult): string {
   >();
   for (const call of all) {
     const key = JSON.stringify([
+      call.modality,
       call.model,
       call.inputUsdPerMillion,
       call.outputUsdPerMillion,
@@ -519,6 +532,7 @@ function receipt(result: RunResult): string {
     const prior = rates.get(key);
     rates.set(key, {
       model: call.model,
+      vision: call.modality === "vision",
       input: call.inputUsdPerMillion,
       output: call.outputUsdPerMillion,
       source: call.rateSource,
@@ -536,37 +550,59 @@ function receipt(result: RunResult): string {
         '<div class="r-row r-model"><span>model</span><span>' +
         esc(rate.model) +
         "</span></div>" +
+        '<div class="r-provenance">' +
+        (rate.vision
+          ? "Vision · provider-reported cost"
+          : "Text model · rate-based pricing") +
+        "</div>" +
         '<div class="r-row r-usage"><span>input</span><span>' +
         rate.inputTokens.toLocaleString("en-US") +
         " tk</span><span>" +
         esc(
-          rate.complete && rate.input !== null
-            ? money((rate.inputTokens * rate.input) / 1_000_000)
-            : "unknown",
+          rate.vision
+            ? "—"
+            : rate.complete && rate.input !== null
+              ? money((rate.inputTokens * rate.input) / 1_000_000)
+              : "unknown",
         ) +
         "</span></div>" +
-        '<div class="r-row indent"><span>at ' +
-        esc(rate.input === null ? "unknown rate" : "$" + rate.input + "/1M") +
-        "</span></div>" +
+        (rate.vision
+          ? ""
+          : '<div class="r-row indent"><span>at ' +
+            esc(
+              rate.input === null ? "unknown rate" : "$" + rate.input + "/1M",
+            ) +
+            "</span></div>") +
         '<div class="r-row r-usage"><span>output</span><span>' +
         rate.outputTokens.toLocaleString("en-US") +
         " tk</span><span>" +
         esc(
-          rate.complete && rate.output !== null
-            ? money((rate.outputTokens * rate.output) / 1_000_000)
-            : "unknown",
+          rate.vision
+            ? "—"
+            : rate.complete && rate.output !== null
+              ? money((rate.outputTokens * rate.output) / 1_000_000)
+              : "unknown",
         ) +
         "</span></div>" +
-        '<div class="r-row indent"><span>at ' +
-        esc(rate.output === null ? "unknown rate" : "$" + rate.output + "/1M") +
-        "</span></div>" +
+        (rate.vision
+          ? ""
+          : '<div class="r-row indent"><span>at ' +
+            esc(
+              rate.output === null ? "unknown rate" : "$" + rate.output + "/1M",
+            ) +
+            "</span></div>") +
         '<div class="r-row r-usage"><span>calls</span><span>' +
         rate.calls +
         "</span><span>" +
         esc(rate.complete ? money(rate.cost) : "unknown") +
         "</span></div>" +
         '<div class="r-provenance">' +
-        esc(rate.source ?? "source unavailable") +
+        esc(
+          rate.source ??
+            (rate.vision
+              ? "OpenRouter usage.cost; input/output dollar split unavailable"
+              : "source unavailable"),
+        ) +
         (rate.checked ? " · " + esc(rate.checked) : "") +
         "</div>",
     )
@@ -598,6 +634,9 @@ function receipt(result: RunResult): string {
     duration(result.elapsedMs) +
     "</span></div>" +
     '<hr class="r-rule">' +
+    usageLines(result)
+      .map((line) => '<p class="r-provenance">' + esc(line) + "</p>")
+      .join("") +
     (rateRows || '<div class="r-row"><span>no model calls</span></div>') +
     '<hr class="r-rule"><div class="r-row r-total"><span>provider total</span><span>' +
     esc(

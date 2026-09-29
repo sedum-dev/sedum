@@ -233,8 +233,17 @@ describe("action retry boundary", () => {
     const run = await runClick("stale", { vision: true, failure: true });
     expect(run.result.status).toBe("failed");
     expect(run.report.tests[0]?.attempts[0]?.steps[0]?.locator?.vision).toEqual(
-      { failure: "http_error", httpStatus: 429, elapsedMs: 123 },
+      {
+        failure: "http_error",
+        httpStatus: 429,
+        elapsedMs: 123,
+        outcome: "failed",
+        reason: "repeated_member_no_evidence",
+      },
     );
+    expect(
+      run.report.tests[0]?.attempts[0]?.steps[0]?.calls.map((c) => c.modality),
+    ).toEqual([undefined, "vision"]);
     expect(
       run.report.tests[0]?.attempts[0]?.steps[0]?.error?.message,
     ).toContain("vision http_error (HTTP 429)");

@@ -72,6 +72,8 @@ export interface LocatorOptionDiagnostic {
 }
 export interface LocatorDiagnostic {
   readonly vision?: {
+    readonly outcome?: "selected" | "abstained" | "failed";
+    readonly reason?: string;
     readonly elapsedMs: number;
     readonly failure?: VisionFailure | "unknown";
     readonly httpStatus?: number;
@@ -1700,7 +1702,7 @@ export async function resolveTarget(
             signal: controller.signal,
           });
         } catch (error) {
-          calls.push(unknownCostCall(error));
+          calls.push({ ...unknownCostCall(error), modality: "vision" });
           visionDiagnostic =
             error instanceof VisionRequestError
               ? {
@@ -1714,17 +1716,27 @@ export async function resolveTarget(
                   elapsedMs: performance.now() - visionStarted,
                   failure: "unknown",
                 };
+          visionDiagnostic = {
+            ...visionDiagnostic,
+            outcome: "failed",
+            reason: gate ?? "ambiguous",
+          };
           gate = `${gate}:vision_error`;
           return unresolved("ambiguous");
         }
-        calls.push(answer.call);
-        visionDiagnostic = { elapsedMs: performance.now() - visionStarted };
+        calls.push({ ...answer.call, modality: "vision" });
+        visionDiagnostic = {
+          elapsedMs: performance.now() - visionStarted,
+          outcome: "failed",
+          reason: gate ?? "ambiguous",
+        };
         ensureActive();
         if (!sameVersion(await pageVersion(page), source.version)) {
           gate = `${gate}:vision_stale`;
           return unresolved("ambiguous");
         }
         if (answer.decision.kind !== "candidate") {
+          visionDiagnostic = { ...visionDiagnostic, outcome: "abstained" };
           gate = `${gate}:vision_abstained`;
           return unresolved("ambiguous");
         }
@@ -1736,8 +1748,15 @@ export async function resolveTarget(
         if (!target || target.disabled) return unresolved("ambiguous");
         gate = `${gate}:vision_selected`;
         const result = await refresh(target, true);
+        if (result.kind === "resolved") {
+          visionDiagnostic = { ...visionDiagnostic, outcome: "selected" };
+          return {
+            ...result,
+            diagnostic: { ...result.diagnostic, vision: visionDiagnostic },
+          };
+        }
         // Failed visual validation must not activate the runner's stale retry.
-        return result.kind === "resolved" ? result : unresolved("ambiguous");
+        return unresolved("ambiguous");
       } catch {
         gate = `${gate}:vision_unavailable`;
         return unresolved("ambiguous");

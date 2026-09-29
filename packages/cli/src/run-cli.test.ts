@@ -505,9 +505,12 @@ describe("CLI command framework", () => {
     const finalTty = tty.stdout
       .replaceAll("\r\u001b[2K", "")
       .replace(ansiPattern, "");
-    expect(finalTty.replace(/^model .*\n|^cost .*\n/gmu, "")).toContain(
-      plain.stdout,
-    );
+    expect(
+      finalTty.replace(
+        /^(?:model |cost |Text models:|Vision models:|Vision outcomes:|All models \(all attempts\):).*\n/gmu,
+        "",
+      ),
+    ).toContain(plain.stdout);
   });
 
   it("shows costs by default only for a TTY", async () => {

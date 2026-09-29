@@ -1,4 +1,4 @@
-import { RunRecorder, type ResultStep } from "@sedum-dev/core";
+import { RunRecorder, resultTotals, type ResultStep } from "@sedum-dev/core";
 import { describe, expect, it } from "vitest";
 import { renderRunSummary } from "./output.js";
 
@@ -57,5 +57,61 @@ describe("cache outcome in terminal summary", () => {
     expect(output).toContain(
       "cache miss (strong_signal_conflict), model fallback, target changed",
     );
+    const visual: ResultStep = {
+      ...step,
+      locator: {
+        ...step.locator!,
+        vision: {
+          outcome: "selected",
+          reason: "repeated_member_no_evidence",
+          elapsedMs: 2100,
+        },
+      },
+      calls: [
+        {
+          purpose: "locator",
+          modality: "vision",
+          requestedModel: "google/gemini-3.8-flash",
+          model: "google/gemini-3.8-flash",
+          attempts: 1,
+          inputTokens: 123,
+          outputTokens: 17,
+          apiMs: null,
+          inputUsdPerMillion: null,
+          outputUsdPerMillion: null,
+          rateSource: null,
+          rateCheckedAt: null,
+          costUsd: 0.002,
+        },
+      ],
+    };
+    const tests = recorder.snapshot.tests.map((test) => ({
+      ...test,
+      attempts: test.attempts.map((attempt) => ({
+        ...attempt,
+        steps: [visual],
+      })),
+    }));
+    const result = { ...recorder.snapshot, tests, totals: resultTotals(tests) };
+    for (const costs of [false, true]) {
+      const text = renderRunSummary(
+        result,
+        { stdoutIsTTY: false, stderrIsTTY: false, color: false },
+        {
+          progressPath: "progress.json",
+          resultPath: "result.json",
+          authoritative: true,
+        },
+        costs,
+      );
+      expect(text).toContain(
+        "Vision fallback: selected · google/gemini-3.8-flash · 2100 ms",
+      );
+      expect(
+        text.includes(
+          "Vision models: 1 calls · 123 input tokens · 17 output tokens · recorded cost $0.002000",
+        ),
+      ).toBe(costs);
+    }
   });
 });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { RunRecorder, type ResultStep } from "@sedum-dev/core";
 import { renderHtml } from "./html.js";
+import { visionReport } from "./test-fixtures.js";
+import { renderMarkdown } from "./markdown.js";
+import { usageLines } from "./shared.js";
 
 function step(
   id: string,
@@ -89,6 +92,35 @@ async function example() {
 }
 
 describe("HTML report", () => {
+  it("identifies vision outcomes and counts billed usage across historical attempts without inventing prices", async () => {
+    const result = await visionReport();
+    const html = renderHtml(result);
+    const markdown = renderMarkdown(result);
+    for (const output of [html, markdown]) {
+      for (const outcome of ["selected", "abstained", "failed"])
+        expect(output).toContain(`Vision fallback: ${outcome}`);
+      expect(output).toContain("google/gemini-3.8-flash");
+      expect(output).toContain("2345 ms");
+      expect(output).toContain("HTTP 429");
+      expect(output).toContain(
+        "Vision models: 3 calls · 500 input tokens · 34 output tokens · known subtotal $0.005000; 1 call with unknown cost",
+      );
+      expect(output).toContain(
+        "All models (all attempts): 6 calls · 740 input tokens · 70 output tokens · known subtotal $0.005077",
+      );
+    }
+    expect(html).toContain("trigger: repeated_member_no_evidence");
+    expect(markdown).toContain("trigger: repeated\\_member\\_no\\_evidence");
+    expect(html).toContain("Vision · provider-reported cost");
+    expect(html).toContain("input/output dollar split unavailable");
+    expect(html).not.toContain("unknown rate");
+    expect(html).toContain("src-vision");
+    expect(html).toContain("text-model confidence 0.80");
+    expect(usageLines(result)).toContain(
+      "Vision outcomes: 1 selected · 1 abstained · 1 failed",
+    );
+    expect(result.totals.costComplete).toBe(false);
+  });
   it("sorts failures, shows exact per-step lines, escapes data and keeps unknown cost honest", async () => {
     const result = await example();
     const html = renderHtml(result);

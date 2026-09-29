@@ -142,6 +142,7 @@ function resultCall(
 ): ResultCall {
   return {
     purpose,
+    ...(call.modality ? { modality: call.modality } : {}),
     requestedModel: call.requestedModel,
     model: call.model,
     attempts: call.attempts,
