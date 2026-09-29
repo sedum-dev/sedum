@@ -11,10 +11,13 @@
     "agent-markdown-report",
     "configurable-system-one-provider",
     "junit-reporter",
+    "locator-accuracy-experiments",
     "parallel-runs-and-sharding",
+    "quiet-tests-choose",
     "real-site-hardening",
     "replay-type-steps",
     "sed-51-release-pipeline",
+    "simplify-locator-guards",
     "warm-html-report"
   ]
 }

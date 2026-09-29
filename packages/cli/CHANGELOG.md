@@ -1,5 +1,20 @@
 # sedum-cli
 
+## 0.1.0-alpha.3
+
+### Minor Changes
+
+- 4b50aa6: Add experimental `sedum run --affected` selection using one Jev relevance probability per test against a Git merge-base diff. Include a JSON preview, configurable base and threshold, complete module context, and explicit failure handling without silently skipping tests.
+
+### Patch Changes
+
+- Updated dependencies [027b095]
+- Updated dependencies [4b50aa6]
+- Updated dependencies [3e2d8a6]
+  - @sedum-dev/core@0.1.0-alpha.3
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.3
+  - @sedum-dev/reporters@0.1.0-alpha.3
+
 ## 0.1.0-alpha.2
 
 ### Minor Changes

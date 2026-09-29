@@ -1,5 +1,26 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.3
+
+### Minor Changes
+
+- 027b095: Find and choose page elements more reliably. The page script now reaches open
+  shadow roots, pointer-styled controls with no role, drawn checkboxes and radios,
+  and controls named only by an icon, image, placeholder, or nearby text, and it
+  tells the model where each control sits. The locator resolves ordinals, prices,
+  row references, and named sections in code, asks the model one yes/no question
+  per item for references it cannot match, and gives up on steps that name only a
+  kind of control or fit two near-namesakes. Among repeated elements it now acts on
+  the model's pick by default (`repeatedMember: {}` restores the strict rule).
+  A TypeSafe 402 (no credits) is reported as a configuration error.
+- 4b50aa6: Add experimental `sedum run --affected` selection using one Jev relevance probability per test against a Git merge-base diff. Include a JSON preview, configurable base and threshold, complete module context, and explicit failure handling without silently skipping tests.
+
+### Patch Changes
+
+- Updated dependencies [027b095]
+- Updated dependencies [3e2d8a6]
+  - @sedum-dev/core@0.1.0-alpha.3
+
 ## 0.1.0-alpha.2
 
 ### Minor Changes
