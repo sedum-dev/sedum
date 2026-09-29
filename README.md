@@ -157,18 +157,21 @@ Planned for the 0.1 alpha:
 - a GitHub Action
 - starting your app before a run
 
-Coming soon after that:
+## Goal-based tests
 
-- **Goal-based tests.** State the outcome and let Sedum work out the steps:
+State the outcome and let Sedum work out the actions, then independently verify it:
 
-  ```yaml
-  url: https://shop.example.com/
-  goal: >
-    sign in, add a hat to the cart, check out with the saved card
-  verify: the confirmation page shows an order number
-  ```
+```yaml
+url: https://shop.example.com/
+goal: >
+  sign in, add a hat to the cart, check out with the saved card
+verify: the confirmation page shows an order number
+```
 
-  Until then, write each step as a sentence.
+Use `goal` and a required `verify` claim instead of `steps`. Supply typing values
+through `data`; `before` and `after` hooks remain available. Run and validate the
+file with the same CLI commands as authored-step tests. See [goal mode](docs/goal-mode.md)
+for budgets, reporting, supported operations and recorded limitations.
 
 ## Contributing
 

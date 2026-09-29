@@ -929,7 +929,8 @@ export async function executeRunCommand(
                 operational ??= flowDiagnostic(result);
                 return "stop";
               }
-              if (result.status === "passed") break;
+              if (result.status === "passed" || result.retryable === false)
+                break;
             }
             return "continue";
           },

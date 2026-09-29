@@ -52,6 +52,32 @@ describe("entry URL resolution", () => {
 });
 
 describe("walking-skeleton flow runner", () => {
+  it("rejects unsupported goal providers before launching a browser", async () => {
+    const folder = await mkdtemp(path.join(tmpdir(), "sedum-goal-provider-"));
+    try {
+      const file = path.join(folder, "goal.test.yaml");
+      await writeFile(
+        file,
+        "url: https://example.com\ngoal: Open products\nverify: Products are visible\n",
+      );
+      const launch = vi.fn();
+      const result = await runFlow(file, {
+        repoRoot: folder,
+        browser: { launch },
+        classificationCache: new NoopClassificationCache(),
+        env: {},
+        provider: { classifyBatch: vi.fn(), choose: vi.fn(), holds: vi.fn() },
+      });
+      expect(result).toMatchObject({
+        status: "could_not_run",
+        code: "unsupported_test",
+        source: { line: 2 },
+      });
+      expect(launch).not.toHaveBeenCalled();
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
+  });
   it("runs hook flows through the browser lifecycle", async () => {
     const folder = await mkdtemp(path.join(tmpdir(), "sedum-runner-"));
     try {

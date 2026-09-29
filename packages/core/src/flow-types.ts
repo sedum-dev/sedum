@@ -82,6 +82,12 @@ export interface FlowDefinition {
   readonly before: readonly FlowStep[];
   readonly steps: readonly FlowStep[];
   readonly after: readonly FlowStep[];
+  readonly goal?: {
+    readonly text: string;
+    readonly source: FlowSource;
+    readonly verify: string;
+    readonly verifySource: FlowSource;
+  };
 }
 
 export interface ModuleDefinition {

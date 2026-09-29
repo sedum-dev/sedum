@@ -1,5 +1,21 @@
 # RunResult v1 and live progress
 
+Goal tests populate optional `tests[].goal` with complete, secret-redacted
+`text` and `verify` strings after data resolution, before browser execution.
+HTML reports display these above the replay and steps. Authored-step tests omit
+this field. Existing result files without it remain supported.
+
+Goal tests publish an action step after each dispatched click or type, then an
+aggregate step (`kind: verify`, `operation: goal`) when the bounded loop ends.
+Action steps use data-binding names instead of typed values and include target
+scores, incremental planner calls, and opt-in post-action replay frames subject
+to normal privacy rules. The aggregate includes action/request counts and the
+termination reason in `detail`, independent Judge scores when reached, and only
+remaining calls with `purpose: planner` or `judge`, avoiding duplicate usage.
+A flagged goal assertion fails the goal even without `--strict`. The aggregate
+omits page metadata, screenshots and replay frames. Goal failures are not
+automatically restarted by `--retries`.
+
 `@sedum-dev/core/run-result.schema.json` is the Draft 2020-12 schema generated from the same Zod definition used to validate every published snapshot. The schema ID is `https://sedum.dev/schemas/run-result/v1`. The v1 schema may still change incompatibly before its first published release. After v1 is published, incompatible changes require a new major schema version. Consumers should reject unknown major versions.
 
 Each attempt problem has a unique ID, consecutive attempt-local ordinal, phase, ordered source stack, outcome, typed error, and an origin of `step` or `module_binding`. A step problem links its executed step; a module binding problem has `stepId: null` because no sentence ran. The first encountered problem is primary. A failed setup or body stays primary even if later teardown reports an operational error. A primary operational error leaves the verdict null. Executed steps retain their own phase and source stack; there are no synthetic module-call steps.

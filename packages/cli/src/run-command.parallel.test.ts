@@ -52,6 +52,7 @@ const state = vi.hoisted(() => ({
   active: 0,
   peak: 0,
   envs: [] as Array<Readonly<Record<string, string | undefined>>>,
+  retryable: true,
 }));
 
 vi.mock("@sedum-dev/core", async (importOriginal) => {
@@ -118,6 +119,7 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
                 status: "failed" as const,
                 file,
                 source: { file, line: 1, col: 1 },
+                ...(!state.retryable ? { retryable: false as const } : {}),
               };
         } finally {
           state.active--;
@@ -138,6 +140,7 @@ afterEach(async () => {
   state.active = 0;
   state.peak = 0;
   state.envs = [];
+  state.retryable = true;
   if (previous) process.chdir(previous);
   if (root) await rm(root, { recursive: true, force: true });
   root = undefined;
@@ -341,6 +344,24 @@ describe("parallel sedum run", () => {
       .map(([, dependencies]) => dependencies.env.SEDUM_ATTEMPT_KEY);
     expect(retriedKeys).toHaveLength(2);
     expect(retriedKeys[0]).not.toBe(retriedKeys[1]);
+  });
+
+  it("does not restart a failed goal when retries are requested", async () => {
+    const names = await project(1);
+    state.retryable = false;
+    state.behavior = async () => "failed";
+    const output = await executeRunCommand({
+      ...base,
+      paths: names,
+      retries: 2,
+    });
+    expect(output.result.verdict).toBe("failed");
+    expect(output.result.tests[0]!.attempts).toHaveLength(1);
+    expect(
+      vi
+        .mocked(runFlow)
+        .mock.calls.filter(([file]) => path.basename(file) === names[0]),
+    ).toHaveLength(1);
   });
 
   it("closes every in-flight attempt when the run is interrupted", async () => {

@@ -494,6 +494,13 @@ function testSection(
     '</p><p class="rerun"><span class="label">rerun</span> <code>sedum run ' +
     esc(shellArg(test.file)) +
     "</code></p>" +
+    (test.goal
+      ? '<section class="goal goal-context" aria-label="Goal and verification"><h3 class="label">Goal</h3><p class="goal-text">' +
+        esc(test.goal.text) +
+        '</p><div class="goal-until"><h3 class="label">Verify</h3><p class="goal-claim">' +
+        esc(test.goal.verify) +
+        "</p></div></section>"
+      : "") +
     test.attempts.map((item) => attemptSection(test, item, frames)).join("") +
     (!test.attempts.length
       ? '<p class="empty">This flow was selected but did not execute.</p>'
@@ -660,6 +667,8 @@ function receipt(result: RunResult): string {
 
 const extraCss = `
 .test-head-right{display:flex;align-items:center;gap:1.2rem}.test-summary{max-width:32ch;text-align:right}
+.goal-context .goal-text,.goal-context .goal-claim{white-space:pre-wrap;overflow-wrap:anywhere}
+.goal-context .goal-until .label{display:block}
 .attempt{border-top:1px solid var(--rule);margin-top:1.2rem;padding-top:.7rem}.attempt>summary{cursor:pointer;font-family:var(--mono);font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--soft)}
 .attempt[open]>summary{color:var(--ink)}.step-extra td{padding:0 0 .7rem 3.2rem!important;background:transparent!important}
 .step-extra details{font-size:.75rem;color:var(--soft)}.step-extra summary{cursor:pointer;font-family:var(--mono);font-size:.66rem}

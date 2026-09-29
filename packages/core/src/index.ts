@@ -29,3 +29,4 @@ export * from "./project-validation.js";
 export * from "./project-listing.js";
 export * from "./flow-runner.js";
 export * from "./assertion-engine.js";
+export * from "./goal-runner.js";
