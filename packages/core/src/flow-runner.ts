@@ -26,7 +26,7 @@ import {
   type ClassifiedFlowStep,
 } from "./flow-classification.js";
 import { loadFlowFile } from "./flow-loader.js";
-import { runGoal, type GoalPlanner } from "./goal-runner.js";
+import { runGoal, type GoalPlanner, type GoalAction } from "./goal-runner.js";
 import { resolveFlowModules } from "./flow-modules.js";
 import {
   ModuleBindingResolutionError,
@@ -1025,6 +1025,94 @@ async function executeSentence(
   }
 }
 
+/** Goal replay frames show the resulting page, never a stale pre-action target box. */
+async function recordGoalAction(
+  page: BrowserPage,
+  action: GoalAction,
+  report: AttemptReport,
+  repoRoot: string,
+  source: FlowSource,
+): Promise<void> {
+  const attempt = report.test.currentAttempt!;
+  const index = attempt.stepCount + 1;
+  const id = `${attempt.id}:step:${index}`;
+  const privacy = report.privacy;
+  const sensitive =
+    safeUrl(action.beforeVersion.route, privacy).sensitive ||
+    safeUrl(page.url, privacy).sensitive;
+  const capture = async (suffix: string): Promise<ResultFrame> => {
+    if (sensitive) return { status: "omitted", reason: "sensitive_page" };
+    if (!page.captureFrame)
+      return { status: "unavailable", reason: "capture_unavailable" };
+    try {
+      const before = await pageVersion(page);
+      if (safeUrl(before.route, privacy).sensitive)
+        return { status: "omitted", reason: "sensitive_page" };
+      const bytes = await page.captureFrame();
+      const after = await pageVersion(page);
+      if (
+        before.document !== after.document ||
+        before.revision !== after.revision ||
+        before.route !== after.route
+      )
+        return { status: "unavailable", reason: "stale_frame" };
+      return await report.saveFrame(attempt, `${id}:${suffix}`, bytes);
+    } catch {
+      return { status: "unavailable", reason: "capture_failed" };
+    }
+  };
+  const failed = action.status === "failed";
+  await report.test.addStep({
+    id,
+    index,
+    kind: "action",
+    operation: action.operation,
+    phase: "steps",
+    sentence: safeText(action.sentence, privacy, 512),
+    detail: failed
+      ? `Goal action failed: ${action.reason}.`
+      : "Goal action; replay shows the resulting page.",
+    sourceStack: [safeSource(source, repoRoot, privacy)],
+    state: "completed",
+    verdict: action.status,
+    flags: [],
+    elapsedMs: action.elapsedMs,
+    page: sensitive
+      ? { status: "omitted", reason: "sensitive_page" }
+      : await reportPage(page, `${id}:observation:1`, privacy),
+    locator: {
+      confidence: action.confidence,
+      source: "model",
+      cache: null,
+      options: sensitive
+        ? []
+        : [
+            {
+              label: safeText(action.targetName, privacy, 120),
+              role: safeText(action.targetRole, privacy, 80),
+              probability: action.probability,
+            },
+          ],
+    },
+    judgement: null,
+    observations: [],
+    calls: action.calls.map((call) => resultCall(call, "planner")),
+    error: failed
+      ? {
+          code: action.reason!,
+          message: `Goal action did not complete: ${action.reason}.`,
+        }
+      : null,
+    evidence: !failed
+      ? { status: "omitted", reason: "clean_step" }
+      : !report.evidenceEnabled
+        ? { status: "omitted", reason: "disabled" }
+        : await capture("evidence"),
+    replayFrame: report.replay ? await capture("replay") : null,
+    targetBox: null,
+  });
+}
+
 /** Run one validated attempt with setup, body, and exhaustive teardown. */
 export async function runFlow(
   file: string,
@@ -1256,6 +1344,7 @@ export async function runFlow(
     const goal = classified.value.goal;
     if (!setupProblem && goal) {
       const purposes: ResultCall["purpose"][] = [];
+      let reportedCalls = 0;
       const goalResult = await runGoal(
         activePage,
         {
@@ -1282,6 +1371,20 @@ export async function runFlow(
             ),
           ],
           data,
+          ...(dependencies.report
+            ? {
+                onAction: async (action: GoalAction) => {
+                  await recordGoalAction(
+                    activePage,
+                    action,
+                    dependencies.report!,
+                    dependencies.repoRoot,
+                    goal.source,
+                  );
+                  reportedCalls += action.calls.length;
+                },
+              }
+            : {}),
           ...(dependencies.verifyPolicy
             ? { verifyPolicy: dependencies.verifyPolicy }
             : {}),
@@ -1334,9 +1437,11 @@ export async function runFlow(
               }
             : null,
           observations: [],
-          calls: goalResult.calls.map((call, index) =>
-            resultCall(call, purposes[index] ?? "planner"),
-          ),
+          calls: goalResult.calls
+            .slice(reportedCalls)
+            .map((call, index) =>
+              resultCall(call, purposes[index + reportedCalls] ?? "planner"),
+            ),
           error:
             goalResult.status === "failed"
               ? {

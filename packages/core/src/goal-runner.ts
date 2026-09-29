@@ -62,6 +62,22 @@ export interface GoalOptions {
   /** Experimental operation-only margin; target margin and confidence floors stay fixed. */
   readonly operationMinMargin?: number;
   readonly signal?: AbortSignal;
+  /** Awaited after each dispatched action; contains no typed values. */
+  readonly onAction?: (action: GoalAction) => Promise<void>;
+}
+export interface GoalAction {
+  readonly operation: "click" | "type";
+  readonly sentence: string;
+  readonly targetName: string;
+  readonly targetRole: string;
+  readonly confidence: number | null;
+  readonly probability: number;
+  /** Internal provenance for privacy checks, not for serialization. */
+  readonly beforeVersion: PageVersion;
+  readonly status: "passed" | "failed";
+  readonly reason: string | null;
+  readonly elapsedMs: number;
+  readonly calls: readonly ProviderCall[];
 }
 export interface GoalResult {
   readonly status: "passed" | "failed";
@@ -207,6 +223,7 @@ export async function runGoal(
   let requests = 0;
   let actions = 0;
   let pendingCall = false;
+  let reportedCalls = 0;
   const result = (reason: string): GoalResult => ({
     status: reason === "verified" ? "passed" : "failed",
     reason,
@@ -240,6 +257,7 @@ export async function runGoal(
         continue;
       const targets: Record<string, Record<string, string>> = {};
       const commands = new Map<string, StepCommand>();
+      const bindingKeys = new Map<string, string>();
       // Read only binding matches and occupancy, never send field values to the model.
       const fieldState = await active(
         page.evaluate<{ populated: boolean; bindings: string[] }[]>(
@@ -293,6 +311,7 @@ export async function runGoal(
             target: target(c),
             value: entry.value,
           });
+          bindingKeys.set(id, key);
         }
       }
       if (Object.values(targets).some((t) => Object.keys(t).length > 254))
@@ -403,12 +422,50 @@ export async function runGoal(
       // Consume and record BEFORE dispatch. Any executor failure terminates; never replay.
       actions++;
       history.push(project(`${op} ${targets[op]![head.choice]}`));
-      await active(
-        executeStep(page, refreshed, {
-          signal,
-          timeoutMs: Math.min(8_000, timeoutMs - (performance.now() - started)),
-        }),
+      const actionStarted = performance.now();
+      const binding = bindingKeys.get(head.choice);
+      const sentence = project(
+        command.op === "type"
+          ? `Type {{${binding}}} into ${chosen.name}`
+          : `Click ${chosen.name}${chosen.peers[0] ? ` (${chosen.peers[0]})` : ""}`,
       );
+      let failure: unknown;
+      let failed = false;
+      try {
+        await active(
+          executeStep(page, refreshed, {
+            signal,
+            timeoutMs: Math.min(
+              8_000,
+              timeoutMs - (performance.now() - started),
+            ),
+          }),
+        );
+      } catch (error) {
+        failed = true;
+        failure = error;
+      }
+      await options.onAction?.({
+        operation: command.op,
+        sentence,
+        targetName: project(chosen.name),
+        targetRole: chosen.role,
+        confidence: head.confidence,
+        probability: head.probabilities[head.choice]!,
+        beforeVersion: fresh.version,
+        status: failed ? "failed" : "passed",
+        reason: !failed
+          ? null
+          : signal.aborted
+            ? "timeout"
+            : failure instanceof StepExecutionError
+              ? `${failure.code}:${failure.phase}`
+              : "action_failed",
+        elapsedMs: performance.now() - actionStarted,
+        calls: calls.slice(reportedCalls),
+      });
+      reportedCalls = calls.length;
+      if (failed) throw failure;
     }
     return result("timeout");
   } catch (error) {

@@ -4,6 +4,7 @@ import {
   goalChoiceAccepted,
   goalOperations,
   type GoalChoice,
+  type GoalAction,
   type GoalPlanner,
   type GoalState,
 } from "./goal-runner.js";
@@ -204,7 +205,11 @@ describe("bounded goal runner", () => {
     vi.mocked(executeStep).mockRejectedValue(
       new StepExecutionError("click", "action_uncertain", "post_dispatch"),
     );
-    const result = await runGoal(page, planner("CLICK"), judge, options);
+    const onAction = vi.fn(async () => {});
+    const result = await runGoal(page, planner("CLICK"), judge, {
+      ...options,
+      onAction,
+    });
     expect(result).toMatchObject({
       reason: "action_uncertain:post_dispatch",
       actions: 1,
@@ -212,6 +217,51 @@ describe("bounded goal runner", () => {
     });
     expect(result.history).toHaveLength(1);
     expect(executeStep).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "click",
+        status: "failed",
+        reason: "action_uncertain:post_dispatch",
+        calls: [call],
+      }),
+    );
+  });
+  it("streams completed actions with incremental calls, and emits nothing for abstention", async () => {
+    const onAction = vi.fn(async (action: GoalAction) => {
+      expect(executeStep).toHaveBeenCalled();
+      expect(action.status).toBe("passed");
+    });
+    const result = await runGoal(page, planner("CLICK"), judge, {
+      ...options,
+      onAction,
+    });
+    expect(result.reason).toBe("no_progress");
+    expect(onAction).toHaveBeenCalledTimes(3);
+    for (const [action] of onAction.mock.calls) {
+      expect(action).toMatchObject({
+        operation: "click",
+        sentence: "Click Open",
+        status: "passed",
+        reason: null,
+        calls: [call],
+      });
+    }
+    onAction.mockClear();
+    await runGoal(page, planner("BLOCKED"), judge, { ...options, onAction });
+    expect(onAction).not.toHaveBeenCalled();
+  });
+  it("stops instead of dispatching again after a reporting failure", async () => {
+    const onAction = vi.fn(async () => {
+      throw new Error("report sink unavailable");
+    });
+    const result = await runGoal(page, planner("CLICK"), judge, {
+      ...options,
+      onAction,
+    });
+    expect(result.status).toBe("failed");
+    expect(executeStep).toHaveBeenCalledOnce();
+    expect(onAction).toHaveBeenCalledOnce();
   });
   it("redacts quoted secret echoes before serialization and ignores target data for BLOCKED", async () => {
     const secret = 'a"quoted\\secret';

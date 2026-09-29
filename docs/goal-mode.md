@@ -31,9 +31,12 @@ planner's DONE is never itself a passing verdict. Goal execution retains
 applies. YAML does not expose gate or budget overrides. Automatic whole-test
 `--retries` do not restart failed goal tests.
 
-Reports contain one aggregate `goal` verification step with action/request
-counts, failure reason, Judge scores and separate planner/Judge usage. Per-action
-screenshots and replay frames are not recorded for this aggregate step.
+Reports list each dispatched click or type action, followed by a `goal`
+verification step with action/request counts, failure reason and Judge scores.
+Typed values appear as binding names such as `{{password}}`, never resolved
+values. Run with `--replay` to inspect post-action frames in the HTML player;
+sensitive pages remain excluded. Replay is a visual review of the recorded run,
+not a re-execution of its actions. Planner/Judge usage is counted only once.
 The underlying API remains `runGoal(page, planner, judge, options)` with
 `TypeSafeAdapter.chooseGoal`. Authored-step execution is unchanged.
 

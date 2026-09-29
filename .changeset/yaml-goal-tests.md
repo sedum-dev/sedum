@@ -4,5 +4,6 @@
 ---
 
 Support YAML goal tests with required independent verification, supplied data,
-authored setup/teardown hooks, bounded execution and planner usage in reports.
+authored setup/teardown hooks, bounded execution and per-action reporting with
+opt-in replay frames and planner usage.
 Do not automatically retry failed goal tests.

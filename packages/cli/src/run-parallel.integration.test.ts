@@ -145,9 +145,14 @@ describe.skipIf(!browserIntegration)(
         ...extra,
       });
 
-    it.each([true, false])(
-      "runs YAML goal checkout through CLI and real provider transport (verify=%s)",
-      async (passes) => {
+    it.each([
+      [true, false, true],
+      [false, false, true],
+      [true, true, true],
+      [true, false, false],
+    ])(
+      "runs YAML goal checkout through CLI and real provider transport (verify=%s, sensitive=%s, replay=%s)",
+      async (passes, sensitive, replay) => {
         const original = transport.fetch;
         const actions = [
           ["TYPE", "Username", "username"],
@@ -235,21 +240,53 @@ describe.skipIf(!browserIntegration)(
           const output = await run({
             paths: [name],
             retries: 2,
+            replay,
+            sensitiveOrigins: sensitive ? [site.baseUrl] : [],
             reporters: ["json", "markdown", "junit"],
           });
           expect(output.diagnostic).toBeNull();
           expect(runExitCode(output.result, false)).toBe(passes ? 0 : 1);
           expect(output.result.tests[0]!.attempts).toHaveLength(1);
-          const goal = output.result.tests[0]!.attempts[0]!.steps[0]!;
+          const steps = output.result.tests[0]!.attempts[0]!.steps;
+          expect(steps.map((step) => step.operation)).toEqual([
+            ...actions.map((action) => action[0]!.toLowerCase()),
+            "goal",
+          ]);
+          expect(steps[1]!.sentence).toBe("Type {{password}} into Password");
+          for (const step of steps.slice(0, -1)) {
+            expect(step.calls).toHaveLength(1);
+            expect(step.verdict).toBe("passed");
+            if (sensitive) {
+              expect(step.page).toEqual({
+                status: "omitted",
+                reason: "sensitive_page",
+              });
+              expect(step.locator?.options).toEqual([]);
+            }
+            if (!replay) expect(step.replayFrame).toBeNull();
+            else
+              expect(step.replayFrame).toMatchObject(
+                sensitive
+                  ? { status: "omitted", reason: "sensitive_page" }
+                  : { status: "captured" },
+              );
+          }
+          if (replay && !sensitive) await expectIsolatedFrames(output);
+          const html = await readFile(output.artifacts.htmlPath!, "utf8");
+          expect(html.includes("data:image/jpeg;base64,")).toBe(
+            replay && !sensitive,
+          );
+          const goal = steps.at(-1)!;
           expect(goal.operation).toBe("goal");
           expect(goal.detail).toContain("10 actions, 12 requests");
           expect(
             goal.calls.filter((call) => call.purpose === "planner"),
-          ).toHaveLength(11);
+          ).toHaveLength(1);
           expect(
             goal.calls.filter((call) => call.purpose === "judge"),
           ).toHaveLength(1);
           expect(judged).toBe(1);
+          expect(output.result.totals.modelCalls).toBe(12);
           expect(output.result.totals.inputTokens).toBe(204);
           expect(JSON.stringify(output.result)).not.toContain(
             "fixture_password",
