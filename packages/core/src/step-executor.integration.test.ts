@@ -105,7 +105,8 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       } finally {
         await context.close();
       }
-    });
+      // Allow cold native image/SVG initialization on Windows CI.
+    }, 30_000);
 
     it("clicks a native link, observes navigation, and does not replay a canceled link", async () => {
       const { page, context } = await fresh();
