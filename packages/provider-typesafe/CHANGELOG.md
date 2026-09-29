@@ -1,5 +1,13 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.4
+
+### Patch Changes
+
+- Updated dependencies [2300463]
+- Updated dependencies [20ae8f2]
+  - @sedum-dev/core@0.1.0-alpha.4
+
 ## 0.1.0-alpha.3
 
 ### Minor Changes
