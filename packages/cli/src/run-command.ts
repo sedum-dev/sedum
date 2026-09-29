@@ -23,6 +23,7 @@ import {
   flowDiagnostic,
   outputDiagnostic,
   setupDiagnostic,
+  stopsRun,
   type CliDiagnostic,
 } from "./diagnostics.js";
 import { ProgressWriter, ProgressWriterError } from "./progress-writer.js";
@@ -860,6 +861,7 @@ export async function executeRunCommand(
           })
         : undefined;
       let operational: ReturnType<typeof flowDiagnostic> | null = null;
+      let erroredTests = 0;
       const driver = new PlaywrightBrowserDriver();
       const browsers = Array.from(
         { length: lanes },
@@ -926,8 +928,16 @@ export async function executeRunCommand(
               if (result.status === "could_not_run") {
                 // Replace the lane's browser, as Playwright replaces a worker.
                 await browser.recycle();
-                operational ??= flowDiagnostic(result);
-                return "stop";
+                const diagnostic = flowDiagnostic(result);
+                operational ??= diagnostic;
+                if (stopsRun(result.code)) return "stop";
+                erroredTests += 1;
+                // A test-scoped error ends this test only; later tests still
+                // run, and the run keeps a null verdict and exit 3.
+                await recorder
+                  .testAt(ordinal)
+                  ?.errorTest(canonicalDiagnosticError(diagnostic));
+                break;
               }
               if (result.status === "passed" || result.retryable === false)
                 break;
@@ -959,7 +969,16 @@ export async function executeRunCommand(
         return terminalExecution(diagnostic);
       }
       if (operational) {
-        const diagnostic = operational;
+        // Assigned inside the lane callbacks, which narrowing cannot see.
+        const first = operational as CliDiagnostic;
+        const diagnostic: CliDiagnostic =
+          erroredTests > 1
+            ? {
+                code: "test_errors",
+                message: `${erroredTests} tests could not run. First: ${first.message}`,
+                fix: "Fix the tests named under needs attention, then rerun them.",
+              }
+            : first;
         commit();
         await recorder.finish(canonicalDiagnosticError(diagnostic));
         return terminalExecution(diagnostic);

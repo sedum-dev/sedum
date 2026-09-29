@@ -53,6 +53,7 @@ const state = vi.hoisted(() => ({
   peak: 0,
   envs: [] as Array<Readonly<Record<string, string | undefined>>>,
   retryable: true,
+  errorCode: "browser-disconnected",
 }));
 
 vi.mock("@sedum-dev/core", async (importOriginal) => {
@@ -84,8 +85,8 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
             return {
               status: "could_not_run" as const,
               file,
-              code: "browser-disconnected",
-              message: "The browser disconnected during the run.",
+              code: state.errorCode,
+              message: "The test could not run.",
             };
           if (outcome === "hang") {
             await new Promise((resolve) =>
@@ -141,6 +142,7 @@ afterEach(async () => {
   state.peak = 0;
   state.envs = [];
   state.retryable = true;
+  state.errorCode = "browser-disconnected";
   if (previous) process.chdir(previous);
   if (root) await rm(root, { recursive: true, force: true });
   root = undefined;
@@ -291,7 +293,8 @@ describe("parallel sedum run", () => {
     expect(output.diagnostic?.code).toBe("no_tests");
   });
 
-  it("stops scheduling after an operational error but lets in-flight tests finish", async () => {
+  it("stops scheduling after a run-wide error but lets in-flight tests finish", async () => {
+    state.errorCode = "provider_authentication";
     const names = await project(8);
     state.behavior = async (file) => {
       const index = names.indexOf(path.basename(file));
@@ -307,10 +310,60 @@ describe("parallel sedum run", () => {
       paths: names,
       parallel: 2,
     });
-    expect(output.diagnostic?.code).toBe("browser-disconnected");
+    expect(output.diagnostic?.code).toBe("provider_authentication");
     expect(vi.mocked(runFlow).mock.calls.length).toBeLessThan(names.length);
     const second = output.result.tests.find((test) => test.file === names[1]);
     expect(second).toMatchObject({ state: "completed", verdict: "passed" });
+    expect(runExitCode(output.result, false)).toBe(3);
+  });
+
+  it("records a test-scoped error on its test and runs every other test", async () => {
+    const names = await project(4);
+    state.behavior = async (file) => {
+      const index = names.indexOf(path.basename(file));
+      if (index === 0) return "could_not_run";
+      return index === 2 ? "failed" : "passed";
+    };
+    const output = await executeRunCommand({
+      ...base,
+      paths: names,
+      parallel: 1,
+      retries: 1,
+    });
+    // The errored test is not retried; the failed one is.
+    expect(vi.mocked(runFlow).mock.calls.length).toBe(names.length + 1);
+    expect(
+      output.result.tests.map((test) => [test.state, test.verdict]),
+    ).toEqual([
+      ["error", null],
+      ["completed", "passed"],
+      ["completed", "failed"],
+      ["completed", "passed"],
+    ]);
+    expect(output.result.tests[0]!.attempts[0]).toMatchObject({
+      state: "error",
+      error: { code: "browser-disconnected" },
+    });
+    expect(output.result.totals.executedTests).toBe(4);
+    expect(output.result.verdict).toBeNull();
+    expect(output.diagnostic?.code).toBe("browser-disconnected");
+    expect(runExitCode(output.result, false)).toBe(3);
+  });
+
+  it("summarizes several test-scoped errors in the run diagnostic", async () => {
+    const names = await project(3);
+    state.behavior = async (file) =>
+      path.basename(file) === names[1] ? "passed" : "could_not_run";
+    const output = await executeRunCommand({
+      ...base,
+      paths: names,
+      parallel: 2,
+    });
+    expect(vi.mocked(runFlow).mock.calls.length).toBe(names.length);
+    expect(output.diagnostic).toMatchObject({
+      code: "test_errors",
+      message: expect.stringMatching(/^2 tests could not run\. First: /u),
+    });
     expect(runExitCode(output.result, false)).toBe(3);
   });
 

@@ -46,6 +46,7 @@ import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
+  isRunWideProviderError,
   type Judge,
   type ProviderCall,
   type Resolver,
@@ -642,7 +643,8 @@ async function executeSentence(
       opaqueEntries.push(data[match[2]!]!);
       report?.privacy.secretValues.push(remembered);
       return record("continue", locator ? { locator } : {});
-    } catch {
+    } catch (error) {
+      if (isRunWideProviderError(error)) throw error;
       return record(
         unsupported(
           step.source.file,
@@ -674,6 +676,7 @@ async function executeSentence(
         verify: result,
       });
     } catch (error) {
+      if (isRunWideProviderError(error)) throw error;
       const priorCalls =
         error instanceof AssertionEngineError && error.failedCall
           ? [resultCall(error.failedCall, "judge")]
@@ -693,6 +696,7 @@ async function executeSentence(
               failedCalls: priorCalls,
             });
           } catch (retryError) {
+            if (isRunWideProviderError(retryError)) throw retryError;
             return record(
               unsupported(
                 step.source.file,
@@ -806,7 +810,8 @@ async function executeSentence(
   let resolved: LocatorResult;
   try {
     resolved = await locate();
-  } catch {
+  } catch (error) {
+    if (isRunWideProviderError(error)) throw error;
     return record(
       unsupported(
         step.source.file,
@@ -837,7 +842,8 @@ async function executeSentence(
       try {
         const retried = await locate();
         resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
-      } catch {
+      } catch (error) {
+        if (isRunWideProviderError(error)) throw error;
         return record(
           unsupported(
             step.source.file,
@@ -875,7 +881,8 @@ async function executeSentence(
           resolved.reason !== "no_candidates"
         )
           break;
-      } catch {
+      } catch (error) {
+        if (isRunWideProviderError(error)) throw error;
         // A redirect can invalidate the read-only execution context.
       }
     }
@@ -1027,6 +1034,7 @@ async function executeSentence(
       page: locatedPage,
     });
   } catch (error) {
+    if (isRunWideProviderError(error)) throw error;
     const actionError = error instanceof StepExecutionError ? error : null;
     const failed =
       actionError &&
