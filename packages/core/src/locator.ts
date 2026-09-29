@@ -1558,13 +1558,8 @@ export async function resolveTarget(
     // link to the same login page) are told apart by their names already.
     // Counts do not tell members apart: "306 comments" and "12 comments"
     // are the same control on two stories.
-    const masked = (name: string) =>
-      name
-        .trim()
-        .toLocaleLowerCase()
-        .replace(/\d[\d.,]*[km]?(?=\s+\p{L})/gu, "#");
     const sameName = candidates.filter(
-      (candidate) => masked(candidate.name) === masked(selected.name),
+      (candidate) => maskedName(candidate.name) === maskedName(selected.name),
     );
     if (
       sameName.length > 1 &&
