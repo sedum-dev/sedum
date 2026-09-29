@@ -678,12 +678,14 @@ describe("locator", () => {
     });
     const clear = await resolveTarget(page, model, {
       operation: "click",
+      repeatedMember: {},
       sentence: "Add Camera to cart",
     });
     expect(clear.kind).toBe("resolved");
     expect(clear.calls).toHaveLength(2);
     const vague = await resolveTarget(page, model, {
       operation: "click",
+      repeatedMember: {},
       sentence: "Add to cart",
     });
     expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
@@ -704,6 +706,7 @@ describe("locator", () => {
     });
     const result = await resolveTarget(page, model, {
       operation: "click",
+      repeatedMember: {},
       sentence: "Add Phone to cart",
     });
     expect(result.kind).toBe("resolved");
@@ -732,6 +735,7 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart",
       }),
     ).toMatchObject({
@@ -743,10 +747,404 @@ describe("locator", () => {
       (
         await resolveTarget(page, model, {
           operation: "click",
+          repeatedMember: {},
           sentence: "Add Camera to cart",
         })
       ).kind,
     ).toBe("resolved");
+  });
+
+  it("resolves ordinals, prices, and row references in code", async () => {
+    const items = [
+      candidate(0, {
+        name: "Add to cart",
+        peers: ["Trail Light"],
+        signals: { path: "a", item: "Trail Light $49.00 Add to cart" },
+      }),
+      candidate(1, {
+        name: "Add to cart",
+        peers: ["Camp Mug"],
+        signals: { path: "b", item: "Camp Mug $12.00 Add to cart" },
+      }),
+      candidate(2, {
+        name: "Add to cart",
+        peers: ["Grace Hopper"],
+        signals: { path: "c", item: "Grace Hopper Mug $20.00 Add to cart" },
+      }),
+    ];
+    const { page } = recordedPage(items);
+    // The model always prefers the first card; code overrides it.
+    const model = resolver((options) =>
+      answer(options, "r0", { r0: 0.9, r1: 0.04, r2: 0.03, none: 0.03 }, 0.9),
+    );
+    const picked = async (sentence: string) => {
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        repeatedMember: {},
+        sentence,
+      });
+      return result.kind === "resolved"
+        ? result.target.driverTarget().ref
+        : result.reason;
+    };
+    expect(await picked("click the second Add to cart button")).toBe(
+      "fresh-r1",
+    );
+    expect(await picked("click the last Add to cart button")).toBe("fresh-r2");
+    expect(await picked("click Add to cart for the cheapest product")).toBe(
+      "fresh-r1",
+    );
+    expect(await picked("click Add to cart for Grace Hopper")).toBe("fresh-r2");
+    // A reference no item holds, or a qualifier code cannot check, falls
+    // back to the model and the gate.
+    expect(await picked("click Add to cart for Wool Socks")).toBe("ambiguous");
+    expect(await picked("click the first non-sponsored Add to cart")).toBe(
+      "ambiguous",
+    );
+  });
+
+  it.each([
+    "cheapest red mug",
+    "click Add to cart for the cheapest red mug",
+    "click the second Add to cart button that is red",
+    "click Add to cart for the cheapest product with free shipping",
+    "click the second Add to cart in Missing section",
+    "do not click the first Add to cart button",
+  ])(
+    "does not override a model pick from a partial request: %s",
+    async (sentence) => {
+      const items = [
+        candidate(0, {
+          name: "Add to cart",
+          signals: { path: "a", item: "Red mug $10 Add to cart" },
+        }),
+        candidate(1, {
+          name: "Add to cart",
+          signals: { path: "b", item: "Blue mug $5 Add to cart" },
+        }),
+      ];
+      const { page } = recordedPage(items);
+      const model = resolver((options) =>
+        answer(options, "r0", { r0: 0.9, r1: 0.08, none: 0.02 }, 0.9),
+      );
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence,
+      });
+      expect(result.kind).toBe("resolved");
+      if (result.kind === "resolved") {
+        expect(result.target.driverTarget().ref).toBe("fresh-r0");
+        expect(result.diagnostic.gate).not.toBe("resolved_in_code");
+      }
+    },
+  );
+
+  it.each([
+    "click Add to cart for the cheapest red mug",
+    "click the second Add to cart in Missing section",
+  ])(
+    "does not rescue model abstention with a partial match: %s",
+    async (sentence) => {
+      const { page } = recordedPage([
+        candidate(0, {
+          name: "Add to cart",
+          signals: { path: "a", item: "Red mug $10" },
+        }),
+        candidate(1, {
+          name: "Add to cart",
+          signals: { path: "b", item: "Blue mug $5" },
+        }),
+      ]);
+      const model = resolver((options) =>
+        answer(options, "none", { r0: 0.04, r1: 0.04, none: 0.92 }, 0.92),
+      );
+      expect(
+        await resolveTarget(page, model, { operation: "click", sentence }),
+      ).toMatchObject({ kind: "unresolved", reason: "none" });
+    },
+  );
+
+  it.each([
+    ["click the second Edit in Billing", "fresh-r2"],
+    ["click Edit for the cheapest item in Billing", "fresh-r2"],
+    ["click the last Edit under Billing", "fresh-r2"],
+  ])(
+    "applies the section before counting or comparing: %s",
+    async (sentence, expected) => {
+      const items = [
+        candidate(0, {
+          name: "Edit",
+          signals: { path: "a", section: "Account", item: "Account $1" },
+        }),
+        candidate(1, {
+          name: "Edit",
+          signals: {
+            path: "b",
+            section: "Settings › Billing",
+            item: "Billing $20",
+          },
+        }),
+        candidate(2, {
+          name: "Edit",
+          signals: {
+            path: "c",
+            section: "Settings › Billing",
+            item: "Billing $10",
+          },
+        }),
+      ];
+      const { page } = recordedPage(items);
+      const model = resolver((options) =>
+        answer(options, "r0", { r0: 0.9, r1: 0.04, r2: 0.04, none: 0.02 }, 0.9),
+      );
+      const result = await resolveTarget(page, model, {
+        operation: "click",
+        sentence,
+      });
+      expect(result.kind).toBe("resolved");
+      if (result.kind === "resolved")
+        expect(result.target.driverTarget().ref).toBe(expected);
+    },
+  );
+
+  it("counts only article-body members for an explicit article scope", async () => {
+    const items = [
+      candidate(0, {
+        name: "Charles Babbage",
+        tag: "a",
+        role: "link",
+        signals: { path: "sidebar" },
+      }),
+      candidate(1, {
+        name: "Charles Babbage",
+        tag: "a",
+        role: "link",
+        signals: { path: "body/1", region: "article-body" },
+      }),
+      candidate(2, {
+        name: "Charles Babbage",
+        tag: "a",
+        role: "link",
+        signals: { path: "body/2", region: "article-body" },
+      }),
+    ];
+    const model = resolver((options) => answer(options, "r2"));
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click the first Charles Babbage link in the article",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+
+  it("applies an explicit control kind before counting", async () => {
+    const { page } = recordedPage([
+      candidate(0, { name: "Edit", tag: "a", role: "link" }),
+      candidate(1, { name: "Edit" }),
+      candidate(2, { name: "Edit" }),
+    ]);
+    const model = resolver((options) => answer(options, "r2"));
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "click the second Edit button",
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r2",
+    );
+  });
+
+  it.each(["item", "section"] as const)(
+    "rejects changed %s evidence before returning a code pick",
+    async (signal) => {
+      const items = [
+        candidate(0, {
+          name: "Edit",
+          signals: { path: "a", section: "Billing", item: "$20" },
+        }),
+        candidate(1, {
+          name: "Edit",
+          signals: { path: "b", section: "Billing", item: "$10" },
+        }),
+      ];
+      const { page } = recordedPage(items, {
+        live: () =>
+          items.map((item, index) =>
+            index === 0
+              ? {
+                  ...item,
+                  signals: {
+                    ...item.signals,
+                    [signal]: signal === "item" ? "$1" : "Account",
+                  },
+                }
+              : item,
+          ),
+      });
+      const model = resolver((options) =>
+        answer(options, "r0", { r0: 0.9, r1: 0.08, none: 0.02 }, 0.9),
+      );
+      expect(
+        await resolveTarget(page, model, {
+          operation: "click",
+          sentence:
+            signal === "item"
+              ? "click Edit for the cheapest item"
+              : "click the second Edit in Billing",
+        }),
+      ).toMatchObject({ kind: "unresolved", reason: "stale" });
+    },
+  );
+
+  it("acts on the same-name member in the section the sentence names", async () => {
+    const items = [
+      candidate(0, {
+        name: "Python for Everybody",
+        signals: { path: "a", section: "Trending searches › Python" },
+      }),
+      candidate(1, {
+        name: "Python for Everybody",
+        signals: { path: "b", section: "Most popular › New and popular" },
+      }),
+    ];
+    const { page } = recordedPage(items);
+    const model = resolver((options) =>
+      answer(options, "r0", { r0: 0.8, r1: 0.15, none: 0.05 }, 0.8),
+    );
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "open Python for Everybody under Most popular",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_by_section" },
+    });
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe("fresh-r1");
+  });
+
+  it("acts on the model's pick among repeated elements by default", async () => {
+    const items = [
+      candidate(0, { name: "Pricing", signals: { path: "nav", href: "/p" } }),
+      candidate(1, { name: "Pricing", signals: { path: "foot", href: "/q" } }),
+    ];
+    const { page } = recordedPage(items);
+    const model = resolver((options) =>
+      answer(options, "r1", { r0: 0.3, r1: 0.6, none: 0.1 }, 0.6),
+    );
+    const result = await resolveTarget(page, model, {
+      operation: "click",
+      sentence: "click Pricing",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "repeated_member_model_pick" },
+    });
+    if (result.kind === "resolved")
+      expect(result.target.driverTarget().ref).toBe("fresh-r1");
+  });
+
+  it("accepts a repeated member only under an opted-in policy", async () => {
+    const items = [
+      candidate(0, {
+        name: "Pricing",
+        peers: [],
+        signals: { path: "nav", href: "/pricing" },
+      }),
+      candidate(1, {
+        name: "Pricing",
+        peers: [],
+        signals: { path: "footer", href: "/pricing" },
+      }),
+      candidate(2, {
+        name: "Edit",
+        peers: ["Ada Lovelace"],
+        signals: { path: "ada" },
+      }),
+      candidate(3, {
+        name: "Edit",
+        peers: ["Grace Hopper"],
+        signals: { path: "grace" },
+      }),
+    ];
+    const { page } = recordedPage(items);
+    const pricing = resolver((options) =>
+      answer(
+        options,
+        "r0",
+        { r0: 0.6, r1: 0.35, r2: 0, r3: 0, none: 0.05 },
+        0.9,
+      ),
+    );
+    const vague = {
+      operation: "click" as const,
+      sentence: "click Pricing",
+      repeatedMember: {},
+    };
+    expect(await resolveTarget(page, pricing, vague)).toMatchObject({
+      kind: "unresolved",
+      diagnostic: { gate: "repeated_member_no_evidence" },
+    });
+    expect(
+      await resolveTarget(page, pricing, {
+        ...vague,
+        repeatedMember: { sameDestination: true },
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "repeated_member_same_destination" },
+    });
+    const edit = resolver((options) =>
+      answer(
+        options,
+        "r3",
+        { r0: 0, r1: 0, r2: 0.05, r3: 0.9, none: 0.05 },
+        0.95,
+      ),
+    );
+    const paraphrase = {
+      operation: "click" as const,
+      repeatedMember: {},
+      sentence: "edit the second team member",
+    };
+    const trust = { minProbability: 0.7, minLead: 0.3 };
+    expect(
+      await resolveTarget(page, edit, {
+        ...paraphrase,
+        repeatedMember: { sameDestination: true },
+      }),
+    ).toMatchObject({ kind: "unresolved" });
+    expect(
+      await resolveTarget(page, edit, {
+        ...paraphrase,
+        repeatedMember: { trust },
+      }),
+    ).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "repeated_member_trusted" },
+    });
+    expect(
+      await resolveTarget(page, edit, {
+        ...paraphrase,
+        repeatedMember: { trust: { minProbability: 0.95, minLead: 0.3 } },
+      }),
+    ).toMatchObject({ kind: "unresolved" });
+    // A sentence that only repeats the shared label is a guess however sure
+    // the model is.
+    expect(
+      await resolveTarget(page, edit, {
+        operation: "click",
+        sentence: "click the Edit button",
+        repeatedMember: { trust },
+      }),
+    ).toMatchObject({
+      kind: "unresolved",
+      diagnostic: { gate: "repeated_member_no_evidence" },
+    });
   });
 
   it("does not treat a generic category word as evidence for one product", async () => {
@@ -769,6 +1167,7 @@ describe("locator", () => {
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart for the product",
       }),
     ).toMatchObject({
@@ -780,6 +1179,7 @@ describe("locator", () => {
       (
         await resolveTarget(page, model, {
           operation: "click",
+          repeatedMember: {},
           sentence: "Add to cart for Product Camera",
         })
       ).kind,
@@ -823,32 +1223,43 @@ describe("locator", () => {
         peers: ["1. Story One"],
         signals: { path: "other", href: "/comments/1" },
       }),
+      candidate(2, {
+        tag: "a",
+        role: "link",
+        name: "12 comments",
+        peers: ["2. Story Two"],
+        signals: { path: "second", href: "/comments/2" },
+      }),
     ];
     const { page } = recordedPage(items);
     const model = resolver((options) =>
-      answer(options, "r0", { r0: 0.9, r1: 0.05, none: 0.05 }, 0.95),
+      answer(options, "r0", { r0: 0.9, r1: 0.03, r2: 0.02, none: 0.05 }, 0.95),
     );
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the comments link for the first story in the list",
       }),
     ).toMatchObject({ kind: "resolved" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the comments link for the first ranked story",
       }),
     ).toMatchObject({ kind: "resolved" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the comments link",
       }),
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
     expect(
       await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the first story link",
       }),
     ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
@@ -1072,5 +1483,284 @@ describe("locator", () => {
       }),
     ).toMatchObject({ kind: "unresolved", reason: "timeout" });
     expect(idle.choose).not.toHaveBeenCalled();
+  });
+});
+
+describe("name hints, item checks, and code fallback", () => {
+  const post = (index: number, title: string, name = "Share") =>
+    candidate(index, {
+      name,
+      signals: {
+        path: `body/article:${index}/button`,
+        item: `${title} u/author ${index} hr. ago`,
+      },
+    });
+
+  it("projects name hints by default and not when turned off", async () => {
+    const items = [
+      candidate(0, {
+        name: "Stripe Assistant",
+        signals: { path: "body/a:0", nameHint: 'shows "Ask AI"' },
+      }),
+      candidate(1, { name: "Docs" }),
+    ];
+    const seen: string[][] = [];
+    const model = resolver((options) => {
+      seen.push(
+        options.options.flatMap((option) =>
+          option.kind === "candidate" ? [option.candidate.name] : [],
+        ),
+      );
+      return answer(options, "r0");
+    });
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Ask AI",
+      nameHints: false,
+    });
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Ask AI",
+    });
+    expect(seen[0]).toEqual(["Stripe Assistant", "Docs"]);
+    expect(seen[1]).toEqual(['Stripe Assistant (shows "Ask AI")', "Docs"]);
+  });
+
+  it("acts on a clear per-item winner and falls back otherwise", async () => {
+    const items = [
+      post(0, "Microservices are organizational debt"),
+      post(1, "We still maintain a development tool first released in 1993"),
+      post(2, "How we saved memory in a DNS cache"),
+    ];
+    const sentence =
+      "click Share on the post about a tool that has been around for decades";
+    const verify = vi.fn(
+      async (_s: string, list: readonly { id: string }[]) => ({
+        scores: Object.fromEntries(
+          list.map((item) => [item.id, item.id === "r1" ? 0.9 : 0.1]),
+        ),
+        call,
+      }),
+    );
+    const model: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: verify,
+    };
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+      verifyItems: true,
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_by_items" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(verify.mock.calls[0]![1].map((item) => item.id)).toEqual([
+      "r0",
+      "r1",
+      "r2",
+    ]);
+
+    const unsure: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: vi.fn(
+        async (_s: string, list: readonly { id: string }[]) => ({
+          scores: Object.fromEntries(list.map((item) => [item.id, 0.5])),
+          call,
+        }),
+      ),
+    };
+    const fallback = await resolveTarget(recordedPage(items).page, unsure, {
+      operation: "click",
+      sentence,
+      verifyItems: true,
+    });
+    expect(fallback.kind === "resolved" && fallback.diagnostic.gate).toBe(
+      "repeated_member_model_pick",
+    );
+
+    const failing: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: vi.fn(async () => {
+        throw new ProviderError("connection", "down");
+      }),
+    };
+    expect(
+      await resolveTarget(recordedPage(items).page, failing, {
+        operation: "click",
+        sentence,
+        verifyItems: true,
+      }),
+    ).toMatchObject({ kind: "resolved" });
+  });
+
+  it("does not ask about items for ordinals or without the flag", async () => {
+    const items = [post(0, "Alpha story"), post(1, "Beta story")];
+    const verify = vi.fn();
+    const model: Resolver = {
+      choose: vi.fn(async (_s, options) => answer(options, "r0")),
+      verifyItems: verify,
+    };
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Share on the first post",
+      verifyItems: true,
+    });
+    await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click Share on the post about beta",
+    });
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it("matches counted names and references loosely unless codeFallback is off", async () => {
+    const items = [
+      post(0, "Microservices are organizational debt", "131 Go to comments"),
+      post(
+        1,
+        "How we saved 100 terabytes by optimizing DNS cache",
+        "53 Go to comments",
+      ),
+    ];
+    const model = resolver((options) => answer(options, "r0"));
+    const sentence = "open the comments for the DNS cache post";
+    const strict = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+      codeFallback: false,
+    });
+    expect(strict.kind === "resolved" && strict.target.driverTarget().ref).toBe(
+      "fresh-r0",
+    );
+    const loose = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+    });
+    expect(loose).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code" },
+    });
+    expect(loose.kind === "resolved" && loose.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+
+  it("counts all masked siblings, not only identical numeric labels", async () => {
+    const items = [84, 62, 62].map((count, index) =>
+      candidate(index, {
+        name: `${count} comments`,
+        tag: "a",
+        role: "link",
+        signals: { path: `story/${index}` },
+      }),
+    );
+    const model = resolver((options) => answer(options, "r1"));
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence: "click the comments link for the second story",
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+  });
+
+  it("counts when the control name is used as the action", async () => {
+    const { page } = recordedPage([
+      candidate(0, { name: "Upvote" }),
+      candidate(1, { name: "Upvote" }),
+    ]);
+    const result = await resolveTarget(
+      page,
+      resolver((options) => answer(options, "none")),
+      {
+        operation: "click",
+        sentence: "upvote the first post",
+      },
+    );
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r0",
+    );
+  });
+
+  it.each([
+    [
+      "click Share on the post about a development tool first released in 1993",
+      "fresh-r0",
+    ],
+    [
+      "click the first red Share on the post about a development tool first released in 1993",
+      "fresh-r1",
+    ],
+    [
+      "click Share on the first red post about a development tool released in 1993",
+      "fresh-r1",
+    ],
+  ])(
+    "distinguishes an item reference from a target ordinal: %s",
+    async (sentence, expected) => {
+      const { page } = recordedPage([
+        candidate(0, {
+          name: "Share",
+          signals: {
+            path: "a",
+            item: "A red development tool first released in 1993",
+          },
+        }),
+        candidate(1, {
+          name: "Share",
+          signals: { path: "b", item: "A different development tool" },
+        }),
+      ]);
+      const result = await resolveTarget(
+        page,
+        resolver((options) => answer(options, "r1")),
+        {
+          operation: "click",
+          sentence,
+        },
+      );
+      expect(
+        result.kind === "resolved" && result.target.driverTarget().ref,
+      ).toBe(expected);
+    },
+  );
+
+  it("counts in code after the model answers none unless codeFallback is off", async () => {
+    const items = [0, 1, 2, 3].map((index) =>
+      candidate(index, {
+        name: "View Product",
+        tag: "a",
+        role: "link",
+        signals: { path: `body/li:${index}/a`, href: `/p/${index}` },
+      }),
+    );
+    const model = resolver((options) => answer(options, "none"));
+    const sentence = "click View Product on the third product";
+    expect(
+      await resolveTarget(recordedPage(items).page, model, {
+        operation: "click",
+        sentence,
+        codeFallback: false,
+      }),
+    ).toMatchObject({ kind: "unresolved", reason: "none" });
+    const result = await resolveTarget(recordedPage(items).page, model, {
+      operation: "click",
+      sentence,
+    });
+    expect(result).toMatchObject({
+      kind: "resolved",
+      diagnostic: { gate: "resolved_in_code_after_none" },
+    });
+    expect(result.kind === "resolved" && result.target.driverTarget().ref).toBe(
+      "fresh-r2",
+    );
   });
 });

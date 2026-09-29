@@ -269,6 +269,17 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
       ),
     ).rejects.toMatchObject({ code: "authentication", attempts: 1 });
     expect(denied.calls).toHaveLength(1);
+    const unpaid = fake([json({ detail: "billing_error" }, 402)]);
+    await expect(
+      new TypeSafeAdapter({ apiKey: "test-key", fetch: unpaid.fetch }).choose(
+        "Buy",
+        offered,
+      ),
+    ).rejects.toMatchObject({
+      code: "configuration",
+      message: "The TypeSafe account has no available API credits.",
+      attempts: 1,
+    });
     const bad = fake([
       json({
         ...choiceReply,

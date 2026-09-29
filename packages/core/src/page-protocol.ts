@@ -42,6 +42,8 @@ export interface Candidate {
   readonly role: string;
   readonly name: string;
   readonly peers: readonly string[];
+  /** Landmark and nearest heading, e.g. "footer · Company". Sent to the model. */
+  readonly location?: string;
   readonly editable: boolean;
   readonly disabled: boolean;
   readonly inputType: string;
@@ -55,6 +57,16 @@ export interface Candidate {
     readonly path: string;
     /** True only when the first peer contains the entire non-interactive item context. */
     readonly contextComplete?: boolean;
+    /** Local: the text of the list item, card, or row around the control. Never projected. */
+    readonly item?: string;
+    /** Local: labels of the containers around the control, innermost first. Never projected. */
+    readonly section?: string;
+    /**
+     * Local: what a person sees that the name leaves out (visible text beside
+     * an aria-label, placeholder, logo, icon kind). Projected only when the
+     * locator's nameHints option is on.
+     */
+    readonly nameHint?: string;
     /** Local signal: the model sees only a visibly shortened accessible name. */
     readonly nameTruncated?: boolean;
     /** Full name for same-target checks; never included in provider projection. */
@@ -152,6 +164,7 @@ export function projectCandidates(page: CandidatePage): readonly {
   role: string;
   name: string;
   peers: readonly string[];
+  location?: string;
   editable: boolean;
   disabled: boolean;
 }[] {
@@ -162,7 +175,9 @@ export function projectCandidates(page: CandidatePage): readonly {
       codePoints(candidate.name) > NAME_LIMIT ||
       (candidate.role !== "" && !isSafeRole(candidate.role)) ||
       candidate.peers.length > 2 ||
-      candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT)
+      candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT) ||
+      (candidate.location !== undefined &&
+        codePoints(candidate.location) > PEER_LIMIT)
     )
       throw new Error("candidate_field_too_large");
     return {
@@ -171,6 +186,7 @@ export function projectCandidates(page: CandidatePage): readonly {
       role: candidate.role,
       name: candidate.name,
       peers: candidate.peers,
+      ...(candidate.location ? { location: candidate.location } : {}),
       editable: candidate.editable,
       disabled: candidate.disabled,
     };

@@ -79,13 +79,106 @@ if (!window.__sedum) {
     )
       revision++;
   });
-  observer.observe(document, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-    attributes: true,
-    attributeOldValue: true,
-  });
+  const observed = new WeakSet<Node>();
+  function observe(root: Document | ShadowRoot): void {
+    if (observed.has(root)) return;
+    observed.add(root);
+    observer.observe(root, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeOldValue: true,
+    });
+  }
+  observe(document);
+
+  /** The parent in the flat tree: a shadow root's host stands in for it. */
+  function composedParent(element: Element): Element | null {
+    if (element.parentElement) return element.parentElement;
+    const parent = element.parentNode;
+    return parent instanceof ShadowRoot ? parent.host : null;
+  }
+  /** Every element under root in document order, entering open shadow roots. */
+  function allElements(
+    root: Element,
+    limit: number,
+    skipDrawings = false,
+  ): Element[] | null {
+    const result: Element[] = [];
+    const stack: Element[] = [];
+    const push = (parent: ParentNode) => {
+      for (let i = parent.children.length - 1; i >= 0; i--)
+        stack.push(parent.children[i]!);
+    };
+    if (root.shadowRoot) {
+      observe(root.shadowRoot);
+      push(root.shadowRoot);
+    }
+    push(root);
+    while (stack.length) {
+      const element = stack.pop()!;
+      result.push(element);
+      if (result.length > limit) return null;
+      // The inside of an <svg> is drawing, not controls.
+      if (skipDrawings && element instanceof SVGSVGElement) continue;
+      push(element);
+      if (element.shadowRoot) {
+        observe(element.shadowRoot);
+        push(element.shadowRoot);
+      }
+    }
+    return result;
+  }
+  /**
+   * Rendered text nodes under root in flat-tree order: a shadow host shows its
+   * shadow tree, and a slot shows the nodes assigned to it.
+   */
+  function flatTextNodes(root: Node): Text[] {
+    const result: Text[] = [];
+    const visit = (node: Node) => {
+      if (node instanceof Text) {
+        result.push(node);
+        return;
+      }
+      if (node instanceof HTMLSlotElement) {
+        const assigned = node.assignedNodes({ flatten: true });
+        for (const child of assigned.length
+          ? assigned
+          : Array.from(node.childNodes))
+          visit(child);
+        return;
+      }
+      const children =
+        node instanceof Element && node.shadowRoot
+          ? node.shadowRoot.childNodes
+          : node.childNodes;
+      for (const child of Array.from(children)) visit(child);
+    };
+    visit(root);
+    return result;
+  }
+  function deepElementFromPoint(x: number, y: number): Element | null {
+    let hit = document.elementFromPoint(x, y);
+    while (hit?.shadowRoot) {
+      // elementFromPoint retargets slotted text to the host; the stack keeps
+      // the shadow element that actually renders it.
+      const root = hit.shadowRoot;
+      const inner = root
+        .elementsFromPoint(x, y)
+        .find((element) => element.getRootNode() === root);
+      if (!inner) break;
+      hit = inner;
+    }
+    return hit;
+  }
+  function deepContains(ancestor: Element, node: Element): boolean {
+    for (let current: Element | null = node; current;) {
+      if (current === ancestor) return true;
+      current = composedParent(current);
+    }
+    return false;
+  }
 
   function version(): PageVersion {
     if (route !== location.href) {
@@ -110,7 +203,11 @@ if (!window.__sedum) {
     owned.clear();
     snapshot = undefined;
   }
-  function visible(element: Element, visualOnly = false): boolean {
+  function visible(
+    element: Element,
+    visualOnly = false,
+    ignoreOwnOpacity = false,
+  ): boolean {
     if (
       element.closest(
         visualOnly
@@ -130,10 +227,25 @@ if (!window.__sedum) {
       )
         return false;
     }
-    for (let node: Element | null = element; node; node = node.parentElement) {
+    for (
+      let node: Element | null = element;
+      node;
+      node = composedParent(node)
+    ) {
+      // closest() stops at a shadow root, so hosts are checked here.
+      if (
+        node.getRootNode() !== element.getRootNode() &&
+        node.matches(
+          visualOnly
+            ? "[hidden],[inert]"
+            : "[hidden],[inert],[aria-hidden='true']",
+        )
+      )
+        return false;
       const style = getComputedStyle(node);
       if (
-        Number.parseFloat(style.opacity) === 0 ||
+        (Number.parseFloat(style.opacity) === 0 &&
+          !(ignoreOwnOpacity && node === element)) ||
         style.contentVisibility === "hidden"
       )
         return false;
@@ -201,13 +313,16 @@ if (!window.__sedum) {
     }
     return false;
   }
-  function publicText(element: Element): string {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  function publicText(element: Element, visualOnly = false): string {
     const parts: string[] = [];
-    while (walker.nextNode()) {
-      const parent = walker.currentNode.parentElement;
-      if (parent && visible(parent) && !excludedTextAncestor(parent))
-        parts.push(walker.currentNode.textContent ?? "");
+    for (const node of flatTextNodes(element)) {
+      const parent = node.parentElement;
+      if (
+        parent &&
+        visible(parent, visualOnly) &&
+        !excludedTextAncestor(parent)
+      )
+        parts.push(node.textContent ?? "");
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
@@ -229,7 +344,7 @@ if (!window.__sedum) {
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
-  function label(element: Element): string {
+  function label(element: Element, visualOnly = false): string {
     const aria = element.getAttribute("aria-label")?.trim();
     if (aria) return aria;
     const labelledby = element.getAttribute("aria-labelledby");
@@ -247,7 +362,10 @@ if (!window.__sedum) {
     if (element instanceof HTMLElement && "labels" in element) {
       const labels = (element as HTMLInputElement).labels;
       const text = labels?.length
-        ? Array.from(labels).map(publicText).join(" ").trim()
+        ? Array.from(labels)
+            .map((node) => publicText(node))
+            .join(" ")
+            .trim()
         : "";
       if (text) return text;
     }
@@ -265,7 +383,608 @@ if (!window.__sedum) {
       const value = element.value.trim();
       if (value) return value;
     }
-    return publicText(element) || element.getAttribute("title")?.trim() || "";
+    return (
+      publicText(element, visualOnly) ||
+      element.getAttribute("title")?.trim() ||
+      ""
+    );
+  }
+  /**
+   * A control with no accessible name takes the nearest visible text on
+   * screen: to its right on the same line (a checkbox and its caption), to
+   * its left on the same line, or directly above it (a field and its label).
+   */
+  function nearbyText(element: Element): string {
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height) return "";
+    const middle = box.top + box.height / 2;
+    let best: { text: string; distance: number } | null = null;
+    let scope: Element | null = composedParent(element);
+    for (let level = 0; scope && level < 3 && !best; level++) {
+      for (const node of flatTextNodes(scope)) {
+        const parent = node.parentElement;
+        const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+        if (
+          !parent ||
+          !text ||
+          deepContains(element, parent) ||
+          excludedTextAncestor(parent, true) ||
+          // Text that already labels another control is that control's name.
+          (parent.closest("label") as HTMLLabelElement | null)?.control ||
+          !visible(parent)
+        )
+          continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rect = range.getBoundingClientRect();
+        if (!rect.width || !rect.height) continue;
+        const sameLine =
+          Math.abs(rect.top + rect.height / 2 - middle) <
+          Math.max(box.height, rect.height) / 2;
+        const overlapsColumn = rect.left < box.right && rect.right > box.left;
+        let distance = Infinity;
+        if (sameLine && rect.left >= box.right - 2)
+          distance = rect.left - box.right;
+        else if (sameLine && rect.right <= box.left + 2)
+          distance = box.left - rect.right;
+        else if (overlapsColumn && rect.bottom <= box.top + 2)
+          distance = box.top - rect.bottom;
+        if (distance > 48) continue;
+        if (!best || distance < best.distance) best = { text, distance };
+      }
+      scope = scope && composedParent(scope);
+    }
+    return best?.text ?? "";
+  }
+  /** A name carried only by an image or icon inside the control. */
+  function mediaName(element: Element): string {
+    for (const node of Array.from(
+      element.querySelectorAll(
+        "img[alt],svg[aria-label],svg title,[aria-label]",
+      ),
+    )) {
+      // An SVG <title> has no box of its own; the drawing it names does.
+      const drawn = node.matches("svg title") ? node.closest("svg")! : node;
+      if (interactive(node) || !visible(drawn, true)) continue;
+      const text = (
+        node instanceof HTMLImageElement
+          ? node.alt
+          : node.matches("svg title")
+            ? (node.textContent ?? "")
+            : (node.getAttribute("aria-label") ?? "")
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      if (text) return text;
+    }
+    return "";
+  }
+  /** The aria-label of a component whose shadow root holds only this control. */
+  function hostLabel(element: Element): string {
+    const root = element.getRootNode();
+    if (!(root instanceof ShadowRoot)) return "";
+    const host = root.host;
+    const aria = host.getAttribute("aria-label")?.trim();
+    if (!aria || interactive(host)) return "";
+    const inside = allElements(host, 500) ?? [];
+    return inside.filter((node) => interactive(node)).length === 1 ? aria : "";
+  }
+  /** An icon-font glyph's name, such as "search" for fa-search. */
+  function iconName(element: Element): string {
+    for (const node of Array.from(element.querySelectorAll("i,span,em"))) {
+      if (node.textContent?.trim()) continue;
+      for (const token of Array.from(node.classList)) {
+        const match =
+          /^(?:fa|bi|glyphicon|icon|mdi|ti|ri)-([a-z][a-z0-9-]*)$/.exec(token);
+        if (
+          match &&
+          !/^(lg|[0-9]x|fw|solid|regular|light|brands|spin|pulse|border|inverse|stack.*|rotate.*|flip.*)$/.test(
+            match[1]!,
+          )
+        )
+          return match[1]!.replace(/-/g, " ");
+      }
+    }
+    return "";
+  }
+  /** A combobox's visible description, such as its "Select State" prompt. */
+  function describedText(element: Element): string {
+    const ids = element.getAttribute("aria-describedby");
+    if (!ids || role(element) !== "combobox") return "";
+    return ids
+      .split(/\s+/)
+      .map((id) => {
+        const node = document.getElementById(id);
+        return node && visible(node) ? publicText(node) : "";
+      })
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 80);
+  }
+  /** A form field alone in its row takes the row's caption: "Date of Birth | [input]". */
+  function rowLabel(element: Element): string {
+    if (
+      !element.matches(
+        "input,textarea,select,[role='combobox'],[role='textbox']",
+      )
+    )
+      return "";
+    const box = element.getBoundingClientRect();
+    if (!box.width || !box.height) return "";
+    let row: Element | null = null;
+    let node = composedParent(element);
+    for (let level = 0; node && node !== document.body && level < 7; level++) {
+      const inside = allElements(node, 400);
+      if (
+        !inside ||
+        inside.some(
+          (other) => other !== element && interactive(other) && visible(other),
+        )
+      )
+        break;
+      row = node;
+      node = composedParent(node);
+    }
+    if (!row) return "";
+    const middle = box.top + box.height / 2;
+    let best: { text: string; distance: number } | null = null;
+    for (const text of flatTextNodes(row)) {
+      const parent = text.parentElement;
+      const value = (text.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (
+        !parent ||
+        !value ||
+        deepContains(element, parent) ||
+        excludedTextAncestor(parent, true) ||
+        !visible(parent)
+      )
+        continue;
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      const rect = range.getBoundingClientRect();
+      if (!rect.width || !rect.height) continue;
+      const sameLine =
+        Math.abs(rect.top + rect.height / 2 - middle) <
+        Math.max(box.height, rect.height) / 2;
+      let distance = Infinity;
+      if (sameLine && rect.right <= box.left + 2)
+        distance = box.left - rect.right;
+      else if (rect.bottom <= box.top + 2 && rect.left < box.right)
+        distance = box.top - rect.bottom;
+      if (distance > 400) continue;
+      if (!best || distance < best.distance) best = { text: value, distance };
+    }
+    return best?.text ?? "";
+  }
+  function candidateName(element: Element): string {
+    const visualOnly = ariaHiddenOnly(element);
+    return (
+      label(element, visualOnly) ||
+      mediaName(element) ||
+      nearbyText(element) ||
+      hostLabel(element) ||
+      iconName(element) ||
+      describedText(element) ||
+      rowLabel(element)
+    );
+  }
+  // Word-level patterns over class, id, and icon tokens split at - _ : / #.
+  const ICON_KINDS: readonly [RegExp, string][] = [
+    [/(?:^|-)(?:up-?vote|vote-?up|votearrow)(?:$|-)/, "upvote arrow"],
+    [/(?:^|-)(?:down-?vote|vote-?down)(?:$|-)/, "downvote arrow"],
+    [/(?:^|-)(?:search|magnifier|magnifying|loupe)(?:$|-)/, "search"],
+    [/(?:^|-)(?:hamburger|burger|menu|bars)(?:$|-)/, "menu"],
+    [/(?:^|-)(?:close|dismiss|xmark|x-mark|times)(?:$|-)/, "close"],
+    [
+      /(?:^|-)(?:(?:arrow|chevron|caret|angle|paddlenav)-?(?:right|next|forward)|(?:right|next|forward)-?(?:arrow|chevron|caret))(?:$|-)/,
+      "right arrow",
+    ],
+    [
+      /(?:^|-)(?:(?:arrow|chevron|caret|angle|paddlenav)-?(?:left|prev|previous|back)|(?:left|prev|previous|back)-?(?:arrow|chevron|caret))(?:$|-)/,
+      "left arrow",
+    ],
+    [/(?:^|-)(?:terminal|shell|console|prompt)(?:$|-)/, "terminal"],
+    [/(?:^|-)(?:cart|basket)(?:$|-)/, "cart"],
+    [/(?:^|-)(?:kebab|ellipsis|more|dots)(?:$|-)/, "more"],
+    [/(?:^|-)(?:settings|gear|cog)(?:$|-)/, "settings"],
+    [/(?:^|-)share(?:$|-)/, "share"],
+    [/(?:^|-)(?:copy|clipboard)(?:$|-)/, "copy"],
+    [/(?:^|-)(?:bell|notifications?)(?:$|-)/, "notifications"],
+    [/(?:^|-)(?:avatar|account|profile|user)(?:$|-)/, "account"],
+    [/(?:^|-)play(?:$|-)/, "play"],
+    [/(?:^|-)pause(?:$|-)/, "pause"],
+  ];
+  function hintWords(text: string): string[] {
+    return text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  }
+  /** Whether `text` says something the name does not, word for word. */
+  function addsWords(text: string, name: string): boolean {
+    const own = new Set(hintWords(name));
+    return hintWords(text).some(
+      (word) => word.length > 1 && /\p{L}/u.test(word) && !own.has(word),
+    );
+  }
+  function siteRootLink(element: Element): boolean {
+    const href = element.getAttribute("href")?.trim();
+    if (!href) return false;
+    if (/^(?:\/|\.\/|\/index\.html?|\/home(?:page)?\/?)$/i.test(href))
+      return true;
+    try {
+      const url = new URL(href, location.href);
+      if (url.pathname !== "/" || url.search) return false;
+      if (url.host === location.host) return true;
+      const canonical =
+        document.querySelector("link[rel='canonical']")?.getAttribute("href") ??
+        document
+          .querySelector("meta[property='og:url']")
+          ?.getAttribute("content");
+      return !!canonical && new URL(canonical, location.href).host === url.host;
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * Local, experimental: what a person sees that the accessible name leaves
+   * out, such as visible text beside an aria-label, a field's placeholder, a
+   * logo image, or an icon's kind. Never projected unless the locator asks.
+   */
+  function nameHint(element: Element, name: string): string {
+    const parts: string[] = [];
+    const clip = (text: string, limit = 48) =>
+      text.length > limit ? text.slice(0, limit - 1) + "…" : text;
+    // A part is added only when its own text says something new.
+    const addPart = (text: string, payload = text) => {
+      if (payload && addsWords(payload, [name, ...parts].join(" ")))
+        parts.push(text);
+    };
+    if (
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement
+    ) {
+      const placeholder = element.getAttribute("placeholder")?.trim() ?? "";
+      if (placeholder && placeholder !== name)
+        addPart(`placeholder "${clip(placeholder)}"`, placeholder);
+    }
+    const named =
+      element.hasAttribute("aria-label") ||
+      element.hasAttribute("aria-labelledby");
+    const shown = publicText(element, true);
+    if (named && shown) addPart(`shows "${clip(shown)}"`, shown);
+    if (!/\p{L}/u.test(name)) {
+      const hidden = referencedLabelText(element);
+      if (/\p{L}/u.test(hidden)) addPart(`text "${clip(hidden)}"`, hidden);
+    }
+    const inside = Array.from(
+      element.querySelectorAll("img,svg,i,span:empty,div:empty,use,kbd"),
+    ).slice(0, 12);
+    const media = inside.filter((node) => node.matches("img,svg"));
+    const raw = [element, ...inside].flatMap((node) => [
+      node.getAttribute("class") ?? "",
+      node.id,
+      node.getAttribute("data-icon") ?? "",
+      node === element ? "" : (node.getAttribute("title") ?? ""),
+      node.matches("use") ? (node.getAttribute("href") ?? "") : "",
+      node.matches("use") ? (node.getAttribute("xlink:href") ?? "") : "",
+      node instanceof HTMLImageElement ? node.alt : "",
+      node === element ? "" : (node.getAttribute("aria-label") ?? ""),
+    ]);
+    const tokens = raw
+      .join(" ")
+      .toLocaleLowerCase()
+      .split(/\s+/)
+      .map((token) => token.replace(/[_:#/.]+/g, "-"))
+      .filter(Boolean);
+    const isLink = element.matches("a[href]") || role(element) === "link";
+    const rootLink = isLink && siteRootLink(element);
+    const kbdText = Array.from(element.querySelectorAll("kbd"))
+      .map((node) => publicText(node, true))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    // An icon-only control: no visible words of its own beyond key caps.
+    const iconOnly = !/\p{L}/u.test(shown) || (!!kbdText && kbdText === shown);
+    if (
+      media.length &&
+      (rootLink || tokens.some((token) => /logo|brand/.test(token)))
+    ) {
+      const mediaLabel = media
+        .map((node) =>
+          node instanceof HTMLImageElement
+            ? node.alt
+            : (node.getAttribute("aria-label") ??
+              node.querySelector("title")?.textContent ??
+              ""),
+        )
+        .map((text) => text.replace(/\s+/g, " ").trim())
+        .find(Boolean);
+      if (mediaLabel) addPart(`${clip(mediaLabel, 32)} logo`, mediaLabel);
+      if (!hintWords([name, ...parts].join(" ")).includes("logo"))
+        parts.push("logo");
+      if (rootLink && !/\bhome/i.test(name)) addPart("home link");
+    } else if (iconOnly && (inside.length || !/\p{L}/u.test(name))) {
+      const kind = ICON_KINDS.find(([pattern]) =>
+        tokens.some((token) => pattern.test(token)),
+      );
+      if (kind) addPart(`${kind[1]} icon`, kind[1]);
+    }
+    if (kbdText && kbdText === shown) addPart("keyboard shortcut");
+    return parts.join(", ");
+  }
+  function clippedAway(element: Element): boolean {
+    const box = element.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body;
+      node = composedParent(node)
+    ) {
+      const style = getComputedStyle(node);
+      if (style.overflowX === "visible" && style.overflowY === "visible")
+        continue;
+      const bounds = node.getBoundingClientRect();
+      if (
+        x < bounds.left ||
+        x > bounds.right ||
+        y < bounds.top ||
+        y > bounds.bottom
+      )
+        return true;
+    }
+    return false;
+  }
+  /**
+   * A control hidden from assistive technology only (aria-hidden), still
+   * drawn with its own text and reachable by pointer, such as a card's
+   * duplicate "Learn more" link.
+   */
+  function ariaHiddenOnly(element: Element): boolean {
+    if (!interactive(element) || visible(element) || !visible(element, true))
+      return false;
+    const box = element.getBoundingClientRect();
+    return (
+      box.width >= 8 &&
+      box.height >= 8 &&
+      !clippedAway(element) &&
+      !!publicText(element, true)
+    );
+  }
+  function isToggle(element: Element): element is HTMLInputElement {
+    return (
+      element instanceof HTMLInputElement &&
+      (element.type === "checkbox" || element.type === "radio")
+    );
+  }
+  /**
+   * A checkbox or radio the page draws itself, keeping the real input
+   * transparent on top. It is offered when it still covers a clickable area.
+   */
+  function transparentToggle(element: Element): boolean {
+    if (!isToggle(element) || visible(element)) return false;
+    const box = element.getBoundingClientRect();
+    return box.width >= 8 && box.height >= 8 && visible(element, false, true);
+  }
+  /**
+   * The visible label of a checkbox or radio whose input is not drawn at all.
+   * Clicking the label toggles the input, so the label stands in for it.
+   */
+  function toggleLabel(element: Element): HTMLInputElement | null {
+    if (!(element instanceof HTMLLabelElement)) return null;
+    const control = element.control;
+    if (
+      !control ||
+      !isToggle(control) ||
+      visible(control) ||
+      transparentToggle(control) ||
+      control.labels?.[0] !== element
+    )
+      return null;
+    return control;
+  }
+  /**
+   * An element the page styles as clickable but marks up with no role: the
+   * outermost element with a pointer cursor, holding no real control.
+   */
+  function pointerTarget(element: Element): boolean {
+    if (
+      interactive(element) ||
+      element.matches("html,body,label,svg *") ||
+      getComputedStyle(element).cursor !== "pointer"
+    )
+      return false;
+    const parent = composedParent(element);
+    if (parent && getComputedStyle(parent).cursor === "pointer") return false;
+    for (let node = parent; node; node = composedParent(node))
+      if (interactive(node)) return false;
+    // A real control inside, including in a shadow root, is the target instead.
+    const inside = allElements(element, 500);
+    return (
+      !!inside &&
+      !inside.some((node) => interactive(node) || node.hasAttribute("role"))
+    );
+  }
+  type Heading = { text: string; root: Element | null; level: number };
+  const SECTIONING = "article,aside,main,nav,section";
+  /** The landmark a person would name for an element's place on the page. */
+  function landmarkOf(node: Element): string {
+    const tag = node.tagName.toLowerCase();
+    const explicit = node.getAttribute("role");
+    if (tag === "dialog" || explicit === "dialog" || explicit === "alertdialog")
+      return "dialog";
+    if (
+      explicit === "banner" ||
+      (tag === "header" && !node.parentElement?.closest(SECTIONING))
+    )
+      return "header";
+    if (
+      explicit === "contentinfo" ||
+      (tag === "footer" && !node.parentElement?.closest(SECTIONING))
+    )
+      return "footer";
+    if (tag === "nav" || explicit === "navigation") return "navigation";
+    if (tag === "aside" || explicit === "complementary") return "sidebar";
+    if (tag === "main" || explicit === "main") return "main";
+    // Many sites mark regions only with class names or ids.
+    const hint =
+      `${node.id} ${typeof node.className === "string" ? node.className : ""}`.toLowerCase();
+    if (
+      /(^|[\s_-])(site-?header|masthead|top-?bar|navbar|header)($|[\s_-])/.test(
+        hint,
+      )
+    )
+      return "header";
+    if (/(^|[\s_-])(site-?footer|footer)($|[\s_-])/.test(hint)) return "footer";
+    if (
+      /(^|[\s_-])(sidebar|side-?nav|toc|table-of-contents)($|[\s_-])/.test(hint)
+    )
+      return "sidebar";
+    return "";
+  }
+  /**
+   * Where a control sits, as a person would say it: its outermost and
+   * innermost landmarks and the nearest heading above it, e.g.
+   * "footer, navigation · Company".
+   */
+  /** The outermost landmark element around a node, or null. */
+  function landmarkRoot(element: Element): Element | null {
+    let root: Element | null = null;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body;
+      node = composedParent(node)
+    )
+      if (landmarkOf(node)) root = node;
+    return root;
+  }
+  function locationOf(
+    element: Element,
+    heading: { text: string; root: Element | null },
+  ): string {
+    const marks: string[] = [];
+    let root: Element | null = null;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body;
+      node = composedParent(node)
+    ) {
+      const mark = landmarkOf(node);
+      if (!mark) continue;
+      root = node;
+      if (!marks.includes(mark)) marks.unshift(mark);
+    }
+    const kept =
+      marks.length > 2 ? [marks[0]!, marks[marks.length - 1]!] : marks;
+    // A heading from another region, such as the last section before the
+    // footer, would mislabel the control.
+    const parts = [
+      kept.join(", "),
+      heading.root === root ? heading.text : "",
+    ].filter(Boolean);
+    return Array.from(parts.join(" · ")).slice(0, PEER_LIMIT).join("");
+  }
+  const SECTION_TITLE_LIMIT = 60;
+  const titleCache = new Map<
+    Element,
+    { child: Element; text: string } | null
+  >();
+  function shortText(element: Element): string {
+    // Cheap bound first: a long subtree is content, not a title.
+    if ((element.textContent ?? "").length > 400) return "";
+    const text = publicText(element);
+    return Array.from(text).length <= SECTION_TITLE_LIMIT ? text : "";
+  }
+  /**
+   * The title an ancestor gives its later children: a first child that is a
+   * heading or a short non-interactive text block ("Most popular" above a
+   * list, "See also" at the top of a box, a demo's caption).
+   */
+  function containerTitle(
+    container: Element,
+  ): { child: Element; text: string } | null {
+    if (titleCache.has(container)) return titleCache.get(container)!;
+    let found: { child: Element; text: string } | null = null;
+    for (const child of Array.from(container.children)) {
+      if (!(child.textContent ?? "").trim() || !visible(child)) continue;
+      // A title may be a link ("Most popular →" over a carousel), but not
+      // the first entry of a list or menu.
+      const controls = child.querySelectorAll(
+        "button,a[href],input,select,textarea,[role='button'],[role='link']",
+      ).length;
+      if (
+        !child.matches("li,tr,option,[role='listitem'],[role='row']") &&
+        (interactive(child) ? controls === 0 : controls <= 1)
+      ) {
+        const heading = child.matches("h1,h2,h3,h4,h5,h6,[role='heading']")
+          ? child
+          : child.querySelector("h1,h2,h3,h4,h5,h6,[role='heading']");
+        const text = shortText(heading ?? child);
+        // A "Skip to content" link is page chrome, not a section title.
+        if (text && text.split(/\s+/).length <= 8 && !/^skip to\b/i.test(text))
+          found = { child, text };
+      }
+      break;
+    }
+    titleCache.set(container, found);
+    return found;
+  }
+  /**
+   * Local: the labels of the containers around an element, innermost first,
+   * e.g. "Billing address › Checkout". Uses ARIA labels, legends, captions,
+   * summaries, container titles, and the heading outline of its landmark.
+   * Never projected; resolves "under Most popular" or "in the See also box"
+   * in code.
+   */
+  function sectionOf(element: Element, outline: readonly Heading[]): string {
+    const labels: string[] = [];
+    const add = (text: string) => {
+      const clean = text.replace(/\s+/g, " ").trim();
+      if (
+        clean &&
+        Array.from(clean).length <= SECTION_TITLE_LIMIT &&
+        !labels.includes(clean)
+      )
+        labels.push(clean);
+    };
+    let child: Element = element;
+    let depth = 0;
+    for (
+      let node = composedParent(element);
+      node && node !== document.body && depth < 30 && labels.length < 6;
+      child = node, node = composedParent(node), depth++
+    ) {
+      if (!interactive(node)) {
+        const aria = node.getAttribute("aria-label");
+        if (aria) add(aria);
+        const labelledby = node.getAttribute("aria-labelledby");
+        if (labelledby)
+          add(
+            labelledby
+              .split(/\s+/)
+              .map((id) => {
+                const target = document.getElementById(id);
+                return target && target !== element ? publicText(target) : "";
+              })
+              .join(" "),
+          );
+      }
+      const own = (selector: string) => {
+        const title = Array.from(node!.children).find((item) =>
+          item.matches(selector),
+        );
+        return title && title !== child ? shortText(title) : "";
+      };
+      if (node.matches("fieldset")) add(own("legend"));
+      if (node.matches("table")) add(own("caption"));
+      if (node.matches("figure")) add(own("figcaption"));
+      if (node.matches("details")) add(own("summary"));
+      const title = containerTitle(node);
+      if (title && title.child !== child && !title.child.contains(element))
+        add(title.text);
+    }
+    const root = landmarkRoot(element);
+    for (let index = outline.length - 1; index >= 0; index--)
+      if (outline[index]!.root === root) add(outline[index]!.text);
+    return Array.from(labels.slice(0, 6).join(" › ")).slice(0, 300).join("");
   }
   function boundedName(name: string): string {
     const points = Array.from(name);
@@ -292,8 +1011,11 @@ if (!window.__sedum) {
                 ? "spinbutton"
                 : element.type === "search"
                   ? "searchbox"
-                  : "textbox";
+                  : element.type === "file"
+                    ? "button"
+                    : "textbox";
     if (element instanceof HTMLTextAreaElement) return "textbox";
+    if (element.matches("details > summary")) return "button";
     if (element instanceof HTMLSelectElement) return "combobox";
     return "";
   }
@@ -301,7 +1023,7 @@ if (!window.__sedum) {
     if (element.parentElement?.closest("a[href]")) return false;
     return (
       element.matches(
-        "button,a[href],input,textarea,select,[contenteditable]",
+        "button,a[href],input,textarea,select,[contenteditable],details > summary",
       ) ||
       [
         "button",
@@ -393,7 +1115,7 @@ if (!window.__sedum) {
   function peers(
     element: Element,
     name: string,
-  ): { texts: string[]; contextComplete: boolean } {
+  ): { texts: string[]; contextComplete: boolean; item?: string } {
     // Some ranked tables place story metadata in the row immediately after
     // the ranked title row. Include the visible rank and title so "first
     // story comments" can be distinguished from the site navigation link.
@@ -407,16 +1129,19 @@ if (!window.__sedum) {
             .slice(0, PEER_LIMIT)
             .join("")
         : "";
-    let region: Element | null = element.parentElement;
+    let region: Element | null = composedParent(element);
     let lastUnique: Element | null = null;
     while (region && region !== document.body) {
-      const possible = region.querySelectorAll(
-        "button,a[href],[role='button'],input[type='button'],input[type='submit']",
+      const scope = allElements(region, 2000);
+      const possible = (scope ?? []).filter((item) =>
+        item.matches(
+          "button,a[href],[role='button'],input[type='button'],input[type='submit']",
+        ),
       );
       // Large ancestors cannot supply a useful 80-character item context. In
       // particular, comparing every link in an article for every article link
       // turns a dense Wikipedia page into a quadratic scan.
-      if (possible.length > 32) {
+      if (!scope || possible.length > 32) {
         region = lastUnique;
         break;
       }
@@ -429,13 +1154,20 @@ if (!window.__sedum) {
       }
       lastUnique = region;
       if (region.matches("article,li,[data-product],[role='listitem']")) break;
-      region = region.parentElement;
+      region = composedParent(region);
     }
     region = region === document.body ? lastUnique : region;
     if (!region)
       return { texts: rankedPeer ? [rankedPeer] : [], contextComplete: false };
     const result: string[] = [];
     if (rankedPeer) result.push(rankedPeer);
+    // The whole item's text, for resolving "the cheapest" or "for Grace
+    // Hopper" in code. Local only: it is never sent to the model.
+    const item = Array.from(
+      `${rankedPeer} ${publicText(region)}`.replace(/\s+/g, " ").trim(),
+    )
+      .slice(0, 300)
+      .join("");
     const context = itemContext(region);
     if (context.text && result.length < 2) result.push(context.text);
     const named = Array.from(
@@ -473,6 +1205,9 @@ if (!window.__sedum) {
     return {
       texts: result,
       contextComplete: !rankedPeer && context.complete && !!context.text,
+      // An item holding nothing but controls, such as the action bar of a
+      // comment with nested replies, is only part of the real item.
+      ...(item && (context.text || rankedPeer) ? { item } : {}),
     };
   }
   function scan(operation: Operation): {
@@ -488,23 +1223,56 @@ if (!window.__sedum) {
       return { candidates, refs, complete: false };
     const root = selectedModal ?? document.body;
     if (!root) return { candidates, refs, complete: true };
-    const elements = root.querySelectorAll("*");
-    if (elements.length > MAX_ELEMENTS)
-      return { candidates, refs, complete: false };
-    for (const element of Array.from(elements)) {
+    // Pages heavy with inline SVG art can pass the limit on drawing alone.
+    const elements =
+      allElements(root, MAX_ELEMENTS) ?? allElements(root, MAX_ELEMENTS, true);
+    if (!elements) return { candidates, refs, complete: false };
+    let heading: { text: string; root: Element | null } = {
+      text: "",
+      root: null,
+    };
+    const outline: Heading[] = [];
+    titleCache.clear();
+    for (const element of elements) {
+      if (element.matches("h1,h2,h3,h4,h5,h6,[role='heading']")) {
+        const text = visible(element) ? publicText(element) : "";
+        if (text && Array.from(text).length <= 60) {
+          heading = { text, root: landmarkRoot(element) };
+          const level =
+            Number(
+              /^h([1-6])$/i.exec(element.tagName)?.[1] ??
+                element.getAttribute("aria-level"),
+            ) || 2;
+          while (outline.length && outline[outline.length - 1]!.level >= level)
+            outline.pop();
+          outline.push({ ...heading, level });
+        }
+      }
+      const proxied = operation === "click" ? toggleLabel(element) : null;
       if (
-        !visible(element) ||
-        (operation === "read" ? !readable(element) : !interactive(element))
+        !(
+          visible(element) ||
+          transparentToggle(element) ||
+          (operation === "click" && ariaHiddenOnly(element))
+        ) ||
+        (operation === "read"
+          ? !readable(element)
+          : !interactive(element) &&
+            !proxied &&
+            (operation !== "click" || !pointerTarget(element)))
       )
         continue;
       if (operation === "fill" && !editable(element)) continue;
       if (
         operation === "click" &&
         editable(element) &&
-        !element.matches("input[type='checkbox'],input[type='radio']")
+        !element.matches("input[type='checkbox'],input[type='radio']") &&
+        role(element) !== "combobox" &&
+        !(element as HTMLInputElement).readOnly
       )
         continue;
-      const rawName = label(element);
+      const rawName =
+        operation === "read" ? label(element) : candidateName(element);
       if (!rawName) continue;
       const name = boundedName(rawName);
       const ref = `${documentId}-${++sequence}`;
@@ -514,6 +1282,9 @@ if (!window.__sedum) {
         nodeIds.set(element, nodeId);
       }
       const peerData = peers(element, name);
+      const location = locationOf(element, heading);
+      const section = sectionOf(element, outline);
+      const hint = operation === "read" ? "" : nameHint(element, rawName);
       owned.set(element, {
         old: element.getAttribute("data-sedum-ref"),
         ref,
@@ -525,9 +1296,10 @@ if (!window.__sedum) {
         Object.freeze({
           ref,
           tag: element.tagName.toLowerCase(),
-          role: role(element),
+          role: proxied ? role(proxied) : role(element),
           name,
           peers: Object.freeze(peerData.texts),
+          ...(location ? { location } : {}),
           editable: editable(element),
           disabled: disabled(element),
           inputType: element instanceof HTMLInputElement ? element.type : "",
@@ -549,6 +1321,9 @@ if (!window.__sedum) {
             nodeId,
             path: path(element),
             contextComplete: peerData.contextComplete,
+            ...(peerData.item ? { item: peerData.item } : {}),
+            ...(section ? { section } : {}),
+            ...(hint ? { nameHint: hint } : {}),
           }),
         }),
       );
@@ -763,8 +1538,8 @@ if (!window.__sedum) {
       return null;
     const element = refElement(target.ref);
     if (!element || element.tagName.toLowerCase() !== target.tag) return null;
-    const matches = Array.from(
-      document.querySelectorAll("[data-sedum-ref]"),
+    const matches = (
+      allElements(document.documentElement, Infinity) ?? []
     ).filter((node) => node.getAttribute("data-sedum-ref") === target.ref);
     if (matches.length !== 1 || matches[0] !== element) return null;
     const candidate = snapshot.candidates.find(
@@ -779,7 +1554,7 @@ if (!window.__sedum) {
         (element instanceof HTMLElement && element.isContentEditable)
       ) ||
       candidate.name !== target.name ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       !editable(element) ||
@@ -837,13 +1612,20 @@ if (!window.__sedum) {
     const candidate = snapshot?.candidates.find((item) => item.ref === ref);
     if (
       !candidate ||
-      label(element) !== owned.get(element)?.rawName ||
+      candidateName(element) !== owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       (expected && expected.name !== candidate.name)
     )
       return { actionable: false, reason: "stale" };
-    if (!visible(element) || disabled(element))
+    if (
+      !(
+        visible(element) ||
+        transparentToggle(element) ||
+        ariaHiddenOnly(element)
+      ) ||
+      disabled(element)
+    )
       return { actionable: false, reason: "not_actionable" };
     const enclosingLink = element.closest("a[href]");
     if (enclosingLink) {
@@ -873,8 +1655,8 @@ if (!window.__sedum) {
         const x = rect.left + rect.width * fx!;
         const y = rect.top + rect.height * fy!;
         if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
-        const hit = document.elementFromPoint(x, y);
-        if (hit && (hit === element || element.contains(hit))) {
+        const hit = deepElementFromPoint(x, y);
+        if (hit && deepContains(element, hit)) {
           return {
             actionable: true,
             aim: {

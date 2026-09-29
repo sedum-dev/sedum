@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildJudgeRequest, buildResolverRequest } from "./request.js";
+import {
+  buildItemsRequest,
+  buildJudgeRequest,
+  buildResolverRequest,
+} from "./request.js";
 import type { ResolverCandidate, ResolverCandidates } from "@sedum-dev/core";
 
 function candidate(id: string, name = "Checkout"): ResolverCandidate {
@@ -134,5 +138,45 @@ describe("allowlisted TypeSafe requests", () => {
       })),
     );
     expect(() => buildResolverRequest("click", large)).toThrow(/64 KiB/);
+  });
+});
+
+describe("buildItemsRequest", () => {
+  it("asks one Noul per item, each reading only its own item", () => {
+    const built = buildItemsRequest("click Share on the post about DNS", [
+      { id: "a", text: "Microservices are debt" },
+      { id: "b", text: "Saving memory in a DNS cache" },
+    ]);
+    expect(built.keys).toEqual([
+      ["a", "item0"],
+      ["b", "item1"],
+    ]);
+    const request = built.request as unknown as {
+      state: Record<string, string>;
+      questions: Record<string, { type: string; instruction: string }>;
+    };
+    expect(request.state).toEqual({
+      sentence: "click Share on the post about DNS",
+      item0: "Microservices are debt",
+      item1: "Saving memory in a DNS cache",
+    });
+    expect(Object.keys(request.questions)).toEqual(["item0", "item1"]);
+    expect(JSON.stringify(request.questions.item1)).toContain("`item1`");
+  });
+
+  it("rejects too few, duplicate, or oversized items", () => {
+    expect(() => buildItemsRequest("s", [{ id: "a", text: "x" }])).toThrow();
+    expect(() =>
+      buildItemsRequest("s", [
+        { id: "a", text: "x" },
+        { id: "a", text: "y" },
+      ]),
+    ).toThrow();
+    expect(() =>
+      buildItemsRequest("s", [
+        { id: "a", text: "x".repeat(301) },
+        { id: "b", text: "y" },
+      ]),
+    ).toThrow();
   });
 });

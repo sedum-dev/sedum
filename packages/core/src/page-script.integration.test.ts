@@ -109,6 +109,85 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ]);
       await context.close();
     });
+    it("offers and clicks controls inside open shadow roots with slotted names", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`
+        customElements.define("x-button", class extends HTMLElement {
+          connectedCallback() {
+            this.attachShadow({ mode: "open" }).innerHTML = "<button><slot></slot></button>";
+            this.shadowRoot.querySelector("button").addEventListener("click", () => window.shadowClicks = (window.shadowClicks || 0) + 1);
+          }
+        });
+        document.querySelector('#app').innerHTML = '<x-button>Save draft</x-button>';`);
+      const found = await collectCandidates(page, "click");
+      expect(found.candidates).toEqual([
+        expect.objectContaining({
+          tag: "button",
+          role: "button",
+          name: "Save draft",
+        }),
+      ]);
+      const aimed = await clickTarget(page, found.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(await page.evaluate("window.shadowClicks || 0")).toBe(1);
+      await context.close();
+    });
+    it("offers pointer-styled elements with no role and names nameless controls by nearby text", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<div style="cursor:pointer" id="go"><svg width="10" height="10"></svg><span>Create account</span></div>' +
+        '<div style="display:flex;gap:8px"><div style="cursor:pointer;width:16px;height:16px;border:1px solid"></div><span>I agree to the Terms</span></div>' +
+        '<div><span style="display:block">Email</span><input type="email"></div>'`);
+      const click = await collectCandidates(page, "click");
+      expect(
+        click.candidates.map((candidate) => [
+          candidate.tag,
+          candidate.role,
+          candidate.name,
+        ]),
+      ).toEqual([
+        ["div", "", "Create account"],
+        ["div", "", "I agree to the Terms"],
+      ]);
+      const fill = await collectCandidates(page, "fill");
+      expect(fill.candidates).toEqual([
+        expect.objectContaining({ tag: "input", name: "Email" }),
+      ]);
+      await context.close();
+    });
+    it("offers drawn checkboxes, icon-named controls, and summary toggles", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<label><input type="checkbox" style="opacity:0;position:absolute;width:0;height:0"><span>Remember me</span></label>' +
+        '<label style="position:relative"><input type="radio" name="t" style="opacity:0;position:absolute;inset:0;width:20px;height:20px"><span>Dark</span></label>' +
+        '<a href="/home"><img alt="Acme home" width="20" height="20"></a>' +
+        '<button><svg width="16" height="16"><title>Search</title></svg></button>' +
+        '<details><summary>Show rules</summary><p>Be kind</p></details>'`);
+      const click = await collectCandidates(page, "click");
+      expect(
+        click.candidates.map((candidate) => [
+          candidate.tag,
+          candidate.role,
+          candidate.name,
+        ]),
+      ).toEqual([
+        ["label", "checkbox", "Remember me"],
+        ["input", "radio", "Dark"],
+        ["a", "link", "Acme home"],
+        ["button", "button", "Search"],
+        ["summary", "button", "Show rules"],
+      ]);
+      const aimed = await clickTarget(page, click.candidates[0]!.ref);
+      if (!aimed.actionable) throw new Error("No aim");
+      expect((await page.clickRef(aimed.aim)).actionable).toBe(true);
+      expect(
+        await page.evaluate(
+          "document.querySelector('input[type=checkbox]').checked",
+        ),
+      ).toBe(true);
+      await context.close();
+    });
     it("keeps long controls available without losing their full-name guard", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =
@@ -286,6 +365,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       });
       const result = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "the link to the Charles Babbage article in the article body",
       });
       expect(result).toMatchObject({
@@ -313,12 +393,14 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       });
       const vague = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart for the product",
       });
       expect(vague).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
       expect(await page.evaluate("window.clicked")).toBeUndefined();
       const specific = await resolveTarget(page, model, {
         operation: "click",
+        repeatedMember: {},
         sentence: "Add to cart for Product Camera",
       });
       expect(specific.kind).toBe("resolved");
