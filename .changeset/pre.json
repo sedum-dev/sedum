@@ -18,6 +18,8 @@
     "replay-type-steps",
     "sed-51-release-pipeline",
     "simplify-locator-guards",
-    "warm-html-report"
+    "tidy-leaves-see",
+    "warm-html-report",
+    "yaml-goal-tests"
   ]
 }

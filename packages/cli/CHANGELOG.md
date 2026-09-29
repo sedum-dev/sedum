@@ -1,5 +1,34 @@
 # sedum-cli
 
+## 0.1.0-alpha.4
+
+### Minor Changes
+
+- 2300463: Add opt-in OpenRouter vision fallback for ambiguous repeated-control clicks,
+  with CLI/configuration support, labeled screenshots, validated candidate
+  selection, and safe request diagnostics. Existing Jev caching is unchanged;
+  vision selections are not cached.
+
+  Show vision fallback outcomes, models, and duration in HTML, Markdown, and CLI
+  reports, with separate text/vision token and cost summaries across all attempts.
+  Distinguish provider-reported vision cost from unavailable per-token pricing and
+  preserve known subtotals when some calls have unknown costs.
+
+- 20ae8f2: Support YAML goal tests with required independent verification, supplied data,
+  authored setup/teardown hooks, bounded execution and per-action reporting with
+  opt-in replay frames and planner usage.
+  Show complete, secret-redacted Goal and Verify context above the HTML replay
+  and action list without changing authored-step report layouts.
+  Do not automatically retry failed goal tests.
+
+### Patch Changes
+
+- Updated dependencies [2300463]
+- Updated dependencies [20ae8f2]
+  - @sedum-dev/core@0.1.0-alpha.4
+  - @sedum-dev/reporters@0.1.0-alpha.4
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.4
+
 ## 0.1.0-alpha.3
 
 ### Minor Changes
