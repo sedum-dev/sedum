@@ -1,5 +1,9 @@
 import type { BrowserPage } from "./browser-driver.js";
-import { verify, AssertionEngineError } from "./assertion-engine.js";
+import {
+  verify,
+  AssertionEngineError,
+  type VerifyPolicy,
+} from "./assertion-engine.js";
 import { collectCandidates, pageDigest, pageVersion } from "./page-bridge.js";
 import type { Candidate, PageVersion } from "./page-protocol.js";
 import { redactOpaqueText, type ResolvedDataEntry } from "./flow-values.js";
@@ -17,7 +21,7 @@ import {
   type StepCommand,
 } from "./step-executor.js";
 
-/** Experimental API only: authored YAML steps and their execution are unchanged. */
+/** Goal planning state; authored-step execution uses its separate runner. */
 export interface GoalState {
   readonly goal: string;
   readonly page: string;
@@ -48,6 +52,7 @@ export interface GoalPlanner {
 export interface GoalOptions {
   readonly goal: string;
   readonly verify: readonly string[];
+  readonly verifyPolicy?: VerifyPolicy;
   readonly data?: Readonly<Record<string, ResolvedDataEntry>>;
   /** Host-authored allowlist for narrowly scoped read-only experiments, not a security sandbox. */
   readonly allowedClickNames?: readonly string[];
@@ -343,6 +348,7 @@ export async function runGoal(
           };
           const checked = await active(
             verify(page, singleAttemptJudge, project(claim), {
+              ...options.verifyPolicy,
               signal,
               projectText: project,
             }),

@@ -1,5 +1,12 @@
 # RunResult v1 and live progress
 
+Goal tests publish one aggregate step (`kind: verify`, `operation: goal`) after
+the bounded goal loop ends. It includes action/request counts and the termination
+reason in `detail`, independent Judge scores when reached, and calls with
+`purpose: planner` or `judge`. A flagged goal assertion fails the goal even
+without `--strict`. The aggregate omits page metadata, screenshots and replay
+frames. Goal failures are not automatically restarted by `--retries`.
+
 `@sedum-dev/core/run-result.schema.json` is the Draft 2020-12 schema generated from the same Zod definition used to validate every published snapshot. The schema ID is `https://sedum.dev/schemas/run-result/v1`. The v1 schema may still change incompatibly before its first published release. After v1 is published, incompatible changes require a new major schema version. Consumers should reject unknown major versions.
 
 Each attempt problem has a unique ID, consecutive attempt-local ordinal, phase, ordered source stack, outcome, typed error, and an origin of `step` or `module_binding`. A step problem links its executed step; a module binding problem has `stepId: null` because no sentence ran. The first encountered problem is primary. A failed setup or body stays primary even if later teardown reports an operational error. A primary operational error leaves the verdict null. Executed steps retain their own phase and source stack; there are no synthetic module-call steps.

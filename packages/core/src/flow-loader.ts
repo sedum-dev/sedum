@@ -59,7 +59,9 @@ const v1Schema = z.strictObject({
   url: z.string().min(1).optional(),
   data: z.record(dataKeySchema, scalarSchema).optional(),
   before: z.array(stepSchema).optional(),
-  steps: z.array(stepSchema).min(1),
+  steps: z.array(stepSchema).min(1).optional(),
+  goal: nonemptyText.optional(),
+  verify: nonemptyText.optional(),
   after: z.array(stepSchema).optional(),
   tags: z.array(z.string()).optional(),
   meta: z.record(z.string(), z.unknown()).optional(),
@@ -73,6 +75,8 @@ const knownKeys = [
   "data",
   "before",
   "steps",
+  "goal",
+  "verify",
   "after",
   "tags",
   "meta",
@@ -144,8 +148,6 @@ function keyFix(key: string): string {
     return "Use `description` for human-readable text or `id` for identity.";
   if (key === "fileType")
     return "Remove `fileType`; the optional version marker is `sedum: 1`.";
-  if (key === "goal" || key === "verify")
-    return `Remove top-level \`${key}\`; goal authoring is not supported in v1.`;
   const suggestion = knownKeys
     .map((known) => ({ known, score: distance(key, known) }))
     .sort((a, b) => a.score - b.score || a.known.localeCompare(b.known))[0];
@@ -541,13 +543,12 @@ export function parseFlow(
   ) as Record<string, unknown>;
   for (const key of Object.keys(plain)) {
     if (knownKeys.includes(key)) continue;
-    const reserved = key === "goal" || key === "verify";
     add(
       diagnostics,
       "error",
-      reserved ? "reserved_key" : "unknown_key",
+      "unknown_key",
       at(file, counter, nodes, [key, "$key"]),
-      `${reserved ? "Reserved" : "Unknown"} top-level key \`${key}\`.`,
+      `Unknown top-level key \`${key}\`.`,
       keyFix(key),
     );
     delete plain[key];
@@ -563,6 +564,24 @@ export function parseFlow(
     );
     delete plain.sedum;
   }
+  if ((plain.goal === undefined) === (plain.steps === undefined))
+    add(
+      diagnostics,
+      "error",
+      "invalid_test_mode",
+      at(file, counter, nodes, []),
+      "This test needs either a `steps` list or a `goal`, but not both.",
+      "Use `steps` for authored actions, or `goal` with a required `verify` claim.",
+    );
+  if ((plain.goal === undefined) !== (plain.verify === undefined))
+    add(
+      diagnostics,
+      "error",
+      "invalid_goal_verification",
+      at(file, counter, nodes, [plain.goal === undefined ? "verify" : "goal"]),
+      "Top-level `goal` and `verify` must be supplied together.",
+      "Add a nonempty independent `verify` claim to a goal test; use verify sentences in authored steps.",
+    );
   const parsed = v1Schema.safeParse(plain);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
@@ -652,6 +671,15 @@ export function parseFlow(
     knownData,
     diagnostics,
   );
+  for (const key of ["goal", "verify"] as const) {
+    if (typeof plain[key] === "string")
+      checkPlaceholders(
+        tokenizeStep(plain[key]),
+        at(file, counter, nodes, [key]),
+        knownData,
+        diagnostics,
+      );
+  }
   const after = parseSteps(
     "after",
     plain.after,
@@ -726,6 +754,16 @@ export function parseFlow(
     before,
     steps,
     after,
+    ...(input.goal === undefined || input.verify === undefined
+      ? {}
+      : {
+          goal: {
+            text: input.goal,
+            source: at(file, counter, nodes, ["goal"]),
+            verify: input.verify,
+            verifySource: at(file, counter, nodes, ["verify"]),
+          },
+        }),
   };
   if (format === "failed") {
     const recoverable = new Set([

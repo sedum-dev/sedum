@@ -13,6 +13,43 @@ import { formatFlowDiagnostic, isFullyValidated } from "./flow-types.js";
 const options = { repoRoot: "/project" };
 
 describe("flow loading", () => {
+  it("loads goal and independent verify with positions and validates their bindings", () => {
+    const result = parseFlow(
+      "data: { user: Ada }\nbefore: [press Escape]\ngoal: Sign in as {{user}}\nverify: Welcome {{user}} is visible\nafter: [press Escape]\n",
+      "/project/goal.test.yaml",
+      options,
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(result.value).toMatchObject({
+      steps: [],
+      goal: {
+        text: "Sign in as {{user}}",
+        source: { line: 3 },
+        verify: "Welcome {{user}} is visible",
+        verifySource: { line: 4 },
+      },
+    });
+    expect(result.value?.before).toHaveLength(1);
+    expect(result.value?.after).toHaveLength(1);
+  });
+  it.each([
+    "goal: Sign in",
+    "verify: Signed in",
+    "data: {}",
+    "goal: Sign in\nverify: Signed in\nsteps: [click Login]",
+    "goal: ''\nverify: Signed in",
+    "goal: Sign in\nverify: []",
+    "goal: Sign in\nverify: ' '",
+    "goal: Sign in as {{missing}}\nverify: Signed in",
+    "goal: Sign in\nverify: Welcome {{missing}}",
+    "steps: [click Login]\nverify: Signed in",
+  ])("rejects invalid goal mode: %s", (source) => {
+    const result = parseFlow(source, "/project/goal.test.yaml", options);
+    expect(result.value).toBeUndefined();
+    expect(result.diagnostics.some((item) => item.severity === "error")).toBe(
+      true,
+    );
+  });
   it("loads a typed v1 flow with parser-derived positions and declared data", () => {
     const source = `sedum: 1
 id: login-smoke
@@ -79,7 +116,7 @@ after:
     expect(isFullyValidated(result.coverage, result.diagnostics)).toBe(false);
   });
 
-  it("reports unknown, reserved, obsolete, and missing fields with fixes", () => {
+  it("reports unknown, obsolete, and missing fields with fixes", () => {
     const source =
       "sedum: 2\nname: login\nfileType: sedum/test/v1\ndatas: {}\ngoal: log in\n";
     const result = parseFlow(source, "/project/bad.test.yaml", options);
@@ -88,7 +125,7 @@ after:
       "unsupported_version",
     );
     expect(result.diagnostics.map((item) => item.code)).toContain(
-      "reserved_key",
+      "invalid_goal_verification",
     );
     expect(
       result.diagnostics.filter((item) => item.code === "unknown_key"),
@@ -104,10 +141,10 @@ after:
       result.diagnostics.find((item) => item.message.includes("`datas`"))?.fix,
     ).toContain("data");
     expect(
-      result.diagnostics.find((item) =>
-        item.message.includes("needs a `steps`"),
+      result.diagnostics.find(
+        (item) => item.code === "invalid_goal_verification",
       )?.source,
-    ).toMatchObject({ file: "/project/bad.test.yaml", line: 1 });
+    ).toMatchObject({ file: "/project/bad.test.yaml", line: 5 });
     expect(formatFlowDiagnostic(result.diagnostics[0]!)).toMatch(
       /^\/project\/bad\.test\.yaml:\d+:\d+:/,
     );

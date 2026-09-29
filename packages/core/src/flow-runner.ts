@@ -1,6 +1,9 @@
 import path from "node:path";
 import {
   AssertionEngineError,
+  DEFAULT_MIN_P,
+  DEFAULT_BAND,
+  DEFAULT_CONTRADICTION_CUTOFF,
   verify,
   type VerifyPolicy,
   type VerifyResult,
@@ -23,6 +26,7 @@ import {
   type ClassifiedFlowStep,
 } from "./flow-classification.js";
 import { loadFlowFile } from "./flow-loader.js";
+import { runGoal, type GoalPlanner } from "./goal-runner.js";
 import { resolveFlowModules } from "./flow-modules.js";
 import {
   ModuleBindingResolutionError,
@@ -74,6 +78,8 @@ export type FlowRunResult =
       readonly status: "failed";
       readonly file: string;
       readonly source: FlowSource;
+      /** Goal failures must not restart autonomous actions through CLI retries. */
+      readonly retryable?: false;
     }
   | {
       readonly status: "could_not_run";
@@ -89,7 +95,10 @@ export interface FlowRunnerDependencies {
   readonly repoRoot: string;
   /** Parallel lanes pass a `ReusableBrowserDriver` so attempts share one browser. */
   readonly browser: BrowserDriver;
-  readonly provider: ClassificationProvider & Resolver & Judge;
+  readonly provider: ClassificationProvider &
+    Resolver &
+    Judge &
+    Partial<GoalPlanner>;
   readonly classificationCache: ClassificationCache;
   readonly locatorCache?: CacheStore;
   readonly env: Readonly<Record<string, string | undefined>>;
@@ -1030,6 +1039,12 @@ export async function runFlow(
     repoRoot: runDependencies.repoRoot,
   });
   if (!parsed.value) return firstDiagnostic(parsed.diagnostics);
+  if (parsed.value.goal && !runDependencies.provider.chooseGoal)
+    return unsupported(
+      absolute,
+      parsed.value.goal.source,
+      "The configured provider does not support goal planning.",
+    );
   let entryUrl: string;
   try {
     entryUrl = resolveEntryUrl(
@@ -1237,9 +1252,113 @@ export async function runFlow(
       return first;
     };
     const setupProblem = await runItems(classified.value.before, data, false);
-    const bodyProblem = setupProblem
-      ? null
-      : await runItems(classified.value.steps, data, false);
+    let bodyProblem: Problem | null = null;
+    const goal = classified.value.goal;
+    if (!setupProblem && goal) {
+      const purposes: ResultCall["purpose"][] = [];
+      const goalResult = await runGoal(
+        activePage,
+        {
+          chooseGoal: (state, options) => {
+            purposes.push("planner");
+            return dependencies.provider.chooseGoal!(state, options);
+          },
+        },
+        {
+          holds: (text, digest, options) => {
+            purposes.push("judge");
+            return dependencies.provider.holds(text, digest, options);
+          },
+        },
+        {
+          goal: goal.text,
+          verify: [
+            goal.verify.replace(
+              /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
+              (placeholder, key: string) =>
+                data[key]?.modelVisible
+                  ? data[key].value.reveal()
+                  : placeholder,
+            ),
+          ],
+          data,
+          ...(dependencies.verifyPolicy
+            ? { verifyPolicy: dependencies.verifyPolicy }
+            : {}),
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        },
+      );
+      const goalSource =
+        goalResult.reason === "verification_failed"
+          ? goal.verifySource
+          : goal.source;
+      if (dependencies.report) {
+        const { test, privacy } = dependencies.report;
+        const attempt = test.currentAttempt!;
+        const checked = goalResult.verification[0];
+        await test.addStep({
+          id: `${attempt.id}:step:${attempt.stepCount + 1}`,
+          index: attempt.stepCount + 1,
+          kind: "verify",
+          operation: "goal",
+          phase: "steps",
+          sentence: safeText(goal.text, privacy, 512),
+          detail: safeText(
+            `${goalResult.actions} actions, ${goalResult.requests} requests; ${goalResult.reason}. Verify: ${goal.verify}`,
+            privacy,
+            512,
+          ),
+          sourceStack: [goalSource].map((source) =>
+            safeSource(source, dependencies.repoRoot, privacy),
+          ),
+          state: "completed",
+          verdict: goalResult.status,
+          flags:
+            checked?.flags.filter(
+              (flag): flag is "low_confidence" | "contradiction" =>
+                flag === "low_confidence" || flag === "contradiction",
+            ) ?? [],
+          elapsedMs: goalResult.elapsedMs,
+          page: { status: "omitted", reason: "goal_summary" },
+          locator: null,
+          judgement: checked
+            ? {
+                holds: checked.holds,
+                contradicted: checked.contradicted,
+                threshold: dependencies.verifyPolicy?.minP ?? DEFAULT_MIN_P,
+                band: dependencies.verifyPolicy?.band ?? DEFAULT_BAND,
+                contradictionCutoff:
+                  dependencies.verifyPolicy?.contradictionCutoff ??
+                  DEFAULT_CONTRADICTION_CUTOFF,
+                judgedExcerpt: null,
+              }
+            : null,
+          observations: [],
+          calls: goalResult.calls.map((call, index) =>
+            resultCall(call, purposes[index] ?? "planner"),
+          ),
+          error:
+            goalResult.status === "failed"
+              ? {
+                  code: goalResult.reason,
+                  message: `Goal did not pass: ${goalResult.reason}.`,
+                }
+              : null,
+          evidence: { status: "omitted", reason: "goal_summary" },
+          replayFrame: null,
+          targetBox: null,
+        });
+      }
+      if (goalResult.status === "failed")
+        bodyProblem = {
+          status: "failed",
+          file: absolute,
+          source: goalSource,
+          retryable: false,
+        };
+    } else if (!setupProblem) {
+      bodyProblem = await runItems(classified.value.steps, data, false);
+    }
     const teardownProblem = activePage.closed
       ? null
       : await runItems(classified.value.after, data, true);
@@ -1250,7 +1369,9 @@ export async function runFlow(
     }
     if (primary.status === "failed")
       await dependencies.report?.test.finishTest("failed");
-    return primary;
+    return goal && primary.status === "failed"
+      ? { ...primary, retryable: false }
+      : primary;
   } catch (error) {
     return runtimeFailure(absolute, error);
   } finally {

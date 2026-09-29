@@ -45,7 +45,7 @@ export const ResultFrameSchema = z.discriminatedUnion("status", [
   }),
 ]);
 export const ResultCallSchema = z.strictObject({
-  purpose: z.enum(["classification", "locator", "judge"]),
+  purpose: z.enum(["classification", "locator", "judge", "planner"]),
   requestedModel: z.string().max(120),
   model: z.string().max(120),
   attempts: count,
