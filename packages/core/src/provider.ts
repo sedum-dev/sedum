@@ -29,6 +29,8 @@ export interface JudgePageDigest {
 
 export interface ProviderCallOptions {
   readonly signal?: AbortSignal;
+  /** Suppress transport retries for a hard request-count budget. */
+  readonly maxAttempts?: 1;
 }
 
 export interface ProviderTokenUsage {

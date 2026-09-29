@@ -1,0 +1,127 @@
+import { describe, expect, it, vi } from "vitest";
+import { TypeSafeAdapter } from "./index.js";
+import type { GoalState } from "@sedum-dev/core";
+
+const state: GoalState = {
+  goal: "Search for plants",
+  page: "Search",
+  recentActions: [],
+  targets: {
+    CLICK: { c0: "Search button" },
+    TYPE: { t1: "Search field ← {{query}}" },
+  },
+};
+const answer = (choice: string, ids: string[]) => ({
+  type: "choice",
+  choice,
+  confidence: 0.9,
+  probabilities: Object.fromEntries(
+    ids.map((id) => [id, id === choice ? 1 : 0]),
+  ),
+});
+function reply(operation: string, target: unknown) {
+  return new Response(
+    JSON.stringify({
+      model: "jev-test",
+      usage: { input_tokens: 100, output_tokens: 0 },
+      answers: {
+        operation: answer(operation, ["CLICK", "TYPE", "DONE", "BLOCKED"]),
+        click_target: target,
+        type_target: { malformed: true },
+      },
+    }),
+    { headers: { "content-type": "application/json" } },
+  );
+}
+describe("goal speculative heads", () => {
+  it("forwards optional host context without changing target rules or action choices", async () => {
+    const fetch = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.state.declared_data_keys).toEqual(["password", "username"]);
+      expect(body.state.completion_criteria).toEqual([
+        "Confirmation is visible",
+      ]);
+      expect(body.questions.operation.instructions.rules).toContain(
+        "Fill required fields before submitting.",
+      );
+      expect(body.questions.click_target.instructions.rules).not.toContain(
+        "Fill required fields before submitting.",
+      );
+      expect(Object.keys(body.questions.operation.criteria)).toEqual([
+        "CLICK",
+        "TYPE",
+        "DONE",
+        "BLOCKED",
+      ]);
+      return reply("DONE", null);
+    });
+    await new TypeSafeAdapter({ apiKey: "test", fetch }).chooseGoal({
+      ...state,
+      declaredDataKeys: ["password", "username"],
+      completionCriteria: ["Confirmation is visible"],
+      operationInstructions: "Fill required fields before submitting.",
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+  it("sends every head once but ignores the malformed unused head", async () => {
+    const fetch = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(Object.keys(body.questions)).toEqual([
+        "operation",
+        "click_target",
+        "type_target",
+      ]);
+      expect(Object.keys(body.questions.operation.criteria)).toEqual([
+        "CLICK",
+        "TYPE",
+        "DONE",
+        "BLOCKED",
+      ]);
+      expect(body.questions.operation.instructions.goal).toBe(
+        "Search for plants",
+      );
+      expect(body.questions.click_target.criteria).toEqual({
+        c0: "Search button",
+      });
+      expect(body.questions.type_target.criteria).toEqual({
+        t1: "Search field ← {{query}}",
+      });
+      expect(body.state.offered_targets).toEqual(state.targets);
+      expect(body.state).not.toHaveProperty("declared_data_keys");
+      expect(body.state).not.toHaveProperty("completion_criteria");
+      return reply("CLICK", answer("c0", ["c0"]));
+    });
+    const result = await new TypeSafeAdapter({
+      apiKey: "test",
+      fetch,
+    }).chooseGoal(state);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.target?.choice).toBe("c0");
+  });
+  it("rejects a cross-operation target before returning a decision", async () => {
+    const adapter = new TypeSafeAdapter({
+      apiKey: "test",
+      fetch: async () => reply("CLICK", answer("t1", ["t1"])),
+    });
+    await expect(adapter.chooseGoal(state)).rejects.toMatchObject({
+      code: "invalid-response",
+    });
+  });
+  it("DONE ignores every target head", async () => {
+    const adapter = new TypeSafeAdapter({
+      apiKey: "test",
+      fetch: async () => reply("DONE", null),
+    });
+    expect((await adapter.chooseGoal(state)).target).toBeUndefined();
+  });
+  it("does not retry a failed HTTP attempt", async () => {
+    const fetch = vi.fn(
+      async () => new Response("unavailable", { status: 529 }),
+    );
+    const adapter = new TypeSafeAdapter({ apiKey: "test", fetch });
+    await expect(adapter.chooseGoal(state)).rejects.toMatchObject({
+      attempts: 1,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
