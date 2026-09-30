@@ -520,16 +520,19 @@ describe("CLI command framework", () => {
     const plain = await runCli(["run", "x.test.yaml"], "1.2.3", {
       executeRun: async () => execution(canonical),
     });
-    expect(plain.stdout).not.toContain("model 0 call");
+    expect(plain.stdout).not.toContain("Text models");
     const requested = await runCli(["run", "x.test.yaml", "--costs"], "1.2.3", {
       executeRun: async () => execution(canonical),
     });
-    expect(requested.stdout).toContain("model 0 call(s)");
+    expect(requested.stdout).toContain("Text models: 0 calls");
+    // One cost breakdown, not three.
+    expect(requested.stdout).not.toContain("All models");
+    expect(requested.stdout).not.toMatch(/^model \d+ call/mu);
     const tty = await runCli(["run", "x.test.yaml"], "1.2.3", {
       capabilities: { stdoutIsTTY: true, stderrIsTTY: true, color: false },
       executeRun: async () => execution(canonical),
     });
-    expect(tty.stdout).toContain("cost $0.000000");
+    expect(tty.stdout).toContain("recorded cost $0.000000");
 
     const incomplete = await result(
       [{ file: "x.test.yaml", verdict: "passed" }],
