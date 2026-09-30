@@ -50,6 +50,8 @@ export interface CliRuntime {
   readonly signal?: AbortSignal;
   readonly onRunCommitted?: () => void;
   readonly onRunDeadline?: () => void;
+  /** A stray rejection from test code after the run was reported. */
+  readonly onStrayRejection?: (message: string) => void;
   readonly executeRun?: (
     options: RunCommandOptions,
   ) => Promise<RunCommandExecution>;
@@ -579,6 +581,9 @@ export async function runCli(
             }
         };
         const execution = await executeRun({
+          ...(runtime.onStrayRejection
+            ? { onStrayRejection: runtime.onStrayRejection }
+            : {}),
           paths,
           filters: {
             include: options.include,

@@ -65,6 +65,28 @@ describe("attributing a rejection nothing handled", () => {
     });
   });
 
+  it("blames nobody for lines tests declared in a loop share", () => {
+    const loop: LineRange = { start: 3, end: 20 };
+    const shared = new Map([[pathKey(shop), [loop, loop]]]);
+    expect(
+      attributeRejection(
+        failure(`${shop}:5:1`),
+        [{ file: shop, lines: loop }],
+        shared,
+        root,
+      ),
+    ).toMatchObject({ kind: "run", reason: "shared" });
+  });
+
+  it("names the finished test that left work behind", () => {
+    const named = new Map([
+      [pathKey(shop), [{ ...first, id: "tests/shop.test.ts#first" }, second]],
+    ]);
+    expect(
+      attributeRejection(failure(`${shop}:4:1`), [], named, root),
+    ).toMatchObject({ reason: "finished", test: "tests/shop.test.ts#first" });
+  });
+
   it("does not guess for helper code any test could have called", () => {
     for (const frame of [`${shop}:1:1`, `${helper}:4:2`])
       expect(

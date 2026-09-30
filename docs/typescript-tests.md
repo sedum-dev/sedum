@@ -207,9 +207,10 @@ that code left.
 - **A promise left behind fails the run, not another test.** Sedum blames a
   test for an unhandled rejection only when the error's stack points inside
   that test's lines while it runs. A promise that rejects after its test
-  finished, or in a helper any test could have called, is reported for the
-  whole run with its file and line, and the command exits 3. If it rejects
-  after the report is written, Sedum prints it and still exits 3.
+  finished, in a helper any test could have called, in lines that several
+  tests declared in a loop share, or in a file's top-level code, is reported
+  for the whole run with its file and line, and the command exits 3. If it
+  rejects after the report is written, Sedum prints it and still exits 3.
 - **Misusing `ai` is an invalid test.** A missing value, an invalid values
   object, or a missing `await` stops the run as an invalid test, like a YAML
   file with an error, with the file, line, and a fix.
@@ -229,9 +230,10 @@ Validation recognizes the `ai` name.
 
 An argument validation cannot read, such as a variable, a function call, or a
 sentence built with `${}`, is reported as a warning, as is a call that reaches
-`ai` another way: `t.ai(...)`, `ai?.(...)`, or `ai` renamed in a parameter. A
-list passed to `ai.group` must be a literal, a `const` in the same file, or a
-function body. `validate` then does not
+`ai` another way: `t.ai(...)`, `ai?.(...)`, `ai` renamed or aliased, or a
+helper parameter typed `Ai` under another name. Pass `ai` to helpers as a
+parameter named `ai`, such as `login(ai, user)`. A list passed to `ai.group`
+must be a literal, a `const` in the same file, or a function body. `validate` then does not
 call the project fully valid, and exits 1, just as for a YAML sentence it could
 not check offline.
 

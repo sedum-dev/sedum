@@ -207,6 +207,60 @@ describe("literal ai sentences in TypeScript tests", () => {
     expect(scan.warnings.length).toBeGreaterThan(0);
   });
 
+  it.each([
+    ["an alias of ai", 'const step = ai;\nawait step("type {{x into y");'],
+    ["ai handed to a member call", 'await ["click A"].map(ai);'],
+    ["ai called through call()", 'await ai.call(null, "click A");'],
+    [
+      "ai renamed in a declaration",
+      'const { ai: run } = ctx;\nawait run("click A");',
+    ],
+    [
+      "a helper parameter typed Ai under another name",
+      'export async function logIn(step: Ai) { await step("type {{x into y"); }',
+    ],
+    [
+      'a parameter typed TestContext["ai"]',
+      'const logIn = async (run: TestContext["ai"]) => run("click A");',
+    ],
+  ])("warns about %s", (_name, source) => {
+    expect(scanScriptSentences(source, file).warnings.length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("stays quiet for the documented ways of passing ai around", () => {
+    const scan = scanScriptSentences(
+      [
+        'import type { Ai } from "sedum-cli";',
+        "export async function login(ai: Ai, user: string): Promise<void> {",
+        '  await ai("type {{user}} into the Username field", { user });',
+        "}",
+        'test("t", { url: "/" }, async ({ page, ai, env }) => {',
+        '  await login(ai, "ada");',
+        '  await ai.group("Pay", async () => { await ai("click Pay"); });',
+        '  const total = await ai.extract("the total");',
+        "  await helper({ ai });",
+        "});",
+      ].join("\n"),
+      file,
+    );
+    expect(scan.warnings).toEqual([]);
+    expect(scan.sentences.map((item) => item.text)).toEqual([
+      "type {{user}} into the Username field",
+      "click Pay",
+    ]);
+  });
+
+  it("treats parameters of a function with a return type as bindings", () => {
+    const scan = scanScriptSentences(
+      'const steps = ["click A"];\nconst run = async (ai: Ai, steps: string[]): Promise<void> => ai(steps);',
+      file,
+    );
+    expect(scan.warnings.length).toBeGreaterThan(0);
+    expect(scan.sentences).toEqual([]);
+  });
+
   it("reads a postfix increment followed by division as division", () => {
     expect(
       texts(

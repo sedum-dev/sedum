@@ -47,6 +47,11 @@ import { planLanes, runPool, type ParallelRequest } from "./run-pool.js";
 import { shardProblems, shardTests, type ShardSpec } from "./run-shard.js";
 
 export interface RunCommandOptions {
+  /**
+   * Receives a stray rejection from test code that arrived after the run was
+   * reported; the `sedum` binary prints it and fails the exit code.
+   */
+  readonly onStrayRejection?: (message: string) => void;
   readonly file?: string;
   readonly paths?: readonly string[];
   readonly filters?: RunFilters;
@@ -107,31 +112,37 @@ const SUPPORTED_REPORTERS: readonly string[] = [
   "junit",
 ];
 
-/** A run-level diagnostic for a rejection that no running test owned. */
+/** A run-level diagnostic for rejections that no running test owned. */
 export function strayRejectionDiagnostic(
-  stray: UnattributedRejection,
+  strays: readonly UnattributedRejection[],
   config: ResolvedProjectConfig,
 ): CliDiagnostic {
+  const stray = strays[0]!;
   const where = stray.source
     ? `${path.relative(config.projectRoot, stray.source.file).split(path.sep).join("/")}:${stray.source.line}: `
     : "";
   const message = safeDiscoveryText(stray.message, config);
+  const more =
+    strays.length > 1
+      ? ` (${strays.length - 1} more rejected outside their tests; see the terminal.)`
+      : "";
   if (stray.reason === "internal")
     return {
       code: "internal_rejection",
-      message: `Sedum hit an unexpected error during the run: ${message}`,
+      message: `Sedum hit an unexpected error during the run: ${message}${more}`,
       fix: "Rerun the command; if it repeats, report it at https://github.com/sedum-dev/sedum/issues with the run's progress.json.",
     };
   const what = {
-    finished:
-      "a promise the test did not await rejected after that test finished",
+    finished: `a promise ${stray.test ? `\`${safeDiscoveryText(stray.test, config)}\`` : "a test"} did not await rejected after that test finished`,
+    shared:
+      "a promise nobody awaited rejected in lines several tests share, such as tests declared in a loop, so no test is blamed",
     outside:
-      "a promise nobody awaited rejected in code outside the running test, so no test is blamed",
+      "a promise nobody awaited rejected outside any running test, so no test is blamed",
     unknown: "a promise nobody awaited rejected with a value that has no stack",
   }[stray.reason];
   return {
     code: "stray_rejection",
-    message: `${where}${what}: ${message}`,
+    message: `${where}${what}: ${message}${more}`,
     fix: "Add `await` before the page, expect, API, and ai calls the test starts.",
   };
 }
@@ -445,6 +456,8 @@ export async function executeRunCommand(
   // during reporting is still caught. After that, the `sedum` binary's
   // fallback reports it.
   let rejections: RejectionRouter | undefined;
+  let strayConfig: ResolvedProjectConfig | undefined;
+  let reportedStrays = 0;
   const reportFiles = reportSelection(options);
   const runId = randomUUID();
   let committed = false;
@@ -514,6 +527,11 @@ export async function executeRunCommand(
           }
         : {}),
     });
+    // Before any test file is imported: a rejection from a file's top-level
+    // code is then reported for the run rather than lost.
+    strayConfig = config;
+    rejections = new RejectionRouter(config.projectRoot);
+    rejections.install();
     if (config.vision.enabled && !config.visionApiKey)
       throw new ProjectConfigError([
         {
@@ -922,9 +940,7 @@ export async function executeRunCommand(
         { length: lanes },
         () => new ReusableBrowserDriver(driver),
       );
-      rejections = new RejectionRouter(config.projectRoot);
-      rejections.install();
-      const router = rejections;
+      const router = rejections!;
       try {
         await runPool({
           items: files,
@@ -1015,8 +1031,10 @@ export async function executeRunCommand(
       }
       // A rejection no running test owned fails the run with its location,
       // instead of crashing it or failing an unrelated test.
-      const stray = router.unattributed[0];
-      if (stray) operational ??= strayRejectionDiagnostic(stray, config);
+      if (router.unattributed.length) {
+        reportedStrays = router.unattributed.length;
+        operational ??= strayRejectionDiagnostic(router.unattributed, config);
+      }
       if (signal.aborted) {
         const diagnostic: CliDiagnostic = timedOut
           ? {
@@ -1120,5 +1138,10 @@ export async function executeRunCommand(
     if (timeout) clearTimeout(timeout);
     options.signal?.removeEventListener("abort", onExternalAbort);
     rejections?.dispose();
+    // Anything that arrived after the report was decided goes to the caller.
+    for (const late of rejections?.unattributed.slice(reportedStrays) ?? [])
+      options.onStrayRejection?.(
+        strayRejectionDiagnostic([late], strayConfig!).message,
+      );
   }
 }

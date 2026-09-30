@@ -110,17 +110,21 @@ class StepPromise<T> extends Promise<T> {
   }
 }
 
-/** A test's lines run from its declaration to just before the next one. */
+/**
+ * A test's lines run from its declaration to just before the next one. Tests
+ * declared in a loop share a line, so they share a range.
+ */
 function testLines(
   tests: readonly ScriptTest[],
   test: ScriptTest,
-): { readonly start: number; readonly end: number } {
+): { readonly start: number; readonly end: number; readonly id: string } {
   const later = tests
     .map((other) => other.source.line)
     .filter((line) => line > test.source.line);
   return {
     start: test.source.line,
     end: later.length ? Math.min(...later) - 1 : Number.MAX_SAFE_INTEGER,
+    id: test.identity,
   };
 }
 

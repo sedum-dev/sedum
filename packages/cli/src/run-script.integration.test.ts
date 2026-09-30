@@ -6,6 +6,7 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -285,5 +286,56 @@ test("innocent", { url: "/help" }, async ({ page }) => {
       expect(output.diagnostic!.message).toContain("late boom");
       expect(runExitCode(output.result, false)).toBe(3);
     }, 60_000);
+
+    it.each([
+      ["run", ["run", "tests/top.test.ts"]],
+      ["list", ["list"]],
+    ])(
+      "never exits 0 from `sedum %s` when a test file's top-level code rejects",
+      async (_command, args) => {
+        await writeFile(
+          path.join(root, "tests", "top.test.ts"),
+          `import { test } from "sedum-cli";
+void Promise.reject(new Error("seed data setup failed"));
+test("empty", { url: "/help" }, async () => undefined);
+`,
+        );
+        try {
+          // Asynchronous, so this process can keep serving the fixture site.
+          const child = await new Promise<{
+            status: number | null;
+            output: string;
+          }>((resolve) => {
+            let output = "";
+            const process_ = spawn(
+              process.execPath,
+              [path.join(cliPackage, "dist", "cli.js"), ...args],
+              {
+                cwd: root,
+                env: {
+                  ...process.env,
+                  TYPESAFE_API_KEY: "fixture-key",
+                  NO_COLOR: "1",
+                },
+              },
+            );
+            process_.stdout.on("data", (chunk) => (output += chunk));
+            process_.stderr.on("data", (chunk) => (output += chunk));
+            process_.on("close", (status) => resolve({ status, output }));
+          });
+          expect(child.status).toBe(3);
+          expect(child.output).toContain("seed data setup failed");
+          if (_command === "run") {
+            expect(child.output).toContain("tests/top.test.ts:2");
+            expect(child.output).toContain(
+              "test PASSED tests/top.test.ts › empty",
+            );
+          }
+        } finally {
+          await rm(path.join(root, "tests", "top.test.ts"), { force: true });
+        }
+      },
+      90_000,
+    );
   },
 );

@@ -355,6 +355,16 @@ export function scanScriptSentences(
       if (value(parent) === "(") {
         if (after === "=>") return true;
         if (after === "{" && !CONTROL.has(value(parent - 1) ?? "")) return true;
+        // `(steps: string[]): Promise<void> => …` and `function f(): T {`.
+        if (after === ":" && close !== undefined) {
+          for (let cursor = close + 2; cursor < close + 40; cursor++) {
+            const token = value(cursor);
+            if (token === "=>" || token === "{") return true;
+            if (token === undefined || token === ";" || token === ")") break;
+            const skip = match.get(cursor);
+            if (skip !== undefined && token !== "{") cursor = skip;
+          }
+        }
         return false;
       }
       if (after === "=" && value((close ?? 0) + 2) !== "=") return true;
@@ -482,6 +492,50 @@ export function scanScriptSentences(
     )
       functions.add(name.value);
   });
+  /**
+   * Why `ai` at `index` is used as a value that runs steps under another
+   * name, or undefined. Calling it, naming a parameter `ai`, shorthand
+   * `{ ai }`, and passing it straight to a named helper are fine: the helper's
+   * own `ai` calls are checked where it is written.
+   */
+  const aliasUse = (index: number): string | undefined => {
+    const next = value(index + 1);
+    const prev = value(index - 1);
+    if (next === "(" || next === "?") return undefined;
+    if (next === ".") {
+      const member = value(index + 2);
+      return ["call", "apply", "bind"].includes(member ?? "")
+        ? "This ai call is written indirectly, so its sentences are not checked before a run."
+        : undefined;
+    }
+    if (next === ":") {
+      // `const { ai: run } = ctx` renames it; `{ ai: x }` in a literal is a key.
+      const brace = parentOf[index];
+      return brace !== undefined &&
+        DECLARE.has(value(brace - 1) ?? "") &&
+        at(index + 2)?.kind === "ident"
+        ? "`ai` is renamed here, so the steps called through the new name are not checked before a run."
+        : undefined;
+    }
+    if ((prev === "{" || prev === ",") && (next === "}" || next === ","))
+      if (value(parentOf[index] ?? -1) === "{") return undefined;
+    const parent = parentOf[index];
+    if (parent !== undefined && value(parent) === "(") {
+      const close = match.get(parent);
+      const after = close === undefined ? undefined : value(close + 1);
+      // A parameter named ai.
+      if (after === "=>" || after === "{" || after === ":") return undefined;
+      const callee = at(parent - 1);
+      if (
+        callee?.kind === "ident" &&
+        value(parent - 2) !== "." &&
+        !CONTROL.has(callee.value) &&
+        (next === "," || next === ")")
+      )
+        return undefined;
+    }
+    return "`ai` is passed on as a value here, so the steps it runs are not checked before a run.";
+  };
   const unchecked = (token: Token, message: string) =>
     warnings.push({
       severity: "warning",
@@ -504,6 +558,24 @@ export function scanScriptSentences(
       (value(close + 1) === "=>" || value(close + 1) === "{")
     );
   };
+  // `step: Ai` or `step: TestContext["ai"]`: steps run under another name.
+  tokens.forEach((token, index) => {
+    if (
+      token.kind === "ident" &&
+      token.value !== "ai" &&
+      value(index - 1) !== "." &&
+      isPunct(index + 1, ":") &&
+      (value(index + 2) === "Ai" ||
+        (value(index + 2) === "TestContext" &&
+          isPunct(index + 3, "[") &&
+          at(index + 4)?.kind === "string" &&
+          value(index + 4) === "ai"))
+    )
+      unchecked(
+        token,
+        `\`${token.value}\` holds the test's ai, so the steps called through it are not checked before a run.`,
+      );
+  });
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!;
     if (token.kind !== "ident" || token.value !== "ai") continue;
@@ -535,6 +607,11 @@ export function scanScriptSentences(
         token,
         "This ai call is written indirectly, so its sentences are not checked before a run.",
       );
+      continue;
+    }
+    const alias = aliasUse(index);
+    if (alias) {
+      unchecked(token, alias);
       continue;
     }
     if (isPunct(index + 1, "(")) {
