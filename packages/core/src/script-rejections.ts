@@ -49,7 +49,8 @@ export interface RunningTest {
  * lines of a test that is not running means that test left work behind.
  * Anything else, such as a helper at the top of a file, which any test could
  * have called, is reported for the run rather than blamed on whichever test
- * happens to be running. Pure, so the policy is testable without a listener.
+ * happens to be running. `known` is keyed by `pathKey(file)`. Pure, so the
+ * policy is testable without a listener.
  */
 export function attributeRejection(
   reason: unknown,

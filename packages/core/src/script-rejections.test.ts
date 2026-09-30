@@ -7,6 +7,7 @@ import {
   RejectionRouter,
   type LineRange,
 } from "./script-rejections.js";
+import { pathKey } from "./script-registry.js";
 
 const propertySettings = {
   database: { kind: "disabled" },
@@ -32,7 +33,7 @@ function failure(...frames: string[]): Error {
 
 const first: LineRange = { start: 3, end: 9 };
 const second: LineRange = { start: 10, end: 20 };
-const known = new Map([[shop, [first, second]]]);
+const known = new Map([[pathKey(shop), [first, second]]]);
 
 describe("attributing a rejection nothing handled", () => {
   it("blames the running test whose lines hold a frame", () => {
@@ -117,7 +118,7 @@ describe("attributing a rejection nothing handled", () => {
       const owner = attributeRejection(
         failure(...lines.map((line) => `${shop}:${line}:1`)),
         running,
-        new Map([[shop, ranges]]),
+        new Map([[pathKey(shop), ranges]]),
         root,
       );
       if (owner.kind === "attempt") {
