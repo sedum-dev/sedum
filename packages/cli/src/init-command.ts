@@ -39,7 +39,12 @@ TYPESAFE_API_KEY=
 SAUCE_PASSWORD=secret_sauce
 `;
 
-const IGNORE = [".env", ".sedum/runs/", ".sedum/reports/"] as const;
+const IGNORE = [
+  "node_modules/",
+  ".env",
+  ".sedum/runs/",
+  ".sedum/reports/",
+] as const;
 
 const WORDMARK = [
   " ████ █████ ████  █   █ █   █     ████  █████ █   █",

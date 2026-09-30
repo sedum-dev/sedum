@@ -1,4 +1,12 @@
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +28,27 @@ async function project(): Promise<string> {
 }
 
 describe("sedum init", () => {
+  it("keeps installed dependencies out of a fresh project's first git add", async () => {
+    const cwd = await project();
+    await writeFile(path.join(cwd, "package.json"), '{"private":true}\n');
+    await mkdir(path.join(cwd, "node_modules", "demo"), { recursive: true });
+    await writeFile(
+      path.join(cwd, "node_modules", "demo", "index.js"),
+      "export {};\n",
+    );
+    execFileSync("git", ["init", "--quiet"], { cwd });
+    const result = await runCli(["init"], "0.0.0", { cwd });
+    expect(result.exitCode).toBe(0);
+    execFileSync("git", ["add", "-A"], { cwd });
+    const staged = execFileSync("git", ["diff", "--cached", "--name-only"], {
+      cwd,
+      encoding: "utf8",
+    });
+    expect(staged).toContain("package.json");
+    expect(staged).toContain("tests/example.test.ts");
+    expect(staged).not.toContain("node_modules");
+  });
+
   it("creates a runnable example and prints a precise missing-prerequisite path", async () => {
     vi.stubEnv("TYPESAFE_API_KEY", "");
     const cwd = await project();
@@ -46,7 +75,7 @@ describe("sedum init", () => {
     expect(result.stdout).toContain("may incur a charge");
     expect(result.stdout).not.toContain("\u001b[");
     expect(await readFile(path.join(cwd, ".gitignore"), "utf8")).toBe(
-      ".env\n.sedum/runs/\n.sedum/reports/\n",
+      "node_modules/\n.env\n.sedum/runs/\n.sedum/reports/\n",
     );
     expect(await readFile(path.join(cwd, ".env.example"), "utf8")).toContain(
       "SAUCE_PASSWORD=secret_sauce",
