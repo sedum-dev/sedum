@@ -245,6 +245,23 @@ function providerFailure(
   };
 }
 
+/** A navigation failure, in words: which network problem stopped it. */
+export function navigationWhy(error: StepExecutionError): string {
+  const code = /(net::ERR_[A-Z_]+|timeout)$/.exec(error.message)?.[1];
+  if (!code) return "the browser could not load it";
+  if (code === "timeout" || code.includes("TIMED_OUT"))
+    return "it took too long to respond";
+  if (code === "net::ERR_NAME_NOT_RESOLVED")
+    return "the host name could not be resolved (DNS)";
+  if (code === "net::ERR_CONNECTION_REFUSED")
+    return "the server refused the connection";
+  if (code === "net::ERR_INTERNET_DISCONNECTED")
+    return "there is no network connection";
+  if (code.startsWith("net::ERR_CERT_"))
+    return "its TLS certificate was rejected";
+  return `the browser reported ${code}`;
+}
+
 function runtimeFailure(file: string, error: unknown): FlowRunResult {
   if (error instanceof BrowserDriverError) {
     const details: Record<
@@ -292,6 +309,14 @@ function runtimeFailure(file: string, error: unknown): FlowRunResult {
     };
   }
   if (error instanceof ProviderError) return providerFailure(file, error);
+  if (error instanceof StepExecutionError && error.op === "goto")
+    return {
+      status: "could_not_run",
+      file,
+      code: "navigation_failed",
+      message: `Could not open the test's page: ${navigationWhy(error)}.`,
+      fix: "Check the test's url (or baseUrl), your network or VPN, and that the site is up.",
+    };
   return {
     status: "could_not_run",
     file,
@@ -960,7 +985,9 @@ async function executeSentence(
             unsupported(
               step.source.file,
               step.source,
-              `The ${step.op} step could not complete.`,
+              actionError?.op === "goto"
+                ? `Could not open the address: ${navigationWhy(actionError)}.`
+                : `The ${step.op} step could not complete.`,
             ),
             facts,
           );
@@ -1065,20 +1092,13 @@ async function executeSentence(
       return record("failed", {
         locator: resolved,
         error: {
-          code: resolved.reason,
-          message: resolved.diagnostic.vision?.failure
-            ? `Could not resolve this ${step.op} step: vision ${resolved.diagnostic.vision.failure}${resolved.diagnostic.vision.httpStatus ? ` (HTTP ${resolved.diagnostic.vision.httpStatus})` : ""}.`
-            : dependencies.visionResolver && step.op === "click"
-              ? resolved.diagnostic.vision?.outcome === "abstained"
-                ? `Could not resolve this ${step.op} step: the vision model did not find a matching element either.`
-                : !resolved.diagnostic.vision
-                  ? `Could not resolve this ${step.op} step. Vision fallback could not run: ${
-                      resolved.reason === "no_candidates"
-                        ? "the page offered no clickable elements"
-                        : "it needs 2 to 40 fully visible, unobscured controls on screen"
-                    }.`
-                  : `Could not resolve this ${step.op} step.`
-              : `Could not resolve this ${step.op} step.`,
+          // "none" reads like "no error"; say what happened.
+          code: resolved.reason === "none" ? "no_match" : resolved.reason,
+          message: `Could not resolve this ${step.op} step: ${unresolvedWhy(
+            resolved,
+            step.op,
+            Boolean(dependencies.visionResolver) && step.op === "click",
+          )}.`,
         },
       });
     return record(
@@ -1261,6 +1281,29 @@ async function executeSentence(
           facts,
         );
   }
+}
+
+/** Why a step's target was not found, in words a test author can act on. */
+function unresolvedWhy(
+  resolved: Extract<LocatorResult, { kind: "unresolved" }>,
+  op: string,
+  visionEnabled: boolean,
+): string {
+  const vision = resolved.diagnostic.vision;
+  const why =
+    resolved.reason === "none"
+      ? "no element on the page matches it; check the wording against the page"
+      : resolved.reason === "no_candidates"
+        ? `the page had nothing to ${op === "type" ? "type into" : op}`
+        : "several elements match it; name the one you mean more precisely";
+  if (vision?.failure)
+    return `${why} (vision ${vision.failure}${vision.httpStatus ? `, HTTP ${vision.httpStatus}` : ""})`;
+  if (!visionEnabled) return why;
+  if (vision?.outcome === "abstained")
+    return `${why}; the vision model did not find it either`;
+  if (!vision && resolved.reason !== "no_candidates")
+    return `${why}; vision fallback could not run (it needs 2 to 40 fully visible, unobscured controls on screen)`;
+  return why;
 }
 
 /** Goal replay frames show the resulting page, never a stale pre-action target box. */

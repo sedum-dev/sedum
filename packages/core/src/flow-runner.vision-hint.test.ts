@@ -98,7 +98,7 @@ describe("vision fallback feedback", () => {
       expect(
         recorder.snapshot.tests[0]?.attempts[0]?.steps[0]?.error?.message,
       ).toBe(
-        "Could not resolve this click step. Vision fallback could not run: it needs 2 to 40 fully visible, unobscured controls on screen.",
+        "Could not resolve this click step: no element on the page matches it; check the wording against the page; vision fallback could not run (it needs 2 to 40 fully visible, unobscured controls on screen).",
       );
     } finally {
       await rm(root, { recursive: true, force: true });

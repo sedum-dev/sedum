@@ -138,6 +138,15 @@ export function flowDiagnostic(result: {
   };
   const diagnostic = known[result.code];
   if (diagnostic) return { code: result.code, ...diagnostic };
+  if (result.code === "navigation_failed")
+    return {
+      code: result.code,
+      message: bounded(result.message),
+      fix: bounded(
+        result.fix ??
+          "Check the test's url (or baseUrl), your network or VPN, and that the site is up.",
+      ),
+    };
   if (result.code === "provider_rate_limited")
     return {
       code: result.code,

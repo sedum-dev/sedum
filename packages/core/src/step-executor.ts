@@ -458,11 +458,16 @@ export async function executeStep(
     };
   } catch (error) {
     if (error instanceof StepExecutionError) throw error;
+    const network =
+      error instanceof Error
+        ? /\((net::ERR_[A-Z_]+|timeout)\)/.exec(error.message)?.[1]
+        : undefined;
     throw new StepExecutionError(
       op,
       "operation_failed",
       phase,
       safeCallLog(error),
+      network ? `${op} failed: ${network}` : undefined,
     );
   }
 }

@@ -172,9 +172,37 @@ function mapUnknownKeys(
         prefix ? `${prefix}.${key}` : key,
         "unknown_config_key",
         `Unknown configuration key \`${prefix ? `${prefix}.` : ""}${key}\`.`,
-        "Remove the key or use one documented by `sedum run --help`.",
+        keyFix(key, names),
       );
   }
+}
+
+/** Edit distance, for a "did you mean" on a misspelt key. */
+function distance(left: string, right: string): number {
+  const row = Array.from({ length: right.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= left.length; i++) {
+    let previous = row[0]!;
+    row[0] = i;
+    for (let j = 1; j <= right.length; j++) {
+      const saved = row[j]!;
+      row[j] = Math.min(
+        row[j]! + 1,
+        row[j - 1]! + 1,
+        previous + (left[i - 1] === right[j - 1] ? 0 : 1),
+      );
+      previous = saved;
+    }
+  }
+  return row[right.length]!;
+}
+
+function keyFix(key: string, names: ReadonlySet<string>): string {
+  const [closest] = [...names]
+    .map((known) => ({ known, score: distance(key, known) }))
+    .sort((a, b) => a.score - b.score || a.known.localeCompare(b.known));
+  return closest && closest.score <= 2
+    ? `Did you mean \`${closest.known}\`?`
+    : "Remove the key or use one documented in docs/configuration.md.";
 }
 
 function object(value: unknown): value is Record<string, unknown> {
