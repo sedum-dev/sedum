@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import { describe, expect, it, test as propertyTest } from "vitest";
 import * as hegel from "@hegeldev/hegel";
@@ -85,14 +86,20 @@ describe("script test registry", () => {
             `    at async run (file://${file}:${line}:${col})`,
           ]),
         );
-        expect(parseFrame(frame)).toEqual({ file, line, col });
+        expect(parseFrame(frame)).toEqual({
+          file: frame.includes("file://")
+            ? fileURLToPath(`file://${file}`)
+            : file,
+          line,
+          col,
+        });
       }, propertySettings);
     },
   );
 
   it("decodes file URLs with escaped characters", () => {
     expect(parseFrame("    at x (file:///a%20b/c.test.ts:3:4)")).toEqual({
-      file: "/a b/c.test.ts",
+      file: fileURLToPath("file:///a%20b/c.test.ts"),
       line: 3,
       col: 4,
     });

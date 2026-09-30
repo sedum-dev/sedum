@@ -139,7 +139,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await symlink(
         cliPackage,
         path.join(root, "node_modules", "sedum-cli"),
-        "dir",
+        "junction",
       );
       await mkdir(path.join(root, "tests"));
       await writeFile(

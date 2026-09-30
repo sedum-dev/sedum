@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import type { BrowserContext, Page } from "playwright-core";
 import type { FlowSource } from "./flow-types.js";
@@ -151,17 +152,17 @@ export function test(
 
 /** One stack frame, as `file:line:col`, parsed from V8's text. */
 export function parseFrame(frame: string): FlowSource | undefined {
-  const match =
-    /(?:\(|at\s)(?:file:\/\/)?([^()\s][^()]*?):(\d+):(\d+)\)?\s*$/u.exec(
-      frame.trim(),
-    );
+  const match = /(?:\(|at\s)([^()\s][^()]*?):(\d+):(\d+)\)?\s*$/u.exec(
+    frame.trim(),
+  );
   if (!match) return undefined;
   let file = match[1]!;
-  try {
-    if (frame.includes("file://")) file = decodeURIComponent(file);
-  } catch {
-    // Keep the undecoded path.
-  }
+  if (file.startsWith("file://"))
+    try {
+      file = fileURLToPath(file);
+    } catch {
+      // Keep the URL text.
+    }
   return { file, line: Number(match[2]), col: Number(match[3]) };
 }
 
