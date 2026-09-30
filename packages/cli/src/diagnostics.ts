@@ -145,15 +145,23 @@ export function flowDiagnostic(result: {
         "The model provider kept rate limiting requests for five minutes.",
       fix: "Lower --parallel or --provider-concurrency, or retry later.",
     };
+  if (result.code === "provider_authentication")
+    return {
+      code: result.code,
+      message: "The model provider rejected the API key.",
+      fix: "Set TYPESAFE_API_KEY to a valid key, check it with `sedum doctor`, then rerun.",
+    };
+  if (result.code === "provider_configuration")
+    return {
+      code: result.code,
+      message: "The model provider is not configured correctly.",
+      fix: "Check TYPESAFE_API_KEY, TYPESAFE_BASE_URL and the model with `sedum doctor`, then rerun.",
+    };
   if (result.code.startsWith("provider_"))
     return {
       code: result.code,
       message: "The model provider could not complete the run safely.",
-      fix:
-        result.code === "provider_configuration" ||
-        result.code === "provider_authentication"
-          ? "Check the provider configuration and API access, then rerun the test."
-          : "Check provider availability and the test input, then rerun the test.",
+      fix: "Check provider availability and the test input, then rerun the test.",
     };
   return {
     code: "execution_error",
