@@ -351,7 +351,10 @@ function replay(
         src: data ? "data:image/jpeg;base64," + data : null,
         status:
           frame.status === "captured" && !data ? "unavailable" : frame.status,
-        label: step.index + ". " + step.operation + " " + stepText(step),
+        // The sentence already names the action ("type {{user}} in …");
+        // a TypeScript step also shows its ai.group path.
+        label:
+          step.index + ". " + (step.sentence ? stepText(step) : step.operation),
         step: step.index,
         attempt: attempt.id,
         box: step.targetBox,

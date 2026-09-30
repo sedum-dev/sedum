@@ -184,6 +184,12 @@ describe("HTML report", () => {
     expect(renderHtml(incomplete)).toContain("unknown or incomplete");
   });
 
+  it("never wraps a score, duration or cost mid-number", async () => {
+    const html = renderHtml(await example());
+    expect(html).toContain(".steps td.num,.steps th{white-space:nowrap}");
+    expect(html).toMatch(/<td class="num[^"]*">/u);
+  });
+
   it("embeds only supplied replay frames and escapes player JSON", async () => {
     const result = await example();
     const html = renderHtml(result, {
@@ -193,6 +199,11 @@ describe("HTML report", () => {
     expect(html).toContain("\\u003cscript");
     expect(html).toContain('"status":"unavailable"');
     expect(html).toContain("data-attempt=");
+    // Captions are the step sentence, never "click click …".
+    const labels = [...html.matchAll(/"label":"([^"]*)"/g)].map((m) => m[1]!);
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels)
+      expect(label).not.toMatch(/^\d+\. (\w+) \1\b/iu);
   });
 
   it("puts a flow that never reached a verdict before a flagged pass", async () => {

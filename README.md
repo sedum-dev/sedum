@@ -92,8 +92,9 @@ model name differs from the default. See
 [provider configuration](docs/configuration.md).
 
 The example signs in to a demo shop. To see a failure, change its last step to
-a false claim, such as `verify the cart is empty`, and run it again. If
-anything is missing, `npx sedum doctor` says what and how to fix it.
+a false claim, such as `verify an error message says the password is incorrect`,
+and run it again: it fails with exit code 1. If anything is missing,
+`npx sedum doctor` says what and how to fix it.
 
 New to AI browser tests? Read
 [plain-English browser tests](docs/plain-english-tests.md) first.
