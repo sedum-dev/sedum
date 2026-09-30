@@ -57,5 +57,14 @@ for (const entry of manifest.packages) {
       `sha512-${createHash("sha512").update(candidate).digest("base64")}`,
     `Registry integrity differs for ${entry.name}`,
   );
+  const packument = await (
+    await fetchWithRetry(
+      `https://registry.npmjs.org/${encodeURIComponent(entry.name)}`,
+    )
+  ).json();
+  assert(
+    packument["dist-tags"]?.latest === entry.version,
+    `npm latest for ${entry.name} is ${packument["dist-tags"]?.latest}, not ${entry.version}`,
+  );
   console.log(`Verified ${entry.name}@${entry.version}`);
 }
