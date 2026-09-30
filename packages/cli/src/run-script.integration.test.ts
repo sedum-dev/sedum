@@ -247,10 +247,12 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(output.diagnostic).toBeNull();
       expect(runExitCode(output.result, false)).toBe(1);
       const markdown = await readFile(output.artifacts.markdownPath!, "utf8");
+      // Reports keep the platform's path separator, as for YAML tests.
+      const shown = path.join("tests", "shop.test.ts");
       expect(markdown).toContain(
-        "sedum run 'tests/shop.test.ts' --name 'a wrong claim fails'",
+        `sedum run '${shown}' --name 'a wrong claim fails'`,
       );
-      expect(markdown).toContain("tests/shop.test.ts › a wrong claim fails");
+      expect(markdown).toContain(`${shown} › a wrong claim fails`);
     }, 60_000);
   },
 );
