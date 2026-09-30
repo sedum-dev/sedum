@@ -80,6 +80,7 @@ export const ResultLocatorSchema = z.strictObject({
     .strictObject({
       outcome: z.enum(["selected", "abstained", "failed"]).optional(),
       reason: z.string().max(120).optional(),
+      abstentionReason: z.string().max(120).optional(),
       elapsedMs: nonnegative,
       failure: z
         .enum([
@@ -92,6 +93,7 @@ export const ResultLocatorSchema = z.strictObject({
           "invalid_selection",
           "truncated_response",
           "unknown",
+          "stale_page",
         ])
         .optional(),
       httpStatus: z.number().int().min(100).max(599).optional(),

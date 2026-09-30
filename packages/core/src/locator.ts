@@ -75,8 +75,9 @@ export interface LocatorDiagnostic {
   readonly vision?: {
     readonly outcome?: "selected" | "abstained" | "failed";
     readonly reason?: string;
+    readonly abstentionReason?: string;
     readonly elapsedMs: number;
-    readonly failure?: VisionFailure | "unknown";
+    readonly failure?: VisionFailure | "unknown" | "stale_page";
     readonly httpStatus?: number;
   };
   readonly candidateCount: number;
@@ -1708,7 +1709,13 @@ export async function resolveTarget(
           options.projectText,
         );
         ensureActive();
-        if (!captured) return unresolved("ambiguous");
+        if (!captured) {
+          if (!sameVersion(await pageVersion(page), source.version)) {
+            gate = `${gate}:vision_stale_capture`;
+            return unresolved("stale");
+          }
+          return unresolved("ambiguous");
+        }
         let answer;
         const visionStarted = performance.now();
         try {
@@ -1746,11 +1753,16 @@ export async function resolveTarget(
         };
         ensureActive();
         if (!sameVersion(await pageVersion(page), source.version)) {
+          visionDiagnostic = { ...visionDiagnostic, failure: "stale_page" };
           gate = `${gate}:vision_stale`;
           return unresolved("ambiguous");
         }
         if (answer.decision.kind !== "candidate") {
-          visionDiagnostic = { ...visionDiagnostic, outcome: "abstained" };
+          visionDiagnostic = {
+            ...visionDiagnostic,
+            outcome: "abstained",
+            abstentionReason: answer.decision.reason,
+          };
           gate = `${gate}:vision_abstained`;
           return unresolved("ambiguous");
         }
@@ -1770,6 +1782,7 @@ export async function resolveTarget(
           };
         }
         // Failed visual validation must not activate the runner's stale retry.
+        visionDiagnostic = { ...visionDiagnostic, failure: "stale_page" };
         return unresolved("ambiguous");
       } catch {
         // A page still settling after a navigation moves under the capture.

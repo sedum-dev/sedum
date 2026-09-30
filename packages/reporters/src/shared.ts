@@ -18,6 +18,9 @@ export function visionSummary(step: ResultStep): string | null {
   return (
     `Vision fallback: ${vision.outcome ?? (vision.failure ? "failed" : "outcome unrecorded")} · ${models.join(", ") || "model unrecorded"} · ${Math.round(vision.elapsedMs)} ms` +
     (vision.reason ? ` · trigger: ${vision.reason}` : "") +
+    (vision.abstentionReason
+      ? ` · abstention: ${vision.abstentionReason}`
+      : "") +
     (vision.failure ? ` · ${vision.failure}` : "") +
     (vision.httpStatus ? ` · HTTP ${vision.httpStatus}` : "")
   );

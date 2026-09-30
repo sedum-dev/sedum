@@ -108,6 +108,46 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       // Allow cold native image/SVG initialization on Windows CI.
     }, 30_000);
 
+    it("settles delayed navigation UI before capturing, without reusing stale candidates", async () => {
+      const { page, context } = await fresh();
+      try {
+        await page.evaluate(`(() => {
+          document.querySelector('#app').innerHTML = '<div id="menu"></div><button>Add to cart</button><button>Add to cart</button>';
+        })()`);
+        const snapshot = await collectCandidates(page, "click");
+        await page.evaluate(
+          `setTimeout(() => document.querySelector('#menu').hidden = true, 500)`,
+        );
+        // Sauce Demo hides its menu after navigation, even while it already
+        // looks closed. The old frame must not consume the one model request.
+        expect(
+          await captureVisionObservation(
+            page,
+            snapshot.candidates,
+            snapshot.version,
+            "click the button beside the grey top",
+          ),
+        ).toBeNull();
+        const freshSnapshot = await collectCandidates(page, "click");
+        expect(freshSnapshot.version.revision).toBeGreaterThan(
+          snapshot.version.revision,
+        );
+        expect(
+          (
+            await captureVisionObservation(
+              page,
+              freshSnapshot.candidates,
+              freshSnapshot.version,
+              "click the button beside the grey top",
+            )
+          )?.observation.candidates,
+        ).toHaveLength(2);
+        expect(await pageVersion(page)).toEqual(freshSnapshot.version);
+      } finally {
+        await context.close();
+      }
+    }, 30_000);
+
     it("includes unobscured shadow-root controls but excludes covered ones", async () => {
       const { page, context } = await fresh();
       try {
