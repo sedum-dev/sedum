@@ -378,7 +378,18 @@ describe("hook and module attempt lifecycle", () => {
     );
     expect(run.result.status, JSON.stringify(run.result)).toBe("passed");
     expect(run.holds.mock.calls[0]?.[0]).toBe("the price is $42");
-    expect(JSON.stringify(run.report)).not.toContain("$42");
+  });
+
+  it("keeps a remembered public page value readable in report excerpts", async () => {
+    const run = await runHooks(
+      "steps:\n  - remember the price as {{price}}\n  - verify the price is {{price}}\n",
+      { readText: "$42", judgements: [0.05] },
+    );
+    expect(run.result.status).toBe("failed");
+    const excerpt =
+      run.report.tests[0]?.attempts[0]?.steps[1]?.judgement?.judgedExcerpt;
+    expect(excerpt).toContain("$42");
+    expect(excerpt).not.toContain("[REDACTED]");
   });
 
   it("re-observes a remember target that went stale while it was resolved", async () => {

@@ -748,14 +748,17 @@ async function executeSentence(
       const opaqueValues = sensitivePage
         ? [...echoedSecrets, new RuntimeValue(remembered, `{{${match[2]!}}}`)]
         : echoedSecrets;
+      // Public page text stays readable in reports; only a value read from a
+      // sensitive page, or one echoing a known secret, is treated as secret.
+      const secret = opaqueValues.length > 0;
       data[match[2]!] = {
         value: new RuntimeValue(remembered, `{{${match[2]!}}}`),
-        sensitive: true,
-        modelVisible: opaqueValues.length === 0,
+        sensitive: secret,
+        modelVisible: !secret,
         opaqueValues,
       };
       opaqueEntries.push(data[match[2]!]!);
-      report?.privacy.secretValues.push(remembered);
+      if (secret) report?.privacy.secretValues.push(remembered);
       return record("continue", locator ? { locator } : {});
     } catch (error) {
       if (isRunWideProviderError(error)) throw await runWide(error);
