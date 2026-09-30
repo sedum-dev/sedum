@@ -1,5 +1,25 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.5
+
+### Patch Changes
+
+- c135228: Make the documented Sauce Demo goal example pass, and explain goal abstentions. The planner split its probability between the next step and `BLOCKED` (for example TYPE 0.50 vs BLOCKED 0.48 on the login page), so the goal abstained before acting or before placing the order. `BLOCKED` now means that no offered element can move the goal forward, and every step the goal names counts as expected. A goal action whose target went stale before dispatch is now taken back and the page observed again, instead of failing the goal. A goal that abstains reports which decision was uncertain, on which page, and its top probabilities, with a hint on how to rewrite the goal.
+- Updated dependencies [9131d3c]
+- Updated dependencies [834b723]
+- Updated dependencies [a8f641d]
+- Updated dependencies [c5469e4]
+- Updated dependencies [0ddfcad]
+- Updated dependencies [c135228]
+- Updated dependencies [e83c74c]
+- Updated dependencies [0662f50]
+- Updated dependencies [cbd82f1]
+- Updated dependencies [acae6ef]
+- Updated dependencies [62db939]
+- Updated dependencies [fd55a18]
+- Updated dependencies [2fbd519]
+  - @sedum-dev/core@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Patch Changes

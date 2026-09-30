@@ -1,5 +1,60 @@
 # sedum-cli
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- fd55a18: Write tests in TypeScript. A `*.test.ts` file declares tests with `test(title, options, async ({ page, context, ai, env, testInfo }) => { ... })`. Plain-English steps run with `await ai("click the Login button")`; values go in a second argument (`ai("type {{email}} into the Email field", { email })`) and `secret()` keeps a value out of model input and reports. `ai.group` names a block of steps, `ai.extract` reads an element's text, and Playwright's `page`, `context`, and `expect` work between steps. `sedum run`, `list`, and `validate` discover `*.test.ts` beside `*.test.yaml`; `validate` classifies the literal sentences in `ai(...)` calls and warns about sentences built at run time. `sedum run --id <id>` selects tests by exact id, and reports name a TypeScript test by its file and title and rerun it with `--id`. `sedum init` now writes a TypeScript example.
+
+### Patch Changes
+
+- 9131d3c: Report `cache miss (not_cacheable)` for a target the locator cache never stores, such as an `<input type="submit">` button, instead of `cache miss (absent)`, which implied the next run would hit. A run outside a Git checkout now prints a hint to run `git init` to enable the cache, and the README Quickstart includes `git init`.
+- 834b723: Keep running the rest of the suite when one test cannot run. Previously the first test-scoped error, such as an unsupported step, stopped `sedum run` and the remaining selected tests never ran. That test is now recorded with `state: "error"`, and every other test still gets a verdict. The run still exits 3, and the summary says how many tests could not run. A missing browser, a rejected provider key, or sustained rate limiting still stops the run immediately.
+
+  A rejected provider key is now reported as `provider_authentication` and stops the run at the first request, instead of surfacing as `Could not resolve this click step` in every test.
+
+- c5469e4: Clearer error messages:
+
+  - An unreachable test URL now reports `navigation_failed` with the cause, e.g. "Could not open the test's page: the host name could not be resolved (DNS)", instead of "The browser run could not be completed safely".
+  - A missing test path is named in the final error instead of blaming `sedum.config.yaml`'s `tests.include`.
+  - A misspelt key in `sedum.config.yaml` gets a "Did you mean `browser`?" fix, as test files already do.
+  - A run that never started a test no longer prints "read …" hints.
+  - An unresolved step says why (no element matches, several match, or nothing to click), and its error code is `no_match` instead of `none`.
+  - `report.md` labels an error "browser error, untrusted" only when it came from the browser.
+  - A test file with neither `steps` nor `goal` is told so, instead of "…but not both".
+  - An unexpected internal error is no longer reported as "The command could not be parsed safely".
+
+- 0ddfcad: Flag a test that passes only after a failed attempt as `flaky`. It still counts as passed, but the flag appears on the test, in the run's flags, in the terminal summary (`flaky N test(s)`) and in JUnit output, and `--strict` exits 2 as for any flagged pass. Previously `--retries` could hide a flaky test completely.
+- 45e4f4e: Print `npx sedum …` in hints when sedum runs from a project's `node_modules` or through npx, as the README installs it. Previously every "Next steps", "rerun" and "Fix" hint said bare `sedum …`, which fails with "command not found" for a local install. This covers terminal output and the rerun hints in the HTML, Markdown and JUnit reports. A global install keeps `sedum`.
+- 0662f50: Say that the model provider rejected the API key when a run uses a wrong `TYPESAFE_API_KEY`, as `sedum doctor` does, and point to `TYPESAFE_API_KEY` and `sedum doctor` in the fix. The step that hit the rejection is recorded with the `provider_authentication` error. Previously the run reported a vague provider failure, and before that an unresolved click with test-input advice.
+- 77f0e94: Stop repeating lines in `sedum run` terminal output. Each test's result line appeared twice, the `progress` path twice, and the cost three ways ("Text models", "All models (all attempts)", and "model … / cost …"). The final summary now adds only per-test details (retries and cache outcomes) under the test's file, names `progress.json` once at the start, and shows one cost breakdown. "All models" appears only when vision calls make it differ from "Text models", and an incomplete cost is still called out.
+- 2fbd519: Fix vision fallback never running when the page was still settling after a navigation. The screenshot's freshness check failed, and the error was swallowed as an ambiguous target. That case is now reported as stale, so the runner takes its one fresh observation and vision gets its turn.
+
+  Make vision's behavior visible. With vision enabled, `sedum run` checks `OPEN_ROUTER_API_KEY` against OpenRouter's unbilled key endpoint before tests start and warns in the summary when the key is rejected. The summary says how many steps used vision, or that vision was not needed. A click that fails without trying vision explains why. `sedum doctor` checks the vision key when vision is enabled, or with `--vision`.
+
+  Vision fallback now also runs when the text model finds no matching element for a click, for example a target described by its picture. Vision chooses among every visible control or abstains; an abstention keeps the step unresolved as before.
+
+- Updated dependencies [9131d3c]
+- Updated dependencies [834b723]
+- Updated dependencies [a8f641d]
+- Updated dependencies [c5469e4]
+- Updated dependencies [0ddfcad]
+- Updated dependencies [c135228]
+- Updated dependencies [e83c74c]
+- Updated dependencies [45e4f4e]
+- Updated dependencies [0662f50]
+- Updated dependencies [cbd82f1]
+- Updated dependencies [acae6ef]
+- Updated dependencies [4ba7bfd]
+- Updated dependencies [3df6e4a]
+- Updated dependencies [62db939]
+- Updated dependencies [77f0e94]
+- Updated dependencies [fd55a18]
+- Updated dependencies [2fbd519]
+  - @sedum-dev/core@0.1.0-alpha.5
+  - @sedum-dev/reporters@0.1.0-alpha.5
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Minor Changes

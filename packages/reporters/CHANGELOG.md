@@ -1,5 +1,44 @@
 # @sedum-dev/reporters
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- fd55a18: Write tests in TypeScript. A `*.test.ts` file declares tests with `test(title, options, async ({ page, context, ai, env, testInfo }) => { ... })`. Plain-English steps run with `await ai("click the Login button")`; values go in a second argument (`ai("type {{email}} into the Email field", { email })`) and `secret()` keeps a value out of model input and reports. `ai.group` names a block of steps, `ai.extract` reads an element's text, and Playwright's `page`, `context`, and `expect` work between steps. `sedum run`, `list`, and `validate` discover `*.test.ts` beside `*.test.yaml`; `validate` classifies the literal sentences in `ai(...)` calls and warns about sentences built at run time. `sedum run --id <id>` selects tests by exact id, and reports name a TypeScript test by its file and title and rerun it with `--id`. `sedum init` now writes a TypeScript example.
+
+### Patch Changes
+
+- c5469e4: Clearer error messages:
+
+  - An unreachable test URL now reports `navigation_failed` with the cause, e.g. "Could not open the test's page: the host name could not be resolved (DNS)", instead of "The browser run could not be completed safely".
+  - A missing test path is named in the final error instead of blaming `sedum.config.yaml`'s `tests.include`.
+  - A misspelt key in `sedum.config.yaml` gets a "Did you mean `browser`?" fix, as test files already do.
+  - A run that never started a test no longer prints "read …" hints.
+  - An unresolved step says why (no element matches, several match, or nothing to click), and its error code is `no_match` instead of `none`.
+  - `report.md` labels an error "browser error, untrusted" only when it came from the browser.
+  - A test file with neither `steps` nor `goal` is told so, instead of "…but not both".
+  - An unexpected internal error is no longer reported as "The command could not be parsed safely".
+
+- 0ddfcad: Flag a test that passes only after a failed attempt as `flaky`. It still counts as passed, but the flag appears on the test, in the run's flags, in the terminal summary (`flaky N test(s)`) and in JUnit output, and `--strict` exits 2 as for any flagged pass. Previously `--retries` could hide a flaky test completely.
+- 45e4f4e: Print `npx sedum …` in hints when sedum runs from a project's `node_modules` or through npx, as the README installs it. Previously every "Next steps", "rerun" and "Fix" hint said bare `sedum …`, which fails with "command not found" for a local install. This covers terminal output and the rerun hints in the HTML, Markdown and JUnit reports. A global install keeps `sedum`.
+- 4ba7bfd: Fix the HTML replay captions repeating the verb (`type type {{user}} …`, `click click the login button`). The caption is now the step sentence, which already names its action.
+- 3df6e4a: Stop the HTML report's CONF, MS and COST columns from wrapping mid-number (`0.⏎95`, `20⏎5m⏎s`, `$0.0⏎0007⏎8`) when a long step, such as a goal, squeezes the table. Number cells and column headers no longer wrap.
+- 77f0e94: Stop repeating lines in `sedum run` terminal output. Each test's result line appeared twice, the `progress` path twice, and the cost three ways ("Text models", "All models (all attempts)", and "model … / cost …"). The final summary now adds only per-test details (retries and cache outcomes) under the test's file, names `progress.json` once at the start, and shows one cost breakdown. "All models" appears only when vision calls make it differ from "Text models", and an incomplete cost is still called out.
+- Updated dependencies [9131d3c]
+- Updated dependencies [834b723]
+- Updated dependencies [a8f641d]
+- Updated dependencies [c5469e4]
+- Updated dependencies [0ddfcad]
+- Updated dependencies [c135228]
+- Updated dependencies [e83c74c]
+- Updated dependencies [0662f50]
+- Updated dependencies [cbd82f1]
+- Updated dependencies [acae6ef]
+- Updated dependencies [62db939]
+- Updated dependencies [fd55a18]
+- Updated dependencies [2fbd519]
+  - @sedum-dev/core@0.1.0-alpha.5
+
 ## 0.1.0-alpha.4
 
 ### Minor Changes
