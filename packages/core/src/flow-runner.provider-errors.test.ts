@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { NoopClassificationCache } from "./classification-cache.js";
 import { runFlow } from "./flow-runner.js";
 import { ProviderError, type ProviderErrorCode } from "./provider.js";
+import { RunRecorder } from "./run-recorder.js";
 
 async function runWithFailingProvider(step: string, code: ProviderErrorCode) {
   const root = await mkdtemp(path.join(tmpdir(), "sedum-provider-"));
@@ -61,17 +62,27 @@ async function runWithFailingProvider(step: string, code: ProviderErrorCode) {
       })),
       close: vi.fn(async () => {}),
     };
+    const recorder = new RunRecorder(async () => {}, "provider-run");
+    await recorder.start();
     const fail = async () => {
       throw new ProviderError(code, "provider failed");
     };
-    return await runFlow(file, {
+    const result = await runFlow(file, {
       repoRoot: root,
       browser: { launch: vi.fn(async () => session) } as never,
       provider: { classifyBatch: vi.fn(), choose: fail, holds: fail },
       classificationCache: new NoopClassificationCache(),
       env: {},
       baseUrl: version.route,
+      report: {
+        recorder,
+        privacy: { secretValues: [] },
+        evidenceEnabled: false,
+        replay: false,
+        saveFrame: vi.fn(),
+      },
     });
+    return { ...result, steps: recorder.snapshot.tests[0]?.attempts[0]?.steps };
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -94,6 +105,26 @@ describe("provider failures that affect the whole run", () => {
       expect(result).toMatchObject({ status: "could_not_run", code: expected });
     },
   );
+
+  it("names a rejected key and records it on the step that hit it", async () => {
+    const result = await runWithFailingProvider(
+      "click the login button",
+      "authentication",
+    );
+    expect(result).toMatchObject({
+      message: "The model provider rejected the API key.",
+      fix: expect.stringContaining("TYPESAFE_API_KEY"),
+    });
+    expect(result.steps).toMatchObject([
+      {
+        state: "error",
+        error: {
+          code: "provider_authentication",
+          message: "The model provider rejected the API key.",
+        },
+      },
+    ]);
+  });
 
   it("keeps other provider failures scoped to the step", async () => {
     const result = await runWithFailingProvider(

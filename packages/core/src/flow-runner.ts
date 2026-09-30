@@ -207,6 +207,44 @@ function unsupported(
   };
 }
 
+/** Provider failures name the cause the provider reported, like `sedum doctor`. */
+function providerFailure(
+  file: string,
+  error: ProviderError,
+): Extract<FlowRunResult, { status: "could_not_run" }> {
+  const details: Partial<
+    Record<
+      ProviderError["code"],
+      { readonly message: string; readonly fix: string }
+    >
+  > = {
+    "rate-limited": {
+      message: "The provider kept rate limiting requests for five minutes.",
+      fix: "Lower --parallel or --provider-concurrency, or retry later.",
+    },
+    authentication: {
+      message: "The model provider rejected the API key.",
+      fix: "Set TYPESAFE_API_KEY to a valid key, check it with `sedum doctor`, then rerun.",
+    },
+    configuration: {
+      message: "The model provider is not configured correctly.",
+      fix: "Check TYPESAFE_API_KEY, TYPESAFE_BASE_URL and the model with `sedum doctor`, then rerun.",
+    },
+  };
+  return {
+    status: "could_not_run",
+    file,
+    code:
+      error.code === "rate-limited"
+        ? "provider_rate_limited"
+        : `provider_${error.code}`,
+    ...(details[error.code] ?? {
+      message: "The model provider could not complete the run safely.",
+      fix: "Check provider availability and the test input, then rerun the test.",
+    }),
+  };
+}
+
 function runtimeFailure(file: string, error: unknown): FlowRunResult {
   if (error instanceof BrowserDriverError) {
     const details: Record<
@@ -253,26 +291,7 @@ function runtimeFailure(file: string, error: unknown): FlowRunResult {
       ...details[error.code],
     };
   }
-  if (error instanceof ProviderError) {
-    if (error.code === "rate-limited")
-      return {
-        status: "could_not_run",
-        file,
-        code: "provider_rate_limited",
-        message: "The provider kept rate limiting requests for five minutes.",
-        fix: "Lower --parallel or --provider-concurrency, or retry later.",
-      };
-    return {
-      status: "could_not_run",
-      file,
-      code: `provider_${error.code}`,
-      message: "The model provider could not complete the run safely.",
-      fix:
-        error.code === "configuration" || error.code === "authentication"
-          ? "Check the configured provider API key and access, then rerun the test."
-          : "Check provider availability and the test input, then rerun the test.",
-    };
-  }
+  if (error instanceof ProviderError) return providerFailure(file, error);
   return {
     status: "could_not_run",
     file,
@@ -605,6 +624,15 @@ async function executeSentence(
     await report.test.addStep(result);
     return outcome;
   };
+  // A provider failure every later step would hit too is recorded on this
+  // step with its real cause, then ends the attempt and the run.
+  const runWide = async (error: ProviderError): Promise<ProviderError> => {
+    const outcome = providerFailure(step.source.file, error);
+    await record(outcome, {
+      error: { code: outcome.code, message: outcome.message },
+    });
+    return error;
+  };
   // Observe one settled DOM before locating/judging the next step. This avoids
   // treating the mutation from the previous action as a fresh locator target;
   // it does not retry or replay an action.
@@ -730,7 +758,7 @@ async function executeSentence(
       report?.privacy.secretValues.push(remembered);
       return record("continue", locator ? { locator } : {});
     } catch (error) {
-      if (isRunWideProviderError(error)) throw error;
+      if (isRunWideProviderError(error)) throw await runWide(error);
       return record(
         unsupported(
           step.source.file,
@@ -772,7 +800,7 @@ async function executeSentence(
         verify: result,
       });
     } catch (error) {
-      if (isRunWideProviderError(error)) throw error;
+      if (isRunWideProviderError(error)) throw await runWide(error);
       const priorCalls =
         error instanceof AssertionEngineError && error.failedCall
           ? [resultCall(error.failedCall, "judge")]
@@ -792,7 +820,8 @@ async function executeSentence(
               failedCalls: priorCalls,
             });
           } catch (retryError) {
-            if (isRunWideProviderError(retryError)) throw retryError;
+            if (isRunWideProviderError(retryError))
+              throw await runWide(retryError);
             return record(
               unsupported(
                 step.source.file,
@@ -984,7 +1013,7 @@ async function executeSentence(
   try {
     resolved = await locate();
   } catch (error) {
-    if (isRunWideProviderError(error)) throw error;
+    if (isRunWideProviderError(error)) throw await runWide(error);
     return record(
       unsupported(
         step.source.file,
@@ -1005,6 +1034,7 @@ async function executeSentence(
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     });
   } catch (error) {
+    if (isRunWideProviderError(error)) throw await runWide(error);
     if (!(error instanceof LocateRetryError)) throw error;
     return record(
       unsupported(
@@ -1179,7 +1209,7 @@ async function executeSentence(
         : { detail: `Chose "${chosenOption}" in the dropdown.` }),
     });
   } catch (error) {
-    if (isRunWideProviderError(error)) throw error;
+    if (isRunWideProviderError(error)) throw await runWide(error);
     const actionError = error instanceof StepExecutionError ? error : null;
     const failed =
       actionError &&
