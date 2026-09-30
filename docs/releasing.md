@@ -1,6 +1,6 @@
 # Releasing Sedum
 
-The four npm packages share one version: `sedum-cli`, `@sedum-dev/core`, `@sedum-dev/provider-typesafe`, and `@sedum-dev/reporters`. Changesets is in `alpha` prerelease mode. The first version PR should therefore be `0.1.0-alpha.0`; public npm releases use the `next` tag.
+The four npm packages share one version: `sedum-cli`, `@sedum-dev/core`, `@sedum-dev/provider-typesafe`, and `@sedum-dev/reporters`. Changesets is in `alpha` prerelease mode. The first version PR should therefore be `0.1.0-alpha.0`; public npm releases use the `latest` tag, so the README's plain `npm install -D sedum-cli` installs the newest alpha. Move them to a prerelease tag once a stable release exists.
 
 ## Flow
 
@@ -8,7 +8,7 @@ The four npm packages share one version: `sedum-cli`, `@sedum-dev/core`, `@sedum
 2. On `main`, `release-pr.yml` opens or updates the Changesets version PR. Review and merge it after CI passes.
 3. After CI succeeds on that merge, `release-candidate.yml` builds and packs the versioned packages from the merged SHA. It rebuilds on later `main` commits while that version remains unpublished, so a newer source commit supersedes the old candidate. Its `npm-candidate` artifact contains `manifest.json` and all four tarballs. The candidate workflow installs that exact tarball set on Linux, macOS, and Windows. Retention is 60 days. Record the candidate workflow run ID, artifact ID/digest, and manifest SHA-256.
 4. For the temporary alpha path, a maintainer dispatches `publish-npm.yml` on `main` with the successful candidate run ID. It checks the run, artifact digest, manifest, package hashes, current `main` commit, alpha version, and protected release environment. It has no UAT input.
-5. The `npm-release` environment requires a fresh human approval. The publish job repeats the candidate checks after approval, publishes the exact tarballs with provenance under `next`, checks registry bytes and integrity, creates a GitHub release from the Changesets changelogs, and tests a clean public install on Linux, macOS, and Windows.
+5. The `npm-release` environment requires a fresh human approval. The publish job repeats the candidate checks after approval, publishes the exact tarballs with provenance under `latest`, checks registry bytes, integrity, and that `latest` points at the new version, creates a GitHub release from the Changesets changelogs, and tests a clean public install on Linux, macOS, and Windows.
 
 Any new source commit after candidate validation requires another candidate. Failed, missing, expired, or unverifiable artifacts block publication. npm versions are immutable. A rerun after partial publication skips only packages whose public tarball bytes match the candidate; a mismatch blocks the release.
 

@@ -62,7 +62,7 @@ for (const entry of manifest.packages) {
       "--access",
       "public",
       "--tag",
-      "next",
+      "latest",
       "--provenance",
       "--ignore-scripts",
     ],
