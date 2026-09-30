@@ -431,8 +431,14 @@ export class RunRecorder {
     const test = this.testById(testId);
     const attempt = test.attempts.at(-1);
     if (!attempt) throw new Error("No test to finish");
+    const retriedPass =
+      verdict === "passed" &&
+      test.attempts.slice(0, -1).some((prior) => prior.verdict === "failed");
     const flags = [
-      ...new Set(attempt.steps.flatMap((step) => step.flags)),
+      ...new Set([
+        ...attempt.steps.flatMap((step) => step.flags),
+        ...(retriedPass ? (["flaky"] as const) : []),
+      ]),
     ] as ResultAttempt["flags"];
     const finished = new Date().toISOString();
     const updatedAttempt: ResultAttempt = {

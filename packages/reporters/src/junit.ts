@@ -383,7 +383,9 @@ function testSuite(
     const stepFlags = { low_confidence: 0, contradiction: 0 };
     for (const step of attempt.steps)
       for (const flag of step.flags) stepFlags[flag] += 1;
-    output.push(`flags: ${flagSummary(stepFlags)} (flagged steps)`);
+    output.push(
+      `flags: ${flagSummary(stepFlags)} (flagged steps)${test.flags.includes("flaky") ? "; flaky: passed only after a failed attempt" : ""}`,
+    );
   }
   // In default mode a flagged pass has no failure to carry its diagnostics;
   // they include the attempt history, which otherwise stands alone.

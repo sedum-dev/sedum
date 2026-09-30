@@ -4,7 +4,9 @@ const probability = z.number().finite().min(0).max(1);
 const nonnegative = z.number().finite().nonnegative();
 const count = z.number().int().nonnegative();
 const verdict = z.enum(["passed", "failed"]);
-const flag = z.enum(["low_confidence", "contradiction"]);
+const stepFlag = z.enum(["low_confidence", "contradiction"]);
+/** Attempts, tests and runs add `flaky`: a pass that needed a retry. */
+const flag = z.enum(["low_confidence", "contradiction", "flaky"]);
 const state = z.enum(["running", "completed", "interrupted", "error"]);
 
 export const ResultSourceSchema = z.strictObject({
@@ -134,7 +136,7 @@ export const ResultStepSchema = z.strictObject({
   sourceStack: z.array(ResultSourceSchema).min(1),
   state,
   verdict: verdict.nullable(),
-  flags: z.array(flag),
+  flags: z.array(stepFlag),
   elapsedMs: nonnegative,
   page: ResultPageSchema,
   locator: ResultLocatorSchema.nullable(),

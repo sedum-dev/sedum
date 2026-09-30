@@ -66,4 +66,29 @@ describe("SED-13 exit policy", () => {
     ]);
     expect([runExitCode(zero, false), runExitCode(zero, true)]).toEqual([3, 3]);
   });
+
+  it("flags a pass that needed a retry, so --strict exits 2", async () => {
+    const recorder = new RunRecorder(async () => undefined, "flaky-fixture");
+    await recorder.start();
+    await recorder.startTest({ id: "test", file: "x.test.yaml" });
+    await recorder.addStep(fixtureStep("failed", []));
+    await recorder.finishTest("failed");
+    await recorder.startAttempt();
+    await recorder.addStep({ ...fixtureStep("passed", []), id: "retry" });
+    await recorder.finishTest("passed");
+    await recorder.finish();
+    const result = recorder.snapshot;
+    expect(result.tests[0]?.attempts.map((attempt) => attempt.flags)).toEqual([
+      [],
+      ["flaky"],
+    ]);
+    expect(result.tests[0]?.flags).toEqual(["flaky"]);
+    expect(result.flags).toEqual(["flaky"]);
+    expect(result.verdict).toBe("passed");
+    // No step was flagged; only the attempt history makes it flaky.
+    expect(result.totals.flaggedSteps).toBe(0);
+    expect([runExitCode(result, false), runExitCode(result, true)]).toEqual([
+      0, 2,
+    ]);
+  });
 });

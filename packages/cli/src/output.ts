@@ -149,7 +149,7 @@ export function renderRunSummary(
     `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed${erroredTests ? `, ${erroredTests} could not run` : ""}`,
   );
   lines.push(
-    `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}`,
+    `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}, flaky ${value.tests.filter((test) => test.flags.includes("flaky")).length} test(s)`,
   );
   lines.push(...executionLines(value));
   for (const test of value.tests)
