@@ -395,14 +395,21 @@ export async function runScriptTest(
       scope: Record<string, ResolvedDataEntry>,
       presentation: SentencePresentation,
     ): Promise<void> => {
-      const outcome = await executeSentence(
-        activePage,
-        step,
-        dependencies,
-        scope,
-        opaqueEntries,
-        presentation,
-      );
+      let outcome: Awaited<ReturnType<typeof executeSentence>>;
+      try {
+        outcome = await executeSentence(
+          activePage,
+          step,
+          dependencies,
+          scope,
+          opaqueEntries,
+          presentation,
+        );
+      } catch (error) {
+        // A lost browser or a run-wide provider error ends the attempt even
+        // if the test body catches it.
+        return stop(runtimeFailure(absolute, error) as Problem);
+      }
       if (outcome === "continue") return;
       if (outcome === "failed")
         stop({ status: "failed", file: absolute, source: step.source });

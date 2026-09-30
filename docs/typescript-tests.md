@@ -100,8 +100,9 @@ await ai("type {{email}} into the Email field", { email });
 await ai(["click the Cart link", "click the Checkout button"]);
 ```
 
-A sentence is one step, written exactly as in a YAML test: `click`, `type`,
-`verify`, and `remember` sentences, classified and resolved the same way (see
+A sentence is one step, written exactly as in a YAML test and classified and
+resolved the same way: `click`, `type`, `press`, `goto`, `scroll`, `wait`,
+`verify`, `measure`, and `remember` (see
 [step classification](classification.md)). A list runs its sentences in order,
 sharing one values object.
 
