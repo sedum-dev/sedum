@@ -48,6 +48,19 @@ describe("project configuration", () => {
     expect(Object.isFrozen(config.thresholds)).toBe(true);
   });
 
+  it("suggests the intended key for a misspelt config key", async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, "sedum.config.yaml"), "browsr: chrome\n");
+    await expect(loadProjectConfig(root, {})).rejects.toMatchObject({
+      diagnostics: [
+        expect.objectContaining({
+          code: "unknown_config_key",
+          fix: "Did you mean `browser`?",
+        }),
+      ],
+    });
+  });
+
   it("validates vision settings and reads its credential only from the environment", async () => {
     const root = await temporaryRoot();
     await writeFile(

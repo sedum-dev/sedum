@@ -802,6 +802,23 @@ export async function executeRunCommand(
       await recorder.finish(canonicalDiagnosticError(diagnostic));
       return terminalExecution(diagnostic);
     }
+    // Nothing runnable because the named paths themselves are wrong: say so,
+    // rather than blaming the config's include patterns.
+    if (files.length === 0 && discoveryProblems.length) {
+      const [first] = discoveryProblems;
+      const diagnostic: CliDiagnostic = {
+        code: "discovery_error",
+        message:
+          discoveryProblems.length === 1
+            ? `${first!.file}: ${first!.message}`
+            : `${discoveryProblems.length} test file or path problem(s) were found; the first: ${first!.file}: ${first!.message}`,
+        fix: first!.fix,
+      };
+      await recorder.addDiscoveryProblems(discoveryProblems);
+      commit();
+      await recorder.finish(canonicalDiagnosticError(diagnostic));
+      return terminalExecution(diagnostic);
+    }
     if (files.length === 0) {
       const error = new ProjectConfigError([
         {

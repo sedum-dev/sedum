@@ -299,9 +299,15 @@ function safeOperationError(
         ? "page-closed"
         : "operation-failed";
   const lines = safeCallLog(error);
+  // Chromium's network error code names the cause and carries no page data.
+  const network =
+    error instanceof Error
+      ? (/net::ERR_[A-Z_]+/.exec(error.message)?.[0] ??
+        (/Timeout \d+ms exceeded/.test(error.message) ? "timeout" : null))
+      : null;
   return new BrowserDriverError(
     code,
-    `${operation} failed.${lines.length ? `\nCall log:\n${lines.join("\n")}` : ""}`,
+    `${operation} failed${network ? ` (${network})` : ""}.${lines.length ? `\nCall log:\n${lines.join("\n")}` : ""}`,
   );
 }
 

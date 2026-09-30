@@ -309,6 +309,26 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await context.close();
     });
 
+    it("names the network cause of a failed navigation without the URL", async () => {
+      const { page, context } = await fresh();
+      const url = new RuntimeUrl(
+        ["https://", ".invalid/"],
+        [new RuntimeValue("NAV_SECRET")],
+      );
+      let failure: unknown;
+      try {
+        await executeStep(page, { op: "goto", url });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toMatchObject({
+        code: "operation_failed",
+        message: "goto failed: net::ERR_NAME_NOT_RESOLVED",
+      });
+      expect(JSON.stringify(failure)).not.toContain("NAV_SECRET");
+      await context.close();
+    });
+
     it("navigates with a safe display URL, emits one wheel, and honors explicit wait", async () => {
       const { page, context } = await fresh();
       const value = new RuntimeValue("secret-token", "{{token}}");

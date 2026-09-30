@@ -570,7 +570,9 @@ export function parseFlow(
       "error",
       "invalid_test_mode",
       at(file, counter, nodes, []),
-      "This test needs either a `steps` list or a `goal`, but not both.",
+      plain.goal === undefined
+        ? "This test has neither a `steps` list nor a `goal`."
+        : "This test has both a `steps` list and a `goal`; use one.",
       "Use `steps` for authored actions, or `goal` with a required `verify` claim.",
     );
   if ((plain.goal === undefined) !== (plain.verify === undefined))
