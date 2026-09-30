@@ -7,7 +7,7 @@ import { runFlow } from "./flow-runner.js";
 import { RunRecorder } from "./run-recorder.js";
 
 describe("vision fallback feedback", () => {
-  it("says why vision was not tried for a click with no match", async () => {
+  it("says why vision could not run for a click with no match", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "sedum-vision-hint-"));
     try {
       const file = path.join(root, "main.test.yaml");
@@ -98,7 +98,7 @@ describe("vision fallback feedback", () => {
       expect(
         recorder.snapshot.tests[0]?.attempts[0]?.steps[0]?.error?.message,
       ).toBe(
-        "Could not resolve this click step. Vision fallback was not tried: the text model found no matching element, and vision only breaks ties between repeated controls.",
+        "Could not resolve this click step. Vision fallback could not run: it needs 2 to 40 fully visible, unobscured controls on screen.",
       );
     } finally {
       await rm(root, { recursive: true, force: true });

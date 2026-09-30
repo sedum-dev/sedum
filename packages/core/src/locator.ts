@@ -1466,7 +1466,20 @@ export async function resolveTarget(
       const fallback = codeFallback
         ? codeAfterNone(options.sentence, candidates)
         : null;
-      if (!fallback) return unresolved("none");
+      if (!fallback) {
+        // A description only a picture can settle ("the Add to cart button
+        // under the grey two-tone top") gets one look from vision, which
+        // chooses among every visible control or abstains. Without a vision
+        // choice the step stays "none".
+        if (options.visionResolver && options.operation === "click") {
+          gate = "none";
+          const seen = await ambiguous(candidates);
+          return seen.kind === "unresolved" && seen.reason === "ambiguous"
+            ? { ...seen, reason: "none" }
+            : seen;
+        }
+        return unresolved("none");
+      }
       gate = "resolved_in_code_after_none";
       if (options.operation === "fill" && !fallback.editable)
         return unresolved("not_fillable");

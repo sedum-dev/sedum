@@ -1982,19 +1982,56 @@ describe("vision fallback boundaries", () => {
       expect(vision.choose).toHaveBeenCalledTimes(1);
     },
   );
-  it("never invokes vision for fills or none decisions", async () => {
+  it("never invokes vision for fills", async () => {
     const { page, vision, jev } = setup();
     await resolveTarget(page, jev, {
       operation: "fill",
       sentence: "Edit",
       visionResolver: vision,
     });
-    await resolveTarget(
-      page,
-      resolver((options) => answer(options, "none")),
-      { operation: "click", sentence: "Edit", visionResolver: vision },
-    );
     expect(vision.choose).not.toHaveBeenCalled();
+  });
+  it("asks vision when the text model finds no match for a click", async () => {
+    const { page, vision } = setup();
+    const none = resolver((options) => answer(options, "none"));
+    const picked = await resolveTarget(page, none, {
+      operation: "click",
+      sentence: "click the Edit under the photo of the grey two-tone top",
+      visionResolver: vision,
+    });
+    expect(vision.choose).toHaveBeenCalledTimes(1);
+    expect(picked).toMatchObject({
+      kind: "resolved",
+      diagnostic: {
+        gate: "none:vision_selected",
+        vision: { outcome: "selected" },
+      },
+    });
+    expect(picked.kind === "resolved" && picked.target.driverTarget().ref).toBe(
+      "fresh-r1",
+    );
+    // A vision abstention keeps the text model's "none".
+    vi.mocked(vision.choose).mockResolvedValueOnce({
+      decision: { kind: "abstain" as const, reason: "no visible match" },
+      call,
+    });
+    const abstained = await resolveTarget(recordedPage(items).page, none, {
+      operation: "click",
+      sentence: "click the Edit under the photo of the grey two-tone top",
+      visionResolver: vision,
+    });
+    expect(abstained).toMatchObject({
+      kind: "unresolved",
+      reason: "none",
+      diagnostic: { vision: { outcome: "abstained" } },
+    });
+    // Without vision, "none" is unchanged.
+    expect(
+      await resolveTarget(recordedPage(items).page, none, {
+        operation: "click",
+        sentence: "click the Edit under the photo of the grey two-tone top",
+      }),
+    ).toMatchObject({ kind: "unresolved", reason: "none" });
   });
   it("preserves safe vision failure details and billed usage", async () => {
     const { page, vision, jev } = setup();

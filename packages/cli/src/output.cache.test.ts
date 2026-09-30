@@ -141,7 +141,7 @@ describe("vision fallback in terminal summary", () => {
     };
     const accepted = await render("accepted");
     expect(accepted).toContain(
-      "vision google/gemini-3.8-flash: enabled, not used; it only breaks ties between repeated controls the text model finds ambiguous",
+      "vision google/gemini-3.8-flash: enabled, not used; every click was resolved from the page text",
     );
     expect(accepted).not.toContain("vision warning");
     expect(await render("rejected")).toContain(

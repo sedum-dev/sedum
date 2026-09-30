@@ -109,8 +109,11 @@ still runs first. With vision disabled, Jev's behavior is unchanged. Core API
 callers can explicitly override this via `repeatedMember`; an explicit
 `modelPick: true` takes precedence over vision.
 
-Only Jev's ambiguous repeated-control **clicks** can invoke vision. `none`,
-missing controls, fills, assertions, and provider failures do not activate it.
+Only **clicks** can invoke vision: when Jev's pick among repeated controls is
+ambiguous, or when Jev finds no matching element at all, for example a target
+described by its picture. In the second case vision chooses among every
+visible control or abstains, and an abstention keeps the step's `none`.
+Missing controls, fills, assertions, and provider failures do not activate it.
 The model selects a labeled existing candidate or abstains. Unknown IDs and
 changed page versions are rejected; execution still uses Sedum's normal target
 and actionability checks. Visual layout changes without a DOM revision are not
@@ -142,7 +145,8 @@ unresolved and is not retried.
 When vision is enabled, `sedum run` checks `OPEN_ROUTER_API_KEY` once before
 tests start, using OpenRouter's unbilled key endpoint. The run summary says
 which vision model was enabled and on how many steps it ran, and warns when
-OpenRouter rejected the key. A click that fails without trying vision says
-why, for example because the text model found no matching element. `sedum
+OpenRouter rejected the key. A click that fails without vision being able
+to run says why, for example because fewer than two controls were fully
+visible. `sedum
 doctor` checks the key when `vision.enabled` is true, or with
 `sedum doctor --vision`.

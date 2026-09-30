@@ -88,7 +88,7 @@ function executionLines(value: RunResult): string[] {
     lines.push(
       used
         ? `vision ${execution.vision.model}: used on ${used} step(s)`
-        : `vision ${execution.vision.model}: enabled, not used; it only breaks ties between repeated controls the text model finds ambiguous`,
+        : `vision ${execution.vision.model}: enabled, not used; every click was resolved from the page text`,
     );
     if (execution.vision.key === "rejected")
       lines.push(
