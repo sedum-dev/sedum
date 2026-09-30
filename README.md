@@ -45,6 +45,7 @@ You need Node.js 20.19 or newer and a [TypeSafe](https://typesafe.ai) API key or
 ```sh
 mkdir my-sedum-tests && cd my-sedum-tests
 npm init -y
+git init                              # locator results are cached in Git metadata
 npm install -D sedum-cli
 npx sedum init                        # an example test, config, and .env.example
 npx sedum browsers install chromium   # if init says it is missing

@@ -1152,7 +1152,18 @@ async function executeSentence(
         );
         await dependencies.locatorCache.put(seed.key, entry);
       } catch (error) {
+        // A target that cannot be told apart safely is never stored, so an
+        // "absent" miss would wrongly suggest the next run will hit.
         if (
+          error instanceof Error &&
+          error.message === "candidate_not_distinguishable" &&
+          resolved.cache?.reason === "absent"
+        )
+          recordedLocator = {
+            ...resolved,
+            cache: { ...resolved.cache, reason: "not_cacheable" },
+          };
+        else if (
           error instanceof Error &&
           error.message !== "candidate_not_distinguishable" &&
           resolved.cache

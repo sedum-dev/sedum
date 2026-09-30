@@ -29,6 +29,13 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
           );
           return;
         }
+        if (request.url === "/submit") {
+          response.writeHead(200, { "content-type": "text/html" });
+          response.end(
+            '<form onsubmit="event.preventDefault()"><input type="submit" value="Login"></form>',
+          );
+          return;
+        }
         if (request.url === "/checkout") {
           response.writeHead(200, { "content-type": "text/html" });
           response.end(
@@ -418,6 +425,20 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const secondLiteral = await run("literal-b", literalB);
       expect(secondLiteral.flow.status).toBe("passed");
       expect(secondLiteral.result.totals.modelCalls).toBe(0);
+      // An input button's name is its runtime value, so it is never stored.
+      // Say so rather than "absent", which promises a hit next time.
+      const submitFile = path.join(root, "submit.test.yaml");
+      await writeFile(
+        submitFile,
+        `url: ${base}/submit\nsteps:\n  - click the login button\n`,
+      );
+      for (const id of ["submit-cold", "submit-again"]) {
+        const submit = await run(id, submitFile);
+        expect(
+          submit.result.tests[0]?.attempts[0]?.steps[0]?.locator?.cache,
+        ).toMatchObject({ outcome: "miss", reason: "not_cacheable" });
+        expect(submit.result.totals.modelCalls).toBe(1);
+      }
     }, 15_000);
   },
 );
