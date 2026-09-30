@@ -62,8 +62,11 @@ The design follows `model.py` (`action_space`, `choose`), `agent.py`, and
 5. Sedum has one operation-specific snapshot, so recollect the chosen operation
    and require the exact page version and whole candidate surface to match.
    Remap its private reference, then execute through `executeStep`.
-6. Record before dispatch. Stop on every executor error, including pre-dispatch
-   errors; an uncertain dispatched action is never replayed.
+6. Record before dispatch. A target that went stale before dispatch provably
+   received no input: it is taken back, not reported as an action, and the
+   page is observed again (each retry still costs a planner request). Stop on
+   every other executor error; an uncertain dispatched action is never
+   replayed.
 7. `DONE` calls the existing independent assertion engine with separately
    authored claims. The runner requires **unflagged** passes: stricter than authored
    steps' normal passed-with-warning policy. `DONE` alone cannot pass.
@@ -80,6 +83,12 @@ Default budgets: 24 decision/assertion reservations, 18 dispatched actions,
 including independent Judge calls. More than three visits to the same
 page/digest/field-binding state stops as `no_progress`. Low confidence,
 abstention, oversized/incomplete observations and stale targets fail closed.
+An abstention reports which decision was uncertain, on which page, and its top
+probabilities, for example `operation on /checkout-step-one.html: CLICK 0.41,
+TYPE 0.33, BLOCKED 0.17`. Name that page or control in the goal, or move that
+part into authored steps. `BLOCKED` means no offered element or field can move
+the goal forward; every step the goal names, such as signing in or placing an
+order, is treated as expected.
 Timeouts with unknown provider usage retain unknown cost rather than zero cost.
 Custom provider implementations must honor cancellation and `maxAttempts: 1`.
 
