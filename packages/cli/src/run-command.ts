@@ -85,6 +85,8 @@ export interface RunCommandOptions {
   readonly locatorCacheDisabled?: boolean;
   readonly locatorCacheCi?: boolean;
   readonly signal?: AbortSignal;
+  /** How to invoke sedum in report rerun hints, e.g. `npx sedum`. */
+  readonly command?: string;
   readonly onSnapshot?: (
     snapshot: RunResult,
     artifacts: RunArtifactPaths,
@@ -229,11 +231,13 @@ async function openReportCopy(
     return undefined;
   }
   if (!selection.json && !junit) return undefined;
-  return ProgressWriter.create(root, runId, reporterDir, {
+  const writer = await ProgressWriter.create(root, runId, reporterDir, {
     json: selection.json,
     html: false,
     junit,
   });
+  writer.command = canonical.command;
+  return writer;
 }
 
 interface RunFinish {
@@ -602,6 +606,7 @@ export async function executeRunCommand(
         config.outputDir,
         { markdown: reportFiles.markdown },
       );
+      writer.command = options.command ?? "sedum";
     } catch {
       commit();
       const intended = path.join(config.outputDir, runId);

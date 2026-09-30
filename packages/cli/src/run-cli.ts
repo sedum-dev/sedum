@@ -1,3 +1,4 @@
+import { withCommand } from "./invocation.js";
 import { Command, CommanderError, InvalidArgumentError } from "commander";
 import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
 import {
@@ -64,6 +65,8 @@ export interface CliRuntime {
   readonly createClassificationProvider?: ClassificationProviderFactory;
   readonly createRelevanceProvider?: RelevanceProviderFactory;
   readonly doctorProbes?: DoctorProbes;
+  /** How the user invokes sedum, for hints; the entry point detects it. */
+  readonly command?: "sedum" | "npx sedum";
   readonly confirmInit?: (question: string) => Promise<boolean>;
 }
 
@@ -202,8 +205,12 @@ export async function runCli(
 ): Promise<CliOutput> {
   const stdout: string[] = [];
   const stderr: string[] = [];
-  const writeOut = runtime.stdout ?? ((value: string) => stdout.push(value));
-  const writeErr = runtime.stderr ?? ((value: string) => stderr.push(value));
+  // Hints name the command the user can actually type again.
+  const command = runtime.command ?? "sedum";
+  const rawOut = runtime.stdout ?? ((value: string) => stdout.push(value));
+  const rawErr = runtime.stderr ?? ((value: string) => stderr.push(value));
+  const writeOut = (value: string) => rawOut(withCommand(value, command));
+  const writeErr = (value: string) => rawErr(withCommand(value, command));
   const capabilities = runtime.capabilities ?? plainOutput;
   // Loaded lazily so `validate` and `list` never load the provider or browser code.
   const executeRun =
@@ -581,6 +588,7 @@ export async function runCli(
             }
         };
         const execution = await executeRun({
+          command,
           ...(runtime.onStrayRejection
             ? { onStrayRejection: runtime.onStrayRejection }
             : {}),

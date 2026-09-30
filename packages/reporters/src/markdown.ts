@@ -339,7 +339,7 @@ function verdictLine(
 }
 
 /** Render one validated run as Markdown for a reader who has to fix it. */
-export function renderMarkdown(input: RunResult): string {
+function renderMarkdownBody(input: RunResult): string {
   const result = validateRunResult(input);
   const tests = result.tests
     .map((test, index) => ({ test, index }))
@@ -487,4 +487,21 @@ export function renderMarkdown(input: RunResult): string {
       );
   }
   return out.join("\n") + "\n";
+}
+
+export interface MarkdownReportOptions {
+  /** How to invoke sedum in rerun hints, e.g. `npx sedum`. Default `sedum`. */
+  readonly command?: string;
+}
+
+export function renderMarkdown(
+  input: RunResult,
+  options: MarkdownReportOptions = {},
+): string {
+  const body = renderMarkdownBody(input);
+  const command = options.command ?? "sedum";
+  // Rerun hints are the only code spans that start with the command.
+  return command === "sedum"
+    ? body
+    : body.replaceAll("`sedum run ", `\`${command} run `);
 }

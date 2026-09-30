@@ -20,7 +20,7 @@ export type {
   ReporterContext,
   TerminalReporterName,
 } from "./terminal.js";
-export { renderMarkdown } from "./markdown.js";
+export { renderMarkdown, type MarkdownReportOptions } from "./markdown.js";
 export {
   usageLines,
   visionSummary,

@@ -55,7 +55,8 @@ export function usageLines(result: RunResult): string[] {
       `Vision outcomes: ${outcomes.filter((v) => v.outcome === "selected").length} selected · ${outcomes.filter((v) => v.outcome === "abstained").length} abstained · ${outcomes.filter((v) => v.outcome === "failed" || (!v.outcome && v.failure)).length} failed`,
     );
   }
-  lines.push(line("All models (all attempts)", all));
+  // With text models only, the total would repeat the line above.
+  if (vision.length) lines.push(line("All models (all attempts)", all));
   return lines;
 }
 
