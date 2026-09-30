@@ -1637,7 +1637,11 @@ export async function runFlow(
             goalResult.status === "failed"
               ? {
                   code: goalResult.reason,
-                  message: `Goal did not pass: ${goalResult.reason}.`,
+                  message: safeText(
+                    `Goal did not pass: ${goalResult.reason}.${goalResult.detail ? ` The planner was unsure of the ${goalResult.detail}.` : ""}${goalResult.reason.endsWith("_abstention") ? " Name the page or control for that step in the goal, or split the goal into authored steps around it." : ""}`,
+                    privacy,
+                    512,
+                  ),
                 }
               : null,
           evidence: { status: "omitted", reason: "goal_summary" },

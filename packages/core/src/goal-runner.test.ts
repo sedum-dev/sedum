@@ -98,6 +98,37 @@ beforeEach(() => {
   });
 });
 describe("bounded goal runner", () => {
+  it("observes again after a target went stale before dispatch", async () => {
+    vi.mocked(executeStep)
+      .mockRejectedValueOnce(
+        new StepExecutionError("click", "stale", "pre_dispatch"),
+      )
+      .mockResolvedValue({ op: "click", outcome: "acted", elapsedMs: 1 });
+    const onAction = vi.fn(async () => {});
+    const result = await runGoal(page, planner("CLICK"), judge, {
+      ...options,
+      maxActions: 1,
+      onAction,
+    });
+    // The stale attempt dispatched nothing: it is neither counted nor
+    // reported as an action, and the goal continues.
+    expect(result).toMatchObject({ reason: "action_limit", actions: 1 });
+    expect(executeStep).toHaveBeenCalledTimes(2);
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(result.history).toHaveLength(1);
+  });
+  it("still stops on an error after dispatch", async () => {
+    vi.mocked(executeStep).mockRejectedValueOnce(
+      new StepExecutionError("click", "action_uncertain", "post_dispatch"),
+    );
+    expect(await runGoal(page, planner("CLICK"), judge, options)).toMatchObject(
+      {
+        reason: "action_uncertain:post_dispatch",
+        actions: 1,
+      },
+    );
+    expect(executeStep).toHaveBeenCalledTimes(1);
+  });
   it("relaxes only operation margin, retaining target and confidence gates", async () => {
     const model = planner("CLICK");
     const implementation = vi.mocked(model.chooseGoal).getMockImplementation()!;
@@ -112,6 +143,8 @@ describe("bounded goal runner", () => {
     expect(await runGoal(page, model, judge, options)).toMatchObject({
       reason: "operation_abstention",
       actions: 0,
+      // A failed goal says which decision was close, and where.
+      detail: "operation on /: CLICK 0.52, DONE 0.48, BLOCKED 0.00",
     });
     expect(
       await runGoal(page, model, judge, {
