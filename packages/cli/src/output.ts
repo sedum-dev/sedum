@@ -136,6 +136,17 @@ export function renderRunSummary(
       }
     }
   }
+  const outsideGit = value.tests.some((test) =>
+    test.attempts.some((attempt) =>
+      attempt.steps.some(
+        (step) => step.locator?.cache?.reason === "outside_git",
+      ),
+    ),
+  );
+  if (outsideGit)
+    lines.push(
+      "cache off: this project is not a Git checkout; run `git init` to cache locator results",
+    );
   const runLabel = stateLabel(value.state, value.verdict);
   lines.push(`run  ${paint(runLabel.text, runLabel.color, color)}`);
   for (const problem of value.discoveryProblems ?? [])

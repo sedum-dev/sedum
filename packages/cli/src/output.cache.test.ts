@@ -57,6 +57,44 @@ describe("cache outcome in terminal summary", () => {
     expect(output).toContain(
       "cache miss (strong_signal_conflict), model fallback, target changed",
     );
+    expect(output).not.toContain("git init");
+    const outside = {
+      ...recorder.snapshot,
+      tests: recorder.snapshot.tests.map((test) => ({
+        ...test,
+        attempts: test.attempts.map((attempt) => ({
+          ...attempt,
+          steps: [
+            {
+              ...step,
+              locator: {
+                ...step.locator!,
+                cache: {
+                  outcome: "bypassed" as const,
+                  reason: "outside_git",
+                  fallbackCalledModel: true,
+                  targetChanged: false,
+                },
+              },
+            },
+          ],
+        })),
+      })),
+    };
+    expect(
+      renderRunSummary(
+        outside,
+        { stdoutIsTTY: false, stderrIsTTY: false, color: false },
+        {
+          progressPath: "progress.json",
+          resultPath: "result.json",
+          authoritative: true,
+        },
+        false,
+      ),
+    ).toContain(
+      "cache off: this project is not a Git checkout; run `git init` to cache locator results",
+    );
     const visual: ResultStep = {
       ...step,
       locator: {
