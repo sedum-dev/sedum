@@ -350,7 +350,8 @@ function replay(
         src: data ? "data:image/jpeg;base64," + data : null,
         status:
           frame.status === "captured" && !data ? "unavailable" : frame.status,
-        label: step.index + ". " + step.operation + " " + step.sentence,
+        // The sentence already names the action ("type {{user}} in …").
+        label: step.index + ". " + (step.sentence || step.operation),
         step: step.index,
         attempt: attempt.id,
         box: step.targetBox,
