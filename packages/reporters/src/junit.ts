@@ -41,6 +41,8 @@ export interface JunitReportOptions {
    * resolves attachments against, or null to list no attachments.
    */
   readonly evidenceDirectory: string | null;
+  /** How to invoke sedum in rerun hints, e.g. `npx sedum`. Default `sedum`. */
+  readonly command?: string;
 }
 
 const MESSAGE_LIMIT = 512;
@@ -548,7 +550,7 @@ export function isEvidenceDirectory(value: string): boolean {
 }
 
 /** JUnit XML for one validated run; the same input always gives the same bytes. */
-export function renderJunit(
+function renderJunitBody(
   input: RunResult,
   options: JunitReportOptions,
 ): string {
@@ -579,4 +581,16 @@ export function renderJunit(
     suites.map(renderSuite).join("") +
     "</testsuites>\n"
   );
+}
+
+export function renderJunit(
+  input: RunResult,
+  options: JunitReportOptions,
+): string {
+  const body = renderJunitBody(input, options);
+  const command = options.command ?? "sedum";
+  // Rerun hints are the only places the command is written.
+  return command === "sedum"
+    ? body
+    : body.replaceAll("rerun: sedum run ", `rerun: ${command} run `);
 }
