@@ -10,6 +10,7 @@ import type {
 } from "./flow-types.js";
 import {
   parseFrame,
+  samePath,
   scriptRegistry,
   sourceInFile,
   type ScriptRegistration,
@@ -81,7 +82,8 @@ export function checkRegistrations(
     const called = registration.callSite
       ? parseFrame(registration.callSite)
       : undefined;
-    const source = called?.file === file ? called : top;
+    const source =
+      called && samePath(called.file, file) ? { ...called, file } : top;
     const problems: FlowDiagnostic[] = [];
     const { title, options, body } = registration;
     if (typeof title !== "string" || !title.trim() || title.length > 512)

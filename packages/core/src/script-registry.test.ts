@@ -1,4 +1,5 @@
-import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { inspect } from "node:util";
 import { describe, expect, it, test as propertyTest } from "vitest";
 import * as hegel from "@hegeldev/hegel";
@@ -7,6 +8,7 @@ import {
   isSecret,
   parseFrame,
   revealSecret,
+  samePath,
   scriptRegistry,
   secret,
   sourceInFile,
@@ -76,34 +78,37 @@ describe("script test registry", () => {
     () => {
       hegel.test((tc) => {
         const parts = tc.draw(gs.arrays(segment, { minSize: 1, maxSize: 4 }));
-        const file = `/${parts.join("/")}.test.ts`;
+        // An absolute path on this platform, such as /a/b or D:\a\b.
+        const file = path.resolve("/", ...parts) + ".test.ts";
         const line = tc.draw(gs.integers({ minValue: 1, maxValue: 99_999 }));
         const col = tc.draw(gs.integers({ minValue: 1, maxValue: 999 }));
         const frame = tc.draw(
           gs.sampledFrom([
             `    at ${file}:${line}:${col}`,
             `    at Object.fn (${file}:${line}:${col})`,
-            `    at async run (file://${file}:${line}:${col})`,
+            `    at async run (${pathToFileURL(file).href}:${line}:${col})`,
           ]),
         );
-        expect(parseFrame(frame)).toEqual({
-          file: frame.includes("file://")
-            ? fileURLToPath(`file://${file}`)
-            : file,
-          line,
-          col,
-        });
+        expect(parseFrame(frame)).toEqual({ file, line, col });
       }, propertySettings);
     },
   );
 
   it("decodes file URLs with escaped characters", () => {
-    expect(parseFrame("    at x (file:///a%20b/c.test.ts:3:4)")).toEqual({
-      file: fileURLToPath("file:///a%20b/c.test.ts"),
+    const file = path.resolve("/a b/c.test.ts");
+    expect(parseFrame(`    at x (${pathToFileURL(file).href}:3:4)`)).toEqual({
+      file,
       line: 3,
       col: 4,
     });
     expect(parseFrame("    at native code")).toBeUndefined();
+  });
+
+  it("matches a frame path however Windows spells it", () => {
+    const file = path.resolve("/project/a.test.ts");
+    expect(samePath(file, file)).toBe(true);
+    expect(samePath(file.replaceAll("\\", "/"), file)).toBe(true);
+    expect(samePath(path.resolve("/project/b.test.ts"), file)).toBe(false);
   });
 
   it("finds the innermost frame inside the test file", () => {

@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import type { BrowserContext, Page } from "playwright-core";
@@ -166,6 +168,24 @@ export function parseFrame(frame: string): FlowSource | undefined {
   return { file, line: Number(match[2]), col: Number(match[3]) };
 }
 
+/**
+ * Whether a stack frame's path names `file`. On Windows a frame may use
+ * forward slashes, a long name for a short one, or another drive-letter case.
+ */
+export function samePath(a: string, b: string): boolean {
+  const normal = (value: string) => {
+    let resolved = path.resolve(value);
+    try {
+      // Also undoes Windows 8.3 short names, such as RUNNER~1 in a temp dir.
+      resolved = realpathSync.native(resolved);
+    } catch {
+      // A path that does not exist is compared as written.
+    }
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return a === b || normal(a) === normal(b);
+}
+
 /** The innermost stack frame inside `file`, for reporting where a step was written. */
 export function sourceInFile(
   stack: string | undefined,
@@ -173,7 +193,7 @@ export function sourceInFile(
 ): FlowSource | undefined {
   for (const frame of stack?.split("\n").slice(1) ?? []) {
     const source = parseFrame(frame);
-    if (source && source.file === file) return source;
+    if (source && samePath(source.file, file)) return { ...source, file };
   }
   return undefined;
 }
