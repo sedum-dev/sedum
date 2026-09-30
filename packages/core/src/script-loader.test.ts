@@ -496,6 +496,58 @@ test("names", async ({ ai }) => {
     expect(result.fullyValidated).toBe(false);
   });
 
+  it("warns when the test's context goes to a helper validation does not follow", async () => {
+    const folder = path.join(directory, "context-helpers");
+    await mkdir(path.join(folder, "proj", "tests", "support"), {
+      recursive: true,
+    });
+    await mkdir(path.join(folder, "shared"), { recursive: true });
+    await writeFile(
+      path.join(folder, "shared", "login.ts"),
+      'export async function logInCtx(ctx) { await ctx.ai("type {{email into y"); }\n',
+    );
+    await writeFile(
+      path.join(folder, "proj", "tests", "support", "local.ts"),
+      'export async function useCtx(ctx) { await ctx.ai("click A"); }\n',
+    );
+    const test = path.join(folder, "proj", "tests", "ctx.test.ts");
+    await writeFile(
+      test,
+      `import { test } from ${JSON.stringify(api)};
+import { logInCtx } from "../../shared/login.js";
+import { useCtx } from "./support/local.js";
+test("ctx", async (ctx) => {
+  await useCtx(ctx);
+  await logInCtx(ctx);
+});
+`,
+    );
+    const result = await validateProject(
+      { tests: [test], modules: [] },
+      {
+        repoRoot: path.join(folder, "proj"),
+        mode: "offline",
+        cache: new NoopClassificationCache(),
+      },
+    );
+    expect(
+      result.diagnostics.map((item) => [
+        path.basename(item.source.file),
+        item.source.line,
+        item.code,
+      ]),
+    ).toEqual(
+      // The local helper is followed, and reaching ai through ctx warns
+      // there; the helper outside the project warns at the call.
+      expect.arrayContaining([
+        ["ctx.test.ts", 6, "unchecked_call"],
+        ["local.ts", 1, "unchecked_call"],
+      ]),
+    );
+    expect(result.diagnostics).toHaveLength(2);
+    expect(result.fullyValidated).toBe(false);
+  });
+
   it("reports a syntax error and a file without tests", async () => {
     const broken = await load("broken.test.ts", "const = ;\n");
     expect(broken.diagnostics.map((item) => item.code)).toEqual(["load_error"]);

@@ -23,6 +23,12 @@ export interface HelperCall {
   readonly callee: string;
   readonly position: number;
   readonly source: FlowSource;
+  /**
+   * `ai`: the test's ai itself, so the parameter must be named `ai`.
+   * `context`: the test's context or `{ ai }`, so the helper must be one
+   * validation reads.
+   */
+  readonly passes: "ai" | "context";
 }
 
 type Token =
@@ -511,10 +517,28 @@ export function scanScriptSentences(
     }
     return names;
   };
+  // A name bound more than once (nested helpers, a parameter, a shadowing
+  // const) cannot be resolved to one function without scopes.
+  const bindingCount = new Map<string, number>();
+  tokens.forEach((token, index) => {
+    if (token.kind === "ident" && value(index - 1) !== "." && binds(index))
+      bindingCount.set(token.value, (bindingCount.get(token.value) ?? 0) + 1);
+  });
   const functions = new Map<string, string[]>();
+  const ambiguous = new Set<string>();
   tokens.forEach((token, index) => {
     const name = at(index + 1);
     if (token.kind !== "ident" || name?.kind !== "ident") return;
+    if ((bindingCount.get(name.value) ?? 0) > 1) {
+      if (
+        (token.value === "function" && isPunct(index + 2, "(")) ||
+        (["const", "let", "var"].includes(token.value) &&
+          isPunct(index + 2, "=") &&
+          inlineFunction(index + 3))
+      )
+        ambiguous.add(name.value);
+      return;
+    }
     if (token.value === "function" && isPunct(index + 2, "("))
       functions.set(name.value, parameters(index + 2));
     else if (
@@ -558,8 +582,11 @@ export function scanScriptSentences(
         ? "`ai` is renamed here, so the steps called through the new name are not checked before a run."
         : undefined;
     }
-    if ((prev === "{" || prev === ",") && (next === "}" || next === ","))
-      if (value(parentOf[index] ?? -1) === "{") return undefined;
+    if ((prev === "{" || prev === ",") && (next === "}" || next === ",")) {
+      const brace = parentOf[index];
+      if (brace !== undefined && value(brace) === "{")
+        return handedOver(brace, "`{ ai }`");
+    }
     const parent = parentOf[index];
     if (parent !== undefined && value(parent) === "(") {
       const close = match.get(parent);
@@ -581,6 +608,8 @@ export function scanScriptSentences(
           if (skip !== undefined) cursor = skip;
           else if (isPunct(cursor, ",")) position++;
         }
+        if (ambiguous.has(callee.value))
+          return `\`${callee.value}\` is declared more than once in this file, so validation cannot tell which one receives the test's ai.`;
         const local = functions.get(callee.value);
         if (local)
           return local[position] === "ai"
@@ -591,11 +620,46 @@ export function scanScriptSentences(
           callee: callee.value,
           position,
           source: { file, line: token.line, col: token.col },
+          passes: "ai",
         });
         return undefined;
       }
     }
     return "`ai` is passed on as a value here, so the steps it runs are not checked before a run.";
+  };
+  /**
+   * The test's context, or an object holding `ai`, at `index` inside some
+   * parentheses: fine as a parameter pattern or a destructuring, or when it
+   * is handed to a helper validation reads (declared once here, or imported
+   * from a local module it follows). Otherwise, why it is not checked.
+   */
+  const handedOver = (index: number, what: string): string | undefined => {
+    const parent = parentOf[index];
+    if (parent === undefined || value(parent) !== "(") return undefined;
+    const close = match.get(parent);
+    const after = close === undefined ? undefined : value(close + 1);
+    if (after === "=>" || after === "{" || after === ":") return undefined;
+    const callee = at(parent - 1);
+    if (callee?.kind !== "ident" || CONTROL.has(callee.value)) return undefined;
+    if (value(parent - 2) === ".")
+      return `${what} is handed to \`${callee.value}\` through another object, so the steps it runs are not checked before a run.`;
+    if (ambiguous.has(callee.value))
+      return `\`${callee.value}\` is declared more than once in this file, so validation cannot tell which one receives ${what}.`;
+    if (functions.has(callee.value)) return undefined;
+    let position = 0;
+    for (let cursor = parent + 1; cursor < index; cursor++) {
+      const skip = match.get(cursor);
+      if (skip !== undefined) cursor = skip;
+      else if (isPunct(cursor, ",")) position++;
+    }
+    const token = at(index)!;
+    helperCalls.push({
+      callee: callee.value,
+      position,
+      source: { file, line: token.line, col: token.col },
+      passes: "context",
+    });
+    return undefined;
   };
   const unchecked = (token: Token, message: string) =>
     warnings.push({
@@ -621,6 +685,62 @@ export function scanScriptSentences(
       (value(close + 1) === "=>" || value(close + 1) === "{")
     );
   };
+  // `t["ai"]`: ai reached through an object by a computed key.
+  tokens.forEach((token, index) => {
+    if (
+      token.kind === "string" &&
+      !token.dynamic &&
+      token.value === "ai" &&
+      isPunct(index - 1, "[") &&
+      isPunct(index + 1, "]") &&
+      value(index - 2) !== "TestContext"
+    )
+      unchecked(
+        token,
+        "This reaches ai through another object, so the steps it runs are not checked before a run.",
+      );
+  });
+  // A test's context handed to a helper: its `ai` runs where validation must
+  // be able to follow.
+  const contexts = new Set<string>();
+  tokens.forEach((token, index) => {
+    if (
+      token.kind !== "ident" ||
+      token.value !== "test" ||
+      !isPunct(index + 1, "(")
+    )
+      return;
+    const close = match.get(index + 1);
+    if (close === undefined) return;
+    // Only a function passed directly as an argument of test() is the
+    // test's body; functions nested inside it have their own parameters.
+    for (let cursor = index + 2; cursor < close; cursor++) {
+      if (parentOf[cursor] !== index + 1) continue;
+      let start = cursor;
+      if (value(start) === "async") start++;
+      if (value(start) === "function") start++;
+      const inner = isPunct(start, "(") ? match.get(start) : undefined;
+      if (
+        inner !== undefined &&
+        (value(inner + 1) === "=>" || value(start - 1) === "function")
+      ) {
+        const first = parameters(start)[0];
+        if (first) contexts.add(first);
+      }
+    }
+  });
+  tokens.forEach((token, index) => {
+    if (
+      token.kind !== "ident" ||
+      !contexts.has(token.value) ||
+      value(index - 1) === "." ||
+      !["(", ","].includes(value(index - 1) ?? "") ||
+      ![")", ","].includes(value(index + 1) ?? "")
+    )
+      return;
+    const reason = handedOver(index, `The test's context \`${token.value}\``);
+    if (reason) unchecked(token, reason);
+  });
   // `step: Ai` or `step: TestContext["ai"]`: steps run under another name.
   tokens.forEach((token, index) => {
     if (
@@ -643,12 +763,12 @@ export function scanScriptSentences(
     const token = tokens[index]!;
     if (token.kind !== "ident" || token.value !== "ai") continue;
     if (isPunct(index - 1, ".")) {
-      // `t.ai("...")` or `t.ai.group(...)`: `ai` reached through an object.
-      if (isPunct(index + 1, "(") || isPunct(index + 1, "."))
-        unchecked(
-          token,
-          "This ai call goes through another object, so its sentences are not checked before a run.",
-        );
+      // `t.ai("...")`, `t.ai.group(...)`, or `const run = t.ai`: `ai`
+      // reached through an object runs steps validation cannot see.
+      unchecked(
+        token,
+        "This reaches ai through another object, so the steps it runs are not checked before a run.",
+      );
       continue;
     }
     if (renamedParameter(index)) {

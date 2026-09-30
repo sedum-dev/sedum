@@ -229,13 +229,15 @@ the file declares that name once and never reassigns it.
 Validation recognizes the `ai` name.
 
 An argument validation cannot read, such as a variable, a function call, or a
-sentence built with `${}`, is reported as a warning, as is a call that reaches
-`ai` another way: `t.ai(...)`, `ai?.(...)`, `ai` renamed or aliased, or a
-helper that receives `ai` under another name. Pass `ai` to a helper declared
-in the test file or a local module, as a parameter named `ai`, such as
-`login(ai, user)`; validation follows the call and checks the helper's steps. A list passed to `ai.group`
-must be a literal, a `const` in the same file, or a function body. `validate` then does not
-call the project fully valid, and exits 1, just as for a YAML sentence it could
+sentence built with `${}`, is reported as a warning. So is any way of running
+steps that validation cannot follow: `ai` aliased or renamed, `ai` read off the
+context (`ctx.ai`, `t["ai"]`), or `ai`, `{ ai }`, or the test's context handed
+to a helper outside the project or to a helper name the file declares more
+than once. Pass `ai` to a helper in the test file or a local module as a
+parameter named `ai`, such as `login(ai, user)`; validation follows the call
+and checks the helper's steps. A list passed to `ai.group` must be a literal, a
+`const` in the same file, or a function body. When it warns, `validate` does
+not call the project fully valid and exits 1, as for a YAML sentence it could
 not check offline.
 
 Importing a file runs its top-level code. Keep network calls and other side
@@ -243,6 +245,10 @@ effects inside test bodies.
 
 ## Limits
 
+- `validate` reads your code without running it. It vouches for the
+  sentences it can see in the shapes above and warns about the rest; a
+  sentence it cannot see is still checked when its step runs, and an invalid
+  one stops that test with the file and line.
 - There are no `beforeEach` or `afterEach` hooks yet; use a helper function
   and `try`/`finally` for cleanup.
 - `import ... from "sedum-cli"` always resolves to the CLI that runs the test,

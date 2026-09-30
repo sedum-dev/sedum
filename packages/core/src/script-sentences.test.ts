@@ -241,7 +241,7 @@ describe("literal ai sentences in TypeScript tests", () => {
         'test("t", { url: "/" }, async ({ page, ai, env }) => {',
         '  await login(ai, "ada");',
         '  await ai.group("Pay", async () => { await ai("click Pay"); });',
-        '  const total = await ai.extract("the total");',
+        '  const total = await ai.extract("the total", { parse: (text) => Number(String(text)) });',
         "  await helper({ ai });",
         "});",
       ].join("\n"),
@@ -285,7 +285,46 @@ describe("literal ai sentences in TypeScript tests", () => {
     );
     expect(scan.warnings).toEqual([]);
     expect(scan.helperCalls).toEqual([
-      { callee: "logIn", position: 0, source: { file, line: 2, col: 43 } },
+      {
+        callee: "logIn",
+        position: 0,
+        source: { file, line: 2, col: 43 },
+        passes: "ai",
+      },
+    ]);
+  });
+
+  it.each([
+    [
+      "a helper declared twice in one file",
+      'test("a", async ({ ai }) => {\n  async function logIn(step) { await step("zzz"); }\n  await logIn(ai);\n});\ntest("b", async ({ ai }) => {\n  async function logIn(ai) { await ai("click A"); }\n  await logIn(ai);\n});',
+    ],
+    [
+      "ai read off the context as a value",
+      'test("t", async (ctx) => { const run = ctx.ai; await run("zzz"); });',
+    ],
+    [
+      "ai read by a computed key",
+      'test("t", async (t) => { await t["ai"]("zzz"); });',
+    ],
+    [
+      "the context handed to a member call",
+      'test("t", async (ctx) => { await helpers.logIn(ctx); });',
+    ],
+  ])("warns about %s", (_name, source) => {
+    expect(scanScriptSentences(source, file).warnings.length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("leaves the context or { ai } handed to an imported helper for validation", () => {
+    const scan = scanScriptSentences(
+      'import { logInCtx } from "../shared/login.js";\ntest("t", async (ctx) => { await logInCtx(ctx); await logInCtx({ ai: ctx.ai }); });\ntest("u", async ({ ai }) => { await logInCtx({ ai }); });',
+      file,
+    );
+    expect(scan.helperCalls.map((call) => [call.callee, call.passes])).toEqual([
+      ["logInCtx", "context"],
+      ["logInCtx", "context"],
     ]);
   });
 

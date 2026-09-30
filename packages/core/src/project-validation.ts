@@ -316,14 +316,21 @@ function unresolvedHelperCalls(
         : undefined;
       const parameters =
         binding && helper ? helper.functions.get(binding.imported) : undefined;
-      if (parameters?.[call.position] === "ai") continue;
+      // The test's context or `{ ai }` is fine in any helper validation
+      // reads; the test's ai itself must arrive under the name `ai`.
+      if (
+        call.passes === "context"
+          ? parameters
+          : parameters?.[call.position] === "ai"
+      )
+        continue;
       warnings.push({
         severity: "warning",
         code: "unchecked_call",
         source: call.source,
         message: parameters
           ? `\`${call.callee}\` receives the test's ai under another name, so the steps it runs are not checked before a run.`
-          : `Validation cannot find \`${call.callee}\`, so the steps it runs with the test's ai are not checked before a run.`,
+          : `Validation cannot follow \`${call.callee}\` to a local module, so the steps it runs with the test's ai are not checked before a run.`,
         fix: "Declare the helper in the test file or a local module, with its parameter named `ai`.",
       });
     }
