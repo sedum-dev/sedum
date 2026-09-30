@@ -1,5 +1,13 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.6
+
+### Patch Changes
+
+- Updated dependencies [8dd5d42]
+- Updated dependencies [892c784]
+  - @sedum-dev/core@0.1.0-alpha.6
+
 ## 0.1.0-alpha.5
 
 ### Patch Changes
