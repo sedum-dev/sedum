@@ -47,6 +47,8 @@ type Problem = Exclude<FlowRunResult, { status: "passed" }>;
 
 const KEY = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const EXTRACT_KEY = "sedum_extracted";
+/** The run result keeps at most this many group names per step. */
+const MAX_GROUP_DEPTH = 16;
 const REMEMBER_AS =
   /^(?:remember|capture)\b.*\bas\s+\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}\s*\.?$/iu;
 const STEP_ERROR = Symbol.for("sedum.script.stepError");
@@ -298,6 +300,8 @@ export async function runScriptTest(
   const opaqueEntries: ResolvedDataEntry[] = [];
   let firstProblem: Problem | null = null;
   let inFlight: Promise<unknown> | null = null;
+  /** Every step promise handed to the test, settled or not. */
+  const outstanding = new Set<Promise<unknown>>();
   let finished = false;
   const groups: string[] = [];
 
@@ -528,15 +532,36 @@ export async function runScriptTest(
       } else await exclusive(source, () => sentence(input, values, source));
     };
 
-    const ai = ((input: string | readonly string[], values?: AiValues) =>
-      sentences(input, values, where(new Error().stack))) as Ai;
+    /**
+     * A step promise that the test never awaits must not crash the process
+     * when it rejects: its failure is already recorded, and the runner waits
+     * for it before deciding the result. Awaiting callers still see it reject.
+     */
+    const track = <T>(promise: Promise<T>): Promise<T> => {
+      outstanding.add(promise);
+      const settle = () => outstanding.delete(promise);
+      promise.then(settle, settle);
+      return promise;
+    };
 
-    ai.group = (async (
+    const ai = ((input: string | readonly string[], values?: AiValues) =>
+      track(sentences(input, values, where(new Error().stack)))) as Ai;
+
+    const group = async (
       name: string,
       body: unknown,
-      values?: AiValues,
+      values: AiValues | undefined,
+      source: FlowSource,
     ): Promise<unknown> => {
-      const source = where(new Error().stack);
+      if (groups.length >= MAX_GROUP_DEPTH)
+        usage(
+          new ScriptUsageError(
+            "invalid_group",
+            `Groups nest at most ${MAX_GROUP_DEPTH} deep.`,
+            "Flatten the inner groups.",
+          ),
+          source,
+        );
       if (typeof name !== "string" || !name.trim() || name.length > 120)
         usage(
           new ScriptUsageError(
@@ -571,13 +596,17 @@ export async function runScriptTest(
       } finally {
         groups.pop();
       }
-    }) as Ai["group"];
+    };
+    ai.group = ((name: string, body: unknown, values?: AiValues) =>
+      track(
+        group(name, body, values, where(new Error().stack)),
+      )) as Ai["group"];
 
-    ai.extract = (async (
+    const extract = async (
       description: string,
-      parser?: Parser<unknown>,
+      parser: Parser<unknown> | undefined,
+      source: FlowSource,
     ): Promise<unknown> => {
-      const source = where(new Error().stack);
       if (
         typeof description !== "string" ||
         !description.trim() ||
@@ -614,7 +643,11 @@ export async function runScriptTest(
         return scope[EXTRACT_KEY]!.value.reveal();
       });
       return parser ? parser.parse(text) : text;
-    }) as Ai["extract"];
+    };
+    ai.extract = ((description: string, parser?: Parser<unknown>) =>
+      track(
+        extract(description, parser, where(new Error().stack)),
+      )) as Ai["extract"];
 
     const raw = activePage.playwright?.();
     const unavailable = () => {
@@ -650,8 +683,10 @@ export async function runScriptTest(
       thrown = error;
       threw = true;
     }
-    if (inFlight) {
-      await (inFlight as Promise<unknown>).catch(() => undefined);
+    if (outstanding.size) {
+      // Settle every step the body started but did not await, so its
+      // outcome is part of this attempt, then report the missing await.
+      while (outstanding.size) await Promise.allSettled([...outstanding]);
       firstProblem ??= {
         status: "could_not_run",
         file: absolute,

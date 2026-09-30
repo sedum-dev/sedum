@@ -10,6 +10,7 @@ import type {
 } from "./flow-types.js";
 import {
   parseFrame,
+  pathKey,
   samePath,
   scriptRegistry,
   sourceInFile,
@@ -46,6 +47,12 @@ const OPTION_KEYS = new Set(["id", "url", "tags"]);
 
 let jiti: ReturnType<typeof createJiti> | undefined;
 const loaded = new Map<string, Promise<LoadedScriptFile>>();
+/**
+ * Registrations by the file whose `test()` made them. Importing a test file
+ * from another runs its `test()` calls once, during the other file's import;
+ * they still belong to their own file, whichever is loaded first.
+ */
+const declared = new Map<string, ScriptRegistration[]>();
 let queue: Promise<unknown> = Promise.resolve();
 
 function diagnostic(
@@ -230,14 +237,14 @@ async function importOnce(
   });
   const registry = scriptRegistry();
   registry.pending = [];
+  let failure: LoadedScriptFile | undefined;
   try {
     await jiti.import(file);
   } catch (error) {
-    registry.pending = [];
     const stack = error instanceof Error ? error.stack : undefined;
     const message =
       error instanceof Error ? error.message.split("\n")[0]! : String(error);
-    return {
+    failure = {
       file,
       tests: [],
       diagnostics: [
@@ -250,9 +257,23 @@ async function importOnce(
       ],
     };
   }
-  const registrations = registry.pending;
+  // One evaluation of a module declares all of its tests. A module can be
+  // evaluated again under another specifier, so it replaces, never appends.
+  const evaluated = new Map<string, ScriptRegistration[]>();
+  for (const registration of registry.pending) {
+    const called = registration.callSite
+      ? parseFrame(registration.callSite)
+      : undefined;
+    const owner = pathKey(called?.file ?? file);
+    evaluated.set(owner, [...(evaluated.get(owner) ?? []), registration]);
+  }
+  for (const [owner, registrations] of evaluated)
+    declared.set(owner, registrations);
   registry.pending = [];
-  return checkRegistrations(file, registrations, repoRoot);
+  return (
+    failure ??
+    checkRegistrations(file, declared.get(pathKey(file)) ?? [], repoRoot)
+  );
 }
 
 /**

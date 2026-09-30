@@ -25,11 +25,12 @@ node ../../packages/cli/dist/cli.js run --headed
 In your own project, the same tests run with `npx sedum run` after
 `npm install -D sedum-cli @faker-js/faker`.
 
-Run one file, or one test by its title:
+Run one file, the tests whose title contains a word, or one test by its id:
 
 ```sh
 node ../../packages/cli/dist/cli.js run tests/cart.test.ts
 node ../../packages/cli/dist/cli.js run --name "locked-out"
+node ../../packages/cli/dist/cli.js run --id "tests/login.test.ts#a standard user signs in"
 ```
 
 `node ../../packages/cli/dist/cli.js validate` checks every literal `ai(...)`

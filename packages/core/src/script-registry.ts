@@ -169,21 +169,23 @@ export function parseFrame(frame: string): FlowSource | undefined {
 }
 
 /**
- * Whether a stack frame's path names `file`. On Windows a frame may use
- * forward slashes, a long name for a short one, or another drive-letter case.
+ * One spelling per file, for comparing paths from stack frames. On Windows a
+ * frame may use forward slashes, a long name for a short one (RUNNER~1 in a
+ * temp dir), or another drive-letter case.
  */
+export function pathKey(file: string): string {
+  let resolved = path.resolve(file);
+  try {
+    resolved = realpathSync.native(resolved);
+  } catch {
+    // A path that does not exist is compared as written.
+  }
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+/** Whether a stack frame's path names `file`. */
 export function samePath(a: string, b: string): boolean {
-  const normal = (value: string) => {
-    let resolved = path.resolve(value);
-    try {
-      // Also undoes Windows 8.3 short names, such as RUNNER~1 in a temp dir.
-      resolved = realpathSync.native(resolved);
-    } catch {
-      // A path that does not exist is compared as written.
-    }
-    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
-  };
-  return a === b || normal(a) === normal(b);
+  return a === b || pathKey(a) === pathKey(b);
 }
 
 /** The innermost stack frame inside `file`, for reporting where a step was written. */

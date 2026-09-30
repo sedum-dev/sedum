@@ -1,4 +1,6 @@
+import { existsSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import {
   classifyParsedFlow,
   classifySentenceSteps,
@@ -26,7 +28,7 @@ import {
   loadScriptFile,
   scriptListingEntries,
 } from "./script-loader.js";
-import { scanScriptSentences } from "./script-sentences.js";
+import { scanLocalImports, scanScriptSentences } from "./script-sentences.js";
 
 export interface ProjectValidationOptions extends ClassifyFlowOptions {
   /** The real project root returned by `discoverProjectFiles`. */
@@ -197,20 +199,30 @@ async function validateScriptFile(
       },
     };
   }
-  const scan = scanScriptSentences(source, file);
-  diagnostics.push(...scan.warnings);
-  const sentences: SentenceStep[] = scan.sentences.map((item) => ({
-    kind: "sentence",
-    phase: "steps",
-    text: item.text,
-    tokens: tokenizeStep(item.text).tokens,
-    source: item.source,
-  }));
+  // Sentences in local helper modules the test imports are steps too.
+  const scans = [scanScriptSentences(source, file)];
+  for (const helper of await localHelpers(file, source, options.repoRoot)) {
+    const text = await readFile(helper, "utf8").catch(() => "");
+    scans.push(scanScriptSentences(text, helper));
+  }
+  const warnings = scans.flatMap((scan) => scan.warnings);
+  diagnostics.push(...warnings);
+  const sentences: SentenceStep[] = scans
+    .flatMap((scan) => scan.sentences)
+    .map((item) => ({
+      kind: "sentence",
+      phase: "steps",
+      text: item.text,
+      tokens: tokenizeStep(item.text).tokens,
+      source: item.source,
+    }));
   const checked = await classifySentenceSteps(sentences, classify);
   diagnostics.push(...checked.diagnostics);
+  // A sentence that is not a literal was not checked: never report it valid.
   const complete =
     checked.classification.steps.every((step) => step !== null) &&
-    checked.diagnostics.length === 0;
+    checked.diagnostics.length === 0 &&
+    warnings.length === 0;
   return {
     headers,
     diagnostics,
@@ -221,6 +233,62 @@ async function validateScriptFile(
       modules: "not_needed",
     },
   };
+}
+
+const HELPER_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs"];
+const MAX_HELPERS = 64;
+
+/** Resolve `./support/login.js` the way a TypeScript import would. */
+function resolveHelper(from: string, specifier: string): string | undefined {
+  const base = path.resolve(path.dirname(from), specifier);
+  const stem = base.replace(/\.(?:m|c)?js$/u, "");
+  const candidates = [
+    base,
+    ...HELPER_EXTENSIONS.map((extension) => stem + extension),
+    ...HELPER_EXTENSIONS.map((extension) =>
+      path.join(base, `index${extension}`),
+    ),
+  ];
+  return candidates.find(
+    (candidate) =>
+      HELPER_EXTENSIONS.some((extension) => candidate.endsWith(extension)) &&
+      existsSync(candidate) &&
+      statSync(candidate).isFile(),
+  );
+}
+
+/**
+ * The local modules a test file imports, directly or through other helpers,
+ * inside the project and outside `node_modules`.
+ */
+async function localHelpers(
+  file: string,
+  source: string,
+  repoRoot: string,
+): Promise<readonly string[]> {
+  const seen = new Set<string>([file]);
+  const helpers: string[] = [];
+  const queue: [string, string][] = [[file, source]];
+  while (queue.length && helpers.length < MAX_HELPERS) {
+    const [from, text] = queue.shift()!;
+    for (const specifier of scanLocalImports(text)) {
+      const target = resolveHelper(from, specifier);
+      const relative = target && path.relative(repoRoot, target);
+      if (
+        !target ||
+        seen.has(target) ||
+        !relative ||
+        relative.startsWith("..") ||
+        path.isAbsolute(relative) ||
+        relative.split(path.sep).includes("node_modules")
+      )
+        continue;
+      seen.add(target);
+      helpers.push(target);
+      queue.push([target, await readFile(target, "utf8").catch(() => "")]);
+    }
+  }
+  return helpers;
 }
 
 async function checkUnreferencedModule(

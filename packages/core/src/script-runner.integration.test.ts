@@ -327,6 +327,18 @@ test("session cookie", async ({ page, context, ai }) => {
         "The value for {{user}} must be a string, a finite number, a boolean, or secret().",
         4,
       ],
+      [
+        "an unawaited failing step",
+        `ai("type {{email}} into the Username field");\n  await new Promise((resolve) => setTimeout(resolve, 200));`,
+        "{{email}} has no value.",
+        4,
+      ],
+      [
+        "groups nested too deep",
+        `const nest = (n: number): Promise<unknown> => n === 0 ? ai("click the Login button") : ai.group("g" + n, () => nest(n - 1));\n  await nest(17);`,
+        "Groups nest at most 16 deep.",
+        4,
+      ],
     ])(
       "reports %s as an invalid test at its line",
       async (name, body, message, line) => {
@@ -343,6 +355,42 @@ test("session cookie", async ({ page, context, ai }) => {
       },
       60_000,
     );
+
+    it("finishes the attempt when an unawaited step fails or starts after the body", async () => {
+      const failing = await run(
+        "unawaited-verify.test.ts",
+        `
+test("unawaited", { url: "/home?user=Ada" }, async ({ ai }) => {
+  ai("verify the page shows Welcome Grace");
+});
+`,
+      );
+      // The failed claim is recorded and stays primary; the process survives.
+      expect(failing.outcome).toMatchObject({
+        status: "failed",
+        source: { line: 4 },
+      });
+      expect(failing.result.tests[0]!.attempts[0]!.steps[0]).toMatchObject({
+        operation: "verify",
+        verdict: "failed",
+      });
+      const late = await run(
+        "late.test.ts",
+        `
+test("late", { url: "/home?user=Ada" }, async ({ ai }) => {
+  void ai.group("later", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await ai("verify the page shows Welcome Ada");
+  });
+});
+`,
+      );
+      expect(late.outcome).toMatchObject({
+        status: "could_not_run",
+        code: "invalid_test",
+        message: "The test body finished while an ai step was still running.",
+      });
+    }, 60_000);
 
     it("selects one test by identity and reports an unknown one", async () => {
       await run(

@@ -24,6 +24,8 @@ export interface RunFilters {
   readonly exclude?: readonly string[];
   readonly labels?: readonly string[];
   readonly names?: readonly string[];
+  /** Exact test ids; rerun commands use these to select one test. */
+  readonly ids?: readonly string[];
 }
 
 function contained(root: string, target: string): boolean {
@@ -45,12 +47,14 @@ export function selectRunTests(
   const excludes = filters.exclude ?? [];
   const labels = filters.labels ?? [];
   const names = filters.names ?? [];
+  const ids = filters.ids ?? [];
   return tests.filter(
     (test) =>
       (includes.length === 0 ||
         includes.some((glob) => minimatch(test.file, glob))) &&
       !excludes.some((glob) => minimatch(test.file, glob)) &&
       labels.every((label) => test.tags.includes(label)) &&
+      (ids.length === 0 || ids.includes(test.id)) &&
       (names.length === 0 ||
         names.some((name) =>
           `${test.id}\n${test.description ?? ""}`

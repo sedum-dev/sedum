@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -12,7 +12,9 @@ import {
 } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
+import { NoopClassificationCache } from "./classification-cache.js";
 import { listTests } from "./project-listing.js";
+import { validateProject } from "./project-validation.js";
 import {
   checkRegistrations,
   isScriptTestFile,
@@ -226,6 +228,90 @@ throw new Error("setup exploded");
         source: expect.objectContaining({ line: 3 }),
       }),
     ]);
+  });
+
+  it.each(["importer first", "imported first"])(
+    "keeps each test in its own file when one test file imports another (%s)",
+    async (order) => {
+      const folder = path.join(directory, order.replace(" ", "-"));
+      await mkdir(folder);
+      const login = path.join(folder, "login.test.ts");
+      const checkout = path.join(folder, "checkout.test.ts");
+      await writeFile(
+        login,
+        `import { test } from ${JSON.stringify(api)};
+export const user = "Ada";
+test("a user logs in", async () => undefined);
+`,
+      );
+      await writeFile(
+        checkout,
+        `import { test } from ${JSON.stringify(api)};
+import { user } from "./login.test.ts";
+test("checks out as " + user, async () => undefined);
+`,
+      );
+      const files =
+        order === "importer first" ? [checkout, login] : [login, checkout];
+      const loaded = new Map<
+        string,
+        Awaited<ReturnType<typeof loadScriptFile>>
+      >();
+      for (const file of files)
+        loaded.set(file, await loadScriptFile(file, { repoRoot: folder }));
+      expect(loaded.get(login)!.diagnostics).toEqual([]);
+      expect(loaded.get(checkout)!.diagnostics).toEqual([]);
+      expect(
+        loaded
+          .get(login)!
+          .tests.map((test) => [test.identity, test.source.line]),
+      ).toEqual([["login.test.ts#a user logs in", 3]]);
+      expect(loaded.get(checkout)!.tests.map((test) => test.identity)).toEqual([
+        "checkout.test.ts#checks out as Ada",
+      ]);
+    },
+  );
+
+  it("validates sentences in imported helpers and never calls unread arguments valid", async () => {
+    const folder = path.join(directory, "validate");
+    await mkdir(path.join(folder, "support"), { recursive: true });
+    const test = path.join(folder, "shop.test.ts");
+    await writeFile(
+      path.join(folder, "support", "steps.ts"),
+      `import type { Ai } from ${JSON.stringify(api)};
+export async function login(ai: Ai, steps: string[]) {
+  await ai("");
+  await ai(steps);
+}
+`,
+    );
+    await writeFile(
+      test,
+      `import { test } from ${JSON.stringify(api)};
+import { login } from "./support/steps.js";
+test("shop", async ({ ai }) => { await login(ai, ["click Login"]); });
+`,
+    );
+    const result = await validateProject(
+      { tests: [test], modules: [] },
+      {
+        repoRoot: folder,
+        mode: "offline",
+        cache: new NoopClassificationCache(),
+      },
+    );
+    expect(
+      result.diagnostics.map((item) => [
+        path.basename(item.source.file),
+        item.source.line,
+        item.severity,
+        item.code,
+      ]),
+    ).toEqual([
+      ["steps.ts", 3, "error", "empty"],
+      ["steps.ts", 4, "warning", "dynamic_sentence"],
+    ]);
+    expect(result.fullyValidated).toBe(false);
   });
 
   it("reports a syntax error and a file without tests", async () => {

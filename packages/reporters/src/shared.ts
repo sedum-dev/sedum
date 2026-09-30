@@ -184,11 +184,9 @@ export function testLabel(
 }
 
 /** Arguments to `sedum run` that select exactly this test. */
-export function rerunArgs(
-  test: Pick<ResultTest, "file" | "description">,
-): string {
-  return isScriptTest(test) && test.description
-    ? `${shellArg(test.file)} --name ${shellArg(test.description)}`
+export function rerunArgs(test: Pick<ResultTest, "file" | "id">): string {
+  return isScriptTest(test)
+    ? `${shellArg(test.file)} --id ${shellArg(test.id)}`
     : shellArg(test.file);
 }
 

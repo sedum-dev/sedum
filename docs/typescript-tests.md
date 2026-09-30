@@ -53,7 +53,7 @@ test(
 ```sh
 npx sedum run                                  # every test under tests/
 npx sedum run tests/checkout.test.ts           # every test in one file
-npx sedum run tests/checkout.test.ts --name "checks out"   # one test
+npx sedum run --id "tests/checkout.test.ts#a new customer checks out"   # one test
 ```
 
 Install `sedum-cli` in the project (`npm install -D sedum-cli`) so your editor
@@ -119,8 +119,10 @@ product. The value of a `type` step is typed, never shown to the model.
 
 **Secrets.** Wrap a sensitive value in `secret()`. It is typed into the page,
 but it stays a `{{placeholder}}` in model requests and is redacted from report
-text and `result.json`. Printing a secret shows `[secret]`. Screenshots are not
-redacted; list origins that show secrets with `--sensitive-origin`.
+text and `result.json`. Printing a secret shows `[secret]`. Sedum learns a
+secret when a step first passes it, so page text judged by an earlier step can
+still contain it; screenshots are never redacted. List origins that show
+secrets with `--sensitive-origin`.
 
 ```ts
 await ai("type {{password}} into the Password field", {
@@ -202,15 +204,21 @@ that code left.
   file with an error, with the file, line, and a fix.
 
 Reports name a TypeScript test by its file and title, and rerun commands add
-`--name` to select just that test.
+`--id` to select just that test.
 
 ## Validation and listing
 
 `sedum list` imports each `*.test.ts` file and lists one row per `test()`.
-`sedum validate` also finds the literal sentences passed to `ai(...)`,
-`ai([...])`, and `ai.group(name, [...])`, and checks them offline, or online
-with `--online`, exactly like YAML steps. It recognizes the `ai` name from the
-test body; a sentence built at run time is reported as a warning.
+`sedum validate` also finds the sentences passed to `ai(...)`, `ai([...])`,
+and `ai.group(name, [...])`, in the test file and in the local modules it
+imports, and checks them offline, or online with `--online`, exactly like YAML
+steps. A list or sentence held in a `const` in the same file is read too.
+Validation recognizes the `ai` name.
+
+An argument validation cannot read, such as a variable, a function call, or a
+sentence built with `${}`, is reported as a warning. `validate` then does not
+call the project fully valid, and exits 1, just as for a YAML sentence it could
+not check offline.
 
 Importing a file runs its top-level code. Keep network calls and other side
 effects inside test bodies.

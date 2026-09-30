@@ -1,7 +1,11 @@
 import { describe, expect, it, test as propertyTest } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
-import { scanScriptSentences, tokenize } from "./script-sentences.js";
+import {
+  scanLocalImports,
+  scanScriptSentences,
+  tokenize,
+} from "./script-sentences.js";
 
 const propertySettings = {
   database: { kind: "disabled" },
@@ -86,8 +90,64 @@ describe("literal ai sentences in TypeScript tests", () => {
     expect(scan.warnings.map((item) => [item.code, item.source.line])).toEqual([
       ["dynamic_sentence", 1],
       ["dynamic_sentence", 2],
+      ["dynamic_sentence", 3],
     ]);
     expect(scan.warnings[0]!.severity).toBe("warning");
+  });
+
+  it("reads lists and sentences declared as constants in the file", () => {
+    const scan = scanScriptSentences(
+      [
+        'const LOGIN = ["type {{user}} into the Username field", "click Login"];',
+        'const CHECKOUT = "click the Checkout button";',
+        "await ai(LOGIN, { user });",
+        "await ai(CHECKOUT);",
+        "await ai.group(title, LOGIN);",
+        'await ai.group(`Pay ${n}`, ["click Pay"]);',
+        "await ai.group(name, login);",
+      ].join("\n"),
+      file,
+    );
+    expect(scan.sentences.map((item) => [item.text, item.source.line])).toEqual(
+      [
+        ["type {{user}} into the Username field", 1],
+        ["click Login", 1],
+        ["click the Checkout button", 2],
+        ["type {{user}} into the Username field", 1],
+        ["click Login", 1],
+        ["click Pay", 6],
+      ],
+    );
+    // A function passed to ai.group has its own ai calls; it is not a warning.
+    expect(scan.warnings).toEqual([]);
+  });
+
+  it("warns about every argument it cannot read", () => {
+    const scan = scanScriptSentences(
+      [
+        "await ai(steps);",
+        'await ai(["click Home", ...more, pick()]);',
+        "await ai(cond ? 'click A' : 'click B');",
+      ].join("\n"),
+      file,
+    );
+    expect(scan.sentences.map((item) => item.text)).toEqual(["click Home"]);
+    expect(scan.warnings.map((item) => item.source.line)).toEqual([1, 2, 2, 3]);
+  });
+
+  it("lists the relative modules a file imports", () => {
+    expect(
+      scanLocalImports(
+        [
+          'import { login } from "./support/login.js";',
+          'import "../setup";',
+          'const lazy = await import("./lazy.ts");',
+          'const legacy = require("./legacy.cjs");',
+          'import { test } from "sedum-cli";',
+          "// import { x } from './commented.js';",
+        ].join("\n"),
+      ),
+    ).toEqual(["./support/login.js", "../setup", "./lazy.ts", "./legacy.cjs"]);
   });
 
   it("decodes escapes the way JavaScript does", () => {
