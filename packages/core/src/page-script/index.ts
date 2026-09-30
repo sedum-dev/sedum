@@ -1155,6 +1155,7 @@ if (!window.__sedum) {
   function peers(
     element: Element,
     name: string,
+    operation: Operation = "click",
   ): { texts: string[]; contextComplete: boolean; item?: string } {
     // Some ranked tables place story metadata in the row immediately after
     // the ranked title row. Include the visible rank and title so "first
@@ -1194,6 +1195,24 @@ if (!window.__sedum) {
       }
       lastUnique = region;
       if (region.matches("article,li,[data-product],[role='listitem']")) break;
+      // Read targets have no same-labelled button to bound their context.
+      // Repeated styled containers are also item boundaries (for example,
+      // product cards built from divs). Do not borrow another card's title.
+      const container = region;
+      if (
+        operation === "read" &&
+        container.classList.length > 0 &&
+        Array.from(container.parentElement?.children ?? []).some(
+          (sibling) =>
+            sibling !== container &&
+            sibling.tagName === container.tagName &&
+            sibling.classList.length === container.classList.length &&
+            Array.from(container.classList).every((name) =>
+              sibling.classList.contains(name),
+            ),
+        )
+      )
+        break;
       region = composedParent(region);
     }
     region = region === document.body ? lastUnique : region;
@@ -1321,7 +1340,7 @@ if (!window.__sedum) {
         nodeId = `${documentId}-node-${++nodeSequence}`;
         nodeIds.set(element, nodeId);
       }
-      const peerData = peers(element, name);
+      const peerData = peers(element, name, operation);
       const location = locationOf(element, heading);
       const section = sectionOf(element, outline);
       const hint = operation === "read" ? "" : nameHint(element, rawName);
@@ -1630,7 +1649,7 @@ if (!window.__sedum) {
       !readable(element) ||
       !visible(element) ||
       label(element) !== owned.get(element)?.rawName ||
-      JSON.stringify(peers(element, candidate.name).texts) !==
+      JSON.stringify(peers(element, candidate.name, "read").texts) !==
         JSON.stringify(candidate.peers)
     )
       return { status: "stale" };
