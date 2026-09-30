@@ -120,7 +120,11 @@ export interface ScriptRegistration {
   readonly title: string;
   readonly options: TestOptions;
   readonly body: TestBody;
-  /** Where `test()` was called, when a stack frame could be read. */
+  /**
+   * The innermost stack frame in a `*.test.ts` file when `test()` ran, so a
+   * test declared through a helper belongs to the test file that called it.
+   * Otherwise the direct caller's frame.
+   */
   readonly callSite: string | undefined;
 }
 
@@ -148,8 +152,16 @@ export function test(
     title,
     options: options ?? {},
     body: body as TestBody,
-    callSite: new Error().stack?.split("\n")[2],
+    callSite: testFileFrame(new Error().stack),
   });
+}
+
+function testFileFrame(stack: string | undefined): string | undefined {
+  const frames = stack?.split("\n").slice(2) ?? [];
+  return (
+    frames.find((frame) => parseFrame(frame)?.file.endsWith(".test.ts")) ??
+    frames[0]
+  );
 }
 
 /** One stack frame, as `file:line:col`, parsed from V8's text. */

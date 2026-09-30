@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -201,11 +201,24 @@ async function validateScriptFile(
   }
   // Sentences in local helper modules the test imports are steps too.
   const scans = [scanScriptSentences(source, file)];
-  for (const helper of await localHelpers(file, source, options.repoRoot)) {
+  const { helpers, truncated } = await localHelpers(
+    file,
+    source,
+    options.repoRoot,
+  );
+  for (const helper of helpers) {
     const text = await readFile(helper, "utf8").catch(() => "");
     scans.push(scanScriptSentences(text, helper));
   }
   const warnings = scans.flatMap((scan) => scan.warnings);
+  if (truncated)
+    warnings.push({
+      severity: "warning",
+      code: "too_many_helpers",
+      source: { file, line: 1, col: 1 },
+      message: `This test imports more than ${MAX_HELPERS} local modules; the sentences in the rest were not checked.`,
+      fix: "Keep shared steps in fewer modules.",
+    });
   diagnostics.push(...warnings);
   const sentences: SentenceStep[] = scans
     .flatMap((scan) => scan.sentences)
@@ -265,15 +278,21 @@ async function localHelpers(
   file: string,
   source: string,
   repoRoot: string,
-): Promise<readonly string[]> {
-  const seen = new Set<string>([file]);
+): Promise<{
+  readonly helpers: readonly string[];
+  readonly truncated: boolean;
+}> {
+  const root = realpathSync.native(repoRoot);
+  const seen = new Set<string>([realpathSync.native(file)]);
   const helpers: string[] = [];
   const queue: [string, string][] = [[file, source]];
-  while (queue.length && helpers.length < MAX_HELPERS) {
+  while (queue.length) {
     const [from, text] = queue.shift()!;
     for (const specifier of scanLocalImports(text)) {
-      const target = resolveHelper(from, specifier);
-      const relative = target && path.relative(repoRoot, target);
+      const found = resolveHelper(from, specifier);
+      // Contain by real path: a symlink out of the project is not followed.
+      const target = found && realpathSync.native(found);
+      const relative = target && path.relative(root, target);
       if (
         !target ||
         seen.has(target) ||
@@ -283,12 +302,13 @@ async function localHelpers(
         relative.split(path.sep).includes("node_modules")
       )
         continue;
+      if (helpers.length >= MAX_HELPERS) return { helpers, truncated: true };
       seen.add(target);
       helpers.push(target);
       queue.push([target, await readFile(target, "utf8").catch(() => "")]);
     }
   }
-  return helpers;
+  return { helpers, truncated: false };
 }
 
 async function checkUnreferencedModule(

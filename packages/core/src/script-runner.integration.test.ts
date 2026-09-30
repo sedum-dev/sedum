@@ -392,6 +392,68 @@ test("late", { url: "/home?user=Ada" }, async ({ ai }) => {
       });
     }, 60_000);
 
+    it.each([
+      [
+        "an unawaited group whose code throws",
+        `void ai.group("totals", async () => {\n    throw new Error("expected 42 got 41");\n  });\n  await new Promise((resolve) => setTimeout(resolve, 100));`,
+        "expected 42 got 41",
+        5,
+        ["totals"],
+      ],
+      [
+        "an unawaited extract whose parser throws",
+        `void ai.extract("the cart total", { parse: () => { throw new Error("not a number"); } });\n  await new Promise((resolve) => setTimeout(resolve, 1500));`,
+        "not a number",
+        4,
+        [],
+      ],
+      [
+        "an unawaited expect",
+        `void expect(page.locator("h1")).toHaveText("Goodbye", { timeout: 200 });\n  await new Promise((resolve) => setTimeout(resolve, 600));`,
+        "toHaveText",
+        4,
+        [],
+      ],
+      [
+        "an unawaited click that fails when the page closes",
+        `void page.locator("#never-there").click();`,
+        "",
+        4,
+        [],
+      ],
+    ])(
+      "fails the test for %s instead of passing or crashing",
+      async (name, body, message, line, group) => {
+        const { outcome, result } = await run(
+          `${name.replaceAll(" ", "-")}.test.ts`,
+          `\ntest("t", { url: "/home?user=Ada" }, async ({ page, ai }) => {\n  ${body}\n});\n`,
+        );
+        expect(outcome).toMatchObject({ status: "failed" });
+        const step = result.tests[0]!.attempts[0]!.steps.find(
+          (item) => item.operation === "code",
+        )!;
+        expect(step.error!.message).toContain(message);
+        expect(step.group ?? []).toEqual(group);
+        if (line) expect(step.sourceStack[0]!.line).toBe(line);
+      },
+      60_000,
+    );
+
+    it("lets a test handle a failing group on purpose", async () => {
+      const { outcome } = await run(
+        "handled.test.ts",
+        `
+test("optional banner", { url: "/home?user=Ada" }, async ({ ai }) => {
+  await ai.group("optional", async () => {
+    throw new Error("no banner today");
+  }).catch(() => undefined);
+  await ai("verify the page shows Welcome Ada");
+});
+`,
+      );
+      expect(outcome.status).toBe("passed");
+    }, 60_000);
+
     it("selects one test by identity and reports an unknown one", async () => {
       await run(
         "many.test.ts",

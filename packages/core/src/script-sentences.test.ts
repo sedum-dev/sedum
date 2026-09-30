@@ -122,6 +122,54 @@ describe("literal ai sentences in TypeScript tests", () => {
     expect(scan.warnings).toEqual([]);
   });
 
+  it.each([
+    [
+      "a loop variable shadowing a constant",
+      'const step = "click the Login button";\nfor (const step of [\'type "abc into the Name field\']) await ai(step);',
+    ],
+    [
+      "two declarations of one name",
+      'test("a", async ({ ai }) => { const step = "click A"; await ai(step); });\ntest("b", async ({ ai }) => { const step = "click B"; await ai(step); });',
+    ],
+    [
+      "a reassigned let",
+      'let step = "click the Login button";\nstep = \'type "abc into the Name field\';\nawait ai(step);',
+    ],
+    [
+      "a list built by a call",
+      'const STEPS = ["click the Login button"].concat(extra);\nawait ai(STEPS);',
+    ],
+    [
+      "a parameter with the same name",
+      'const step = "click A";\nconst run = async (step: string) => ai(step);',
+    ],
+    [
+      "a destructured name",
+      'const step = "click A";\nconst { step: other, ...rest } = x;\nconst [steps] = y;\nawait ai(steps);',
+    ],
+  ])("does not read %s as a constant", (_name, source) => {
+    const scan = scanScriptSentences(source, file);
+    expect(scan.warnings.length).toBeGreaterThan(0);
+    expect(scan.sentences.map((item) => item.text)).not.toContain(
+      'type "abc into the Name field',
+    );
+  });
+
+  it("stops expanding lists that multiply, with a warning", () => {
+    const row = Array.from({ length: 200 }, () => '"click A"').join(", ");
+    const source = [
+      `const A = [${row}];`,
+      `const B = [${Array.from({ length: 200 }, () => "A").join(", ")}];`,
+      `const C = [${Array.from({ length: 200 }, () => "B").join(", ")}];`,
+      "await ai(C);",
+    ].join("\n");
+    const scan = scanScriptSentences(source, file);
+    expect(scan.sentences.length).toBeLessThanOrEqual(10_000);
+    expect(scan.warnings.map((item) => item.code)).toContain(
+      "too_many_sentences",
+    );
+  });
+
   it("warns about every argument it cannot read", () => {
     const scan = scanScriptSentences(
       [

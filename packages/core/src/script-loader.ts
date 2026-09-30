@@ -264,7 +264,11 @@ async function importOnce(
     const called = registration.callSite
       ? parseFrame(registration.callSite)
       : undefined;
-    const owner = pathKey(called?.file ?? file);
+    // A test belongs to the test file that declared it, even through a
+    // helper; with no test file on the stack, to the file being imported.
+    const owner = pathKey(
+      called && isScriptTestFile(called.file) ? called.file : file,
+    );
     evaluated.set(owner, [...(evaluated.get(owner) ?? []), registration]);
   }
   for (const [owner, registrations] of evaluated)

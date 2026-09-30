@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -269,6 +269,117 @@ test("checks out as " + user, async () => undefined);
       expect(loaded.get(checkout)!.tests.map((test) => test.identity)).toEqual([
         "checkout.test.ts#checks out as Ada",
       ]);
+    },
+  );
+
+  it.each(["first user first", "second user first"])(
+    "keeps tests declared through a shared wrapper in the test files that call it (%s)",
+    async (order) => {
+      const folder = path.join(
+        directory,
+        `wrapper-${order.replaceAll(" ", "-")}`,
+      );
+      await mkdir(path.join(folder, "support"), { recursive: true });
+      await writeFile(
+        path.join(folder, "support", "smoke.ts"),
+        `import { test, type TestBody } from ${JSON.stringify(api)};
+export function smoke(title: string, body: TestBody) {
+  test(title, { tags: ["smoke"] }, body);
+}
+`,
+      );
+      const one = path.join(folder, "one.test.ts");
+      const two = path.join(folder, "two.test.ts");
+      await writeFile(
+        one,
+        `import { smoke } from "./support/smoke.js";\nsmoke("one", async () => undefined);\n`,
+      );
+      await writeFile(
+        two,
+        `import { smoke } from "./support/smoke.js";\nsmoke("two a", async () => undefined);\nsmoke("two b", async () => undefined);\n`,
+      );
+      const files = order === "first user first" ? [one, two] : [two, one];
+      const loaded = new Map<
+        string,
+        Awaited<ReturnType<typeof loadScriptFile>>
+      >();
+      for (const target of files)
+        loaded.set(target, await loadScriptFile(target, { repoRoot: folder }));
+      expect(
+        loaded
+          .get(one)!
+          .tests.map((test) => [test.identity, test.source.line, test.tags]),
+      ).toEqual([["one.test.ts#one", 2, ["smoke"]]]);
+      expect(
+        loaded.get(two)!.tests.map((test) => [test.identity, test.source.line]),
+      ).toEqual([
+        ["two.test.ts#two a", 2],
+        ["two.test.ts#two b", 3],
+      ]);
+      expect([...loaded.values()].flatMap((file) => file.diagnostics)).toEqual(
+        [],
+      );
+    },
+  );
+
+  it("warns when a test imports more helpers than validation follows", async () => {
+    const folder = path.join(directory, "many-helpers");
+    await mkdir(folder);
+    for (let index = 0; index < 70; index++)
+      await writeFile(
+        path.join(folder, `h${index}.ts`),
+        index < 69
+          ? `import "./h${index + 1}.js";\n`
+          : 'export const late = () => ai("");\n',
+      );
+    const test = path.join(folder, "deep.test.ts");
+    await writeFile(
+      test,
+      `import { test } from ${JSON.stringify(api)};\nimport "./h0.js";\ntest("deep", async () => undefined);\n`,
+    );
+    const result = await validateProject(
+      { tests: [test], modules: [] },
+      {
+        repoRoot: folder,
+        mode: "offline",
+        cache: new NoopClassificationCache(),
+      },
+    );
+    expect(result.diagnostics.map((item) => item.code)).toContain(
+      "too_many_helpers",
+    );
+    expect(result.fullyValidated).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "does not follow a helper symlinked from outside the project",
+    async () => {
+      const folder = path.join(directory, "linked");
+      const outside = path.join(directory, "outside-project");
+      await mkdir(folder);
+      await mkdir(outside);
+      await writeFile(
+        path.join(outside, "steps.ts"),
+        'export const x = () => ai("");\n',
+      );
+      await symlink(
+        path.join(outside, "steps.ts"),
+        path.join(folder, "steps.ts"),
+      );
+      const test = path.join(folder, "linked.test.ts");
+      await writeFile(
+        test,
+        `import { test } from ${JSON.stringify(api)};\nimport "./steps.js";\ntest("linked", async () => undefined);\n`,
+      );
+      const result = await validateProject(
+        { tests: [test], modules: [] },
+        {
+          repoRoot: folder,
+          mode: "offline",
+          cache: new NoopClassificationCache(),
+        },
+      );
+      expect(result.diagnostics).toEqual([]);
     },
   );
 

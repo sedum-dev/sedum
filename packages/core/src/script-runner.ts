@@ -88,6 +88,59 @@ function isStepStop(error: unknown): error is StepStop {
   );
 }
 
+/**
+ * A step promise that notices whether the test awaited or handled it:
+ * `await` on a subclass goes through `then`, while the runner's own
+ * bookkeeping calls `Promise.prototype.then` directly.
+ */
+class StepPromise<T> extends Promise<T> {
+  observed = false;
+
+  static override get [Symbol.species](): PromiseConstructor {
+    return Promise;
+  }
+
+  override then<A = T, B = never>(
+    onFulfilled?: ((value: T) => A | PromiseLike<A>) | null,
+    onRejected?: ((reason: unknown) => B | PromiseLike<B>) | null,
+  ): Promise<A | B> {
+    this.observed = true;
+    return super.then(onFulfilled, onRejected);
+  }
+}
+
+/** Receives a rejection nothing handled while its attempt was running. */
+type RejectionReceiver = (reason: unknown, attributed: boolean) => void;
+const receivers = new Set<RejectionReceiver>();
+let routing = false;
+
+/**
+ * A promise from test code that nobody awaits, such as an unawaited
+ * `page.click`, must fail its test rather than kill the run. With one test
+ * running it is that test's failure; with several, none can be blamed, so
+ * each is told. Outside any test, Node's default behaviour applies.
+ */
+function routeUnhandledRejection(reason: unknown): void {
+  if (!receivers.size) throw reason;
+  const attributed = receivers.size === 1;
+  for (const receive of receivers) receive(reason, attributed);
+}
+
+function listenForRejections(receive: RejectionReceiver): () => void {
+  if (!routing) {
+    process.on("unhandledRejection", routeUnhandledRejection);
+    routing = true;
+  }
+  receivers.add(receive);
+  return () => {
+    receivers.delete(receive);
+    if (!receivers.size && routing) {
+      process.off("unhandledRejection", routeUnhandledRejection);
+      routing = false;
+    }
+  };
+}
+
 /** Convert `{{name}}` values to the runner's opaque data entries. */
 export function valueEntries(
   values: AiValues | undefined,
@@ -302,6 +355,17 @@ export async function runScriptTest(
   let inFlight: Promise<unknown> | null = null;
   /** Every step promise handed to the test, settled or not. */
   const outstanding = new Set<Promise<unknown>>();
+  /** Steps that rejected, to find failures the test never looked at. */
+  const rejected: {
+    readonly step: StepPromise<unknown>;
+    readonly error: unknown;
+  }[] = [];
+  /** Rejections from test code that nothing handled during this attempt. */
+  const unhandled: {
+    readonly reason: unknown;
+    readonly attributed: boolean;
+  }[] = [];
+  let stopListening: (() => void) | undefined;
   let finished = false;
   const groups: string[] = [];
 
@@ -537,11 +601,20 @@ export async function runScriptTest(
      * when it rejects: its failure is already recorded, and the runner waits
      * for it before deciding the result. Awaiting callers still see it reject.
      */
-    const track = <T>(promise: Promise<T>): Promise<T> => {
-      outstanding.add(promise);
-      const settle = () => outstanding.delete(promise);
-      promise.then(settle, settle);
-      return promise;
+    const track = <T>(work: Promise<T>): Promise<T> => {
+      const step = new StepPromise<T>((resolve, reject) =>
+        work.then(resolve, reject),
+      );
+      outstanding.add(step);
+      Promise.prototype.then.call(
+        step,
+        () => outstanding.delete(step),
+        (error: unknown) => {
+          outstanding.delete(step);
+          rejected.push({ step: step as StepPromise<unknown>, error });
+        },
+      );
+      return step;
     };
 
     const ai = ((input: string | readonly string[], values?: AiValues) =>
@@ -553,6 +626,15 @@ export async function runScriptTest(
       values: AiValues | undefined,
       source: FlowSource,
     ): Promise<unknown> => {
+      if (finished)
+        usage(
+          new ScriptUsageError(
+            "step_after_test",
+            "An ai.group ran after the test body had finished.",
+            "Await every ai.group(...) call inside the test body.",
+          ),
+          source,
+        );
       if (groups.length >= MAX_GROUP_DEPTH)
         usage(
           new ScriptUsageError(
@@ -677,6 +759,9 @@ export async function runScriptTest(
 
     let thrown: unknown;
     let threw = false;
+    stopListening = listenForRejections((reason, attributed) =>
+      unhandled.push({ reason, attributed }),
+    );
     try {
       await test.body(testContext);
     } catch (error) {
@@ -698,30 +783,53 @@ export async function runScriptTest(
     }
     finished = true;
 
+    const groupsOf = (error: unknown): readonly string[] =>
+      typeof error === "object" && error !== null && THROWN_IN in error
+        ? (error as { [THROWN_IN]: readonly string[] })[THROWN_IN]
+        : [];
+    /** An exception from test code fails the test at the line that threw. */
+    const codeFailure = async (error: unknown): Promise<Problem> => {
+      if (error instanceof BrowserDriverError || error instanceof ProviderError)
+        return runtimeFailure(absolute, error) as Problem;
+      const source = error instanceof Error ? where(error.stack) : test.source;
+      await recordCodeFailure(
+        activePage,
+        dependencies,
+        source,
+        error,
+        groupsOf(error),
+      );
+      return { status: "failed", file: absolute, source };
+    };
+
     let primary: Problem | null = firstProblem;
-    if (!primary && threw && !isStepStop(thrown)) {
-      if (
-        thrown instanceof BrowserDriverError ||
-        thrown instanceof ProviderError
-      )
-        primary = runtimeFailure(absolute, thrown) as Problem;
-      else {
-        const source =
-          thrown instanceof Error ? where(thrown.stack) : test.source;
-        const thrownIn =
-          typeof thrown === "object" && thrown !== null && THROWN_IN in thrown
-            ? (thrown as { [THROWN_IN]: readonly string[] })[THROWN_IN]
-            : [];
-        await recordCodeFailure(
-          activePage,
-          dependencies,
-          source,
-          thrown,
-          thrownIn,
-        );
-        primary = { status: "failed", file: absolute, source };
-      }
-    }
+    // A step the body never awaited or handled can still fail the test.
+    const ignored = rejected.find(
+      ({ step, error }) => !step.observed && !isStepStop(error),
+    );
+    if (!primary && threw && !isStepStop(thrown))
+      primary = await codeFailure(thrown);
+    else if (!primary && ignored) primary = await codeFailure(ignored.error);
+
+    // Close the page while still listening: an unawaited page call from the
+    // test rejects when its page closes, and belongs to this attempt.
+    await closeQuietly(page);
+    await closeQuietly(context);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    stopListening();
+    const stray = unhandled[0];
+    if (!primary && stray)
+      primary = stray.attributed
+        ? await codeFailure(stray.reason)
+        : {
+            status: "could_not_run",
+            file: absolute,
+            code: "invalid_test",
+            source: test.source,
+            message:
+              "A promise nobody awaited rejected while several tests were running, so it could not be attributed to one of them.",
+            fix: "Add `await` before every page, expect, and ai call, or rerun without --parallel to find the test.",
+          };
     if (!primary) {
       await report?.test.finishTest("passed");
       return { status: "passed", file: absolute };
@@ -733,6 +841,7 @@ export async function runScriptTest(
     return runtimeFailure(absolute, error);
   } finally {
     finished = true;
+    stopListening?.();
     await closeQuietly(page);
     await closeQuietly(context);
     await closeQuietly(session);

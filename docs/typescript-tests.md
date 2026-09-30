@@ -187,6 +187,8 @@ sentence is the wrong tool:
 - **Generate data.** Use any library, such as `@faker-js/faker`, and pass the
   values to `ai`.
 - **Share steps.** A module is a function: `export async function login(ai, user) { ... }`.
+  A helper can also wrap `test()` itself, for example to add shared tags; the
+  test belongs to the file that calls the helper.
 
 The page settles before each `ai` step, so a step after code sees the page
 that code left.
@@ -198,7 +200,10 @@ that code left.
   run. The test fails even if your code catches the error.
 - **An exception from your code fails the test.** A failed `expect` or any
   thrown error is recorded as a failed step with `operation: "code"`, at the
-  file and line that threw, under its group.
+  file and line that threw, under its group. This includes a promise the test
+  never awaits, such as an unawaited `page.click` or `expect`, and an
+  `ai.group` or `ai.extract` whose code throws while nobody awaits it. To let a
+  block fail on purpose, handle it: `await ai.group(...).catch(() => {})`.
 - **Misusing `ai` is an invalid test.** A missing value, an invalid values
   object, or a missing `await` stops the run as an invalid test, like a YAML
   file with an error, with the file, line, and a fix.
@@ -212,7 +217,8 @@ Reports name a TypeScript test by its file and title, and rerun commands add
 `sedum validate` also finds the sentences passed to `ai(...)`, `ai([...])`,
 and `ai.group(name, [...])`, in the test file and in the local modules it
 imports, and checks them offline, or online with `--online`, exactly like YAML
-steps. A list or sentence held in a `const` in the same file is read too.
+steps. A list or sentence held in a `const` in the same file is read too, when
+the file declares that name once and never reassigns it.
 Validation recognizes the `ai` name.
 
 An argument validation cannot read, such as a variable, a function call, or a

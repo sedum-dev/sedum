@@ -276,20 +276,111 @@ export function scanScriptSentences(
     }
     return cursor;
   };
-  // `const STEPS = [...]` or `const STEP = "..."` in the same file can be
-  // read where it is used. Any other identifier is a run-time value.
-  const constants = new Map<string, number>();
-  tokens.forEach((token, index) => {
-    const name = at(index + 1);
+  // Bracket structure, to tell a use of a name from a binding of it.
+  const match = new Map<number, number>();
+  const parentOf: (number | undefined)[] = [];
+  {
+    const open: number[] = [];
+    tokens.forEach((token, index) => {
+      parentOf[index] = open.at(-1);
+      if (token.kind !== "punct") return;
+      if ("([{".includes(token.value)) open.push(index);
+      else if (")]}".includes(token.value)) {
+        const opener = open.pop();
+        if (opener !== undefined) match.set(opener, index);
+      }
+    });
+  }
+  const value = (index: number) => at(index)?.value;
+  const DECLARE = new Set(["const", "let", "var", "function", "class"]);
+  const COMPOUND = new Set([
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "&",
+    "|",
+    "^",
+    "<",
+    ">",
+    "?",
+  ]);
+  const CONTROL = new Set(["if", "while", "for", "switch", "with"]);
+  /** Whether the name at `index` is bound or assigned there, not just read. */
+  const binds = (index: number): boolean => {
+    const next = value(index + 1);
+    const prev = value(index - 1);
+    if (DECLARE.has(prev ?? "") || next === "=>") return true;
+    if (next === "=" && value(index + 2) !== "=") return true;
+    if (COMPOUND.has(next ?? "") && value(index + 2) === "=") return true;
     if (
-      token.kind === "ident" &&
-      ["const", "let", "var"].includes(token.value) &&
-      name?.kind === "ident" &&
-      isPunct(index + 2, "=") &&
-      (at(index + 3)?.kind === "string" || isPunct(index + 3, "["))
+      (next === "+" && value(index + 2) === "+") ||
+      (next === "-" && value(index + 2) === "-") ||
+      (prev === "+" && value(index - 2) === "+") ||
+      (prev === "-" && value(index - 2) === "-")
     )
-      constants.set(name.value, index + 3);
-  });
+      return true;
+    // Walk out through patterns: `{ a, b } = x`, `const [a] = x`, `(a) => …`.
+    for (let parent = parentOf[index]; parent !== undefined;) {
+      const close = match.get(parent);
+      const after = close === undefined ? undefined : value(close + 1);
+      if (value(parent) === "(") {
+        if (after === "=>") return true;
+        if (after === "{" && !CONTROL.has(value(parent - 1) ?? "")) return true;
+        return false;
+      }
+      if (after === "=" && value((close ?? 0) + 2) !== "=") return true;
+      if (DECLARE.has(value(parent - 1) ?? "")) return true;
+      parent = parentOf[parent];
+    }
+    return false;
+  };
+  /** A value that ends where its declaration does, not `[...].concat(x)`. */
+  const endsCleanly = (last: number): boolean => {
+    const next = at(last + 1);
+    return (
+      next === undefined ||
+      next.line > at(last)!.line ||
+      next.value === ";" ||
+      next.value === "," ||
+      (next.value === "as" && value(last + 2) === "const")
+    );
+  };
+  // A name can be read where it is used only when the file declares it once,
+  // with `const`, as a literal list or sentence, and never rebinds it. A name
+  // declared twice, a `let`, or a loop variable is a run-time value.
+  const constants = new Map<string, number>();
+  {
+    const bindings = new Map<string, number>();
+    tokens.forEach((token, index) => {
+      if (token.kind === "ident" && binds(index) && value(index - 1) !== ".")
+        bindings.set(token.value, (bindings.get(token.value) ?? 0) + 1);
+    });
+    tokens.forEach((token, index) => {
+      const name = at(index + 1);
+      if (
+        token.kind !== "ident" ||
+        token.value !== "const" ||
+        name?.kind !== "ident" ||
+        !isPunct(index + 2, "=") ||
+        bindings.get(name.value) !== 1
+      )
+        return;
+      const start = index + 3;
+      const last =
+        at(start)?.kind === "string"
+          ? start
+          : isPunct(start, "[")
+            ? match.get(start)
+            : undefined;
+      if (last !== undefined && endsCleanly(last))
+        constants.set(name.value, start);
+    });
+  }
+  const MAX_SENTENCES = 10_000;
+  const MAX_DEPTH = 32;
+  let truncated = false;
   const reading = new Set<string>();
   /** One argument or list element at `index`; returns the index after it. */
   const argument = (index: number): number => {
@@ -298,6 +389,7 @@ export function scanScriptSentences(
     const end = skipExpression(index);
     if (token.kind === "string" && end === index + 1) {
       if (token.dynamic) dynamic(token);
+      else if (sentences.length >= MAX_SENTENCES) truncated = true;
       else
         sentences.push({
           text: token.value,
@@ -309,6 +401,13 @@ export function scanScriptSentences(
       token.kind === "ident" && end === index + 1
         ? constants.get(token.value)
         : undefined;
+    if (
+      declared !== undefined &&
+      (reading.size >= MAX_DEPTH || sentences.length >= MAX_SENTENCES)
+    ) {
+      truncated = true;
+      return end;
+    }
     if (declared !== undefined && !reading.has(token.value)) {
       reading.add(token.value);
       if (isPunct(declared, "[")) list(declared);
@@ -364,6 +463,14 @@ export function scanScriptSentences(
         argument(second);
     }
   }
+  if (truncated)
+    warnings.push({
+      severity: "warning",
+      code: "too_many_sentences",
+      source: { file, line: 1, col: 1 },
+      message: `This file's lists expand to more than ${MAX_SENTENCES} step sentences, or nest more than ${MAX_DEPTH} deep; the rest were not checked.`,
+      fix: "Split the lists, or pass fewer copies of them to ai().",
+    });
   return { sentences, warnings };
 }
 
