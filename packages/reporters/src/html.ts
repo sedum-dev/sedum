@@ -26,6 +26,8 @@ import { REPORT_JS } from "./html-interactions.js";
 export interface HtmlReportOptions {
   /** Captured replay JPEGs, keyed by the relative path recorded in RunResult. */
   readonly replayFrames?: ReadonlyMap<string, string>;
+  /** How to invoke sedum in rerun hints, e.g. `npx sedum`. Default `sedum`. */
+  readonly command?: string;
 }
 
 const mark =
@@ -350,7 +352,8 @@ function replay(
         src: data ? "data:image/jpeg;base64," + data : null,
         status:
           frame.status === "captured" && !data ? "unavailable" : frame.status,
-        label: step.index + ". " + step.operation + " " + step.sentence,
+        // The sentence already names the action ("type {{user}} in …").
+        label: step.index + ". " + (step.sentence || step.operation),
         step: step.index,
         attempt: attempt.id,
         box: step.targetBox,
@@ -697,7 +700,7 @@ const extraCss = `
 }
 `;
 
-export function renderHtml(
+function renderHtmlBody(
   result: RunResult,
   options: HtmlReportOptions = {},
 ): string {
@@ -839,4 +842,16 @@ export function renderHtml(
     REPORT_JS +
     "</script></body></html>\n"
   );
+}
+
+export function renderHtml(
+  input: RunResult,
+  options: HtmlReportOptions = {},
+): string {
+  const body = renderHtmlBody(input, options);
+  const command = options.command ?? "sedum";
+  // Rerun hints are the only places the command is written.
+  return command === "sedum"
+    ? body
+    : body.replaceAll("<code>sedum run ", `<code>${command} run `);
 }

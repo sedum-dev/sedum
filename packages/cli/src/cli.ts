@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { sedumCommand } from "./invocation.js";
 import { runCli } from "./run-cli.js";
 import { createInterruptState } from "./interrupts.js";
 import { startDeadlineWatchdog } from "./deadline-watchdog.js";
@@ -24,6 +26,7 @@ const output = await runCli(process.argv.slice(2), pkg.version, {
     color: process.stdout.isTTY === true && !("NO_COLOR" in process.env),
     ...(process.stdout.columns ? { columns: process.stdout.columns } : {}),
   },
+  command: sedumCommand(process.env, fileURLToPath(import.meta.url)),
   stdout: (value) => process.stdout.write(value),
   stderr: (value) => process.stderr.write(value),
 });

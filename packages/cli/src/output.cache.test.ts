@@ -53,7 +53,9 @@ describe("cache outcome in terminal summary", () => {
       },
       false,
     );
-    expect(output).toContain("test PASSED");
+    // The live reporter printed the outcome; the summary only adds detail.
+    expect(output).not.toContain("test PASSED");
+    expect(output).toMatch(/^cart\.test\.yaml\n {2}step 1: cache /mu);
     expect(output).toContain(
       "cache miss (strong_signal_conflict), model fallback, target changed",
     );
