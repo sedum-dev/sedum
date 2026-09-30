@@ -45,8 +45,10 @@ async function render(
   for (const [index, step] of steps.entries()) {
     await recorder.addStep({ ...step, id: `step-${index}`, index: index + 1 });
   }
-  await recorder.finishTest("failed");
-  await recorder.finish();
+  const errored = steps.find((step) => step.state === "error");
+  if (errored) await recorder.errorTestFor("test", errored.error!);
+  else await recorder.finishTest("failed");
+  await recorder.finish(errored?.error ?? null);
   return renderRunSummary(
     recorder.snapshot,
     { stdoutIsTTY: false, stderrIsTTY: false, color: false },
