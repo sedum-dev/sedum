@@ -129,14 +129,12 @@ export function renderRunSummary(
   const color = capabilities.stdoutIsTTY && capabilities.color;
   const lines: string[] = [];
   const flagCounts = { low_confidence: 0, contradiction: 0 };
+  // The live reporter has already printed each test's outcome; the summary
+  // only adds the detail it did not show, under the test's file.
   for (const test of value.tests) {
-    const label = stateLabel(test.state, test.verdict);
-    const flags = test.flags.length ? ` [${test.flags.join(", ")}]` : "";
-    lines.push(
-      `test ${paint(label.text, label.color, color)} ${test.file}${flags}`,
-    );
+    const details: string[] = [];
     if (test.attempts.length > 1)
-      lines.push(
+      details.push(
         `  attempts ${test.attempts.length} (${test.attempts.map((attempt) => attempt.verdict ?? attempt.state).join(" -> ")})`,
       );
     const selected = test.attempts.find(
@@ -149,11 +147,12 @@ export function renderRunSummary(
         const reason = cache.reason ? ` (${cache.reason})` : "";
         const fallback = cache.fallbackCalledModel ? ", model fallback" : "";
         const changed = cache.targetChanged ? ", target changed" : "";
-        lines.push(
+        details.push(
           `  step ${step.index}: cache ${cache.outcome}${reason}${fallback}${changed}`,
         );
       }
     }
+    if (details.length) lines.push(test.file, ...details);
   }
   const outsideGit = value.tests.some((test) =>
     test.attempts.some((attempt) =>
@@ -197,7 +196,7 @@ export function renderRunSummary(
           );
       }
   if (artifacts.authoritative) {
-    lines.push(`progress ${artifacts.progressPath}`);
+    // progress.json was named when the run started.
     lines.push(`result ${artifacts.resultPath}`);
     if (artifacts.htmlPath) lines.push(`html ${artifacts.htmlPath}`);
     if (artifacts.markdownPath)
@@ -210,14 +209,8 @@ export function renderRunSummary(
   }
   if (capabilities.stdoutIsTTY || showCosts) {
     lines.push(...usageLines(value));
-    lines.push(
-      `model ${value.totals.modelCalls} call(s), ${value.totals.inputTokens} input tokens, ${value.totals.outputTokens} output tokens`,
-    );
-    lines.push(
-      value.totals.costComplete && value.totals.costUsd !== null
-        ? `cost $${value.totals.costUsd.toFixed(6)}`
-        : "cost unknown or incomplete",
-    );
+    if (!value.totals.costComplete || value.totals.costUsd === null)
+      lines.push("cost unknown or incomplete");
   }
   return `${lines.join("\n")}\n`;
 }
