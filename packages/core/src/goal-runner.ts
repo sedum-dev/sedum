@@ -87,6 +87,12 @@ export interface GoalResult {
   readonly elapsedMs: number;
   readonly calls: readonly ProviderCall[];
   readonly history: readonly string[];
+  /**
+   * For an abstention: which choice was uncertain, where, and its top
+   * probabilities, e.g. "operation on …/inventory.html: BLOCKED 0.48,
+   * CLICK 0.46". Contains no typed values.
+   */
+  readonly detail?: string;
   readonly verification: readonly {
     claim: string;
     verdict: string;
@@ -107,7 +113,8 @@ export function goalOperations(state: GoalState): Record<string, string> {
       ]),
     ),
     DONE: "All goal requirements are visibly satisfied; request independent verification",
-    BLOCKED: "No supported operation can safely progress; abstain",
+    BLOCKED:
+      "No offered element or field can move the goal forward from this page; abstain",
   };
 }
 
@@ -224,7 +231,7 @@ export async function runGoal(
   let actions = 0;
   let pendingCall = false;
   let reportedCalls = 0;
-  const result = (reason: string): GoalResult => ({
+  const result = (reason: string, detail?: string): GoalResult => ({
     status: reason === "verified" ? "passed" : "failed",
     reason,
     requests,
@@ -232,8 +239,31 @@ export async function runGoal(
     elapsedMs: Math.round(performance.now() - started),
     calls,
     history,
+    ...(detail ? { detail } : {}),
     verification,
   });
+  /** The top of an uncertain choice, so a failed goal says what was close. */
+  const uncertain = (
+    what: string,
+    answer: GoalChoice | undefined,
+    route: string,
+    label: (choice: string) => string = (choice) => choice,
+  ) => {
+    let where = route;
+    try {
+      where = new URL(route).pathname || route;
+    } catch {
+      // Keep the raw route.
+    }
+    const top = answer
+      ? Object.entries(answer.probabilities)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([choice, p]) => `${label(choice)} ${p.toFixed(2)}`)
+          .join(", ")
+      : "no answer";
+    return project(`${what} on ${where}: ${top}`);
+  };
   const seen = new Map<string, number>();
   try {
     while (!signal.aborted) {
@@ -348,7 +378,10 @@ export async function runGoal(
           operationMinMargin,
         )
       )
-        return result("operation_abstention");
+        return result(
+          "operation_abstention",
+          uncertain("operation", decision.operation, digest.version.route),
+        );
       if (!same(digest.version, await active(pageVersion(page)))) continue;
       const op = decision.operation.choice;
       if (op === "BLOCKED") return result("blocked");
@@ -391,7 +424,23 @@ export async function runGoal(
         !head ||
         !goalChoiceAccepted(head, Object.keys(state.targets[op] ?? {}))
       )
-        return result("target_abstention");
+        return result(
+          "target_abstention",
+          uncertain(`${op} target`, head, digest.version.route, (id) => {
+            const name = (() => {
+              try {
+                return (
+                  JSON.parse(state.targets[op]?.[id] ?? "{}") as {
+                    name?: string;
+                  }
+                ).name;
+              } catch {
+                return undefined;
+              }
+            })();
+            return name ? `"${name}"` : id;
+          }),
+        );
       const command = commands.get(head.choice);
       if (!command) return result("invalid_target");
       if (actions >= maxActions) return result("action_limit");
@@ -444,6 +493,20 @@ export async function runGoal(
       } catch (error) {
         failed = true;
         failure = error;
+      }
+      // A target that went stale before dispatch provably received no input,
+      // so no action happened: take it back and observe the page again.
+      // Each retry still costs a planner request, which bounds the loop.
+      if (
+        failed &&
+        failure instanceof StepExecutionError &&
+        failure.code === "stale" &&
+        failure.phase === "pre_dispatch" &&
+        !signal.aborted
+      ) {
+        actions--;
+        history.pop();
+        continue;
       }
       await options.onAction?.({
         operation: command.op,

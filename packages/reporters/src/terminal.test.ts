@@ -363,7 +363,7 @@ describe("terminal reporters", () => {
         .join("");
     };
     expect(render("list")).toBe(
-      "progress /tmp/run/progress.json\n[1/2] test PASSED steady.test.yaml\n[2/2] test PASSED flaky.test.yaml (2 attempts)\n",
+      "progress /tmp/run/progress.json\n[1/2] test PASSED steady.test.yaml\n[2/2] test PASSED [flaky] flaky.test.yaml (2 attempts)\n",
     );
     const steps = render("steps");
     expect(steps.indexOf("steady.test.yaml:1")).toBeLessThan(
@@ -373,7 +373,9 @@ describe("terminal reporters", () => {
       /flaky.test.yaml:1 FAILED[^\n]*\nflaky.test.yaml:1 PASSED/u,
     );
     // Serial output now shows the retry's outcome too.
-    expect(render("list", context)).toContain("test PASSED flaky.test.yaml");
+    expect(render("list", context)).toContain(
+      "test PASSED [flaky] flaky.test.yaml",
+    );
     // Without a retry budget the failure is final at once.
     const noRetry = {
       ...context,

@@ -81,6 +81,25 @@ function executionLines(value: RunResult): string[] {
       ]),
     ),
   ];
+  if (execution?.vision) {
+    const steps = value.tests.flatMap((test) =>
+      test.attempts.flatMap((attempt) => attempt.steps),
+    );
+    const used = steps.filter((step) => step.locator?.vision).length;
+    lines.push(
+      used
+        ? `vision ${execution.vision.model}: used on ${used} step(s)`
+        : `vision ${execution.vision.model}: enabled, not used; every click was resolved from the page text`,
+    );
+    if (execution.vision.key === "rejected")
+      lines.push(
+        "vision warning: OpenRouter rejected OPEN_ROUTER_API_KEY, so vision fallback cannot work. Check it with `sedum doctor --vision`.",
+      );
+    else if (execution.vision.key === "unreachable")
+      lines.push(
+        "vision warning: OpenRouter could not be reached to check OPEN_ROUTER_API_KEY.",
+      );
+  }
   const limited = calls.filter((call) => call.rateLimited).length;
   const waitMs = calls.reduce(
     (sum, call) => sum + (call.rateLimitWaitMs ?? 0),
@@ -137,6 +156,17 @@ export function renderRunSummary(
       }
     }
   }
+  const outsideGit = value.tests.some((test) =>
+    test.attempts.some((attempt) =>
+      attempt.steps.some(
+        (step) => step.locator?.cache?.reason === "outside_git",
+      ),
+    ),
+  );
+  if (outsideGit)
+    lines.push(
+      "cache off: this project is not a Git checkout; run `git init` to cache locator results",
+    );
   const runLabel = stateLabel(value.state, value.verdict);
   lines.push(`run  ${paint(runLabel.text, runLabel.color, color)}`);
   for (const problem of value.discoveryProblems ?? [])
@@ -150,7 +180,7 @@ export function renderRunSummary(
     `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed${erroredTests ? `, ${erroredTests} could not run` : ""}`,
   );
   lines.push(
-    `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}`,
+    `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}, flaky ${value.tests.filter((test) => test.flags.includes("flaky")).length} test(s)`,
   );
   lines.push(...executionLines(value));
   for (const test of value.tests)

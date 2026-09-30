@@ -315,3 +315,31 @@ export async function captureVisionObservation(
     },
   };
 }
+
+export type VisionKeyProbe = "accepted" | "rejected" | "unreachable";
+
+/**
+ * Checks OPEN_ROUTER_API_KEY without a model request: OpenRouter's key
+ * endpoint answers 401 for an unknown key and is not billed.
+ */
+export async function probeOpenRouterKey(
+  apiKey: string,
+  options: { readonly timeoutMs?: number; readonly signal?: AbortSignal } = {},
+): Promise<VisionKeyProbe> {
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/key", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.any([
+        AbortSignal.timeout(options.timeoutMs ?? 5_000),
+        ...(options.signal ? [options.signal] : []),
+      ]),
+    });
+    await response.body?.cancel().catch(() => undefined);
+    if (response.ok) return "accepted";
+    return response.status === 401 || response.status === 403
+      ? "rejected"
+      : "unreachable";
+  } catch {
+    return "unreachable";
+  }
+}

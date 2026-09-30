@@ -215,6 +215,44 @@ export function unsupported(
   };
 }
 
+/** Provider failures name the cause the provider reported, like `sedum doctor`. */
+function providerFailure(
+  file: string,
+  error: ProviderError,
+): Extract<FlowRunResult, { status: "could_not_run" }> {
+  const details: Partial<
+    Record<
+      ProviderError["code"],
+      { readonly message: string; readonly fix: string }
+    >
+  > = {
+    "rate-limited": {
+      message: "The provider kept rate limiting requests for five minutes.",
+      fix: "Lower --parallel or --provider-concurrency, or retry later.",
+    },
+    authentication: {
+      message: "The model provider rejected the API key.",
+      fix: "Set TYPESAFE_API_KEY to a valid key, check it with `sedum doctor`, then rerun.",
+    },
+    configuration: {
+      message: "The model provider is not configured correctly.",
+      fix: "Check TYPESAFE_API_KEY, TYPESAFE_BASE_URL and the model with `sedum doctor`, then rerun.",
+    },
+  };
+  return {
+    status: "could_not_run",
+    file,
+    code:
+      error.code === "rate-limited"
+        ? "provider_rate_limited"
+        : `provider_${error.code}`,
+    ...(details[error.code] ?? {
+      message: "The model provider could not complete the run safely.",
+      fix: "Check provider availability and the test input, then rerun the test.",
+    }),
+  };
+}
+
 /** @internal */
 export function runtimeFailure(file: string, error: unknown): FlowRunResult {
   if (error instanceof BrowserDriverError) {
@@ -262,26 +300,7 @@ export function runtimeFailure(file: string, error: unknown): FlowRunResult {
       ...details[error.code],
     };
   }
-  if (error instanceof ProviderError) {
-    if (error.code === "rate-limited")
-      return {
-        status: "could_not_run",
-        file,
-        code: "provider_rate_limited",
-        message: "The provider kept rate limiting requests for five minutes.",
-        fix: "Lower --parallel or --provider-concurrency, or retry later.",
-      };
-    return {
-      status: "could_not_run",
-      file,
-      code: `provider_${error.code}`,
-      message: "The model provider could not complete the run safely.",
-      fix:
-        error.code === "configuration" || error.code === "authentication"
-          ? "Check the configured provider API key and access, then rerun the test."
-          : "Check provider availability and the test input, then rerun the test.",
-    };
-  }
+  if (error instanceof ProviderError) return providerFailure(file, error);
   return {
     status: "could_not_run",
     file,
@@ -632,6 +651,15 @@ export async function executeSentence(
     await report.test.addStep(result);
     return outcome;
   };
+  // A provider failure every later step would hit too is recorded on this
+  // step with its real cause, then ends the attempt and the run.
+  const runWide = async (error: ProviderError): Promise<ProviderError> => {
+    const outcome = providerFailure(step.source.file, error);
+    await record(outcome, {
+      error: { code: outcome.code, message: outcome.message },
+    });
+    return error;
+  };
   // Observe one settled DOM before locating/judging the next step. This avoids
   // treating the mutation from the previous action as a fresh locator target;
   // it does not retry or replay an action.
@@ -757,7 +785,7 @@ export async function executeSentence(
       report?.privacy.secretValues.push(remembered);
       return record("continue", locator ? { locator } : {});
     } catch (error) {
-      if (isRunWideProviderError(error)) throw error;
+      if (isRunWideProviderError(error)) throw await runWide(error);
       return record(
         unsupported(
           step.source.file,
@@ -799,7 +827,7 @@ export async function executeSentence(
         verify: result,
       });
     } catch (error) {
-      if (isRunWideProviderError(error)) throw error;
+      if (isRunWideProviderError(error)) throw await runWide(error);
       const priorCalls =
         error instanceof AssertionEngineError && error.failedCall
           ? [resultCall(error.failedCall, "judge")]
@@ -819,7 +847,8 @@ export async function executeSentence(
               failedCalls: priorCalls,
             });
           } catch (retryError) {
-            if (isRunWideProviderError(retryError)) throw retryError;
+            if (isRunWideProviderError(retryError))
+              throw await runWide(retryError);
             return record(
               unsupported(
                 step.source.file,
@@ -1011,7 +1040,7 @@ export async function executeSentence(
   try {
     resolved = await locate();
   } catch (error) {
-    if (isRunWideProviderError(error)) throw error;
+    if (isRunWideProviderError(error)) throw await runWide(error);
     return record(
       unsupported(
         step.source.file,
@@ -1032,6 +1061,7 @@ export async function executeSentence(
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
     });
   } catch (error) {
+    if (isRunWideProviderError(error)) throw await runWide(error);
     if (!(error instanceof LocateRetryError)) throw error;
     return record(
       unsupported(
@@ -1062,7 +1092,17 @@ export async function executeSentence(
           code: resolved.reason,
           message: resolved.diagnostic.vision?.failure
             ? `Could not resolve this ${step.op} step: vision ${resolved.diagnostic.vision.failure}${resolved.diagnostic.vision.httpStatus ? ` (HTTP ${resolved.diagnostic.vision.httpStatus})` : ""}.`
-            : `Could not resolve this ${step.op} step.`,
+            : dependencies.visionResolver && step.op === "click"
+              ? resolved.diagnostic.vision?.outcome === "abstained"
+                ? `Could not resolve this ${step.op} step: the vision model did not find a matching element either.`
+                : !resolved.diagnostic.vision
+                  ? `Could not resolve this ${step.op} step. Vision fallback could not run: ${
+                      resolved.reason === "no_candidates"
+                        ? "the page offered no clickable elements"
+                        : "it needs 2 to 40 fully visible, unobscured controls on screen"
+                    }.`
+                  : `Could not resolve this ${step.op} step.`
+              : `Could not resolve this ${step.op} step.`,
         },
       });
     return record(
@@ -1179,7 +1219,18 @@ export async function executeSentence(
         );
         await dependencies.locatorCache.put(seed.key, entry);
       } catch (error) {
+        // A target that cannot be told apart safely is never stored, so an
+        // "absent" miss would wrongly suggest the next run will hit.
         if (
+          error instanceof Error &&
+          error.message === "candidate_not_distinguishable" &&
+          resolved.cache?.reason === "absent"
+        )
+          recordedLocator = {
+            ...resolved,
+            cache: { ...resolved.cache, reason: "not_cacheable" },
+          };
+        else if (
           error instanceof Error &&
           error.message !== "candidate_not_distinguishable" &&
           resolved.cache
@@ -1206,7 +1257,7 @@ export async function executeSentence(
         : { detail: `Chose "${chosenOption}" in the dropdown.` }),
     });
   } catch (error) {
-    if (isRunWideProviderError(error)) throw error;
+    if (isRunWideProviderError(error)) throw await runWide(error);
     const actionError = error instanceof StepExecutionError ? error : null;
     const failed =
       actionError &&
@@ -1664,7 +1715,11 @@ export async function runFlow(
             goalResult.status === "failed"
               ? {
                   code: goalResult.reason,
-                  message: `Goal did not pass: ${goalResult.reason}.`,
+                  message: safeText(
+                    `Goal did not pass: ${goalResult.reason}.${goalResult.detail ? ` The planner was unsure of the ${goalResult.detail}.` : ""}${goalResult.reason.endsWith("_abstention") ? " Name the page or control for that step in the goal, or split the goal into authored steps around it." : ""}`,
+                    privacy,
+                    512,
+                  ),
                 }
               : null,
           evidence: { status: "omitted", reason: "goal_summary" },

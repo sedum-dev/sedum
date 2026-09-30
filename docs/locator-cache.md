@@ -63,3 +63,8 @@ Each action's `RunResult.locator.cache` records `hit`, `miss`, or `bypassed`,
 the reason, whether fallback called the locator model, and proven target-change
 evidence. Terminal output shows the same outcome. A changed or stale recipe
 remains visible even when the subsequent model-selected action succeeds.
+A miss with reason `not_cacheable` means the target has no signal that can
+safely find it again, for example an `<input type="submit">` button whose
+name is its runtime value, so that step always uses the model. A run outside a
+Git checkout reports `bypassed (outside_git)` and prints a hint to run
+`git init`.

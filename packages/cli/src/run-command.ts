@@ -5,6 +5,7 @@ import {
   RunRecorder,
   OpenRouterVisionResolver,
   isScriptTestFile,
+  probeOpenRouterKey,
   runFlow,
   runScriptTest,
   safeText,
@@ -14,6 +15,7 @@ import {
   type FlowRunnerDependencies,
   RejectionRouter,
   type UnattributedRejection,
+  type VisionKeyProbe,
 } from "@sedum-dev/core";
 import {
   DEFAULT_PROVIDER_CONCURRENCY,
@@ -70,6 +72,8 @@ export interface RunCommandOptions {
   readonly providerConcurrency?: number;
   /** Injected for tests; defaults to `os.availableParallelism()`. */
   readonly availableParallelism?: number;
+  /** Injected for tests; defaults to OpenRouter's unbilled key endpoint. */
+  readonly probeVisionKey?: (apiKey: string) => Promise<VisionKeyProbe>;
   readonly replay: boolean;
   readonly evidence: boolean;
   readonly sensitiveOrigins: readonly string[];
@@ -870,10 +874,20 @@ export async function executeRunCommand(
       const providerConcurrency =
         options.providerConcurrency ??
         Math.min(DEFAULT_PROVIDER_CONCURRENCY, lanes * 2);
+      // A wrong vision key would otherwise go unnoticed until a step needs
+      // vision, which may be never. Check it once, unbilled, and report it.
+      const visionKey = config.vision.enabled
+        ? await (options.probeVisionKey ?? probeOpenRouterKey)(
+            config.visionApiKey!,
+          ).catch((): VisionKeyProbe => "unreachable")
+        : null;
       await recorder.selectTests(files.length, {
         parallel: { requested: options.parallel ?? 1, lanes },
         shard: options.shard ? { ...options.shard, globalSelectedTests } : null,
         providerConcurrency,
+        ...(visionKey
+          ? { vision: { model: config.vision.model, key: visionKey } }
+          : {}),
       });
       if (discoveryProblems.length)
         await recorder.addDiscoveryProblems(discoveryProblems);

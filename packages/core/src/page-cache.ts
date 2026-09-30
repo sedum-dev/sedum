@@ -14,6 +14,8 @@ export const CACHE_FORMAT = 1;
 export const MATCHER_VERSION = 1;
 export type CacheMissReason =
   | "absent"
+  /** The target has no signal that can safely find it again, such as an input button. */
+  | "not_cacheable"
   | "disabled"
   | "ci_default"
   | "outside_git"

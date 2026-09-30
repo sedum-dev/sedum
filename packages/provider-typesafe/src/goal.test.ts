@@ -44,6 +44,13 @@ describe("goal speculative heads", () => {
       expect(body.questions.operation.instructions.rules).toContain(
         "Fill required fields before submitting.",
       );
+      // BLOCKED means no offered control helps, not that a named step is risky.
+      expect(body.questions.operation.instructions.rules).toContain(
+        "Every step the goal names is expected and safe to perform here",
+      );
+      expect(body.questions.operation.criteria.BLOCKED).toBe(
+        "No offered element or field can move the goal forward from this page; abstain",
+      );
       expect(body.questions.click_target.instructions.rules).not.toContain(
         "Fill required fields before submitting.",
       );
