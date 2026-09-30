@@ -18,6 +18,13 @@ automatically restarted by `--retries`.
 
 `@sedum-dev/core/run-result.schema.json` is the Draft 2020-12 schema generated from the same Zod definition used to validate every published snapshot. The schema ID is `https://sedum.dev/schemas/run-result/v1`. The v1 schema may still change incompatibly before its first published release. After v1 is published, incompatible changes require a new major schema version. Consumers should reject unknown major versions.
 
+A step from a TypeScript test carries `group`, the enclosing `ai.group` names
+from the outermost, when it ran inside a group. An exception thrown by test
+code is one failed step with `kind: verify` and `operation: code`, whose error
+code is `expect_failed` for a failed `expect()` and `code_error` otherwise. A
+TypeScript test's `id` is `<file>#<title>` unless it sets an `id`, and its
+`description` is the title.
+
 Each attempt problem has a unique ID, consecutive attempt-local ordinal, phase, ordered source stack, outcome, typed error, and an origin of `step` or `module_binding`. A step problem links its executed step; a module binding problem has `stepId: null` because no sentence ran. The first encountered problem is primary. A failed setup or body stays primary even if later teardown reports an operational error. A primary operational error leaves the verdict null. Executed steps retain their own phase and source stack; there are no synthetic module-call steps.
 
 For a syntactically valid `sedum run`, the CLI resolves project configuration,

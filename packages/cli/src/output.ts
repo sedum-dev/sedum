@@ -1,5 +1,5 @@
 import { validateRunResult, type RunResult } from "@sedum-dev/core";
-import { usageLines, visionSummary } from "@sedum-dev/reporters";
+import { testLabel, usageLines, visionSummary } from "@sedum-dev/reporters";
 
 export interface OutputCapabilities {
   readonly stdoutIsTTY: boolean;
@@ -51,7 +51,8 @@ export function renderProgress(
 ): string {
   if (!capabilities.stdoutIsTTY) return "";
   const value = validateRunResult(result);
-  const current = value.tests.at(-1)?.file ?? "preparing run";
+  const last = value.tests.at(-1);
+  const current = last ? testLabel(last) : "preparing run";
   return `\r\u001b[2K${paint("RUNNING", "cyan", capabilities.color)} ${current}`;
 }
 
@@ -152,7 +153,7 @@ export function renderRunSummary(
         );
       }
     }
-    if (details.length) lines.push(test.file, ...details);
+    if (details.length) lines.push(testLabel(test), ...details);
   }
   const outsideGit = value.tests.some((test) =>
     test.attempts.some((attempt) =>

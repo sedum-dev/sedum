@@ -169,3 +169,31 @@ export function sourceStack(
 export function shellArg(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }
+
+/** A `*.test.ts` file can declare several tests; its title tells them apart. */
+function isScriptTest(test: Pick<ResultTest, "file">): boolean {
+  return test.file.endsWith(".test.ts");
+}
+
+/** How a test is named in reports: its file, plus its title for `*.test.ts`. */
+export function testLabel(
+  test: Pick<ResultTest, "file" | "description">,
+): string {
+  return isScriptTest(test) && test.description
+    ? `${test.file} › ${test.description}`
+    : test.file;
+}
+
+/** Arguments to `sedum run` that select exactly this test. */
+export function rerunArgs(test: Pick<ResultTest, "file" | "id">): string {
+  return isScriptTest(test)
+    ? `${shellArg(test.file)} --id ${shellArg(test.id)}`
+    : shellArg(test.file);
+}
+
+/** A step's sentence under its `ai.group` names, outermost first. */
+export function stepText(step: Pick<ResultStep, "sentence" | "group">): string {
+  return step.group?.length
+    ? `${step.group.join(" › ")} › ${step.sentence}`
+    : step.sentence;
+}

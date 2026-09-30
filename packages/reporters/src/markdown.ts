@@ -13,9 +13,12 @@ import {
   duration,
   needsAttention,
   score,
+  rerunArgs,
   selectedAttempt,
   shellArg,
   sourceStack,
+  stepText,
+  testLabel,
   stepStatus,
   testOrder,
   testStatus,
@@ -120,9 +123,9 @@ function stepSection(
   step: ResultStep,
 ): string[] {
   const out = [
-    `### ${number}. ${stepStatus(step)} · ${code(test.file)} · ${step.phase} step ${step.index} · ${step.kind}`,
+    `### ${number}. ${stepStatus(step)} · ${code(testLabel(test))} · ${step.phase} step ${step.index} · ${step.kind}`,
     "",
-    `> ${inline(step.sentence) || "(no sentence recorded)"}`,
+    `> ${inline(stepText(step)) || "(no sentence recorded)"}`,
     "",
     `- **status**: ${step.state}, verdict ${step.verdict ?? "none"}, flags ${flags(step.flags)}`,
     `- **where**: ${code(sourceStack(step.sourceStack))}`,
@@ -170,7 +173,7 @@ function stepSection(
       ? `- **frame**: ![step ${step.index} frame](${step.evidence.path}) ${code(step.evidence.path)}`
       : `- **frame**: ${step.evidence.status} (${inline(step.evidence.reason)})`,
   );
-  out.push(`- **rerun**: ${code("sedum run " + shellArg(test.file))}`);
+  out.push(`- **rerun**: ${code("sedum run " + rerunArgs(test))}`);
   if (test.attempts.length > 1) {
     out.push(
       `- **attempt**: ${attempt.ordinal} of ${test.attempts.length}; earlier ${earlierAttempts(test)}`,
@@ -207,10 +210,10 @@ function problemSection(
   problem: ResultProblem,
 ): string[] {
   return [
-    `### ${number}. ${problem.outcome} · ${code(test.file)} · ${problem.phase} module binding`,
+    `### ${number}. ${problem.outcome} · ${code(testLabel(test))} · ${problem.phase} module binding`,
     "",
     `- **where**: ${code(sourceStack(problem.sourceStack))}`,
-    `- **rerun**: ${code("sedum run " + shellArg(test.file))}`,
+    `- **rerun**: ${code("sedum run " + rerunArgs(test))}`,
     "",
     "**Why it stopped** (untrusted)",
     "",
@@ -225,12 +228,12 @@ function attemptErrorSection(
   attempt: ResultAttempt,
 ): string[] {
   const out = [
-    `### ${number}. ${attempt.state} · ${code(test.file)} · attempt ${attempt.ordinal}`,
+    `### ${number}. ${attempt.state} · ${code(testLabel(test))} · attempt ${attempt.ordinal}`,
     "",
   ];
   if (attempt.timeoutReason)
     out.push(`- **timeout**: ${inline(attempt.timeoutReason)}`);
-  out.push(`- **rerun**: ${code("sedum run " + shellArg(test.file))}`);
+  out.push(`- **rerun**: ${code("sedum run " + rerunArgs(test))}`);
   if (attempt.error)
     out.push(
       "",
@@ -254,7 +257,7 @@ function stepTable(steps: readonly ResultStep[]): string[] {
         ? `confidence ${score(step.locator.confidence)}`
         : "";
     out.push(
-      `| ${step.index} | ${stepStatus(step)} | ${step.phase} | ${inline(step.operation)}: ${inline(step.sentence)} | ${value} | ${duration(step.elapsedMs)} | ${inline(step.detail)} |`,
+      `| ${step.index} | ${stepStatus(step)} | ${step.phase} | ${inline(step.operation)}: ${inline(stepText(step))} | ${value} | ${duration(step.elapsedMs)} | ${inline(step.detail)} |`,
     );
   }
   return out;
@@ -292,14 +295,14 @@ function flowDetail(test: ResultTest): string[] {
         out.push(
           `- holds ${holds(step)}` +
             (lines ? ` (passes at ${score(lines.pass)})` : "") +
-            ` — ${inline(step.sentence)}`,
+            ` — ${inline(stepText(step))}`,
         );
       }
       out.push("");
     }
     return out;
   }
-  out.push(`Rerun: ${code("sedum run " + shellArg(test.file))}`, "");
+  out.push(`Rerun: ${code("sedum run " + rerunArgs(test))}`, "");
   if (steps.length) out.push(...stepTable(steps), "");
   else out.push("No steps executed in the selected attempt.", "");
   return out;

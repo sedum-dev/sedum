@@ -161,6 +161,8 @@ export interface BrowserPage {
   /** Optional diagnostic effects; fake pages may leave them unavailable. */
   title?(): Promise<string>;
   captureFrame?(): Promise<Uint8Array>;
+  /** The underlying Playwright objects, for code in `*.test.ts` bodies. */
+  playwright?(): { readonly page: Page; readonly context: BrowserContext };
   goto(url: string, options?: NavigationOptions): Promise<NavigationResult>;
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
@@ -331,6 +333,10 @@ class PlaywrightPage implements BrowserPage {
 
   get url(): string {
     return this.page.url();
+  }
+
+  playwright(): { readonly page: Page; readonly context: BrowserContext } {
+    return { page: this.page, context: this.page.context() };
   }
 
   async title(): Promise<string> {

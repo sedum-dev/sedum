@@ -4,12 +4,17 @@ import {
   ReusableBrowserDriver,
   RunRecorder,
   OpenRouterVisionResolver,
+  isScriptTestFile,
   probeOpenRouterKey,
   runFlow,
+  runScriptTest,
   safeText,
   validateRunResult,
   type RunResult,
   type BrowserKind,
+  type FlowRunnerDependencies,
+  RejectionRouter,
+  type UnattributedRejection,
   type VisionKeyProbe,
 } from "@sedum-dev/core";
 import {
@@ -42,6 +47,11 @@ import { planLanes, runPool, type ParallelRequest } from "./run-pool.js";
 import { shardProblems, shardTests, type ShardSpec } from "./run-shard.js";
 
 export interface RunCommandOptions {
+  /**
+   * Receives a stray rejection from test code that arrived after the run was
+   * reported; the `sedum` binary prints it and fails the exit code.
+   */
+  readonly onStrayRejection?: (message: string) => void;
   readonly file?: string;
   readonly paths?: readonly string[];
   readonly filters?: RunFilters;
@@ -103,6 +113,41 @@ const SUPPORTED_REPORTERS: readonly string[] = [
   "markdown",
   "junit",
 ];
+
+/** A run-level diagnostic for rejections that no running test owned. */
+export function strayRejectionDiagnostic(
+  strays: readonly UnattributedRejection[],
+  config: ResolvedProjectConfig,
+): CliDiagnostic {
+  const stray = strays[0]!;
+  const where = stray.source
+    ? `${path.relative(config.projectRoot, stray.source.file).split(path.sep).join("/")}:${stray.source.line}: `
+    : "";
+  const message = safeDiscoveryText(stray.message, config);
+  const more =
+    strays.length > 1
+      ? ` (${strays.length - 1} more rejected outside their tests; see the terminal.)`
+      : "";
+  if (stray.reason === "internal")
+    return {
+      code: "internal_rejection",
+      message: `Sedum hit an unexpected error during the run: ${message}${more}`,
+      fix: "Rerun the command; if it repeats, report it at https://github.com/sedum-dev/sedum/issues with the run's progress.json.",
+    };
+  const what = {
+    finished: `a promise ${stray.test ? `\`${safeDiscoveryText(stray.test, config)}\`` : "a test"} did not await rejected after that test finished`,
+    shared:
+      "a promise nobody awaited rejected in lines several tests share, such as tests declared in a loop, so no test is blamed",
+    outside:
+      "a promise nobody awaited rejected outside any running test, so no test is blamed",
+    unknown: "a promise nobody awaited rejected with a value that has no stack",
+  }[stray.reason];
+  return {
+    code: "stray_rejection",
+    message: `${where}${what}: ${message}${more}`,
+    fix: "Add `await` before the page, expect, API, and ai calls the test starts.",
+  };
+}
 
 function safeDiscoveryText(
   value: string,
@@ -411,6 +456,12 @@ export async function executeRunCommand(
   options: RunCommandOptions,
 ): Promise<RunCommandExecution> {
   const invocationRoot = process.cwd();
+  // Removed only when the command ends, so a stray rejection from test code
+  // during reporting is still caught. After that, the `sedum` binary's
+  // fallback reports it.
+  let rejections: RejectionRouter | undefined;
+  let strayConfig: ResolvedProjectConfig | undefined;
+  let reportedStrays = 0;
   const reportFiles = reportSelection(options);
   const runId = randomUUID();
   let committed = false;
@@ -726,9 +777,15 @@ export async function executeRunCommand(
         };
       }
     };
-    let files: readonly string[];
+    let files: readonly { readonly file: string; readonly id: string }[];
     let globalSelectedTests = 0;
     let discoveryProblems: NonNullable<RunResult["discoveryProblems"]> = [];
+    // Before any test file is imported: a rejection from a file's top-level
+    // code is then reported for the run rather than lost. Installed after the
+    // setup checks, so every path from here reaches the disposing finally.
+    strayConfig = config;
+    rejections = new RejectionRouter(config.projectRoot);
+    rejections.install();
     try {
       const selection = await discoverRunTests(
         config,
@@ -739,7 +796,10 @@ export async function executeRunCommand(
       const selected = options.shard
         ? shardTests(selection.tests, options.shard)
         : selection.tests;
-      files = selected.map((test) => path.join(config.projectRoot, test.file));
+      files = selected.map((test) => ({
+        file: path.join(config.projectRoot, test.file),
+        id: test.id,
+      }));
       discoveryProblems = [
         ...selection.problems,
         ...selection.invalid.flatMap((entry) =>
@@ -835,7 +895,7 @@ export async function executeRunCommand(
           col: 1,
           key: "tests.include",
           message: "The selection matched no valid test files.",
-          fix: "Add a matching *.test.yaml file or correct paths and filters.",
+          fix: "Add a matching *.test.ts or *.test.yaml file, or correct paths and filters.",
         },
       ]);
       const diagnostic = setupDiagnostic(error);
@@ -903,13 +963,19 @@ export async function executeRunCommand(
         { length: lanes },
         () => new ReusableBrowserDriver(driver),
       );
+      const router = rejections!;
       try {
         await runPool({
           items: files,
           lanes,
           signal,
-          run: async (file, lane, ordinal) => {
+          run: async ({ file, id }, lane, ordinal) => {
             const browser = browsers[lane]!;
+            // A `*.test.ts` file can declare several tests; the id selects one.
+            const execute = (dependencies: FlowRunnerDependencies) =>
+              isScriptTestFile(file)
+                ? runScriptTest(file, id, dependencies)
+                : runFlow(file, dependencies);
             for (
               let attempt = 0;
               attempt <= (options.retries ?? 0);
@@ -917,7 +983,7 @@ export async function executeRunCommand(
             ) {
               if (attempt > 0)
                 await recorder.testAt(ordinal)?.startAttempt(lane);
-              const result = await runFlow(file, {
+              const result = await execute({
                 repoRoot: config.projectRoot,
                 browser,
                 provider,
@@ -946,6 +1012,7 @@ export async function executeRunCommand(
                   ? { slowMoMs: options.slowMoMs }
                   : {}),
                 signal,
+                rejections: router,
                 report: {
                   recorder,
                   slot: { ordinal, lane },
@@ -984,6 +1051,14 @@ export async function executeRunCommand(
       } finally {
         gate.close();
         await Promise.all(browsers.map((browser) => browser.recycle()));
+      }
+      // A rejection no running test owned fails the run with its location,
+      // instead of crashing it or failing an unrelated test.
+      // With another run error already primary, the strays still reach the
+      // terminal through onStrayRejection rather than being dropped.
+      if (router.unattributed.length && !operational) {
+        reportedStrays = router.unattributed.length;
+        operational = strayRejectionDiagnostic(router.unattributed, config);
       }
       if (signal.aborted) {
         const diagnostic: CliDiagnostic = timedOut
@@ -1087,5 +1162,11 @@ export async function executeRunCommand(
   } finally {
     if (timeout) clearTimeout(timeout);
     options.signal?.removeEventListener("abort", onExternalAbort);
+    rejections?.dispose();
+    // Anything that arrived after the report was decided goes to the caller.
+    for (const late of rejections?.unattributed.slice(reportedStrays) ?? [])
+      options.onStrayRejection?.(
+        strayRejectionDiagnostic([late], strayConfig!).message,
+      );
   }
 }

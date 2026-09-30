@@ -1,4 +1,6 @@
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import {
   classifyParsedFlow,
   classifySentenceSteps,
@@ -20,6 +22,18 @@ import {
   type SentenceStep,
 } from "./flow-types.js";
 import type { ProviderCall } from "./provider.js";
+import { tokenizeStep } from "./flow-values.js";
+import {
+  isScriptTestFile,
+  loadScriptFile,
+  scriptListingEntries,
+} from "./script-loader.js";
+import {
+  scanImportBindings,
+  scanLocalImports,
+  scanScriptSentences,
+  type ScriptSentenceScan,
+} from "./script-sentences.js";
 
 export interface ProjectValidationOptions extends ClassifyFlowOptions {
   /** The real project root returned by `discoverProjectFiles`. */
@@ -134,6 +148,233 @@ function entryUrlDiagnostic(
   }
 }
 
+/**
+ * Import a `*.test.ts` file for its `test()` declarations and classify the
+ * literal sentences its `ai` calls name. Sentences built at run time are
+ * warnings: they can only be classified when they run.
+ */
+async function validateScriptFile(
+  file: string,
+  options: ProjectValidationOptions,
+  classify: ClassifyFlowOptions,
+): Promise<{
+  readonly headers: readonly FlowDefinition[];
+  readonly diagnostics: readonly FlowDiagnostic[];
+  readonly calls: readonly ProviderCall[];
+  readonly coverage: FullValidationCoverage;
+}> {
+  const script = await loadScriptFile(file, { repoRoot: options.repoRoot });
+  const headers = scriptListingEntries(script).flatMap((entry) =>
+    entry.result.value ? [entry.result.value] : [],
+  );
+  const diagnostics: FlowDiagnostic[] = [...script.diagnostics];
+  for (const header of headers) {
+    // A script test without a url starts on a blank page.
+    if (header.url === undefined || options.baseUrl === undefined) continue;
+    const entry = entryUrlDiagnostic(header, options.baseUrl);
+    if (entry)
+      diagnostics.push({
+        ...entry,
+        source:
+          script.tests.find((test) => test.identity === header.identity)
+            ?.source ?? entry.source,
+      });
+  }
+  let source: string;
+  try {
+    source = await readFile(file, "utf8");
+  } catch {
+    return {
+      headers,
+      diagnostics: [
+        ...diagnostics,
+        {
+          severity: "error",
+          code: "unreadable_file",
+          source: { file, line: 1, col: 1 },
+          message: "The test file could not be read.",
+          fix: "Check the file permissions and rerun.",
+        },
+      ],
+      calls: [],
+      coverage: {
+        format: "failed",
+        steps: "not_checked",
+        modules: "not_needed",
+      },
+    };
+  }
+  // Sentences in local helper modules the test imports are steps too.
+  const read = [{ file, source, scan: scanScriptSentences(source, file) }];
+  const { helpers, truncated } = await localHelpers(
+    file,
+    source,
+    options.repoRoot,
+  );
+  for (const helper of helpers) {
+    const text = await readFile(helper, "utf8").catch(() => "");
+    read.push({
+      file: helper,
+      source: text,
+      scan: scanScriptSentences(text, helper),
+    });
+  }
+  const scans = read.map((item) => item.scan);
+  const warnings = [
+    ...scans.flatMap((scan) => scan.warnings),
+    ...unresolvedHelperCalls(read),
+  ];
+  if (truncated)
+    warnings.push({
+      severity: "warning",
+      code: "too_many_helpers",
+      source: { file, line: 1, col: 1 },
+      message: `This test imports more than ${MAX_HELPERS} local modules; the sentences in the rest were not checked.`,
+      fix: "Keep shared steps in fewer modules.",
+    });
+  diagnostics.push(...warnings);
+  const sentences: SentenceStep[] = scans
+    .flatMap((scan) => scan.sentences)
+    .map((item) => ({
+      kind: "sentence",
+      phase: "steps",
+      text: item.text,
+      tokens: tokenizeStep(item.text).tokens,
+      source: item.source,
+    }));
+  const checked = await classifySentenceSteps(sentences, classify);
+  diagnostics.push(...checked.diagnostics);
+  // A sentence that is not a literal was not checked: never report it valid.
+  const complete =
+    checked.classification.steps.every((step) => step !== null) &&
+    checked.diagnostics.length === 0 &&
+    warnings.length === 0;
+  return {
+    headers,
+    diagnostics,
+    calls: checked.classification.calls,
+    coverage: {
+      format: script.diagnostics.length ? "failed" : "passed",
+      steps: complete ? "checked" : "incomplete",
+      modules: "not_needed",
+    },
+  };
+}
+
+const HELPER_EXTENSIONS = [".ts", ".mts", ".cts", ".tsx", ".js", ".mjs"];
+const MAX_HELPERS = 64;
+
+/** Resolve `./support/login.js` the way a TypeScript import would. */
+function resolveHelper(from: string, specifier: string): string | undefined {
+  const base = path.resolve(path.dirname(from), specifier);
+  const stem = base.replace(/\.(?:m|c)?js$/u, "");
+  const candidates = [
+    base,
+    ...HELPER_EXTENSIONS.map((extension) => stem + extension),
+    ...HELPER_EXTENSIONS.map((extension) =>
+      path.join(base, `index${extension}`),
+    ),
+  ];
+  return candidates.find(
+    (candidate) =>
+      HELPER_EXTENSIONS.some((extension) => candidate.endsWith(extension)) &&
+      existsSync(candidate) &&
+      statSync(candidate).isFile(),
+  );
+}
+
+/**
+ * The local modules a test file imports, directly or through other helpers,
+ * inside the project and outside `node_modules`.
+ */
+/**
+ * `login(ai)` hands the test's ai to an imported helper. Its sentences are
+ * checked only if that helper's parameter at that position is named `ai`;
+ * any other name, or a helper validation cannot find, is a warning.
+ */
+function unresolvedHelperCalls(
+  read: readonly {
+    readonly file: string;
+    readonly source: string;
+    readonly scan: ScriptSentenceScan;
+  }[],
+): FlowDiagnostic[] {
+  const byPath = new Map(
+    read.map((item) => [realpathSync.native(item.file), item.scan]),
+  );
+  const warnings: FlowDiagnostic[] = [];
+  for (const { file, source, scan } of read) {
+    if (!scan.helperCalls.length) continue;
+    const imports = scanImportBindings(source);
+    for (const call of scan.helperCalls) {
+      const binding = imports.find((item) => item.local === call.callee);
+      const target = binding
+        ? resolveHelper(file, binding.specifier)
+        : undefined;
+      const helper = target
+        ? byPath.get(realpathSync.native(target))
+        : undefined;
+      const parameters =
+        binding && helper ? helper.functions.get(binding.imported) : undefined;
+      // The test's context or `{ ai }` is fine in any helper validation
+      // reads; the test's ai itself must arrive under the name `ai`.
+      if (
+        call.passes === "context"
+          ? parameters
+          : parameters?.[call.position] === "ai"
+      )
+        continue;
+      warnings.push({
+        severity: "warning",
+        code: "unchecked_call",
+        source: call.source,
+        message: parameters
+          ? `\`${call.callee}\` receives the test's ai under another name, so the steps it runs are not checked before a run.`
+          : `Validation cannot follow \`${call.callee}\` to a local module, so the steps it runs with the test's ai are not checked before a run.`,
+        fix: "Declare the helper in the test file or a local module, with its parameter named `ai`.",
+      });
+    }
+  }
+  return warnings;
+}
+
+async function localHelpers(
+  file: string,
+  source: string,
+  repoRoot: string,
+): Promise<{
+  readonly helpers: readonly string[];
+  readonly truncated: boolean;
+}> {
+  const root = realpathSync.native(repoRoot);
+  const seen = new Set<string>([realpathSync.native(file)]);
+  const helpers: string[] = [];
+  const queue: [string, string][] = [[file, source]];
+  while (queue.length) {
+    const [from, text] = queue.shift()!;
+    for (const specifier of scanLocalImports(text)) {
+      const found = resolveHelper(from, specifier);
+      // Contain by real path: a symlink out of the project is not followed.
+      const target = found && realpathSync.native(found);
+      const relative = target && path.relative(root, target);
+      if (
+        !target ||
+        seen.has(target) ||
+        !relative ||
+        relative.startsWith("..") ||
+        path.isAbsolute(relative) ||
+        relative.split(path.sep).includes("node_modules")
+      )
+        continue;
+      if (helpers.length >= MAX_HELPERS) return { helpers, truncated: true };
+      seen.add(target);
+      helpers.push(target);
+      queue.push([target, await readFile(target, "utf8").catch(() => "")]);
+    }
+  }
+  return { helpers, truncated: false };
+}
+
 async function checkUnreferencedModule(
   file: string,
   options: ClassifyFlowOptions,
@@ -197,6 +438,23 @@ export async function validateProject(
   let allTestsValidated = true;
 
   for (const file of input.tests) {
+    if (isScriptTestFile(file)) {
+      const checked = await validateScriptFile(file, options, classify);
+      flows.push(...checked.headers);
+      diagnostics.push(...checked.diagnostics);
+      calls.push(...checked.calls);
+      if (!isFullyValidated(checked.coverage, checked.diagnostics))
+        allTestsValidated = false;
+      files.push({
+        file,
+        kind: "test",
+        ...(checked.headers[0]
+          ? { identity: checked.headers[0].identity }
+          : {}),
+        coverage: checked.coverage,
+      });
+      continue;
+    }
     const loaded = await loadFlowFile(file, {
       repoRoot: options.repoRoot,
       ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),

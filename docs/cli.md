@@ -3,7 +3,7 @@
 ## `sedum init`
 
 Run `sedum init` in the directory you want to turn into a Sedum project. It
-creates `sedum.config.yaml`, `tests/example.test.yaml`, `.env.example`, and
+creates `sedum.config.yaml`, `tests/example.test.ts`, `.env.example`, and
 `.gitignore` entries for `.env`, `.sedum/runs/`, and `.sedum/reports/`. The
 classification cache at `.sedum/classifications.json` remains trackable.
 
@@ -17,7 +17,7 @@ the configured provider and may incur a charge. The generated config selects
 Chromium. If no matching browser is installed, `init` prints
 `sedum browsers install chromium`; on Linux,
 `sedum browsers install chromium --with-deps` also installs system libraries.
-The command reports a missing key, previews the YAML test it creates, and
+The command reports a missing key, previews the TypeScript test it creates, and
 prints a headed run command. It does not contact the provider or install a
 browser itself.
 
@@ -36,7 +36,7 @@ mkdir my-sedum-tests && cd my-sedum-tests
 sedum init
 cp .env.example .env  # only when .env does not already exist
 # Set TYPESAFE_API_KEY in .env, or configure a compatible provider. Install Chromium if needed.
-sedum run tests/example.test.yaml --headed
+sedum run tests/example.test.ts --headed
 ```
 
 ## `sedum doctor`
@@ -65,7 +65,7 @@ Sedum prefers an installed Google Chrome channel when available. If Chrome is no
 
 `sedum run [paths...]` runs the configured test directory, or the named test files and directories. Paths are relative to the project root. Directories are searched recursively; symlinked test files and directories are skipped or rejected. Explicit paths form the candidate set, while a run with no paths uses `tests.directory`, `tests.include`, and `tests.exclude` from configuration.
 
-Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` for project-relative paths, use `--labels smoke,auth` to require both YAML `tags`, and repeat `--name <text>` to match any case-insensitive substring of a test `id` or `description`. Excludes win. Bad test files are named in the result and valid files still run; the command exits 3 because the suite was incomplete. Likewise, a test that cannot run, for example because one of its steps cannot be completed, is recorded as an error on that test and the remaining tests still run; the command exits 3. Only a problem no later test can avoid stops the run early: a missing browser, a rejected provider key or configuration, or sustained provider rate limiting. A selection with no valid tests also exits 3.
+Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` for project-relative paths, use `--labels smoke,auth` to require both tags, and repeat `--name <text>` to match any case-insensitive substring of a test `id` or `description`. A TypeScript test's description is its title. Repeat `--id <id>` to select tests by their exact id, such as `tests/checkout.test.ts#a new customer checks out`; rerun commands in reports use it. Excludes win. Bad test files are named in the result and valid files still run; the command exits 3 because the suite was incomplete. Likewise, a test that cannot run, for example because one of its steps cannot be completed, is recorded as an error on that test and the remaining tests still run; the command exits 3. Only a problem no later test can avoid stops the run early: a missing browser, a rejected provider key or configuration, or sustained provider rate limiting. A selection with no valid tests also exits 3.
 
 `--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. A test that passes only after a failed attempt is flagged `flaky`: it still counts as passed, but it appears in the flags summary, and `--strict` exits 2 for it as for any flagged pass. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
@@ -218,8 +218,8 @@ The HTML report includes light and dark themes, failure and flagged-flow filters
 
 Both commands find the project the same way `sedum run` does; see [project configuration](configuration.md). The project root is the folder of the nearest `sedum.config.yaml`, or the current directory when there is none. Test ids are therefore the same whichever folder you run from.
 
-- **With no paths,** the commands check the tests that `sedum run` would run: the `*.test.yaml` files under `tests.directory` that match its `include` and `exclude` globs. They also check every `*.module.yaml` file under that directory.
-- **With paths,** each path is resolved against the project root, as `sedum run` resolves an explicit file. A path can be a directory, a `*.test.yaml` file, or a `*.module.yaml` file. Directories are searched recursively. `node_modules` and dot-directories such as `.git` and `.sedum` are skipped, unless you name one directly.
+- **With no paths,** the commands check the tests that `sedum run` would run: the `*.test.ts` and `*.test.yaml` files under `tests.directory` that match its `include` and `exclude` globs. They also check every `*.module.yaml` file under that directory.
+- **With paths,** each path is resolved against the project root, as `sedum run` resolves an explicit file. A path can be a directory, a `*.test.ts` or `*.test.yaml` file, or a `*.module.yaml` file. A `*.test.ts` file is imported to find its tests, and the literal sentences in its `ai(...)` calls are checked like YAML steps; see [TypeScript tests](typescript-tests.md#validation-and-listing). Directories are searched recursively. `node_modules` and dot-directories such as `.git` and `.sedum` are skipped, unless you name one directly.
 
 It checks the following:
 

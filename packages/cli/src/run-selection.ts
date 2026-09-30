@@ -3,7 +3,8 @@ import path from "node:path";
 import { minimatch } from "minimatch";
 import {
   listTests,
-  loadFlowFile,
+  loadListingEntries,
+  TEST_SUFFIXES,
   walkSuiteFiles,
   type InvalidListEntry,
   type ListedTest,
@@ -23,6 +24,8 @@ export interface RunFilters {
   readonly exclude?: readonly string[];
   readonly labels?: readonly string[];
   readonly names?: readonly string[];
+  /** Exact test ids; rerun commands use these to select one test. */
+  readonly ids?: readonly string[];
 }
 
 function contained(root: string, target: string): boolean {
@@ -44,12 +47,14 @@ export function selectRunTests(
   const excludes = filters.exclude ?? [];
   const labels = filters.labels ?? [];
   const names = filters.names ?? [];
+  const ids = filters.ids ?? [];
   return tests.filter(
     (test) =>
       (includes.length === 0 ||
         includes.some((glob) => minimatch(test.file, glob))) &&
       !excludes.some((glob) => minimatch(test.file, glob)) &&
       labels.every((label) => test.tags.includes(label)) &&
+      (ids.length === 0 || ids.includes(test.id)) &&
       (names.length === 0 ||
         names.some((name) =>
           `${test.id}\n${test.description ?? ""}`
@@ -130,7 +135,7 @@ export async function discoverRunTests(
       if (info.isDirectory()) {
         for (const file of await walkSuiteFiles(
           target,
-          [".test.yaml"],
+          TEST_SUFFIXES,
           (folder) => {
             problems.push({
               file: path.relative(root, folder),
@@ -141,27 +146,24 @@ export async function discoverRunTests(
           },
         ))
           files.add(file);
-      } else if (info.isFile() && candidate.endsWith(".test.yaml"))
+      } else if (
+        info.isFile() &&
+        TEST_SUFFIXES.some((suffix) => candidate.endsWith(suffix))
+      )
         files.add(target);
       else
         problems.push({
           file,
           code: "unsupported_file",
-          message: "Expected a *.test.yaml file or directory.",
+          message: "Expected a *.test.ts or *.test.yaml file, or a directory.",
           fix: "Choose a test path.",
         });
     }
   }
-  const parsed = [];
-  for (const file of [...files].sort()) {
-    parsed.push({
-      file,
-      result: await loadFlowFile(file, {
-        repoRoot: root,
-        rejectSymlinks: true,
-      }),
-    });
-  }
+  const parsed = await loadListingEntries([...files].sort(), {
+    repoRoot: root,
+    rejectSymlinks: true,
+  });
   const listing = listTests(parsed, { repoRoot: root });
   return {
     tests: selectRunTests(listing.tests, filters),

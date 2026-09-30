@@ -34,12 +34,10 @@ describe("sedum init", () => {
     expect(result.stdout).toContain("Install Node 20.19.0 or newer");
     expect(result.stdout).toContain("sedum browsers install chromium");
     expect(result.stdout).toContain("TYPESAFE_API_KEY");
+    expect(result.stdout).toContain("sedum run tests/example.test.ts --headed");
+    expect(result.stdout).toContain("── tests/example.test.ts");
     expect(result.stdout).toContain(
-      "sedum run tests/example.test.yaml --headed",
-    );
-    expect(result.stdout).toContain("── tests/example.test.yaml");
-    expect(result.stdout).toContain(
-      await readFile(path.join(cwd, "tests/example.test.yaml"), "utf8"),
+      await readFile(path.join(cwd, "tests/example.test.ts"), "utf8"),
     );
     expect(result.stdout).toContain("1. Update Node.js");
     expect(result.stdout).toContain("2. Add a provider API key");
@@ -75,8 +73,8 @@ describe("sedum init", () => {
       "node_modules/\n.env\n",
     );
     const second = await runCli(["init"], "0.0.0", { cwd });
-    expect(second.stdout).toContain("kept tests/example.test.yaml");
-    expect(second.stdout).not.toContain("── tests/example.test.yaml");
+    expect(second.stdout).toContain("kept tests/example.test.ts");
+    expect(second.stdout).not.toContain("── tests/example.test.ts");
     expect(second.stdout).not.toMatch(/^created /mu);
   });
 
@@ -155,7 +153,7 @@ describe("sedum init", () => {
       "tests exists but is not a regular directory",
     );
     expect(
-      await readFile(path.join(outside, "example.test.yaml"), "utf8").catch(
+      await readFile(path.join(outside, "example.test.ts"), "utf8").catch(
         () => null,
       ),
     ).toBeNull();

@@ -133,6 +133,8 @@ export const ResultStepSchema = z.strictObject({
   phase: z.enum(["before", "steps", "after"]),
   sentence: z.string().max(512),
   detail: z.string().max(512),
+  /** Enclosing `ai.group` names, outermost first; absent outside a group. */
+  group: z.array(z.string().max(120)).max(16).optional(),
   sourceStack: z.array(ResultSourceSchema).min(1),
   state,
   verdict: verdict.nullable(),

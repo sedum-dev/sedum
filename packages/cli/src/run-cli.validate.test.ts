@@ -152,11 +152,11 @@ describe("sedum validate", () => {
     [["validate", "absent"], "absent does not exist."],
     [
       ["validate", "notes.txt"],
-      "notes.txt is not a *.test.yaml or *.module.yaml file.",
+      "notes.txt is not a *.test.ts, *.test.yaml, or *.module.yaml file.",
     ],
     [
       ["validate", "empty"],
-      "No *.test.yaml or *.module.yaml files were found under empty.",
+      "No *.test.ts, *.test.yaml, or *.module.yaml files were found under empty.",
     ],
     [["validate", ".."], "is outside the project root"],
   ])("exits 3 for usage problem %j", async (args, message) => {
@@ -347,7 +347,7 @@ describe("project configuration", () => {
     });
     expect(validate.exitCode).toBe(3);
     expect(validate.stderr).toContain(
-      "No *.test.yaml or *.module.yaml files were found under tests.",
+      "No *.test.ts, *.test.yaml, or *.module.yaml files were found under tests.",
     );
     expect(
       await runCli(["list"], "0.0.0", { cwd, capabilities: plain }),

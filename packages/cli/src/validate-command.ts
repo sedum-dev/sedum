@@ -61,7 +61,7 @@ function emptyProjectProblem(
   return {
     code: "missing_path",
     path: shown,
-    message: `No *.test.yaml or *.module.yaml files were found under ${shown}.`,
+    message: `No *.test.ts, *.test.yaml, or *.module.yaml files were found under ${shown}.`,
     fix: paths.length
       ? "Pass paths relative to the project root that contain tests or modules."
       : "Add tests under tests.directory, or correct tests.directory/include/exclude in sedum.config.yaml.",

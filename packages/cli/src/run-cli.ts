@@ -51,6 +51,8 @@ export interface CliRuntime {
   readonly signal?: AbortSignal;
   readonly onRunCommitted?: () => void;
   readonly onRunDeadline?: () => void;
+  /** A stray rejection from test code after the run was reported. */
+  readonly onStrayRejection?: (message: string) => void;
   readonly executeRun?: (
     options: RunCommandOptions,
   ) => Promise<RunCommandExecution>;
@@ -329,6 +331,12 @@ export async function runCli(
       collectValue,
       [],
     )
+    .option(
+      "--id <id>",
+      "select a test by its exact id (repeatable)",
+      collectValue,
+      [],
+    )
     .option("--env <name>", "select a named environment")
     .option("--browser <kind>", "chrome or chromium")
     .option("--vision", "enable vision fallback for ambiguous clicks")
@@ -401,7 +409,7 @@ export async function runCli(
     )
     .addHelpText(
       "after",
-      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and set TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible provider).\n\nExamples:\n  sedum run tests/login.test.yaml\n  sedum run tests/login.test.yaml --strict --costs\n",
+      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and set TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible provider).\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n",
     )
     .action(
       async (
@@ -415,6 +423,7 @@ export async function runCli(
           exclude: string[];
           labels: string[];
           name: string[];
+          id: string[];
           env?: string;
           browser?: string;
           vision?: boolean;
@@ -497,6 +506,7 @@ export async function runCli(
                 exclude: options.exclude,
                 labels: options.labels,
                 names: options.name,
+                ids: options.id,
               },
               threshold: options.threshold ?? 0.1,
               ...(options.base !== undefined ? { base: options.base } : {}),
@@ -579,12 +589,16 @@ export async function runCli(
         };
         const execution = await executeRun({
           command,
+          ...(runtime.onStrayRejection
+            ? { onStrayRejection: runtime.onStrayRejection }
+            : {}),
           paths,
           filters: {
             include: options.include,
             exclude: options.exclude,
             labels: options.labels,
             names: options.name,
+            ids: options.id,
           },
           ...(options.env ? { environment: options.env } : {}),
           ...(options.browser ? { browser: options.browser } : {}),

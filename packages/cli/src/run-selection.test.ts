@@ -40,6 +40,27 @@ describe("run selection", () => {
     expect(selectRunTests(tests, { labels: ["shop", "auth"] })).toEqual([]);
   });
 
+  it("selects by exact id, unlike the substring match of --name", () => {
+    const tests = [
+      "tests/a.test.ts#logs in",
+      "tests/a.test.ts#logs in with a wrong password",
+    ].map((id) => ({
+      id,
+      idSource: "path" as const,
+      file: "tests/a.test.ts",
+      description: id.split("#")[1]!,
+      tags: [],
+    }));
+    expect(
+      selectRunTests(tests, { ids: ["tests/a.test.ts#logs in"] }).map(
+        (test) => test.id,
+      ),
+    ).toEqual(["tests/a.test.ts#logs in"]);
+    expect(
+      selectRunTests(tests, { names: ["logs in"] }).map((test) => test.id),
+    ).toHaveLength(2);
+  });
+
   it("rejects an explicit symlink before reading its outside target while still selecting valid files", async () => {
     root = await mkdtemp(path.join(tmpdir(), "sedum-run-select-"));
     const outside = await mkdtemp(path.join(tmpdir(), "sedum-run-outside-"));

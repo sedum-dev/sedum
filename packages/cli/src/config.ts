@@ -82,7 +82,7 @@ interface RawConfig extends RawEnvironment {
 
 const DEFAULTS = {
   testDirectory: "tests",
-  include: ["**/*.test.yaml"],
+  include: ["**/*.test.ts", "**/*.test.yaml"],
   exclude: [] as string[],
   browser: "chrome" as BrowserKind,
   viewport: { width: 1280, height: 900 },
@@ -392,7 +392,7 @@ function stringList(
       key,
       "invalid_config_globs",
       `Configuration key \`${key}\` must be a list of nonempty glob strings.`,
-      `Write \`${key}: ["**/*.test.yaml"]\`.`,
+      `Write \`${key}: ["**/*.test.ts", "**/*.test.yaml"]\`.`,
     );
     return [...fallback];
   }
@@ -835,7 +835,7 @@ export async function loadProjectConfig(
       "tests.include",
       "empty_config_globs",
       "Configuration key `tests.include` must select at least one pattern.",
-      "Add `**/*.test.yaml` or another test glob.",
+      "Add `**/*.test.ts` or another test glob.",
     );
   const variables = {
     ...rootVariables,
@@ -1027,7 +1027,7 @@ export async function discoverConfiguredTests(
           .split(path.sep)
           .join("/");
         if (
-          relative.endsWith(".test.yaml") &&
+          (relative.endsWith(".test.ts") || relative.endsWith(".test.yaml")) &&
           config.include.some((pattern) => minimatch(relative, pattern)) &&
           !config.exclude.some((pattern) => minimatch(relative, pattern))
         )

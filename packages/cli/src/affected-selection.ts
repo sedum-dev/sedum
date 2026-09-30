@@ -2,7 +2,11 @@ import { execFile } from "node:child_process";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { loadFlowFile, resolveFlowModules } from "@sedum-dev/core";
+import {
+  isScriptTestFile,
+  loadFlowFile,
+  resolveFlowModules,
+} from "@sedum-dev/core";
 import {
   TypeSafeAdapter,
   type RelevanceTest,
@@ -163,6 +167,18 @@ export async function selectAffectedTests(options: {
   const forced: boolean[] = [];
   for (const test of selection.tests) {
     const file = path.join(config.projectRoot, test.file);
+    // A TypeScript file is scored once, by its source; selection runs the
+    // whole file, and it has no modules.
+    if (isScriptTestFile(file)) {
+      if (tests.some((scored) => scored.file === test.file)) continue;
+      forced.push(changed.has(await realpath(file)));
+      tests.push({
+        file: test.file,
+        source: await readFile(file, "utf8"),
+        modules: [],
+      });
+      continue;
+    }
     const parsed = await loadFlowFile(file, {
       repoRoot: config.projectRoot,
       rejectSymlinks: true,

@@ -1,7 +1,14 @@
 import type { RunResult } from "@sedum-dev/core";
 import path from "node:path";
 import type { ReporterEvent } from "./lifecycle.js";
-import { needsAttention, selectedAttempt, shellArg } from "./shared.js";
+import {
+  needsAttention,
+  rerunArgs,
+  selectedAttempt,
+  shellArg,
+  stepText,
+  testLabel,
+} from "./shared.js";
 
 export type TerminalReporterName = "list" | "steps";
 
@@ -83,11 +90,11 @@ function attention(result: RunResult, context: ReporterContext): string {
       !attempt.error
     )
       continue;
-    reruns.add(test.file);
-    lines.push(`\nneeds attention: ${test.file}`);
+    reruns.add(rerunArgs(test));
+    lines.push(`\nneeds attention: ${testLabel(test)}`);
     for (const step of affectedSteps) {
       lines.push(
-        `  ${label(step.state, step.verdict)}${flags(step.flags)} ${step.phase} step ${step.index}: ${step.sentence}`,
+        `  ${label(step.state, step.verdict)}${flags(step.flags)} ${step.phase} step ${step.index}: ${stepText(step)}`,
       );
       lines.push(`    at ${source(step.sourceStack)}`);
       if (step.detail) lines.push(`    result ${step.detail}`);
@@ -161,8 +168,7 @@ function attention(result: RunResult, context: ReporterContext): string {
       lines.push(`  read ${context.progressPath}`);
       for (const path of evidence) lines.push(`  read ${path}`);
     } else lines.push(`  result unavailable (intended ${context.resultPath})`);
-    for (const file of reruns)
-      lines.push(`  rerun sedum run ${shellArg(file)}`);
+    for (const args of reruns) lines.push(`  rerun sedum run ${args}`);
     if (reruns.size === 0)
       lines.push(
         context.rerunFile
@@ -183,7 +189,7 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
     context: ReporterContext,
   ) => {
     const { step, test } = event;
-    return `${test.file}:${step.sourceStack[0]?.line ?? 1} ${coloredLabel(step.state, step.verdict, context)}${flags(step.flags)} ${step.phase} step ${step.index}: ${step.sentence}\n`;
+    return `${test.file}:${step.sourceStack[0]?.line ?? 1} ${coloredLabel(step.state, step.verdict, context)}${flags(step.flags)} ${step.phase} step ${step.index}: ${stepText(step)}\n`;
   };
   const flush = (testId: string) => {
     const lines = buffered.get(testId) ?? [];
@@ -200,7 +206,7 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
     completed++;
     const attempts =
       test.attempts.length > 1 ? ` (${test.attempts.length} attempts)` : "";
-    return `[${completed}/${context.parallel!.total}] test ${coloredLabel(test.state, test.verdict, context)}${flags(test.flags)} ${test.file}${attempts}\n`;
+    return `[${completed}/${context.parallel!.total}] test ${coloredLabel(test.state, test.verdict, context)}${flags(test.flags)} ${testLabel(test)}${attempts}\n`;
   };
   return {
     onEvent(event, context) {
@@ -212,7 +218,7 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
       if (event.type === "testStarted" && name === "list")
         return parallel
           ? ""
-          : `test ${coloredLabel("running", null, context)} ${event.test.file}\n`;
+          : `test ${coloredLabel("running", null, context)} ${testLabel(event.test)}\n`;
       if (event.type === "stepCompleted" && name === "steps") {
         if (!parallel) return stepLine(event, context);
         const lines = buffered.get(event.test.id) ?? [];
@@ -223,7 +229,7 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
       if (event.type === "testCompleted") {
         if (!parallel)
           return name === "list"
-            ? `test ${coloredLabel(event.test.state, event.test.verdict, context)}${flags(event.test.flags)} ${event.test.file}\n`
+            ? `test ${coloredLabel(event.test.state, event.test.verdict, context)}${flags(event.test.flags)} ${testLabel(event.test)}\n`
             : "";
         // The run retries exactly a failed test with attempts left; wait for
         // that retry so the live line shows the outcome that counts.
