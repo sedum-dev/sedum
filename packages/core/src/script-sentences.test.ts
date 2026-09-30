@@ -105,6 +105,7 @@ describe("literal ai sentences in TypeScript tests", () => {
         "await ai.group(title, LOGIN);",
         'await ai.group(`Pay ${n}`, ["click Pay"]);',
         "await ai.group(name, login);",
+        "async function login() {}",
       ].join("\n"),
       file,
     );
@@ -168,6 +169,50 @@ describe("literal ai sentences in TypeScript tests", () => {
     expect(scan.warnings.map((item) => item.code)).toContain(
       "too_many_sentences",
     );
+  });
+
+  it.each([
+    [
+      "a group list held in an imported name",
+      'import { steps } from "./steps.js";\nawait ai.group("Log in", steps);',
+    ],
+    [
+      "a group list chosen at run time",
+      'await ai.group("x", ok ? ["click A"] : ["click B"]);',
+    ],
+    [
+      "ai reached through the test context",
+      'test("t", async (t) => { await t.ai("click A"); });',
+    ],
+    [
+      "ai renamed while destructured",
+      'test("t", async ({ ai: step }) => { await step("click A"); });',
+    ],
+    ["an optional call", 'await ai?.("click A");'],
+    ["a parenthesized callee", 'await (ai)("click A");'],
+    [
+      "a list pushed to",
+      'const steps = ["click A"];\nsteps.push("type {{x into y");\nawait ai(steps);',
+    ],
+    [
+      "a list element replaced",
+      'const steps = ["click A"];\nsteps[0] = "type {{x into y";\nawait ai(steps);',
+    ],
+    [
+      "a list continued on the next line",
+      'const steps = ["click A"]\n  .map((step) => step + "!");\nawait ai(steps);',
+    ],
+  ])("warns about %s", (_name, source) => {
+    const scan = scanScriptSentences(source, file);
+    expect(scan.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("reads a postfix increment followed by division as division", () => {
+    expect(
+      texts(
+        'let count = 0;\nconst half = count++ / 2; await ai("click A"); const r = /x/;',
+      ),
+    ).toEqual(["click A"]);
   });
 
   it("warns about every argument it cannot read", () => {

@@ -34,3 +34,4 @@ export * from "./script-registry.js";
 export * from "./script-loader.js";
 export * from "./script-sentences.js";
 export * from "./script-runner.js";
+export * from "./script-rejections.js";

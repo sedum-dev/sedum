@@ -322,6 +322,34 @@ export function smoke(title: string, body: TestBody) {
     },
   );
 
+  it("files a test declared through a wrapper exported by another test file under the caller", async () => {
+    const folder = path.join(directory, "cross-wrapper");
+    await mkdir(folder);
+    const home = path.join(folder, "home.test.ts");
+    const page = path.join(folder, "page.test.ts");
+    await writeFile(
+      home,
+      `import { test, type TestBody } from ${JSON.stringify(api)};
+export function smoke(title: string, body: TestBody) {
+  test(title, { tags: ["smoke"] }, body);
+}
+smoke("home loads", async () => undefined);
+`,
+    );
+    await writeFile(
+      page,
+      `import { smoke } from "./home.test.ts";\nsmoke("a page loads", async () => undefined);\n`,
+    );
+    const second = await loadScriptFile(page, { repoRoot: folder });
+    const first = await loadScriptFile(home, { repoRoot: folder });
+    expect(
+      second.tests.map((test) => [test.identity, test.source.line]),
+    ).toEqual([["page.test.ts#a page loads", 2]]);
+    expect(
+      first.tests.map((test) => [test.identity, test.source.line]),
+    ).toEqual([["home.test.ts#home loads", 5]]);
+  });
+
   it("warns when a test imports more helpers than validation follows", async () => {
     const folder = path.join(directory, "many-helpers");
     await mkdir(folder);

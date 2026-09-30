@@ -254,5 +254,36 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       );
       expect(markdown).toContain(`${shown} › a wrong claim fails`);
     }, 60_000);
+
+    it("reports a promise a finished test left behind without blaming the next test", async () => {
+      await writeFile(
+        path.join(root, "tests", "stray.test.ts"),
+        `import { test } from "sedum-cli";
+
+test("leaves work behind", { url: "/help" }, async () => {
+  void new Promise((_, reject) => setTimeout(() => reject(new Error("late boom")), 300));
+});
+
+test("innocent", { url: "/help" }, async ({ page }) => {
+  await page.waitForTimeout(1200);
+});
+`,
+      );
+      const output = await executeRunCommand({
+        paths: ["tests/stray.test.ts"],
+        evidence: false,
+        replay: false,
+        sensitiveOrigins: [],
+        locatorCacheDisabled: true,
+      });
+      expect(output.result.tests.map((test) => test.verdict)).toEqual([
+        "passed",
+        "passed",
+      ]);
+      expect(output.diagnostic).toMatchObject({ code: "stray_rejection" });
+      expect(output.diagnostic!.message).toContain("tests/stray.test.ts:4");
+      expect(output.diagnostic!.message).toContain("late boom");
+      expect(runExitCode(output.result, false)).toBe(3);
+    }, 60_000);
   },
 );

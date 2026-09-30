@@ -184,7 +184,12 @@ export function tokenize(source: string): Token[] {
     }
     if (char === "/") {
       const previous = tokens.at(-1);
-      if (!previous || REGEX_AFTER.has(previous.value)) {
+      const before = tokens.at(-2);
+      // `count++ / 2` divides: a postfix ++ or -- ends a value.
+      const postfix =
+        (previous?.value === "+" || previous?.value === "-") &&
+        before?.value === previous.value;
+      if (!postfix && (!previous || REGEX_AFTER.has(previous.value))) {
         let inClass = false;
         advance();
         while (index < source.length && source[index] !== "\n") {
@@ -307,6 +312,17 @@ export function scanScriptSentences(
     "?",
   ]);
   const CONTROL = new Set(["if", "while", "for", "switch", "with"]);
+  const MUTATORS = new Set([
+    "push",
+    "unshift",
+    "splice",
+    "pop",
+    "shift",
+    "sort",
+    "reverse",
+    "fill",
+    "copyWithin",
+  ]);
   /** Whether the name at `index` is bound or assigned there, not just read. */
   const binds = (index: number): boolean => {
     const next = value(index + 1);
@@ -321,6 +337,17 @@ export function scanScriptSentences(
       (prev === "-" && value(index - 2) === "-")
     )
       return true;
+    // A list changed in place is not the literal it was declared as.
+    if (next === "." && MUTATORS.has(value(index + 2) ?? "")) return true;
+    if (next === "[") {
+      const close = match.get(index + 1);
+      if (
+        close !== undefined &&
+        value(close + 1) === "=" &&
+        value(close + 2) !== "="
+      )
+        return true;
+    }
     // Walk out through patterns: `{ a, b } = x`, `const [a] = x`, `(a) => …`.
     for (let parent = parentOf[index]; parent !== undefined;) {
       const close = match.get(parent);
@@ -341,7 +368,7 @@ export function scanScriptSentences(
     const next = at(last + 1);
     return (
       next === undefined ||
-      next.line > at(last)!.line ||
+      (next.line > at(last)!.line && !".[(?".includes(next.value)) ||
       next.value === ";" ||
       next.value === "," ||
       (next.value === "as" && value(last + 2) === "const")
@@ -433,10 +460,83 @@ export function scanScriptSentences(
     if (isPunct(first, "[")) list(first);
     else argument(first);
   };
+  /** An inline `async () => …`, `function () {…}`, or `(x) => …` body. */
+  const inlineFunction = (index: number): boolean => {
+    let cursor = index;
+    if (value(cursor) === "async") cursor++;
+    if (value(cursor) === "function") return true;
+    if (at(cursor)?.kind === "ident" && value(cursor + 1) === "=>") return true;
+    const close = isPunct(cursor, "(") ? match.get(cursor) : undefined;
+    return close !== undefined && value(close + 1) === "=>";
+  };
+  // Functions declared in this file: `function login(`, `const login = (…) =>`.
+  const functions = new Set<string>();
+  tokens.forEach((token, index) => {
+    const name = at(index + 1);
+    if (token.kind !== "ident" || name?.kind !== "ident") return;
+    if (token.value === "function") functions.add(name.value);
+    else if (
+      ["const", "let", "var"].includes(token.value) &&
+      isPunct(index + 2, "=") &&
+      inlineFunction(index + 3)
+    )
+      functions.add(name.value);
+  });
+  const unchecked = (token: Token, message: string) =>
+    warnings.push({
+      severity: "warning",
+      code: "unchecked_call",
+      source: { file, line: token.line, col: token.col },
+      message,
+      fix: "Call the test's `ai` directly, as ai(...) or ai.group(...), so its sentences can be checked before a run.",
+    });
+  /** Whether `ai` at `index` is renamed while being destructured from a parameter. */
+  const renamedParameter = (index: number): boolean => {
+    if (!isPunct(index + 1, ":") || at(index + 2)?.kind !== "ident")
+      return false;
+    const brace = parentOf[index];
+    if (brace === undefined || value(brace) !== "{") return false;
+    const paren = parentOf[brace];
+    if (paren === undefined || value(paren) !== "(") return false;
+    const close = match.get(paren);
+    return (
+      close !== undefined &&
+      (value(close + 1) === "=>" || value(close + 1) === "{")
+    );
+  };
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!;
     if (token.kind !== "ident" || token.value !== "ai") continue;
-    if (isPunct(index - 1, ".")) continue;
+    if (isPunct(index - 1, ".")) {
+      // `t.ai("...")` or `t.ai.group(...)`: `ai` reached through an object.
+      if (isPunct(index + 1, "(") || isPunct(index + 1, "."))
+        unchecked(
+          token,
+          "This ai call goes through another object, so its sentences are not checked before a run.",
+        );
+      continue;
+    }
+    if (renamedParameter(index)) {
+      unchecked(
+        token,
+        "`ai` is renamed here, so the steps called through the new name are not checked before a run.",
+      );
+      continue;
+    }
+    if (
+      (isPunct(index + 1, "?") &&
+        isPunct(index + 2, ".") &&
+        isPunct(index + 3, "(")) ||
+      (isPunct(index - 1, "(") &&
+        isPunct(index + 1, ")") &&
+        isPunct(index + 2, "("))
+    ) {
+      unchecked(
+        token,
+        "This ai call is written indirectly, so its sentences are not checked before a run.",
+      );
+      continue;
+    }
     if (isPunct(index + 1, "(")) {
       call(index + 1);
       continue;
@@ -447,18 +547,26 @@ export function scanScriptSentences(
       at(index + 2)!.value === "group" &&
       isPunct(index + 3, "(")
     ) {
-      // ai.group(name, [...sentences]): the name is not a step, and a
-      // function body's own ai calls are found where they are written.
+      // ai.group(name, steps): the name is not a step. A function body's own
+      // ai calls are found where they are written; any other second argument
+      // is a list validation cannot see.
       const afterName = skipExpression(index + 4);
       if (!isPunct(afterName, ",")) continue;
       const second = afterName + 1;
-      const value = at(second);
+      const first = at(second);
       if (isPunct(second, "[")) list(second);
-      else if (value?.kind === "string") argument(second);
       else if (
-        value?.kind === "ident" &&
-        constants.has(value.value) &&
-        skipExpression(second) === second + 1
+        first?.kind === "string" ||
+        (first?.kind === "ident" && constants.has(first.value))
+      )
+        argument(second);
+      else if (
+        !inlineFunction(second) &&
+        !(
+          first?.kind === "ident" &&
+          functions.has(first.value) &&
+          skipExpression(second) === second + 1
+        )
       )
         argument(second);
     }

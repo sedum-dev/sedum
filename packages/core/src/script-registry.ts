@@ -156,11 +156,19 @@ export function test(
   });
 }
 
+/** A frame running a module's own top-level code: it names no function. */
+const TOP_LEVEL =
+  /^\s*at (?:async )?(?:Object\.<anonymous> \()?(?:file:\/\/)?[^()\s][^()]*:\d+:\d+\)?\s*$/u;
+
 function testFileFrame(stack: string | undefined): string | undefined {
   const frames = stack?.split("\n").slice(2) ?? [];
+  const inTests = frames.filter((frame) =>
+    parseFrame(frame)?.file.endsWith(".test.ts"),
+  );
+  // A wrapper can live in another test file; the test belongs to the file
+  // whose own code declared it, so prefer a module's top-level frame.
   return (
-    frames.find((frame) => parseFrame(frame)?.file.endsWith(".test.ts")) ??
-    frames[0]
+    inTests.find((frame) => TOP_LEVEL.test(frame)) ?? inTests[0] ?? frames[0]
   );
 }
 

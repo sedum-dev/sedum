@@ -43,6 +43,7 @@ import {
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import type { VisionResolver } from "./vision.js";
+import type { RejectionRouter } from "./script-rejections.js";
 import { chooseOption } from "./dropdown-option.js";
 import {
   gotoUrlParts,
@@ -124,6 +125,8 @@ export interface FlowRunnerDependencies {
   readonly slowMoMs?: number;
   readonly headedOverlay?: boolean;
   readonly signal?: AbortSignal;
+  /** Routes stray rejections from TypeScript test code; one per run. */
+  readonly rejections?: RejectionRouter;
   readonly report?: {
     readonly recorder: RunRecorder;
     /**

@@ -40,6 +40,7 @@ import {
   type Parser,
   type TestContext,
 } from "./script-registry.js";
+import { RejectionRouter } from "./script-rejections.js";
 import { scanScriptSentences } from "./script-sentences.js";
 import { RuntimeUrl, RuntimeValue, executeStep } from "./step-executor.js";
 
@@ -109,35 +110,17 @@ class StepPromise<T> extends Promise<T> {
   }
 }
 
-/** Receives a rejection nothing handled while its attempt was running. */
-type RejectionReceiver = (reason: unknown, attributed: boolean) => void;
-const receivers = new Set<RejectionReceiver>();
-let routing = false;
-
-/**
- * A promise from test code that nobody awaits, such as an unawaited
- * `page.click`, must fail its test rather than kill the run. With one test
- * running it is that test's failure; with several, none can be blamed, so
- * each is told. Outside any test, Node's default behaviour applies.
- */
-function routeUnhandledRejection(reason: unknown): void {
-  if (!receivers.size) throw reason;
-  const attributed = receivers.size === 1;
-  for (const receive of receivers) receive(reason, attributed);
-}
-
-function listenForRejections(receive: RejectionReceiver): () => void {
-  if (!routing) {
-    process.on("unhandledRejection", routeUnhandledRejection);
-    routing = true;
-  }
-  receivers.add(receive);
-  return () => {
-    receivers.delete(receive);
-    if (!receivers.size && routing) {
-      process.off("unhandledRejection", routeUnhandledRejection);
-      routing = false;
-    }
+/** A test's lines run from its declaration to just before the next one. */
+function testLines(
+  tests: readonly ScriptTest[],
+  test: ScriptTest,
+): { readonly start: number; readonly end: number } {
+  const later = tests
+    .map((other) => other.source.line)
+    .filter((line) => line > test.source.line);
+  return {
+    start: test.source.line,
+    end: later.length ? Math.min(...later) - 1 : Number.MAX_SAFE_INTEGER,
   };
 }
 
@@ -360,12 +343,16 @@ export async function runScriptTest(
     readonly step: StepPromise<unknown>;
     readonly error: unknown;
   }[] = [];
-  /** Rejections from test code that nothing handled during this attempt. */
-  const unhandled: {
-    readonly reason: unknown;
-    readonly attributed: boolean;
-  }[] = [];
+  /** Rejections from this test's code that nothing handled. */
+  const unhandled: unknown[] = [];
   let stopListening: (() => void) | undefined;
+  // `sedum run` owns one router for the whole run. A caller that runs a
+  // single attempt directly gets one scoped to it, and owns what it catches.
+  const ownRouter = runDependencies.rejections
+    ? undefined
+    : new RejectionRouter(runDependencies.repoRoot);
+  const router = runDependencies.rejections ?? ownRouter!;
+  ownRouter?.install();
   let finished = false;
   const groups: string[] = [];
 
@@ -759,8 +746,10 @@ export async function runScriptTest(
 
     let thrown: unknown;
     let threw = false;
-    stopListening = listenForRejections((reason, attributed) =>
-      unhandled.push({ reason, attributed }),
+    stopListening = router.register(
+      { file: absolute, lines: testLines(script.tests, test) },
+      script.tests.map((other) => testLines(script.tests, other)),
+      (reason) => unhandled.push(reason),
     );
     try {
       await test.body(testContext);
@@ -771,7 +760,17 @@ export async function runScriptTest(
     if (outstanding.size) {
       // Settle every step the body started but did not await, so its
       // outcome is part of this attempt, then report the missing await.
-      while (outstanding.size) await Promise.allSettled([...outstanding]);
+      // Wait through the native `then`, so waiting does not count as the
+      // test having looked at a step.
+      while (outstanding.size)
+        await Promise.allSettled(
+          [...outstanding].map(
+            (step) =>
+              new Promise((settle) =>
+                Promise.prototype.then.call(step, settle, settle),
+              ),
+          ),
+        );
       firstProblem ??= {
         status: "could_not_run",
         file: absolute,
@@ -817,19 +816,13 @@ export async function runScriptTest(
     await closeQuietly(context);
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
     stopListening();
-    const stray = unhandled[0];
-    if (!primary && stray)
-      primary = stray.attributed
-        ? await codeFailure(stray.reason)
-        : {
-            status: "could_not_run",
-            file: absolute,
-            code: "invalid_test",
-            source: test.source,
-            message:
-              "A promise nobody awaited rejected while several tests were running, so it could not be attributed to one of them.",
-            fix: "Add `await` before every page, expect, and ai call, or rerun without --parallel to find the test.",
-          };
+    // A rejection this test owns fails it. With a router of its own there
+    // is no run to report to, so whatever else it caught is this attempt's.
+    const ownedOnlyByRun = ownRouter?.unattributed[0];
+    const stray =
+      unhandled[0] ??
+      (ownedOnlyByRun ? new Error(ownedOnlyByRun.message) : undefined);
+    if (!primary && stray !== undefined) primary = await codeFailure(stray);
     if (!primary) {
       await report?.test.finishTest("passed");
       return { status: "passed", file: absolute };
@@ -842,6 +835,7 @@ export async function runScriptTest(
   } finally {
     finished = true;
     stopListening?.();
+    ownRouter?.dispose();
     await closeQuietly(page);
     await closeQuietly(context);
     await closeQuietly(session);
@@ -875,10 +869,13 @@ async function recordCodeFailure(
       ? "expect_failed"
       : "code_error";
   const firstLine = message.split("\n").find((line) => line.trim()) ?? message;
-  let evidence: ResultStep["evidence"] = {
-    status: "omitted",
-    reason: "disabled",
-  };
+  let evidence: ResultStep["evidence"] = !report.evidenceEnabled
+    ? { status: "omitted", reason: "disabled" }
+    : page.closed
+      ? { status: "unavailable", reason: "page_closed" }
+      : !page.captureFrame
+        ? { status: "unavailable", reason: "capture_unavailable" }
+        : { status: "unavailable", reason: "capture_failed" };
   if (report.evidenceEnabled && page.captureFrame && !page.closed)
     try {
       evidence = await report.saveFrame(

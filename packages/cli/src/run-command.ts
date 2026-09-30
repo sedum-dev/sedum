@@ -12,6 +12,8 @@ import {
   type RunResult,
   type BrowserKind,
   type FlowRunnerDependencies,
+  RejectionRouter,
+  type UnattributedRejection,
 } from "@sedum-dev/core";
 import {
   DEFAULT_PROVIDER_CONCURRENCY,
@@ -100,6 +102,35 @@ const SUPPORTED_REPORTERS: readonly string[] = [
   "markdown",
   "junit",
 ];
+
+/** A run-level diagnostic for a rejection that no running test owned. */
+export function strayRejectionDiagnostic(
+  stray: UnattributedRejection,
+  config: ResolvedProjectConfig,
+): CliDiagnostic {
+  const where = stray.source
+    ? `${path.relative(config.projectRoot, stray.source.file).split(path.sep).join("/")}:${stray.source.line}: `
+    : "";
+  const message = safeDiscoveryText(stray.message, config);
+  if (stray.reason === "internal")
+    return {
+      code: "internal_rejection",
+      message: `Sedum hit an unexpected error during the run: ${message}`,
+      fix: "Rerun the command; if it repeats, report it at https://github.com/sedum-dev/sedum/issues with the run's progress.json.",
+    };
+  const what = {
+    finished:
+      "a promise the test did not await rejected after that test finished",
+    outside:
+      "a promise nobody awaited rejected in code outside the running test, so no test is blamed",
+    unknown: "a promise nobody awaited rejected with a value that has no stack",
+  }[stray.reason];
+  return {
+    code: "stray_rejection",
+    message: `${where}${what}: ${message}`,
+    fix: "Add `await` before the page, expect, API, and ai calls the test starts.",
+  };
+}
 
 function safeDiscoveryText(
   value: string,
@@ -406,6 +437,10 @@ export async function executeRunCommand(
   options: RunCommandOptions,
 ): Promise<RunCommandExecution> {
   const invocationRoot = process.cwd();
+  // Removed only when the command ends, so a stray rejection from test code
+  // during reporting is still caught. After that, the `sedum` binary's
+  // fallback reports it.
+  let rejections: RejectionRouter | undefined;
   const reportFiles = reportSelection(options);
   const runId = randomUUID();
   let committed = false;
@@ -873,6 +908,9 @@ export async function executeRunCommand(
         { length: lanes },
         () => new ReusableBrowserDriver(driver),
       );
+      rejections = new RejectionRouter(config.projectRoot);
+      rejections.install();
+      const router = rejections;
       try {
         await runPool({
           items: files,
@@ -921,6 +959,7 @@ export async function executeRunCommand(
                   ? { slowMoMs: options.slowMoMs }
                   : {}),
                 signal,
+                rejections: router,
                 report: {
                   recorder,
                   slot: { ordinal, lane },
@@ -960,6 +999,10 @@ export async function executeRunCommand(
         gate.close();
         await Promise.all(browsers.map((browser) => browser.recycle()));
       }
+      // A rejection no running test owned fails the run with its location,
+      // instead of crashing it or failing an unrelated test.
+      const stray = router.unattributed[0];
+      if (stray) operational ??= strayRejectionDiagnostic(stray, config);
       if (signal.aborted) {
         const diagnostic: CliDiagnostic = timedOut
           ? {
@@ -1062,5 +1105,6 @@ export async function executeRunCommand(
   } finally {
     if (timeout) clearTimeout(timeout);
     options.signal?.removeEventListener("abort", onExternalAbort);
+    rejections?.dispose();
   }
 }

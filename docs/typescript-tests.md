@@ -204,6 +204,12 @@ that code left.
   never awaits, such as an unawaited `page.click` or `expect`, and an
   `ai.group` or `ai.extract` whose code throws while nobody awaits it. To let a
   block fail on purpose, handle it: `await ai.group(...).catch(() => {})`.
+- **A promise left behind fails the run, not another test.** Sedum blames a
+  test for an unhandled rejection only when the error's stack points inside
+  that test's lines while it runs. A promise that rejects after its test
+  finished, or in a helper any test could have called, is reported for the
+  whole run with its file and line, and the command exits 3. If it rejects
+  after the report is written, Sedum prints it and still exits 3.
 - **Misusing `ai` is an invalid test.** A missing value, an invalid values
   object, or a missing `await` stops the run as an invalid test, like a YAML
   file with an error, with the file, line, and a fix.
@@ -222,7 +228,10 @@ the file declares that name once and never reassigns it.
 Validation recognizes the `ai` name.
 
 An argument validation cannot read, such as a variable, a function call, or a
-sentence built with `${}`, is reported as a warning. `validate` then does not
+sentence built with `${}`, is reported as a warning, as is a call that reaches
+`ai` another way: `t.ai(...)`, `ai?.(...)`, or `ai` renamed in a parameter. A
+list passed to `ai.group` must be a literal, a `const` in the same file, or a
+function body. `validate` then does not
 call the project fully valid, and exits 1, just as for a YAML sentence it could
 not check offline.
 

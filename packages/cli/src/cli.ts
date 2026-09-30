@@ -3,11 +3,22 @@ import { createRequire } from "node:module";
 import { runCli } from "./run-cli.js";
 import { createInterruptState } from "./interrupts.js";
 import { startDeadlineWatchdog } from "./deadline-watchdog.js";
+import { describeRejection, RejectionRouter } from "@sedum-dev/core";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
 const interrupts = createInterruptState();
 let deadlineWatchdog: ReturnType<typeof setTimeout> | undefined;
+// A promise a TypeScript test never awaited can reject after its run was
+// reported, while the process drains. Say so and fail the exit code rather
+// than crash; while a run's router is listening, it owns every rejection.
+process.on("unhandledRejection", (reason) => {
+  if (RejectionRouter.routing) return;
+  process.stderr.write(
+    `A promise nobody awaited rejected after the run finished: ${describeRejection(reason)}\nFix: Add \`await\` before the page, expect, API, and ai calls in your tests.\n`,
+  );
+  process.exitCode = 3;
+});
 const onSigint = () => interrupts.request("SIGINT");
 const onSigterm = () => interrupts.request("SIGTERM");
 process.on("SIGINT", onSigint);
