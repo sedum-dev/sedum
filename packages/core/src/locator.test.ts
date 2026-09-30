@@ -1854,6 +1854,29 @@ describe("vision fallback boundaries", () => {
       }
     },
   );
+  it("reports a page that moved under the vision capture as stale, not ambiguous", async () => {
+    const { vision, jev } = setup();
+    const recorded = recordedPage(items);
+    // The page settles after the text model answered: its revision moves
+    // and the capture's snapshot check throws.
+    vi.mocked(captureVisionObservation).mockImplementationOnce(async () => {
+      recorded.setVersion({ ...initial, revision: initial.revision + 1 });
+      throw new Error("stale visual observation");
+    });
+    const result = await resolveTarget(recorded.page, jev, {
+      operation: "click",
+      sentence: "click the Edit next to the mountain photo",
+      visionResolver: vision,
+    });
+    expect(result).toMatchObject({
+      kind: "unresolved",
+      reason: "stale",
+      diagnostic: {
+        gate: "repeated_member_no_evidence:vision_stale_capture",
+      },
+    });
+    expect(vision.choose).not.toHaveBeenCalled();
+  });
   it("offers count-varying controls with distinct destinations to vision", async () => {
     const links = items.map((item, index) => ({
       ...item,

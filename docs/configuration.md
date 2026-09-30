@@ -138,3 +138,11 @@ run result at `steps[].locator.vision`; failures also appear in the step error
 message. Upstream error bodies are not retained.
 An HTTP 429 means rate limiting, not a model abstention; the step remains
 unresolved and is not retried.
+
+When vision is enabled, `sedum run` checks `OPEN_ROUTER_API_KEY` once before
+tests start, using OpenRouter's unbilled key endpoint. The run summary says
+which vision model was enabled and on how many steps it ran, and warns when
+OpenRouter rejected the key. A click that fails without trying vision says
+why, for example because the text model found no matching element. `sedum
+doctor` checks the key when `vision.enabled` is true, or with
+`sedum doctor --vision`.

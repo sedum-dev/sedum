@@ -1759,6 +1759,14 @@ export async function resolveTarget(
         // Failed visual validation must not activate the runner's stale retry.
         return unresolved("ambiguous");
       } catch {
+        // A page still settling after a navigation moves under the capture.
+        // Nothing was sent to the vision provider yet, so report it as stale:
+        // the runner then takes one fresh, settled observation and resolves
+        // again, instead of silently never trying vision.
+        if (!sameVersion(await pageVersion(page), source.version)) {
+          gate = `${gate}:vision_stale_capture`;
+          return unresolved("stale");
+        }
         gate = `${gate}:vision_unavailable`;
         return unresolved("ambiguous");
       }

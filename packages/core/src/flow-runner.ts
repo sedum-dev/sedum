@@ -1035,7 +1035,17 @@ async function executeSentence(
           code: resolved.reason,
           message: resolved.diagnostic.vision?.failure
             ? `Could not resolve this ${step.op} step: vision ${resolved.diagnostic.vision.failure}${resolved.diagnostic.vision.httpStatus ? ` (HTTP ${resolved.diagnostic.vision.httpStatus})` : ""}.`
-            : `Could not resolve this ${step.op} step.`,
+            : dependencies.visionResolver &&
+                step.op === "click" &&
+                !resolved.diagnostic.vision
+              ? `Could not resolve this ${step.op} step. Vision fallback was not tried: ${
+                  resolved.reason === "none"
+                    ? "the text model found no matching element, and vision only breaks ties between repeated controls"
+                    : resolved.reason === "no_candidates"
+                      ? "the page offered no clickable elements"
+                      : "it needs at least two visible, repeated controls to choose between"
+                }.`
+              : `Could not resolve this ${step.op} step.`,
         },
       });
     return record(
