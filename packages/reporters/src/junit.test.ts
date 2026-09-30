@@ -359,7 +359,27 @@ describe("JUnit reporter", () => {
       "tests/checkout.test.yaml",
     );
     expect(passed.children).toEqual([]);
-    expect(passed.systemOut).toBe("attempts: #1 failed (ambiguous), #2 passed");
+    expect(passed.systemOut).toContain(
+      "flaky: passed only after a failed attempt",
+    );
+    expect(passed.systemOut).toContain(
+      "attempts: #1 failed (ambiguous), #2 passed",
+    );
+    // A pass that needed a retry is a flagged pass: --strict fails it.
+    const strict = testCase(
+      renderJunit(await fixtures.retriedThenPassed(), {
+        strict: true,
+        evidenceDirectory: EVIDENCE,
+      }),
+      "tests/checkout.test.yaml",
+    );
+    expect(strict.children).toMatchObject([
+      {
+        element: "failure",
+        type: "sedum.flagged",
+        message: "passed with flags: flaky (--strict)",
+      },
+    ]);
     const exhausted = parse(
       renderJunit(await fixtures.retriesExhausted(), {
         strict: false,
