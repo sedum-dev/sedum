@@ -28,7 +28,12 @@ import {
   loadScriptFile,
   scriptListingEntries,
 } from "./script-loader.js";
-import { scanLocalImports, scanScriptSentences } from "./script-sentences.js";
+import {
+  scanImportBindings,
+  scanLocalImports,
+  scanScriptSentences,
+  type ScriptSentenceScan,
+} from "./script-sentences.js";
 
 export interface ProjectValidationOptions extends ClassifyFlowOptions {
   /** The real project root returned by `discoverProjectFiles`. */
@@ -200,7 +205,7 @@ async function validateScriptFile(
     };
   }
   // Sentences in local helper modules the test imports are steps too.
-  const scans = [scanScriptSentences(source, file)];
+  const read = [{ file, source, scan: scanScriptSentences(source, file) }];
   const { helpers, truncated } = await localHelpers(
     file,
     source,
@@ -208,9 +213,17 @@ async function validateScriptFile(
   );
   for (const helper of helpers) {
     const text = await readFile(helper, "utf8").catch(() => "");
-    scans.push(scanScriptSentences(text, helper));
+    read.push({
+      file: helper,
+      source: text,
+      scan: scanScriptSentences(text, helper),
+    });
   }
-  const warnings = scans.flatMap((scan) => scan.warnings);
+  const scans = read.map((item) => item.scan);
+  const warnings = [
+    ...scans.flatMap((scan) => scan.warnings),
+    ...unresolvedHelperCalls(read),
+  ];
   if (truncated)
     warnings.push({
       severity: "warning",
@@ -274,6 +287,50 @@ function resolveHelper(from: string, specifier: string): string | undefined {
  * The local modules a test file imports, directly or through other helpers,
  * inside the project and outside `node_modules`.
  */
+/**
+ * `login(ai)` hands the test's ai to an imported helper. Its sentences are
+ * checked only if that helper's parameter at that position is named `ai`;
+ * any other name, or a helper validation cannot find, is a warning.
+ */
+function unresolvedHelperCalls(
+  read: readonly {
+    readonly file: string;
+    readonly source: string;
+    readonly scan: ScriptSentenceScan;
+  }[],
+): FlowDiagnostic[] {
+  const byPath = new Map(
+    read.map((item) => [realpathSync.native(item.file), item.scan]),
+  );
+  const warnings: FlowDiagnostic[] = [];
+  for (const { file, source, scan } of read) {
+    if (!scan.helperCalls.length) continue;
+    const imports = scanImportBindings(source);
+    for (const call of scan.helperCalls) {
+      const binding = imports.find((item) => item.local === call.callee);
+      const target = binding
+        ? resolveHelper(file, binding.specifier)
+        : undefined;
+      const helper = target
+        ? byPath.get(realpathSync.native(target))
+        : undefined;
+      const parameters =
+        binding && helper ? helper.functions.get(binding.imported) : undefined;
+      if (parameters?.[call.position] === "ai") continue;
+      warnings.push({
+        severity: "warning",
+        code: "unchecked_call",
+        source: call.source,
+        message: parameters
+          ? `\`${call.callee}\` receives the test's ai under another name, so the steps it runs are not checked before a run.`
+          : `Validation cannot find \`${call.callee}\`, so the steps it runs with the test's ai are not checked before a run.`,
+        fix: "Declare the helper in the test file or a local module, with its parameter named `ai`.",
+      });
+    }
+  }
+  return warnings;
+}
+
 async function localHelpers(
   file: string,
   source: string,

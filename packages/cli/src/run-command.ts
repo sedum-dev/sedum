@@ -527,11 +527,6 @@ export async function executeRunCommand(
           }
         : {}),
     });
-    // Before any test file is imported: a rejection from a file's top-level
-    // code is then reported for the run rather than lost.
-    strayConfig = config;
-    rejections = new RejectionRouter(config.projectRoot);
-    rejections.install();
     if (config.vision.enabled && !config.visionApiKey)
       throw new ProjectConfigError([
         {
@@ -780,6 +775,12 @@ export async function executeRunCommand(
     let files: readonly { readonly file: string; readonly id: string }[];
     let globalSelectedTests = 0;
     let discoveryProblems: NonNullable<RunResult["discoveryProblems"]> = [];
+    // Before any test file is imported: a rejection from a file's top-level
+    // code is then reported for the run rather than lost. Installed after the
+    // setup checks, so every path from here reaches the disposing finally.
+    strayConfig = config;
+    rejections = new RejectionRouter(config.projectRoot);
+    rejections.install();
     try {
       const selection = await discoverRunTests(
         config,
@@ -1031,9 +1032,11 @@ export async function executeRunCommand(
       }
       // A rejection no running test owned fails the run with its location,
       // instead of crashing it or failing an unrelated test.
-      if (router.unattributed.length) {
+      // With another run error already primary, the strays still reach the
+      // terminal through onStrayRejection rather than being dropped.
+      if (router.unattributed.length && !operational) {
         reportedStrays = router.unattributed.length;
-        operational ??= strayRejectionDiagnostic(router.unattributed, config);
+        operational = strayRejectionDiagnostic(router.unattributed, config);
       }
       if (signal.aborted) {
         const diagnostic: CliDiagnostic = timedOut

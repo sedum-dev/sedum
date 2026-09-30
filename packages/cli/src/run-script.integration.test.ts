@@ -327,8 +327,9 @@ test("empty", { url: "/help" }, async () => undefined);
           expect(child.output).toContain("seed data setup failed");
           if (_command === "run") {
             expect(child.output).toContain("tests/top.test.ts:2");
+            // The terminal shows the platform's path separator.
             expect(child.output).toContain(
-              "test PASSED tests/top.test.ts › empty",
+              `test PASSED ${path.join("tests", "top.test.ts")} › empty`,
             );
           }
         } finally {
@@ -337,5 +338,48 @@ test("empty", { url: "/help" }, async () => undefined);
       },
       90_000,
     );
+
+    it("blames no test for a helper written below the tests, even with retries", async () => {
+      await writeFile(
+        path.join(root, "tests", "below.test.ts"),
+        `import { test } from "sedum-cli";
+
+test("A places an order", { url: "/help" }, async () => {
+  void confirmOrder();
+});
+
+test("B views the catalog", { url: "/help" }, async ({ page }) => {
+  await page.waitForTimeout(1200);
+});
+
+async function confirmOrder() {
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  throw new Error("order 42 was not confirmed");
+}
+`,
+      );
+      try {
+        const output = await executeRunCommand({
+          paths: ["tests/below.test.ts"],
+          retries: 1,
+          evidence: false,
+          replay: false,
+          sensitiveOrigins: [],
+          locatorCacheDisabled: true,
+        });
+        expect(output.result.tests.map((test) => test.verdict)).toEqual([
+          "passed",
+          "passed",
+        ]);
+        expect(output.result.tests.map((test) => test.attempts.length)).toEqual(
+          [1, 1],
+        );
+        expect(output.diagnostic).toMatchObject({ code: "stray_rejection" });
+        expect(output.diagnostic!.message).toContain("tests/below.test.ts:13");
+        expect(runExitCode(output.result, false)).toBe(3);
+      } finally {
+        await rm(path.join(root, "tests", "below.test.ts"), { force: true });
+      }
+    }, 60_000);
   },
 );

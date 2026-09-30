@@ -2,6 +2,8 @@ import { describe, expect, it, test as propertyTest } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import {
+  callExtent,
+  scanImportBindings,
   scanLocalImports,
   scanScriptSentences,
   tokenize,
@@ -259,6 +261,75 @@ describe("literal ai sentences in TypeScript tests", () => {
     );
     expect(scan.warnings.length).toBeGreaterThan(0);
     expect(scan.sentences).toEqual([]);
+  });
+
+  it("resolves ai passed to a helper declared in the same file", () => {
+    const named = scanScriptSentences(
+      'async function login(ai: Ai, user: string) { await ai("click Login"); }\ntest("t", async ({ ai }) => { await login(ai, "ada"); });',
+      file,
+    );
+    expect(named.warnings).toEqual([]);
+    const renamed = scanScriptSentences(
+      'const login = async (step) => { await step("zzz"); };\ntest("t", async ({ ai }) => { await login(ai); });',
+      file,
+    );
+    expect(renamed.warnings.map((item) => item.code)).toEqual([
+      "unchecked_call",
+    ]);
+  });
+
+  it("leaves ai passed to an imported helper for validation to resolve", () => {
+    const scan = scanScriptSentences(
+      'import { logIn } from "./support/login.js";\ntest("t", async ({ ai }) => { await logIn(ai); });',
+      file,
+    );
+    expect(scan.warnings).toEqual([]);
+    expect(scan.helperCalls).toEqual([
+      { callee: "logIn", position: 0, source: { file, line: 2, col: 43 } },
+    ]);
+  });
+
+  it("does not read a typed { ai } parameter as a rename", () => {
+    expect(
+      scanScriptSentences(
+        'export async function login({ ai }: { ai: Ai }) { await ai("click Login"); }',
+        file,
+      ).warnings,
+    ).toEqual([]);
+  });
+
+  it("lists import bindings with their local names", () => {
+    expect(
+      scanImportBindings(
+        'import login, { a, b as c, type T } from "./x.js";\nimport type { Ai } from "sedum-cli";',
+      ),
+    ).toEqual([
+      { local: "login", imported: "default", specifier: "./x.js" },
+      { local: "a", imported: "a", specifier: "./x.js" },
+      { local: "c", imported: "b", specifier: "./x.js" },
+      { local: "T", imported: "T", specifier: "./x.js" },
+      { local: "Ai", imported: "Ai", specifier: "sedum-cli" },
+    ]);
+  });
+
+  it("measures a test as its whole call, not up to the next test", () => {
+    const source = [
+      'import { test } from "sedum-cli";',
+      'test("a", async () => {',
+      "  void confirm();",
+      "});",
+      'test("b", async () => {});',
+      "for (const n of [1, 2]) test(`t${n}`, async () => {",
+      "  await go(n);",
+      "});",
+      "async function confirm() {",
+      "  throw new Error('late');",
+      "}",
+    ].join("\n");
+    expect(callExtent(source, 2)).toEqual({ start: 2, end: 4 });
+    expect(callExtent(source, 5)).toEqual({ start: 5, end: 5 });
+    expect(callExtent(source, 6)).toEqual({ start: 6, end: 8 });
+    // The helper below the tests (lines 9-11) is inside no test's call.
   });
 
   it("reads a postfix increment followed by division as division", () => {

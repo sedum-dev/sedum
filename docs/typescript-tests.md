@@ -231,8 +231,9 @@ Validation recognizes the `ai` name.
 An argument validation cannot read, such as a variable, a function call, or a
 sentence built with `${}`, is reported as a warning, as is a call that reaches
 `ai` another way: `t.ai(...)`, `ai?.(...)`, `ai` renamed or aliased, or a
-helper parameter typed `Ai` under another name. Pass `ai` to helpers as a
-parameter named `ai`, such as `login(ai, user)`. A list passed to `ai.group`
+helper that receives `ai` under another name. Pass `ai` to a helper declared
+in the test file or a local module, as a parameter named `ai`, such as
+`login(ai, user)`; validation follows the call and checks the helper's steps. A list passed to `ai.group`
 must be a literal, a `const` in the same file, or a function body. `validate` then does not
 call the project fully valid, and exits 1, just as for a YAML sentence it could
 not check offline.

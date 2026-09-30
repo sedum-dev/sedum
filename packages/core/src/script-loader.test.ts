@@ -454,6 +454,48 @@ test("shop", async ({ ai }) => { await login(ai, ["click Login"]); });
     expect(result.fullyValidated).toBe(false);
   });
 
+  it("checks the steps an imported helper runs only under the name ai", async () => {
+    const folder = path.join(directory, "helper-names");
+    await mkdir(path.join(folder, "support"), { recursive: true });
+    await writeFile(
+      path.join(folder, "support", "login.ts"),
+      `export async function logIn(step) { await step("type {{email into the Email field"); }
+export async function login(ai, user) { await ai("click the Login button"); }
+`,
+    );
+    const test = path.join(folder, "names.test.ts");
+    await writeFile(
+      test,
+      `import { test } from ${JSON.stringify(api)};
+import { logIn, login } from "./support/login.js";
+test("names", async ({ ai }) => {
+  await login(ai, "ada");
+  await logIn(ai);
+});
+`,
+    );
+    const result = await validateProject(
+      { tests: [test], modules: [] },
+      {
+        repoRoot: folder,
+        mode: "offline",
+        cache: new NoopClassificationCache(),
+      },
+    );
+    expect(
+      result.diagnostics.map((item) => [
+        path.basename(item.source.file),
+        item.source.line,
+        item.code,
+      ]),
+    ).toEqual([
+      // The helper's own step runs under `step`, so it is not read; the call
+      // that hands it the test's ai is the warning.
+      ["names.test.ts", 5, "unchecked_call"],
+    ]);
+    expect(result.fullyValidated).toBe(false);
+  });
+
   it("reports a syntax error and a file without tests", async () => {
     const broken = await load("broken.test.ts", "const = ;\n");
     expect(broken.diagnostics.map((item) => item.code)).toEqual(["load_error"]);

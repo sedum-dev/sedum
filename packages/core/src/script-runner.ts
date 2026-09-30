@@ -41,7 +41,7 @@ import {
   type TestContext,
 } from "./script-registry.js";
 import { RejectionRouter } from "./script-rejections.js";
-import { scanScriptSentences } from "./script-sentences.js";
+import { callExtent, scanScriptSentences } from "./script-sentences.js";
 import { RuntimeUrl, RuntimeValue, executeStep } from "./step-executor.js";
 
 type Problem = Exclude<FlowRunResult, { status: "passed" }>;
@@ -111,13 +111,18 @@ class StepPromise<T> extends Promise<T> {
 }
 
 /**
- * A test's lines run from its declaration to just before the next one. Tests
- * declared in a loop share a line, so they share a range.
+ * A test's lines are its whole `test(...)` call (or the wrapper call that
+ * declared it), so a helper written elsewhere in the file belongs to no test.
+ * If the call cannot be read, they run to just before the next test. Tests
+ * declared in a loop share a call, so they share a range.
  */
 function testLines(
   tests: readonly ScriptTest[],
   test: ScriptTest,
+  source: string | undefined,
 ): { readonly start: number; readonly end: number; readonly id: string } {
+  const call = source ? callExtent(source, test.source.line) : undefined;
+  if (call) return { ...call, id: test.identity };
   const later = tests
     .map((other) => other.source.line)
     .filter((line) => line > test.source.line);
@@ -313,11 +318,9 @@ export async function runScriptTest(
 
   // Classify every literal sentence in the file in one batch before the
   // browser starts, as a YAML test does. Problems surface at the step itself.
+  const source = await readFile(absolute, "utf8").catch(() => undefined);
   try {
-    const scan = scanScriptSentences(
-      await readFile(absolute, "utf8"),
-      absolute,
-    );
+    const scan = scanScriptSentences(source ?? "", absolute);
     if (scan.sentences.length) {
       const warm = await classifySentenceSteps(
         scan.sentences.map((item) => sentenceStep(item.text, item.source)),
@@ -751,8 +754,8 @@ export async function runScriptTest(
     let thrown: unknown;
     let threw = false;
     stopListening = router.register(
-      { file: absolute, lines: testLines(script.tests, test) },
-      script.tests.map((other) => testLines(script.tests, other)),
+      { file: absolute, lines: testLines(script.tests, test, source) },
+      script.tests.map((other) => testLines(script.tests, other, source)),
       (reason) => unhandled.push(reason),
     );
     try {

@@ -10,6 +10,19 @@ export interface ScriptSentenceScan {
   readonly sentences: readonly ScriptSentence[];
   /** Sentences built at run time; they cannot be checked before a run. */
   readonly warnings: readonly FlowDiagnostic[];
+  /** Parameter names of the functions this file declares, by position. */
+  readonly functions: ReadonlyMap<string, readonly string[]>;
+  /**
+   * `f(ai)` calls to a function this file does not declare. Validation
+   * resolves them through imports: the parameter must be named `ai`.
+   */
+  readonly helperCalls: readonly HelperCall[];
+}
+
+export interface HelperCall {
+  readonly callee: string;
+  readonly position: number;
+  readonly source: FlowSource;
 }
 
 type Token =
@@ -480,18 +493,46 @@ export function scanScriptSentences(
     return close !== undefined && value(close + 1) === "=>";
   };
   // Functions declared in this file: `function login(`, `const login = (…) =>`.
-  const functions = new Set<string>();
+  /** Parameter names in the list opened at `paren`, by position. */
+  const parameters = (paren: number): string[] => {
+    const close = match.get(paren);
+    if (close === undefined) return [];
+    const names: string[] = [];
+    let expectName = true;
+    for (let cursor = paren + 1; cursor < close; cursor++) {
+      if (expectName) {
+        const token = at(cursor);
+        names.push(token?.kind === "ident" ? token.value : "");
+        expectName = false;
+      }
+      const skip = match.get(cursor);
+      if (skip !== undefined) cursor = skip;
+      else if (isPunct(cursor, ",")) expectName = true;
+    }
+    return names;
+  };
+  const functions = new Map<string, string[]>();
   tokens.forEach((token, index) => {
     const name = at(index + 1);
     if (token.kind !== "ident" || name?.kind !== "ident") return;
-    if (token.value === "function") functions.add(name.value);
+    if (token.value === "function" && isPunct(index + 2, "("))
+      functions.set(name.value, parameters(index + 2));
     else if (
       ["const", "let", "var"].includes(token.value) &&
       isPunct(index + 2, "=") &&
       inlineFunction(index + 3)
-    )
-      functions.add(name.value);
+    ) {
+      let start = index + 3;
+      if (value(start) === "async") start++;
+      if (value(start) === "function") start++;
+      if (isPunct(start, "(")) functions.set(name.value, parameters(start));
+      else if (at(start)?.kind === "ident" && isPunct(start + 1, "("))
+        functions.set(name.value, parameters(start + 1));
+      else if (at(start)?.kind === "ident")
+        functions.set(name.value, [value(start)!]);
+    }
   });
+  const helperCalls: HelperCall[] = [];
   /**
    * Why `ai` at `index` is used as a value that runs steps under another
    * name, or undefined. Calling it, naming a parameter `ai`, shorthand
@@ -531,8 +572,28 @@ export function scanScriptSentences(
         value(parent - 2) !== "." &&
         !CONTROL.has(callee.value) &&
         (next === "," || next === ")")
-      )
+      ) {
+        // `login(ai)`: fine when login's parameter there is named `ai`, so its
+        // own ai calls are the ones validation reads.
+        let position = 0;
+        for (let cursor = parent + 1; cursor < index; cursor++) {
+          const skip = match.get(cursor);
+          if (skip !== undefined) cursor = skip;
+          else if (isPunct(cursor, ",")) position++;
+        }
+        const local = functions.get(callee.value);
+        if (local)
+          return local[position] === "ai"
+            ? undefined
+            : `\`${callee.value}\` receives the test's ai under another name, so the steps it runs are not checked before a run.`;
+        const token = at(index)!;
+        helperCalls.push({
+          callee: callee.value,
+          position,
+          source: { file, line: token.line, col: token.col },
+        });
         return undefined;
+      }
     }
     return "`ai` is passed on as a value here, so the steps it runs are not checked before a run.";
   };
@@ -550,6 +611,8 @@ export function scanScriptSentences(
       return false;
     const brace = parentOf[index];
     if (brace === undefined || value(brace) !== "{") return false;
+    // `({ ai }: { ai: Ai })`: the second brace is a type, not a rename.
+    if (value(brace - 1) === ":") return false;
     const paren = parentOf[brace];
     if (paren === undefined || value(paren) !== "(") return false;
     const close = match.get(paren);
@@ -656,7 +719,7 @@ export function scanScriptSentences(
       message: `This file's lists expand to more than ${MAX_SENTENCES} step sentences, or nest more than ${MAX_DEPTH} deep; the rest were not checked.`,
       fix: "Split the lists, or pass fewer copies of them to ai().",
     });
-  return { sentences, warnings };
+  return { sentences, warnings, functions, helperCalls };
 }
 
 /**
@@ -688,4 +751,93 @@ export function scanLocalImports(source: string): readonly string[] {
       found.add(specifier.value);
   });
   return [...found];
+}
+
+export interface ImportBinding {
+  readonly local: string;
+  readonly imported: string;
+  readonly specifier: string;
+}
+
+/** Named and default imports: `import login, { a, b as c } from "./x.js"`. */
+export function scanImportBindings(source: string): readonly ImportBinding[] {
+  const tokens = tokenize(source);
+  const bindings: ImportBinding[] = [];
+  tokens.forEach((token, index) => {
+    if (token.kind !== "ident" || token.value !== "import") return;
+    const names: { local: string; imported: string }[] = [];
+    let cursor = index + 1;
+    if (tokens[cursor]?.kind === "ident" && tokens[cursor]!.value === "type")
+      cursor++;
+    if (tokens[cursor]?.kind === "ident" && tokens[cursor]!.value !== "from") {
+      names.push({ local: tokens[cursor]!.value, imported: "default" });
+      cursor++;
+      if (tokens[cursor]?.value === ",") cursor++;
+    }
+    if (tokens[cursor]?.value === "{") {
+      cursor++;
+      while (cursor < tokens.length && tokens[cursor]!.value !== "}") {
+        const name = tokens[cursor];
+        if (name?.kind === "ident" && name.value !== "type") {
+          if (
+            tokens[cursor + 1]?.value === "as" &&
+            tokens[cursor + 2]?.kind === "ident"
+          ) {
+            names.push({
+              local: tokens[cursor + 2]!.value,
+              imported: name.value,
+            });
+            cursor += 3;
+            continue;
+          }
+          names.push({ local: name.value, imported: name.value });
+        }
+        cursor++;
+      }
+      cursor++;
+    }
+    const from = tokens[cursor];
+    const specifier = tokens[cursor + 1];
+    if (
+      from?.kind === "ident" &&
+      from.value === "from" &&
+      specifier?.kind === "string" &&
+      !specifier.dynamic
+    )
+      for (const name of names)
+        bindings.push({ ...name, specifier: specifier.value });
+  });
+  return bindings;
+}
+
+/**
+ * The lines of the call expression that starts on `line`, such as a whole
+ * `test("…", async () => { … })`, so a helper declared elsewhere in the file
+ * is not mistaken for part of a test. The outermost call on the line wins.
+ */
+export function callExtent(
+  source: string,
+  line: number,
+): { readonly start: number; readonly end: number } | undefined {
+  const tokens = tokenize(source);
+  const open: number[] = [];
+  let best: number | undefined;
+  tokens.forEach((token, index) => {
+    if (token.kind !== "punct") return;
+    if ("([{".includes(token.value)) open.push(index);
+    else if (")]}".includes(token.value)) {
+      const opener = open.pop();
+      if (
+        opener === undefined ||
+        tokens[opener]!.value !== "(" ||
+        tokens[opener]!.line !== line ||
+        tokens[opener - 1]?.kind !== "ident"
+      )
+        return;
+      if (best === undefined || token.line > tokens[best]!.line) best = index;
+    }
+  });
+  return best === undefined
+    ? undefined
+    : { start: line, end: tokens[best]!.line };
 }
