@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { NoopClassificationCache } from "./classification-cache.js";
 import * as locatorModule from "./locator.js";
+import * as pageBridge from "./page-bridge.js";
 import { runFlow } from "./flow-runner.js";
 import { RunRecorder } from "./run-recorder.js";
 
@@ -412,6 +413,45 @@ describe("hook and module attempt lifecycle", () => {
       expect(run.holds.mock.calls[0]?.[0]).toBe("the price is $29.99");
     } finally {
       resolve.mockRestore();
+    }
+  });
+
+  it("resolves again when the final read goes stale, preserving both model calls", async () => {
+    const read = vi
+      .spyOn(pageBridge, "readTarget")
+      .mockResolvedValueOnce({ status: "stale" });
+    try {
+      const run = await runHooks(
+        "steps:\n  - remember the price as {{price}}\n  - verify the price is {{price}}\n",
+        { readText: "$63.75" },
+      );
+      expect(run.result.status).toBe("passed");
+      expect(run.choose).toHaveBeenCalledTimes(2);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(run.holds.mock.calls[0]?.[0]).toBe("the price is $63.75");
+      expect(run.report.tests[0]?.attempts[0]?.steps[0]?.calls).toHaveLength(2);
+    } finally {
+      read.mockRestore();
+    }
+  });
+
+  it("does not keep retrying when the final read stays stale", async () => {
+    const read = vi
+      .spyOn(pageBridge, "readTarget")
+      .mockResolvedValue({ status: "stale" });
+    try {
+      const run = await runHooks(
+        "steps:\n  - remember the price as {{price}}\n",
+        { readText: "$63.75" },
+      );
+      expect(run.result.status).toBe("failed");
+      expect(run.choose).toHaveBeenCalledTimes(2);
+      expect(read).toHaveBeenCalledTimes(2);
+      expect(run.report.tests[0]?.attempts[0]?.steps[0]?.error?.code).toBe(
+        "remember_stale",
+      );
+    } finally {
+      read.mockRestore();
     }
   });
 

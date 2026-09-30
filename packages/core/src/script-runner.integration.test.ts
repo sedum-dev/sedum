@@ -392,6 +392,19 @@ test("late", { url: "/home?user=Ada" }, async ({ ai }) => {
       });
     }, 60_000);
 
+    it("describes a failed extract without exposing the internal remember step", async () => {
+      const { outcome, result } = await run(
+        "missing-extract.test.ts",
+        `test("missing", { url: "/home" }, async ({ ai }) => {
+          await ai.extract("the absent shipment number");
+        });`,
+      );
+      expect(outcome.status).toBe("failed");
+      expect(result.tests[0]?.attempts[0]?.steps[0]?.error?.message).toBe(
+        "The extract target could not be resolved.",
+      );
+    });
+
     it.each([
       [
         "an unawaited group whose code throws",

@@ -729,6 +729,9 @@ export async function executeSentence(
     }
   }
   if (step.op === "remember") {
+    const targetLabel = presentation.display?.startsWith("extract ")
+      ? "extract"
+      : "remember";
     const match =
       /^(?:remember|capture)\s+(.+?)\s+as\s+\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}\s*\.?$/iu.exec(
         step.text.trim(),
@@ -771,16 +774,32 @@ export async function executeSentence(
             locator,
             error: {
               code: locator.reason,
-              message: "The remember target could not be resolved.",
+              message: `The ${targetLabel} target could not be resolved.`,
             },
           });
-        const read = await readTarget(page, locator.target.driverTarget());
+        let read = await readTarget(page, locator.target.driverTarget());
+        // A DOM revision can land after the locator's freshness check but
+        // before the read. Resolve from a new snapshot once; never reuse the
+        // stale ref or relax the page script's identity/version guards.
+        if (read.status === "stale") {
+          locator = await reobserve(
+            page,
+            { ...locator, kind: "unresolved", reason: "stale" },
+            locateRead,
+            {
+              staleRetry: true,
+              ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+            },
+          );
+          if (locator.kind === "resolved")
+            read = await readTarget(page, locator.target.driverTarget());
+        }
         if (read.status !== "ok")
           return record("failed", {
             locator,
             error: {
               code: `remember_${read.status}`,
-              message: "The remember target did not contain usable text.",
+              message: `The ${targetLabel} target did not contain usable text.`,
             },
           });
         remembered = read.text;
@@ -790,7 +809,7 @@ export async function executeSentence(
           ...(locator ? { locator } : {}),
           error: {
             code: "remember_invalid_text",
-            message: "The remember target did not contain usable text.",
+            message: `The ${targetLabel} target did not contain usable text.`,
           },
         });
       const echoedSecrets = opaqueMatches(remembered, opaqueEntries);

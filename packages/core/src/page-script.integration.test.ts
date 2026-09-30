@@ -315,6 +315,39 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       }
       await context.close();
     });
+    it("keeps read context inside repeated cards rather than borrowing the first product", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<div class="catalog"><div class="card"><a href="#bag"><div>Canvas Bag</div></a><div class="description">A roomy bag</div><div class="buy"><div>$18.25</div><button>Add to cart</button></div></div><div class="card"><a href="#jacket"><div>Fleece Jacket</div></a><div class="description">A warm jacket</div><div class="buy"><div>$63.75</div><button>Add to cart</button></div></div></div>'`);
+      const candidates = await collectCandidates(page, "read");
+      const price = candidates.candidates.find(
+        (item) => item.name === "$63.75",
+      );
+      expect(price?.peers.join(" ")).toContain("Fleece Jacket");
+      expect(price?.peers.join(" ")).not.toContain("Canvas Bag");
+      const model = recordedResolver((options) => {
+        const selected = options.options.find(
+          (option) =>
+            option.kind === "candidate" &&
+            option.candidate.name.startsWith("$") &&
+            option.candidate.peers.some((peer) =>
+              peer.includes("Fleece Jacket"),
+            ),
+        );
+        return selected?.kind === "candidate" ? selected.candidate.id : "none";
+      });
+      const resolved = await resolveTarget(page, model, {
+        operation: "read",
+        sentence: "the price of the Fleece Jacket",
+      });
+      expect(resolved.kind).toBe("resolved");
+      if (resolved.kind === "resolved")
+        expect(await readTarget(page, resolved.target.driverTarget())).toEqual({
+          status: "ok",
+          text: "$63.75",
+        });
+      await context.close();
+    });
     it("chooses the named option of a native dropdown instead of clicking it", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =
