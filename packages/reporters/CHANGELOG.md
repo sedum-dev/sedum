@@ -1,5 +1,14 @@
 # @sedum-dev/reporters
 
+## 0.1.0-alpha.6
+
+### Patch Changes
+
+- 892c784: Wait for a bounded quiet page before capturing a vision fallback and re-observe stale captures before making the single model request. Keep post-request stale-page rejection fail-closed, report it explicitly, and preserve vision abstention reasons separately from the fallback trigger.
+- Updated dependencies [8dd5d42]
+- Updated dependencies [892c784]
+  - @sedum-dev/core@0.1.0-alpha.6
+
 ## 0.1.0-alpha.5
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "sedum-cli",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "repository": "https://github.com/sedum-dev/sedum",
   "publishConfig": {
     "access": "public"

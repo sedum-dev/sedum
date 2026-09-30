@@ -1,5 +1,12 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.6
+
+### Patch Changes
+
+- 8dd5d42: Keep extracted text associated with its own repeated product card instead of another card's title. Retry a stale final text read once with a fresh resolution, retaining strict freshness checks and model-call accounting. Describe TypeScript extract failures as extract targets rather than internal remember targets.
+- 892c784: Wait for a bounded quiet page before capturing a vision fallback and re-observe stale captures before making the single model request. Keep post-request stale-page rejection fail-closed, report it explicitly, and preserve vision abstention reasons separately from the fallback trigger.
+
 ## 0.1.0-alpha.5
 
 ### Minor Changes

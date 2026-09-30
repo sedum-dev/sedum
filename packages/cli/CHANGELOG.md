@@ -1,5 +1,17 @@
 # sedum-cli
 
+## 0.1.0-alpha.6
+
+### Patch Changes
+
+- 86efefd: Report vision fallback attempts and their selected, abstained, or failed outcomes separately. Do not claim every click resolved from page text when vision was not attempted; call out failed clicks without vision instead.
+- 78911d8: Include node_modules/ in init's ignore rules so a new project's first git add does not stage installed dependencies.
+- Updated dependencies [8dd5d42]
+- Updated dependencies [892c784]
+  - @sedum-dev/core@0.1.0-alpha.6
+  - @sedum-dev/reporters@0.1.0-alpha.6
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.6
+
 ## 0.1.0-alpha.5
 
 ### Minor Changes
