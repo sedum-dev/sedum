@@ -85,6 +85,10 @@ export class TestRecording {
   finishTest(verdict: "passed" | "failed"): Promise<void> {
     return this.recorder.finishTestFor(this.testId, verdict);
   }
+  /** Ends a running attempt that could not run; the run itself continues. */
+  errorTest(error: NonNullable<ResultAttempt["error"]>): Promise<void> {
+    return this.recorder.errorTestFor(this.testId, error);
+  }
 }
 
 function newAttempt(
@@ -447,6 +451,35 @@ export class RunRecorder {
       state: "completed",
       verdict,
       flags,
+      attempts: [...current.attempts.slice(0, -1), updatedAttempt],
+    }));
+    await this.publish();
+  }
+
+  /** @internal Use `TestRecording.errorTest`. */
+  async errorTestFor(
+    testId: string,
+    error: NonNullable<ResultAttempt["error"]>,
+  ): Promise<void> {
+    const test = this.testById(testId);
+    const attempt = test.attempts.at(-1);
+    if (attempt?.state !== "running") return;
+    const finished = new Date().toISOString();
+    const updatedAttempt: ResultAttempt = {
+      ...attempt,
+      state: "error",
+      verdict: null,
+      error,
+      finishedAt: finished,
+      elapsedMs: Math.max(
+        0,
+        Date.parse(finished) - Date.parse(attempt.startedAt),
+      ),
+    };
+    this.replaceTest(testId, (current) => ({
+      ...current,
+      state: "error",
+      verdict: null,
       attempts: [...current.attempts.slice(0, -1), updatedAttempt],
     }));
     await this.publish();

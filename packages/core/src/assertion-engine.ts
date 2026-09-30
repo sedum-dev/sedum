@@ -11,7 +11,12 @@ import {
   type DigestResult,
   type PageVersion,
 } from "./page-protocol.js";
-import { unknownCostCall, type Judge, type ProviderCall } from "./provider.js";
+import {
+  isRunWideProviderError,
+  unknownCostCall,
+  type Judge,
+  type ProviderCall,
+} from "./provider.js";
 
 const DEFAULT_OBSERVATION_TIMEOUT_MS = 4_000;
 const POST_JUDGE_VERSION_TIMEOUT_MS = 1_000;
@@ -330,6 +335,7 @@ async function judgePage(
     probability(decision.contradicted, "contradicted");
   } catch (error) {
     if (error instanceof AssertionEngineError) throw error;
+    if (isRunWideProviderError(error)) throw error;
     if (decision)
       throw new AssertionEngineError(
         signal?.aborted ? "canceled" : "provider_failure",

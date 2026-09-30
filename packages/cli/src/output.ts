@@ -142,8 +142,11 @@ export function renderRunSummary(
     lines.push(
       `discovery ${problem.file}${problem.line === undefined ? "" : `:${problem.line}:${problem.col ?? 1}`}: ${problem.message} Fix: ${problem.fix}`,
     );
+  const erroredTests = value.tests.filter(
+    (test) => test.state === "error",
+  ).length;
   lines.push(
-    `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed`,
+    `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed${erroredTests ? `, ${erroredTests} could not run` : ""}`,
   );
   lines.push(
     `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${flagCounts.low_confidence}, contradiction ${flagCounts.contradiction}`,

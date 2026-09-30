@@ -127,6 +127,21 @@ export type ProviderErrorCode =
   | "retry-exhausted"
   | "rate-limited";
 
+/**
+ * A provider failure that every later request will hit too: a rejected key,
+ * a bad configuration, or rate limiting that outlasted its waits. Engines
+ * pass these through instead of turning them into a step outcome, so the
+ * run stops instead of failing each remaining test the same way.
+ */
+export function isRunWideProviderError(error: unknown): error is ProviderError {
+  return (
+    error instanceof ProviderError &&
+    (error.code === "authentication" ||
+      error.code === "configuration" ||
+      error.code === "rate-limited")
+  );
+}
+
 export class ProviderError extends Error {
   readonly failedCall?: ProviderCall;
   constructor(

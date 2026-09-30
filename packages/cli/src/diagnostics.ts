@@ -162,6 +162,24 @@ export function flowDiagnostic(result: {
   };
 }
 
+/**
+ * Codes that no later test can avoid: a missing browser, a bad provider key,
+ * or a provider that keeps rate limiting. Any other error belongs to the test
+ * that raised it, and the run continues with the next selected test.
+ */
+const RUN_STOPPING_CODES: ReadonlySet<string> = new Set([
+  "browser-missing",
+  "browser-launch-failed",
+  "script-missing",
+  "provider_configuration",
+  "provider_authentication",
+  "provider_rate_limited",
+]);
+
+export function stopsRun(code: string): boolean {
+  return RUN_STOPPING_CODES.has(code);
+}
+
 export function renderDiagnostic(diagnostic: CliDiagnostic): string {
   return `${diagnostic.message}\nFix: ${diagnostic.fix}\n`;
 }

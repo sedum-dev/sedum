@@ -4,7 +4,9 @@ import {
   DEFAULT_MIN_P,
   DEFAULT_BAND,
   DEFAULT_CONTRADICTION_CUTOFF,
+  measure,
   verify,
+  type MeasureResult,
   type VerifyPolicy,
   type VerifyResult,
 } from "./assertion-engine.js";
@@ -42,11 +44,18 @@ import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import type { VisionResolver } from "./vision.js";
 import { chooseOption } from "./dropdown-option.js";
+import {
+  gotoUrlParts,
+  pressKey,
+  scrollDirection,
+  waitDurationMs,
+} from "./step-operands.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
+  isRunWideProviderError,
   type Judge,
   type ProviderCall,
   type Resolver,
@@ -279,7 +288,7 @@ function claim(
 ): string {
   return step.text
     .replace(
-      /^\s*(?:verify|assert|check|confirm|ensure|expect)\b\s*(?:that\s+)?/iu,
+      /^\s*(?:verify|assert|check|confirm|ensure|expect|measure|note|observe)\b\s*(?:that\s+|whether\s+|if\s+)?/iu,
       "",
     )
     .trim()
@@ -328,6 +337,75 @@ async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
   await resource?.close().catch(() => undefined);
 }
 
+/** A fresh resolution threw; carries the calls already made for the report. */
+class LocateRetryError extends Error {
+  constructor(readonly priorCalls: readonly ProviderCall[]) {
+    super("The target could not be resolved.");
+  }
+}
+
+/**
+ * Re-observe a resolution that failed only because the page moved under it.
+ * Nothing has been acted on yet, so a fresh read is safe for any operation.
+ */
+async function reobserve(
+  page: BrowserPage,
+  first: LocatorResult,
+  locate: () => Promise<LocatorResult>,
+  options: { readonly staleRetry: boolean; readonly signal?: AbortSignal },
+): Promise<LocatorResult> {
+  let resolved = first;
+  // A resolver response can arrive during an unrelated DOM revision. One fresh
+  // read after a longer quiet period is safe: it reuses neither a target nor a
+  // prior action.
+  if (
+    options.staleRetry &&
+    resolved.kind === "unresolved" &&
+    resolved.reason === "stale"
+  ) {
+    const priorCalls = resolved.calls;
+    const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
+      quiet: false,
+    }));
+    if (settled.quiet) {
+      try {
+        const retried = await locate();
+        resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+      } catch (error) {
+        if (isRunWideProviderError(error)) throw error;
+        throw new LocateRetryError(priorCalls);
+      }
+    }
+  }
+  // A navigation can briefly leave a quiet, empty document before the real
+  // page commits. Re-observe only an empty candidate set within a deadline;
+  // no model choice or action has happened, and an actually empty page still
+  // ends with no_candidates.
+  if (resolved.kind === "unresolved" && resolved.reason === "no_candidates") {
+    const deadline = performance.now() + 8_000;
+    while (performance.now() < deadline && !options.signal?.aborted) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 400));
+      const settled = await quietPage(page, 80, 1_000).catch(() => ({
+        quiet: false,
+      }));
+      if (!settled.quiet) continue;
+      try {
+        const fresh = await locate();
+        resolved = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
+        if (
+          resolved.kind !== "unresolved" ||
+          resolved.reason !== "no_candidates"
+        )
+          break;
+      } catch (error) {
+        if (isRunWideProviderError(error)) throw error;
+        // A redirect can invalidate the read-only execution context.
+      }
+    }
+  }
+  return resolved;
+}
+
 async function executeSentence(
   page: BrowserPage,
   step: ClassifiedFlowSentence,
@@ -369,7 +447,7 @@ async function executeSentence(
     }
   };
   type StepFacts = {
-    verify?: VerifyResult;
+    verify?: VerifyResult | MeasureResult;
     locator?: LocatorResult;
     error?: {
       code: string;
@@ -405,7 +483,7 @@ async function executeSentence(
     const failed =
       outcome === "failed" ||
       (typeof outcome === "object" && outcome.status === "failed");
-    const flags = facts.verify?.flags ?? [];
+    const flags = facts.verify?.kind === "verify" ? facts.verify.flags : [];
     const needsEvidence = failed || isError || flags.length > 0;
     const evidence: ResultFrame = !needsEvidence
       ? { status: "omitted", reason: "clean_step" }
@@ -440,13 +518,14 @@ async function executeSentence(
         ? [resultCall(facts.verify.call, "judge", facts.verify.elapsedMs)]
         : []),
     ];
+    const policy = facts.verify?.kind === "verify" ? facts.verify : null;
     const judgement = facts.verify
       ? {
           holds: facts.verify.holds,
           contradicted: facts.verify.contradicted,
-          threshold: facts.verify.minP,
-          band: facts.verify.band,
-          contradictionCutoff: facts.verify.contradictionCutoff,
+          threshold: policy?.minP ?? null,
+          band: policy?.band ?? null,
+          contradictionCutoff: policy?.contradictionCutoff ?? null,
           judgedExcerpt:
             !sensitive && facts.verify.judgedExcerpt
               ? safeText(facts.verify.judgedExcerpt, privacy, 1500)
@@ -594,10 +673,17 @@ async function executeSentence(
       if (/^(?:the\s+)?page\s+text$/iu.test(match[1]!.trim())) {
         remembered = await page.text();
       } else {
-        locator = await resolveTarget(page, dependencies.provider, {
-          operation: "read",
-          sentence: match[1]!,
-          projectText: (text) => redactOpaqueText(text, opaqueEntries),
+        const locateRead = () =>
+          resolveTarget(page, dependencies.provider, {
+            operation: "read",
+            sentence: match[1]!,
+            projectText: (text) => redactOpaqueText(text, opaqueEntries),
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+          });
+        // A read right after a navigation races the page settling, exactly
+        // as a click does; give it the same single fresh observation.
+        locator = await reobserve(page, await locateRead(), locateRead, {
+          staleRetry: true,
           ...(dependencies.signal ? { signal: dependencies.signal } : {}),
         });
         if (locator.kind !== "resolved")
@@ -643,7 +729,8 @@ async function executeSentence(
       opaqueEntries.push(data[match[2]!]!);
       report?.privacy.secretValues.push(remembered);
       return record("continue", locator ? { locator } : {});
-    } catch {
+    } catch (error) {
+      if (isRunWideProviderError(error)) throw error;
       return record(
         unsupported(
           step.source.file,
@@ -659,22 +746,33 @@ async function executeSentence(
       );
     }
   }
-  if (step.op === "verify") {
-    const judge = () =>
-      verify(page, dependencies.provider, claim(step, data), {
-        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
-        projectText: (text) => redactOpaqueText(text, opaqueEntries),
-        ...(dependencies.verifyPolicy ?? {}),
-      });
+  if (step.op === "verify" || step.op === "measure") {
+    const assertion = {
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      projectText: (text: string) => redactOpaqueText(text, opaqueEntries),
+    };
+    // A measure records both scores and never gates the test.
+    const judge = (): Promise<VerifyResult | MeasureResult> =>
+      step.op === "measure"
+        ? measure(page, dependencies.provider, claim(step, data), assertion)
+        : verify(page, dependencies.provider, claim(step, data), {
+            ...assertion,
+            ...(dependencies.verifyPolicy ?? {}),
+          });
+    const outcome = (result: VerifyResult | MeasureResult) =>
+      result.kind === "verify" && result.verdict === "failed"
+        ? "failed"
+        : "continue";
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider
       // request, take exactly one fresh settled observation rather than
       // reporting a verdict about an old page.
-      return record(result.verdict === "failed" ? "failed" : "continue", {
+      return record(outcome(result), {
         verify: result,
       });
     } catch (error) {
+      if (isRunWideProviderError(error)) throw error;
       const priorCalls =
         error instanceof AssertionEngineError && error.failedCall
           ? [resultCall(error.failedCall, "judge")]
@@ -689,11 +787,12 @@ async function executeSentence(
         if (settled.quiet) {
           try {
             const result = await judge();
-            return record(result.verdict === "failed" ? "failed" : "continue", {
+            return record(outcome(result), {
               verify: result,
               failedCalls: priorCalls,
             });
           } catch (retryError) {
+            if (isRunWideProviderError(retryError)) throw retryError;
             return record(
               unsupported(
                 step.source.file,
@@ -744,20 +843,97 @@ async function executeSentence(
       );
     }
   }
-  if (step.op !== "click" && step.op !== "type")
-    return record(
-      unsupported(
-        step.source.file,
-        step.source,
-        `The ${step.op} operation is not part of this walking skeleton.`,
-      ),
-      {
-        error: {
-          code: "unsupported_operation",
-          message: `The ${step.op} operation is not supported.`,
+  if (
+    step.op === "wait" ||
+    step.op === "press" ||
+    step.op === "scroll" ||
+    step.op === "goto"
+  ) {
+    let command: StepCommand;
+    let detail = "";
+    const invalid = (message: string) =>
+      record(
+        {
+          status: "could_not_run",
+          file: step.source.file,
+          code: "invalid_test",
+          source: step.source,
+          message,
         },
-      },
-    );
+        { error: { code: "invalid_operand", message } },
+      );
+    if (step.op === "wait") {
+      const durationMs = waitDurationMs(step.text);
+      if (durationMs === null)
+        return invalid("Use a positive wait duration of at most 30 seconds.");
+      command = { op: "wait", durationMs };
+    } else if (step.op === "press") {
+      const key = pressKey(step.text);
+      if (key === null)
+        return invalid(
+          'Name one key to press, such as Enter, Tab, Escape, or "Control+A".',
+        );
+      command = { op: "press", key };
+      detail = `Pressed ${key}.`;
+    } else if (step.op === "scroll") {
+      const direction = scrollDirection(step.text);
+      if (direction === null) return invalid("Say scroll up or scroll down.");
+      // One screenful, keeping some overlap so content is not skipped.
+      const height = await page
+        .evaluate<number>("window.innerHeight")
+        .catch(() => 800);
+      const deltaY = Math.round(Math.max(200, height * 0.8));
+      command = {
+        op: "scroll",
+        deltaY: direction === "down" ? deltaY : -deltaY,
+      };
+    } else {
+      const parts = gotoUrlParts(step.text);
+      if (parts === null) return invalid("Name exactly one http(s) address.");
+      const values = parts.names.map((name) => data[name]?.value);
+      if (values.some((value) => value === undefined))
+        return record("failed", {
+          error: {
+            code: "missing_remembered_binding",
+            message:
+              "This step needs a value that is unavailable in this attempt.",
+          },
+        });
+      const url = new RuntimeUrl(parts.literals, values as RuntimeValue[]);
+      try {
+        new URL(url.reveal());
+      } catch {
+        return invalid("The goto address is not a valid URL.");
+      }
+      command = { op: "goto", url };
+      detail = `Opened ${url.toString()}.`;
+    }
+    try {
+      await executeStep(page, command, {
+        ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      });
+      return record("continue", detail ? { detail } : {});
+    } catch (error) {
+      const actionError = error instanceof StepExecutionError ? error : null;
+      const facts = {
+        error: {
+          code: actionError?.code ?? "action_error",
+          message: actionError?.message ?? "The action could not complete.",
+          callLog: actionError?.callLog,
+        },
+      };
+      return actionError?.code === "invalid_input"
+        ? record("failed", facts)
+        : record(
+            unsupported(
+              step.source.file,
+              step.source,
+              `The ${step.op} step could not complete.`,
+            ),
+            facts,
+          );
+    }
+  }
   const typeOperand = step.op === "type" ? validateTypeOperand(step) : null;
   const runtimeDependent = step.tokens.some(
     (token) =>
@@ -807,7 +983,8 @@ async function executeSentence(
   let resolved: LocatorResult;
   try {
     resolved = await locate();
-  } catch {
+  } catch (error) {
+    if (isRunWideProviderError(error)) throw error;
     return record(
       unsupported(
         step.source.file,
@@ -822,64 +999,29 @@ async function executeSentence(
       },
     );
   }
-  // A resolver response can arrive during an unrelated DOM revision. One fresh
-  // read after a longer quiet period is safe: it reuses neither a target nor a
-  // prior action.
-  if (
-    !visionAttempted &&
-    resolved.kind === "unresolved" &&
-    resolved.reason === "stale"
-  ) {
-    const priorCalls = resolved.calls;
-    const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
-      quiet: false,
-    }));
-    if (settled.quiet) {
-      try {
-        const retried = await locate();
-        resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
-      } catch {
-        return record(
-          unsupported(
-            step.source.file,
-            step.source,
-            "The target could not be resolved.",
-          ),
-          {
-            failedCalls: priorCalls.map((call) => resultCall(call, "locator")),
-            error: {
-              code: "locator_error",
-              message: "The target could not be resolved.",
-            },
-          },
-        );
-      }
-    }
-  }
-  // A navigation can briefly leave a quiet, empty document before the real
-  // page commits. Re-observe only an empty candidate set within a deadline;
-  // no model choice or action has happened, and an actually empty page still
-  // ends with no_candidates.
-  if (resolved.kind === "unresolved" && resolved.reason === "no_candidates") {
-    const deadline = performance.now() + 8_000;
-    while (performance.now() < deadline && !dependencies.signal?.aborted) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 400));
-      const settled = await quietPage(page, 80, 1_000).catch(() => ({
-        quiet: false,
-      }));
-      if (!settled.quiet) continue;
-      try {
-        const fresh = await locate();
-        resolved = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
-        if (
-          resolved.kind !== "unresolved" ||
-          resolved.reason !== "no_candidates"
-        )
-          break;
-      } catch {
-        // A redirect can invalidate the read-only execution context.
-      }
-    }
+  try {
+    resolved = await reobserve(page, resolved, locate, {
+      staleRetry: !visionAttempted,
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+    });
+  } catch (error) {
+    if (!(error instanceof LocateRetryError)) throw error;
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        "The target could not be resolved.",
+      ),
+      {
+        failedCalls: error.priorCalls.map((call) =>
+          resultCall(call, "locator"),
+        ),
+        error: {
+          code: "locator_error",
+          message: "The target could not be resolved.",
+        },
+      },
+    );
   }
   if (resolved.kind !== "resolved") {
     if (
@@ -1037,6 +1179,7 @@ async function executeSentence(
         : { detail: `Chose "${chosenOption}" in the dropdown.` }),
     });
   } catch (error) {
+    if (isRunWideProviderError(error)) throw error;
     const actionError = error instanceof StepExecutionError ? error : null;
     const failed =
       actionError &&
