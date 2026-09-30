@@ -1,5 +1,43 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.5
+
+### Minor Changes
+
+- fd55a18: Write tests in TypeScript. A `*.test.ts` file declares tests with `test(title, options, async ({ page, context, ai, env, testInfo }) => { ... })`. Plain-English steps run with `await ai("click the Login button")`; values go in a second argument (`ai("type {{email}} into the Email field", { email })`) and `secret()` keeps a value out of model input and reports. `ai.group` names a block of steps, `ai.extract` reads an element's text, and Playwright's `page`, `context`, and `expect` work between steps. `sedum run`, `list`, and `validate` discover `*.test.ts` beside `*.test.yaml`; `validate` classifies the literal sentences in `ai(...)` calls and warns about sentences built at run time. `sedum run --id <id>` selects tests by exact id, and reports name a TypeScript test by its file and title and rerun it with `--id`. `sedum init` now writes a TypeScript example.
+
+### Patch Changes
+
+- 9131d3c: Report `cache miss (not_cacheable)` for a target the locator cache never stores, such as an `<input type="submit">` button, instead of `cache miss (absent)`, which implied the next run would hit. A run outside a Git checkout now prints a hint to run `git init` to enable the cache, and the README Quickstart includes `git init`.
+- 834b723: Keep running the rest of the suite when one test cannot run. Previously the first test-scoped error, such as an unsupported step, stopped `sedum run` and the remaining selected tests never ran. That test is now recorded with `state: "error"`, and every other test still gets a verdict. The run still exits 3, and the summary says how many tests could not run. A missing browser, a rejected provider key, or sustained rate limiting still stops the run immediately.
+
+  A rejected provider key is now reported as `provider_authentication` and stops the run at the first request, instead of surfacing as `Could not resolve this click step` in every test.
+
+- a8f641d: Name bare counts on icon controls in the page text the judge reads. The "1" on a cart icon used to appear as a lone `1` ("Swag Labs 1 Products"), so `verify the shopping cart badge shows 1` failed although the badge showed 1. It now appears as `cart icon badge: 1` when the control shows only the count and its class, id or test hook names a known icon kind. The docs explain which visual states the judge can and cannot see.
+- c5469e4: Clearer error messages:
+
+  - An unreachable test URL now reports `navigation_failed` with the cause, e.g. "Could not open the test's page: the host name could not be resolved (DNS)", instead of "The browser run could not be completed safely".
+  - A missing test path is named in the final error instead of blaming `sedum.config.yaml`'s `tests.include`.
+  - A misspelt key in `sedum.config.yaml` gets a "Did you mean `browser`?" fix, as test files already do.
+  - A run that never started a test no longer prints "read …" hints.
+  - An unresolved step says why (no element matches, several match, or nothing to click), and its error code is `no_match` instead of `none`.
+  - `report.md` labels an error "browser error, untrusted" only when it came from the browser.
+  - A test file with neither `steps` nor `goal` is told so, instead of "…but not both".
+  - An unexpected internal error is no longer reported as "The command could not be parsed safely".
+
+- 0ddfcad: Flag a test that passes only after a failed attempt as `flaky`. It still counts as passed, but the flag appears on the test, in the run's flags, in the terminal summary (`flaky N test(s)`) and in JUnit output, and `--strict` exits 2 as for any flagged pass. Previously `--retries` could hide a flaky test completely.
+- c135228: Make the documented Sauce Demo goal example pass, and explain goal abstentions. The planner split its probability between the next step and `BLOCKED` (for example TYPE 0.50 vs BLOCKED 0.48 on the login page), so the goal abstained before acting or before placing the order. `BLOCKED` now means that no offered element can move the goal forward, and every step the goal names counts as expected. A goal action whose target went stale before dispatch is now taken back and the page observed again, instead of failing the goal. A goal that abstains reports which decision was uncertain, on which page, and its top probabilities, with a hint on how to rewrite the goal.
+- e83c74c: Choose options in native `<select>` dropdowns. A click resolved to a native dropdown used to click the control, which changes nothing, and still report the step as passed. Now `click the "Price (low to high)" option in the sort dropdown` and `select "Price (low to high)" in the sort dropdown` choose that option. A click on a native dropdown that names no option fails and lists the options instead of passing silently. Quoted `select`, `choose`, and `pick` sentences classify offline without a model call.
+- 0662f50: Say that the model provider rejected the API key when a run uses a wrong `TYPESAFE_API_KEY`, as `sedum doctor` does, and point to `TYPESAFE_API_KEY` and `sedum doctor` in the fix. The step that hit the rejection is recorded with the `provider_authentication` error. Previously the run reported a vague provider failure, and before that an unresolved click with test-input advice.
+- cbd82f1: Fix `remember` failing with `stale: The remember target could not be resolved.` when the page was still settling after a navigation, for example a login redirect that rewrites its URL or fills in content. A `remember` step now gets the same single fresh observation after a stale resolution, and the same wait for an empty page to fill, that `click` and `type` steps already had.
+- acae6ef: Stop redacting remembered page values in reports. `remember the price … as {{price}}` treated the price as a secret, so every later occurrence of `$ 29.99` in a failed step's excerpt read `[REDACTED]`, and a short value such as `1` blanked every matching substring. A remembered value is now redacted only when it was read on a sensitive origin or contains an environment-derived secret.
+- 62db939: Run the documented `goto`, `press`, `scroll`, `wait` and `measure` steps. `sedum validate` accepted these verbs, but `sedum run` stopped on them with `unsupported_operation` and exit 3. Keys use Playwright names (`press enter` and `press the Esc key` both work), scrolls move about one screen, a `goto` address may contain `{{name}}` values, and `measure` records the judge's scores without gating the test.
+- 2fbd519: Fix vision fallback never running when the page was still settling after a navigation. The screenshot's freshness check failed, and the error was swallowed as an ambiguous target. That case is now reported as stale, so the runner takes its one fresh observation and vision gets its turn.
+
+  Make vision's behavior visible. With vision enabled, `sedum run` checks `OPEN_ROUTER_API_KEY` against OpenRouter's unbilled key endpoint before tests start and warns in the summary when the key is rejected. The summary says how many steps used vision, or that vision was not needed. A click that fails without trying vision explains why. `sedum doctor` checks the vision key when vision is enabled, or with `--vision`.
+
+  Vision fallback now also runs when the text model finds no matching element for a click, for example a target described by its picture. Vision chooses among every visible control or abstains; an abstention keeps the step unresolved as before.
+
 ## 0.1.0-alpha.4
 
 ### Minor Changes
