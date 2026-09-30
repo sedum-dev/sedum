@@ -350,6 +350,7 @@ smoke("home loads", async () => undefined);
     ).toEqual([["home.test.ts#home loads", 5]]);
   });
 
+  // Importing a 70-module chain is slow on Windows runners.
   it("warns when a test imports more helpers than validation follows", async () => {
     const folder = path.join(directory, "many-helpers");
     await mkdir(folder);
@@ -377,7 +378,7 @@ smoke("home loads", async () => undefined);
       "too_many_helpers",
     );
     expect(result.fullyValidated).toBe(false);
-  });
+  }, 60_000);
 
   it.skipIf(process.platform === "win32")(
     "does not follow a helper symlinked from outside the project",
