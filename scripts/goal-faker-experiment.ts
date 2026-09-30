@@ -32,10 +32,11 @@ try {
         : {}),
     });
     const page = await context.newPage();
-    const video = page.playwright()!.page.video();
+    const native = page.playwright!();
+    const video = native.page.video();
     const decisions: unknown[] = [];
+    const judgements: unknown[] = [];
     try {
-      const native = page.playwright()!;
       const cdp = await native.context.newCDPSession(native.page);
       await cdp.send("Emulation.setDeviceMetricsOverride", {
         width: 1280,
@@ -67,7 +68,13 @@ try {
             return answer;
           },
         },
-        adapter,
+        {
+          holds: async (claim, digest, options) => {
+            const decision = await adapter.holds(claim, digest, options);
+            judgements.push({ claim, digest, decision });
+            return decision;
+          },
+        },
         {
           goal:
             scenario === "profile"
@@ -75,7 +82,9 @@ try {
               : "Sign in to the existing account. No username or password has been supplied. Do not create an account.",
           verify: [
             scenario === "profile"
-              ? "Profile saved is visible"
+              ? process.argv.includes("--ambiguous-claim")
+                ? "Profile saved is visible"
+                : 'The page displays the confirmation message "Profile saved".'
               : "Products is visible",
           ],
           dataSeed: 53,
@@ -86,9 +95,9 @@ try {
               const name = page.url.endsWith("/synthetic-profile")
                 ? "profile"
                 : "recipient";
-              await page
-                .playwright()!
-                .page.screenshot({ path: path.join(output, `${name}.png`) });
+              await native.page.screenshot({
+                path: path.join(output, `${name}.png`),
+              });
             }
           },
         },
@@ -110,7 +119,7 @@ try {
             };
       await writeFile(
         path.join(output, `${scenario}.json`),
-        JSON.stringify({ result, decisions, checks }, null, 2),
+        JSON.stringify({ result, decisions, judgements, checks }, null, 2),
       );
       console.log(
         JSON.stringify({

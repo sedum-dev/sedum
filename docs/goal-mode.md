@@ -109,6 +109,49 @@ The first experiment used Bun and encountered a fixture-server shutdown error
 after saving its receipts; the documented Node invocation exited normally.
 These are feasibility observations, not a reliability estimate.
 
+### Judge investigation: explicit message claims
+
+Capturing the actual Judge input ruled out missing/stale confirmation text and
+redaction in this fixture: the complete digest was exactly
+`Add a different recipient Profile saved`. The SDK Noul signature and response
+polarity were correct. On the same evidence, the original claim
+`Profile saved is visible` scored holds=0.29; `"Profile saved" is visible`
+scored 0.81; `The page displays the confirmation message "Profile saved".`
+scored 0.90. Moving the claim into question instructions, removing criteria,
+adding line breaks, or adding heading/status labels did not fix the original
+claim. This isolates wording sensitivity, not a proven account of the model's
+internal interpretation.
+
+The demo now uses the explicit confirmation-message claim. A fresh recorded
+run passed all exact DOM checks and independent verification (holds=0.91,
+contradicted=0.06, no flags), with the same 8 actions and 16 requests. The
+missing-credentials control returned BLOCKED with no actions. Generation,
+page extraction, shared Judge prompts, and all thresholds are unchanged.
+The receipts now include the actual redacted claim, digest, and Judge response.
+
+Quote literal UI text and state what it is: for example,
+`The page displays the confirmation message "Profile saved".` rather than
+`Profile saved is visible`. This is authoring guidance, not an automatic
+rewrite or a guarantee: another quoted claim, `"Order placed" is visible`,
+still scored only 0.71 in the fixed-evidence comparison.
+
+The six live confirmation regressions passed: actual confirmation, negation,
+button-only evidence, unrelated success, hypothetical text, and page-injected
+instructions. Positive cases must earn an unflagged pass under the existing
+policy; negative cases must not. These narrow cases do not establish broad
+semantic accuracy or coherent generated identities.
+
+```sh
+# Paid fixed-evidence comparisons; all outcomes retained, including failures:
+node scripts/judge-experiment.ts
+node scripts/judge-experiment.ts --boundaries
+# Paid opt-in semantic regression checks:
+SEDUM_TYPESAFE_LIVE=1 pnpm exec vitest run packages/provider-typesafe/src/index.live.test.ts
+# Record the clarified assertion, or reproduce the original rejection:
+node scripts/goal-faker-experiment.ts --demo
+node scripts/goal-faker-experiment.ts --ambiguous-claim
+```
+
 ## Decision and execution boundaries
 
 The design follows `model.py` (`action_space`, `choose`), `agent.py`, and
