@@ -152,13 +152,18 @@ function attention(result: RunResult, context: ReporterContext): string {
         `  test error ${attempt.error.code}: ${attempt.error.message}`,
       );
   }
+  // A run that never started a test failed during setup: its diagnostic
+  // says why, so point only at rerunning it once that is fixed.
+  const neverStarted = result.tests.length === 0 && result.state === "error";
   if (
     reruns.size > 0 ||
     result.state === "error" ||
     result.state === "interrupted"
   ) {
     lines.push("\nnext");
-    if (context.authoritative) {
+    if (neverStarted) {
+      // Nothing to read beyond the error printed below.
+    } else if (context.authoritative) {
       lines.push(`  read ${context.resultPath}`);
       lines.push(`  read ${context.progressPath}`);
       for (const path of evidence) lines.push(`  read ${path}`);

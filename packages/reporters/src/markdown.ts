@@ -186,7 +186,10 @@ function stepSection(
   if (error)
     out.push(
       "",
-      "**Why it stopped** (browser error, untrusted)",
+      // Only an error carrying a browser call log came from the browser.
+      error.callLog?.length
+        ? "**Why it stopped** (browser error, untrusted)"
+        : "**Why it stopped**",
       "",
       ...errorBlock(error),
     );

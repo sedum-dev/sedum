@@ -678,6 +678,21 @@ describe("CLI command framework", () => {
   });
 });
 
+describe("unexpected errors", () => {
+  it("does not call an internal failure a parsing problem", async () => {
+    const output = await runCli(["run", "x.test.yaml"], "1.2.3", {
+      executeRun: async () => {
+        throw new Error("Passed attempt has problems");
+      },
+    });
+    expect(output.exitCode).toBe(3);
+    expect(output.stderr).not.toContain("could not be parsed");
+    expect(output.stderr).toContain(
+      "Sedum stopped on an unexpected internal error (Error: Passed attempt has problems).",
+    );
+  });
+});
+
 describe("command hints", () => {
   it("names npx sedum in hints when that is how sedum was invoked", async () => {
     const local = await runCli(["browsers", "install", "firefox"], "1.2.3", {

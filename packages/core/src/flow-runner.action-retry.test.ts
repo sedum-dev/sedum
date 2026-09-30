@@ -246,7 +246,7 @@ describe("action retry boundary", () => {
     ).toEqual([undefined, "vision"]);
     expect(
       run.report.tests[0]?.attempts[0]?.steps[0]?.error?.message,
-    ).toContain("vision http_error (HTTP 429)");
+    ).toContain("(vision http_error, HTTP 429)");
     expect(run.clickRef).not.toHaveBeenCalled();
     expect(run.visionChoose).toHaveBeenCalledTimes(1);
   });

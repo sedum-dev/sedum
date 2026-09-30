@@ -867,8 +867,14 @@ export async function runCli(
           "Fix: correct the command shown above and rerun it, or use `sedum --help`.\n",
         );
     } else {
+      // Anything else escaped a command: it is not a parsing problem, so do
+      // not send the user to --help.
+      const detail =
+        error instanceof Error
+          ? `${error.name}: ${error.message.split("\n")[0]!.slice(0, 200)}`
+          : "unknown error";
       writeErr(
-        "The command could not be parsed safely.\nFix: run `sedum --help` and correct the command.\n",
+        `Sedum stopped on an unexpected internal error (${detail}).\nFix: rerun the command; if it happens again, report it with the run's result.json.\n`,
       );
       exitCode = 3;
     }

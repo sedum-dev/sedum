@@ -13,6 +13,18 @@ import { formatFlowDiagnostic, isFullyValidated } from "./flow-types.js";
 const options = { repoRoot: "/project" };
 
 describe("flow loading", () => {
+  it("says whether a test has neither steps nor goal, or both", () => {
+    const message = (source: string) =>
+      parseFlow(source, "/project/mode.test.yaml", options).diagnostics.find(
+        (item) => item.code === "invalid_test_mode",
+      )?.message;
+    expect(message("stepz: [verify the page loads]\n")).toBe(
+      "This test has neither a `steps` list nor a `goal`.",
+    );
+    expect(
+      message("goal: Sign in\nverify: Signed in\nsteps: [click Login]\n"),
+    ).toBe("This test has both a `steps` list and a `goal`; use one.");
+  });
   it("loads goal and independent verify with positions and validates their bindings", () => {
     const result = parseFlow(
       "data: { user: Ada }\nbefore: [press Escape]\ngoal: Sign in as {{user}}\nverify: Welcome {{user}} is visible\nafter: [press Escape]\n",

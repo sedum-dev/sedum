@@ -492,7 +492,7 @@ describe("run output failure contract", () => {
       paths: ["missing.test.yaml"],
       reporterDir: "reports",
     });
-    expect(output.result.error?.code).toBe("no_tests");
+    expect(output.result.error?.code).toBe("discovery_error");
     expect(output.diagnostic?.code).toBe("output_error");
     expect(
       JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
@@ -633,7 +633,7 @@ describe("run output failure contract", () => {
             symlinkSync("trap", artifacts.junitPath);
         },
       });
-      expect(output.result.error?.code).toBe("no_tests");
+      expect(output.result.error?.code).toBe("discovery_error");
       expect(output.diagnostic?.code).toBe("reporter_output_error");
       expect(
         JSON.parse(await readFile(output.artifacts.resultPath, "utf8")),
@@ -914,7 +914,7 @@ describe("run output failure contract", () => {
       paths: ["private.test.yaml"],
     });
     const resultText = JSON.stringify(output.result);
-    expect(output.result.error?.code).toBe("no_tests");
+    expect(output.result.error?.code).toBe("discovery_error");
     expect(output.result.discoveryProblems?.[0]?.line).toBe(1);
     expect(resultText).not.toContain("password");
     expect(resultText).not.toContain("token=abc");
