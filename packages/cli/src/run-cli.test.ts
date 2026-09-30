@@ -674,3 +674,16 @@ describe("CLI command framework", () => {
     );
   });
 });
+
+describe("command hints", () => {
+  it("names npx sedum in hints when that is how sedum was invoked", async () => {
+    const local = await runCli(["browsers", "install", "firefox"], "1.2.3", {
+      command: "npx sedum",
+    });
+    expect(local.exitCode).toBe(3);
+    expect(local.stderr).toContain("`npx sedum browsers install chromium`");
+    const global = await runCli(["browsers", "install", "firefox"], "1.2.3");
+    expect(global.stderr).toContain("`sedum browsers install chromium`");
+    expect(global.stderr).not.toContain("npx");
+  });
+});

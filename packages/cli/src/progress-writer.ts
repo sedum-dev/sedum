@@ -37,6 +37,8 @@ export class ProgressWriter {
   private draining: Promise<void> | null = null;
   private readonly attemptFolders = new Map<string, Promise<string>>();
   private files: WriterFiles;
+  /** How to invoke sedum in report rerun hints. */
+  command = "sedum";
 
   private constructor(
     readonly directory: string,
@@ -194,7 +196,10 @@ export class ProgressWriter {
           const frames = await this.loadReplayFrames(snapshot);
           await this.atomicWrite(
             "report.html",
-            renderHtml(snapshot, frames ? { replayFrames: frames } : {}),
+            renderHtml(snapshot, {
+              ...(frames ? { replayFrames: frames } : {}),
+              command: this.command,
+            }),
           );
         } catch (cause) {
           throw new ProgressWriterError(this.htmlPath, { cause });
@@ -202,7 +207,10 @@ export class ProgressWriter {
       }
       if (this.files.markdown) {
         try {
-          await this.atomicWrite("report.md", renderMarkdown(snapshot));
+          await this.atomicWrite(
+            "report.md",
+            renderMarkdown(snapshot, { command: this.command }),
+          );
         } catch (cause) {
           throw new ProgressWriterError(this.markdownPath, { cause });
         }
@@ -210,7 +218,10 @@ export class ProgressWriter {
       const junit = this.files.junit;
       if (junit) {
         try {
-          await this.atomicWrite("junit.xml", renderJunit(snapshot, junit));
+          await this.atomicWrite(
+            "junit.xml",
+            renderJunit(snapshot, { ...junit, command: this.command }),
+          );
         } catch (cause) {
           throw new ProgressWriterError(this.junitPath, { cause });
         }
