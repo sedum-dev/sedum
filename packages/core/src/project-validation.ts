@@ -20,6 +20,13 @@ import {
   type SentenceStep,
 } from "./flow-types.js";
 import type { ProviderCall } from "./provider.js";
+import { tokenizeStep } from "./flow-values.js";
+import {
+  isScriptTestFile,
+  loadScriptFile,
+  scriptListingEntries,
+} from "./script-loader.js";
+import { scanScriptSentences } from "./script-sentences.js";
 
 export interface ProjectValidationOptions extends ClassifyFlowOptions {
   /** The real project root returned by `discoverProjectFiles`. */
@@ -134,6 +141,88 @@ function entryUrlDiagnostic(
   }
 }
 
+/**
+ * Import a `*.test.ts` file for its `test()` declarations and classify the
+ * literal sentences its `ai` calls name. Sentences built at run time are
+ * warnings: they can only be classified when they run.
+ */
+async function validateScriptFile(
+  file: string,
+  options: ProjectValidationOptions,
+  classify: ClassifyFlowOptions,
+): Promise<{
+  readonly headers: readonly FlowDefinition[];
+  readonly diagnostics: readonly FlowDiagnostic[];
+  readonly calls: readonly ProviderCall[];
+  readonly coverage: FullValidationCoverage;
+}> {
+  const script = await loadScriptFile(file, { repoRoot: options.repoRoot });
+  const headers = scriptListingEntries(script).flatMap((entry) =>
+    entry.result.value ? [entry.result.value] : [],
+  );
+  const diagnostics: FlowDiagnostic[] = [...script.diagnostics];
+  for (const header of headers) {
+    // A script test without a url starts on a blank page.
+    if (header.url === undefined || options.baseUrl === undefined) continue;
+    const entry = entryUrlDiagnostic(header, options.baseUrl);
+    if (entry)
+      diagnostics.push({
+        ...entry,
+        source:
+          script.tests.find((test) => test.identity === header.identity)
+            ?.source ?? entry.source,
+      });
+  }
+  let source: string;
+  try {
+    source = await readFile(file, "utf8");
+  } catch {
+    return {
+      headers,
+      diagnostics: [
+        ...diagnostics,
+        {
+          severity: "error",
+          code: "unreadable_file",
+          source: { file, line: 1, col: 1 },
+          message: "The test file could not be read.",
+          fix: "Check the file permissions and rerun.",
+        },
+      ],
+      calls: [],
+      coverage: {
+        format: "failed",
+        steps: "not_checked",
+        modules: "not_needed",
+      },
+    };
+  }
+  const scan = scanScriptSentences(source, file);
+  diagnostics.push(...scan.warnings);
+  const sentences: SentenceStep[] = scan.sentences.map((item) => ({
+    kind: "sentence",
+    phase: "steps",
+    text: item.text,
+    tokens: tokenizeStep(item.text).tokens,
+    source: item.source,
+  }));
+  const checked = await classifySentenceSteps(sentences, classify);
+  diagnostics.push(...checked.diagnostics);
+  const complete =
+    checked.classification.steps.every((step) => step !== null) &&
+    checked.diagnostics.length === 0;
+  return {
+    headers,
+    diagnostics,
+    calls: checked.classification.calls,
+    coverage: {
+      format: script.diagnostics.length ? "failed" : "passed",
+      steps: complete ? "checked" : "incomplete",
+      modules: "not_needed",
+    },
+  };
+}
+
 async function checkUnreferencedModule(
   file: string,
   options: ClassifyFlowOptions,
@@ -197,6 +286,23 @@ export async function validateProject(
   let allTestsValidated = true;
 
   for (const file of input.tests) {
+    if (isScriptTestFile(file)) {
+      const checked = await validateScriptFile(file, options, classify);
+      flows.push(...checked.headers);
+      diagnostics.push(...checked.diagnostics);
+      calls.push(...checked.calls);
+      if (!isFullyValidated(checked.coverage, checked.diagnostics))
+        allTestsValidated = false;
+      files.push({
+        file,
+        kind: "test",
+        ...(checked.headers[0]
+          ? { identity: checked.headers[0].identity }
+          : {}),
+        coverage: checked.coverage,
+      });
+      continue;
+    }
     const loaded = await loadFlowFile(file, {
       repoRoot: options.repoRoot,
       ...(options.baseUrl ? { baseUrl: options.baseUrl } : {}),

@@ -16,16 +16,20 @@ outputDir: .sedum/runs
 reporterDir: .sedum/reports
 `;
 
-const EXAMPLE = `description: Sign in to the SauceDemo sample store
-url: https://www.saucedemo.com/
-data:
-  user: standard_user
-  password: $SAUCE_PASSWORD
-steps:
-  - type {{user}} in the username field
-  - type {{password}} in the password field
-  - click the login button
-  - verify a list of products with prices is shown
+const EXAMPLE = `import { test, secret } from "sedum-cli";
+
+test(
+  "a customer signs in to the SauceDemo sample store",
+  { url: "https://www.saucedemo.com/" },
+  async ({ ai, env }) => {
+    await ai("type {{user}} in the username field", { user: "standard_user" });
+    await ai("type {{password}} in the password field", {
+      password: secret(env.SAUCE_PASSWORD ?? ""),
+    });
+    await ai("click the login button");
+    await ai("verify a list of products with prices is shown");
+  },
+);
 `;
 
 const ENV_EXAMPLE = `# Get a TypeSafe key and put it in .env, or set it in your shell.
@@ -182,12 +186,12 @@ export async function executeInitCommand(
     await regularDirectory(path.join(root, "tests"));
     for (const [name, contents] of [
       ["sedum.config.yaml", CONFIG],
-      ["tests/example.test.yaml", EXAMPLE],
+      ["tests/example.test.ts", EXAMPLE],
       [".env.example", ENV_EXAMPLE],
     ] as const) {
       const result = await createOrKeep(path.join(root, name), contents);
       if (name === ".env.example" && result === "kept") keptEnvExample = true;
-      if (name === "tests/example.test.yaml" && result === "created")
+      if (name === "tests/example.test.ts" && result === "created")
         createdExample = true;
       say(`${result} ${name}\n`);
     }
@@ -195,7 +199,7 @@ export async function executeInitCommand(
 
     say("\nSedum runs plain-language tests in a browser.\n");
     if (createdExample) {
-      const title = "── tests/example.test.yaml ";
+      const title = "── tests/example.test.ts ";
       const divider = "─".repeat(54);
       say(`\n${title}${divider.slice(title.length)}\n`);
       say(EXAMPLE);
@@ -249,7 +253,7 @@ export async function executeInitCommand(
         ]);
     }
     next("Run the example", [
-      "sedum run tests/example.test.yaml --headed",
+      "sedum run tests/example.test.ts --headed",
       "This calls the TypeSafe API and may incur a charge.",
     ]);
     return { stdout: output.join(""), stderr: "", exitCode: 0 };

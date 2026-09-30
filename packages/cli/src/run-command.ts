@@ -4,11 +4,14 @@ import {
   ReusableBrowserDriver,
   RunRecorder,
   OpenRouterVisionResolver,
+  isScriptTestFile,
   runFlow,
+  runScriptTest,
   safeText,
   validateRunResult,
   type RunResult,
   type BrowserKind,
+  type FlowRunnerDependencies,
 } from "@sedum-dev/core";
 import {
   DEFAULT_PROVIDER_CONCURRENCY,
@@ -717,7 +720,7 @@ export async function executeRunCommand(
         };
       }
     };
-    let files: readonly string[];
+    let files: readonly { readonly file: string; readonly id: string }[];
     let globalSelectedTests = 0;
     let discoveryProblems: NonNullable<RunResult["discoveryProblems"]> = [];
     try {
@@ -730,7 +733,10 @@ export async function executeRunCommand(
       const selected = options.shard
         ? shardTests(selection.tests, options.shard)
         : selection.tests;
-      files = selected.map((test) => path.join(config.projectRoot, test.file));
+      files = selected.map((test) => ({
+        file: path.join(config.projectRoot, test.file),
+        id: test.id,
+      }));
       discoveryProblems = [
         ...selection.problems,
         ...selection.invalid.flatMap((entry) =>
@@ -809,7 +815,7 @@ export async function executeRunCommand(
           col: 1,
           key: "tests.include",
           message: "The selection matched no valid test files.",
-          fix: "Add a matching *.test.yaml file or correct paths and filters.",
+          fix: "Add a matching *.test.ts or *.test.yaml file, or correct paths and filters.",
         },
       ]);
       const diagnostic = setupDiagnostic(error);
@@ -872,8 +878,13 @@ export async function executeRunCommand(
           items: files,
           lanes,
           signal,
-          run: async (file, lane, ordinal) => {
+          run: async ({ file, id }, lane, ordinal) => {
             const browser = browsers[lane]!;
+            // A `*.test.ts` file can declare several tests; the id selects one.
+            const execute = (dependencies: FlowRunnerDependencies) =>
+              isScriptTestFile(file)
+                ? runScriptTest(file, id, dependencies)
+                : runFlow(file, dependencies);
             for (
               let attempt = 0;
               attempt <= (options.retries ?? 0);
@@ -881,7 +892,7 @@ export async function executeRunCommand(
             ) {
               if (attempt > 0)
                 await recorder.testAt(ordinal)?.startAttempt(lane);
-              const result = await runFlow(file, {
+              const result = await execute({
                 repoRoot: config.projectRoot,
                 browser,
                 provider,

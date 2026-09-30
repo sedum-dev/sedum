@@ -1,6 +1,6 @@
 import {
   listTests,
-  loadFlowFile,
+  loadListingEntries,
   type ProjectFiles,
   type TestListing,
 } from "@sedum-dev/core";
@@ -29,12 +29,9 @@ export async function executeListCommand(options: {
   const { discovery } = context;
   if (discovery.problems.length)
     return { discovery, configErrors: [], listing: null };
-  const parsed = [];
-  for (const file of discovery.tests)
-    parsed.push({
-      file,
-      result: await loadFlowFile(file, { repoRoot: discovery.root }),
-    });
+  const parsed = await loadListingEntries(discovery.tests, {
+    repoRoot: discovery.root,
+  });
   return {
     discovery,
     configErrors: [],

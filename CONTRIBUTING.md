@@ -32,6 +32,13 @@ node packages/cli/dist/cli.js run fixtures/saucedemo-checkout.test.yaml
 
 Add `--headed` to watch the browser while debugging.
 
+The TypeScript examples in [`examples/saucedemo`](examples/saucedemo) run the same way from that folder, after `corepack pnpm build`:
+
+```sh
+cd examples/saucedemo
+node ../../packages/cli/dist/cli.js run
+```
+
 ## Packages
 
 `packages/core` owns engine contracts and the browser script boundary. `packages/provider-typesafe` owns model SDK effects. `packages/reporters` consumes the core result contract. `packages/cli` handles process arguments and composition. The browser bundle is emitted at `packages/core/dist/page-script/index.global.js`.

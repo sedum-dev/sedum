@@ -30,6 +30,9 @@ export {
   testOrder,
   testStatus,
   testStatusLabel,
+  testLabel,
+  rerunArgs,
+  stepText,
 } from "./shared.js";
 export type { TestStatus } from "./shared.js";
 export { isEvidenceDirectory, renderJunit } from "./junit.js";

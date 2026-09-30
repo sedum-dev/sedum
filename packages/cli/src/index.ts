@@ -13,3 +13,18 @@ export type {
 } from "./config.js";
 export type { CliOutput, CliRuntime } from "./run-cli.js";
 export type { OutputCapabilities } from "./output.js";
+export { test, expect, secret } from "@sedum-dev/core/script";
+export type {
+  Ai,
+  AiValue,
+  AiValues,
+  Parser,
+  SecretValue,
+  TestBody,
+  TestContext,
+  TestInfo,
+  TestOptions,
+  Page,
+  BrowserContext,
+  Locator,
+} from "@sedum-dev/core/script";

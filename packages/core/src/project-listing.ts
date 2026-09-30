@@ -1,5 +1,10 @@
 import path from "node:path";
-import { findIdentityCollisions } from "./flow-loader.js";
+import { findIdentityCollisions, loadFlowFile } from "./flow-loader.js";
+import {
+  isScriptTestFile,
+  loadScriptFile,
+  scriptListingEntries,
+} from "./script-loader.js";
 import type { FlowDiagnostic, ParsedFlowResult } from "./flow-types.js";
 import { compareDiagnostics } from "./project-validation.js";
 
@@ -87,4 +92,32 @@ export function listTests(
     });
   }
   return { tests, invalid };
+}
+
+/**
+ * Load test headers for listing and selection. A YAML file is one entry; a
+ * `*.test.ts` file is imported and contributes one entry per `test()`.
+ */
+export async function loadListingEntries(
+  files: readonly string[],
+  options: { readonly repoRoot: string; readonly rejectSymlinks?: boolean },
+): Promise<{ readonly file: string; readonly result: ParsedFlowResult }[]> {
+  const entries: { file: string; result: ParsedFlowResult }[] = [];
+  for (const file of files) {
+    if (isScriptTestFile(file))
+      entries.push(
+        ...scriptListingEntries(
+          await loadScriptFile(file, { repoRoot: options.repoRoot }),
+        ),
+      );
+    else
+      entries.push({
+        file,
+        result: await loadFlowFile(file, {
+          repoRoot: options.repoRoot,
+          ...(options.rejectSymlinks ? { rejectSymlinks: true } : {}),
+        }),
+      });
+  }
+  return entries;
 }

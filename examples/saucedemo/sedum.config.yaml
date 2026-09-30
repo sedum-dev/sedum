@@ -1,0 +1,7 @@
+baseUrl: https://www.saucedemo.com
+tests:
+  directory: tests
+browser: chrome
+viewport: { width: 1280, height: 900 }
+outputDir: .sedum/runs
+reporterDir: .sedum/reports

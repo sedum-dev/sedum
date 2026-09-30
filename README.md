@@ -5,28 +5,61 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
 
-Write browser tests in plain English, and run the whole suite on every pull
-request for dollars a month instead of thousands.
+Write browser tests in plain English, keep the full power of TypeScript, and
+run the whole suite on every pull request for dollars a month instead of
+thousands.
 
 <!-- demo: 15 s GIF of `sedum run --headed` passing, then a false claim failing -->
 
-```yaml
-# tests/login.test.yaml
-description: a customer signs in
-url: https://www.saucedemo.com/
-data:
-  user: standard_user
-  password: $SAUCE_PASSWORD
-steps:
-  - type {{user}} in the username field
-  - type {{password}} in the password field
-  - click the login button
-  - verify a list of products with prices is shown
+```ts
+// tests/checkout.test.ts
+import { faker } from "@faker-js/faker";
+import { test, expect, secret } from "sedum-cli";
+
+test(
+  "a customer checks out",
+  { url: "https://www.saucedemo.com/" },
+  async ({ page, ai, env }) => {
+    await ai.group(
+      "Log in",
+      [
+        "type {{user}} in the username field",
+        "type {{password}} in the password field",
+        "click the login button",
+      ],
+      { user: "standard_user", password: secret(env.SAUCE_PASSWORD!) },
+    );
+
+    await ai("click the Add to cart button for {{product}}", {
+      product: "Sauce Labs Backpack",
+    });
+    await expect(page.locator(".shopping_cart_badge")).toHaveText("1"); // plain Playwright
+
+    await ai("click the shopping cart link");
+    await ai("click the Checkout button");
+    await ai("type {{first}} in the First Name field", {
+      first: faker.person.firstName(),
+    });
+    await ai("type {{last}} in the Last Name field", {
+      last: faker.person.lastName(),
+    });
+    await ai("type {{zip}} in the Zip/Postal Code field", {
+      zip: faker.location.zipCode(),
+    });
+    await ai("click the Continue button");
+    await ai("verify the order summary lists Sauce Labs Backpack");
+  },
+);
 ```
 
 ```sh
-npx sedum run tests/login.test.yaml
+npx sedum run tests/checkout.test.ts
 ```
+
+Each `ai(...)` sentence is one step that Sedum resolves on the page, with no
+selectors. Everything between steps is ordinary code: Playwright's `page` and
+`expect`, test data from any library, API calls to seed or skip setup, and
+helper functions.
 
 Sedum uses a model for two jobs only: finding the element a sentence refers to,
 and judging whether a claim such as "a list of products with prices is shown"
@@ -49,7 +82,7 @@ npm install -D sedum-cli
 npx sedum init                        # an example test, config, and .env.example
 npx sedum browsers install chromium   # if init says it is missing
 cp .env.example .env                  # then set TYPESAFE_API_KEY in .env
-npx sedum run tests/example.test.yaml --headed
+npx sedum run tests/example.test.ts --headed
 ```
 
 For a compatible provider, set `TYPESAFE_BASE_URL` to its API root and
@@ -116,25 +149,53 @@ report.
 
 ## Writing tests
 
-A test is a `*.test.yaml` file with a starting `url` and a list of `steps`.
-Each step is one sentence that does one thing:
+A test is a `test()` in a `*.test.ts` file. Its body gets `ai` for
+plain-English steps, and Playwright's `page` and `context` for everything else.
 
-| You write                                        | Sedum does                        |
-| ------------------------------------------------ | --------------------------------- |
-| `click the Checkout button`                      | finds the button and clicks it    |
-| `type {{postcode}} in the Zip/Postal Code field` | types a value from `data`         |
-| `verify the order summary lists 2 items`         | judges the claim against the page |
-| `remember the price shown as {{price}}`          | stores page text for a later step |
+| You write                                                        | Sedum does                            |
+| ---------------------------------------------------------------- | ------------------------------------- |
+| `await ai("click the Checkout button")`                          | finds the button and clicks it        |
+| `await ai("type {{zip}} in the Zip/Postal Code field", { zip })` | types the value you pass              |
+| `await ai("verify the order summary lists 2 items")`             | judges the claim against the page     |
+| `await ai.extract("the order total")`                            | returns the element's text            |
+| `await ai.group("Checkout", async () => { ... })`                | reports the steps inside under a name |
 
-`{{name}}` refers to a `data` value, and `$VAR` reads an environment variable.
-Values from the environment are treated as secrets and hidden from reports and
-model requests. Put shared steps, such as a login, in a `*.module.yaml` file
-and call it with `use:`.
+Write `{{name}}` in a sentence and pass the value separately, so the sentence
+stays the same on every run and can be checked before a run. Wrap passwords
+and tokens in `secret()`: they are typed, but never sent to the model or shown
+in reports. A file can hold several tests, and each gets a fresh browser
+context. See [TypeScript tests](docs/typescript-tests.md) for the full API, and
+[examples/saucedemo](examples/saucedemo) for a small suite that uses faker,
+skips the login form with a cookie, and checks app state behind the UI.
+
+### YAML tests
+
+Tests that need no code can also be `*.test.yaml` files with a list of
+sentences. Both formats run side by side in one project.
+
+```yaml
+# tests/login.test.yaml
+url: https://www.saucedemo.com/
+data:
+  user: standard_user
+  password: $SAUCE_PASSWORD
+steps:
+  - type {{user}} in the username field
+  - type {{password}} in the password field
+  - click the login button
+  - verify a list of products with prices is shown
+```
+
+`$VAR` reads an environment variable and is treated as a secret. Put shared
+steps in a `*.module.yaml` file and call it with `use:`. See the
+[YAML format](docs/format.md).
 
 ## Learn more
 
-- [Test file format](docs/format.md): data, secrets, modules, `before` and
-  `after` steps, ids, and tags.
+- [TypeScript tests](docs/typescript-tests.md): `test()`, `ai`, values and
+  secrets, groups, `extract`, Playwright between steps, and results.
+- [YAML format](docs/format.md): data, secrets, modules, `before` and `after`
+  steps, ids, and tags.
 - [CLI commands](docs/cli.md): filters, parallel runs and sharding, retries,
   timeouts, reporters, and exit codes.
 - [Running in CI](docs/ci.md): GitHub Actions, GitLab, and Jenkins, with JUnit
@@ -149,8 +210,8 @@ and call it with `use:`.
 
 ## Coming next
 
-Recently shipped: the first alpha on npm, `sedum init` to scaffold a project,
-parallel runs and sharding, and JUnit reports.
+Recently shipped: tests in TypeScript, the first alpha on npm, `sedum init` to
+scaffold a project, parallel runs and sharding, and JUnit reports.
 
 Planned for the 0.1 alpha:
 
@@ -168,7 +229,7 @@ goal: >
 verify: the confirmation page shows an order number
 ```
 
-Use `goal` and a required `verify` claim instead of `steps`. Supply typing values
+Goal tests are YAML only for now. Use `goal` and a required `verify` claim instead of `steps`. Supply typing values
 through `data`; `before` and `after` hooks remain available. Run and validate the
 file with the same CLI commands as authored-step tests. See [goal mode](docs/goal-mode.md)
 for budgets, reporting, supported operations and recorded limitations.

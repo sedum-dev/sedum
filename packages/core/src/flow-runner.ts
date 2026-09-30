@@ -146,15 +146,18 @@ export interface FlowRunnerDependencies {
 type RunReport = NonNullable<FlowRunnerDependencies["report"]>;
 
 /** One attempt's report: its own test handle and its own privacy state. */
-type AttemptReport = Omit<RunReport, "recorder" | "slot"> & {
+/** @internal */
+export type AttemptReport = Omit<RunReport, "recorder" | "slot"> & {
   readonly test: TestRecording;
 };
 
-type AttemptDependencies = Omit<FlowRunnerDependencies, "report"> & {
+/** @internal Shared with the script runner. */
+export type AttemptDependencies = Omit<FlowRunnerDependencies, "report"> & {
   readonly report?: AttemptReport;
 };
 
-function resultCall(
+/** @internal */
+export function resultCall(
   call: ProviderCall,
   purpose: ResultCall["purpose"],
   apiMs: number | null = null,
@@ -179,7 +182,8 @@ function resultCall(
   };
 }
 
-function firstDiagnostic(
+/** @internal */
+export function firstDiagnostic(
   diagnostics: readonly FlowDiagnostic[],
 ): FlowRunResult {
   const diagnostic = diagnostics.find((item) => item.severity === "error");
@@ -193,7 +197,8 @@ function firstDiagnostic(
   };
 }
 
-function unsupported(
+/** @internal */
+export function unsupported(
   file: string,
   source: FlowSource,
   message: string,
@@ -207,7 +212,8 @@ function unsupported(
   };
 }
 
-function runtimeFailure(file: string, error: unknown): FlowRunResult {
+/** @internal */
+export function runtimeFailure(file: string, error: unknown): FlowRunResult {
   if (error instanceof BrowserDriverError) {
     const details: Record<
       typeof error.code,
@@ -333,7 +339,10 @@ export function resolveEntryUrl(
   return resolved.href;
 }
 
-async function closeQuietly(resource: { close(): Promise<void> } | undefined) {
+/** @internal */
+export async function closeQuietly(
+  resource: { close(): Promise<void> } | undefined,
+) {
   await resource?.close().catch(() => undefined);
 }
 
@@ -406,12 +415,20 @@ async function reobserve(
   return resolved;
 }
 
-async function executeSentence(
+/** How a script step is shown: its group path and, for extracts, its words. */
+export interface SentencePresentation {
+  readonly group?: readonly string[];
+  readonly display?: string;
+}
+
+/** @internal Execute one classified sentence and record it as one step. */
+export async function executeSentence(
   page: BrowserPage,
   step: ClassifiedFlowSentence,
   dependencies: AttemptDependencies,
   data: Record<string, ResolvedDataEntry>,
   opaqueEntries: ResolvedDataEntry[],
+  presentation: SentencePresentation = {},
 ): Promise<"continue" | "failed" | FlowRunResult> {
   const started = performance.now();
   const report = dependencies.report;
@@ -538,8 +555,15 @@ async function executeSentence(
       kind,
       operation: step.op,
       phase: step.phase,
-      sentence: safeText(step.text, privacy, 512),
+      sentence: safeText(presentation.display ?? step.text, privacy, 512),
       detail: safeText(facts.detail ?? "", privacy, 512),
+      ...(presentation.group?.length
+        ? {
+            group: presentation.group.map((name) =>
+              safeText(name, privacy, 120),
+            ),
+          }
+        : {}),
       sourceStack: (step.sourceStack ?? [step.source]).map((source) =>
         safeSource(source, dependencies.repoRoot, privacy),
       ),

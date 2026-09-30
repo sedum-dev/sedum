@@ -210,6 +210,41 @@ it("always includes changed tests and module dependents even when Jev returns ze
   ]);
 });
 
+it("scores a TypeScript test file once and forces it when it changed", async () => {
+  await fixture();
+  const source = (claim: string) =>
+    `import { test } from "sedum-cli";\ntest("a", async ({ ai }) => { await ai("verify ${claim}"); });\ntest("b", async ({ ai }) => { await ai("verify cart total"); });\n`;
+  await write("tests/shop.test.ts", source("the shop"));
+  git("add", ".");
+  git("commit", "-m", "add typescript tests");
+  await write("tests/shop.test.ts", source("the new shop"));
+  const scored: string[] = [];
+  const selection = await selectAffectedTests({
+    cwd: root,
+    paths: [],
+    filters: {},
+    threshold: 1,
+    createProvider: () => ({
+      scoreRelevance: async (_diff, tests) => {
+        scored.push(...tests.map((test) => test.file));
+        return { probabilities: tests.map(() => 0), calls: [] };
+      },
+    }),
+  });
+  expect(scored).toEqual([
+    "tests/cart.test.yaml",
+    "tests/profile.test.yaml",
+    "tests/shop.test.ts",
+  ]);
+  expect(
+    selection.tests.map((test) => [test.file, test.selected, test.reason]),
+  ).toEqual([
+    ["tests/cart.test.yaml", false, "model"],
+    ["tests/profile.test.yaml", false, "model"],
+    ["tests/shop.test.ts", true, "test-or-module-changed"],
+  ]);
+});
+
 it("forces dependents of a retargeted module symlink even with zero relevance", async () => {
   await fixture();
   await write(

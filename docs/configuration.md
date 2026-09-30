@@ -8,7 +8,7 @@ Paths and test globs are always relative to that root.
 ```yaml
 tests:
   directory: tests
-  include: ["**/*.test.yaml"]
+  include: ["**/*.test.ts", "**/*.test.yaml"]
   exclude: []
 
 browser: chrome
@@ -38,9 +38,10 @@ environments:
 ```
 
 Every key is optional. With no positional file, `sedum run` discovers regular
-`*.test.yaml` files under `tests.directory`, applies the include/exclude globs,
-and runs the sorted result. Symlinked directories are not followed. An explicit
-`sedum run path/to/file.test.yaml` remains supported.
+`*.test.ts` and `*.test.yaml` files under `tests.directory`, applies the
+include/exclude globs, and runs the sorted result. Each `test()` in a
+`*.test.ts` file is one test. Symlinked directories are not followed. An
+explicit `sedum run path/to/file.test.ts` remains supported.
 
 Settings resolve from defaults, then the top-level config, then the selected
 named environment, then explicit command overrides. Named environments may

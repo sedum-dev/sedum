@@ -14,7 +14,8 @@ import {
   duration,
   score,
   selectedAttempt,
-  shellArg,
+  rerunArgs,
+  stepText,
   sourceStack,
   testOrder,
   testStatus,
@@ -290,7 +291,7 @@ function stepRow(step: ResultStep, attemptId: string): string {
     '<span class="what ' +
     (step.kind !== "action" ? "claim" : "") +
     '">' +
-    esc(step.sentence) +
+    esc(stepText(step)) +
     "</span>" +
     detail +
     flags +
@@ -350,7 +351,7 @@ function replay(
         src: data ? "data:image/jpeg;base64," + data : null,
         status:
           frame.status === "captured" && !data ? "unavailable" : frame.status,
-        label: step.index + ". " + step.operation + " " + step.sentence,
+        label: step.index + ". " + step.operation + " " + stepText(step),
         step: step.index,
         attempt: attempt.id,
         box: step.targetBox,
@@ -492,7 +493,7 @@ function testSection(
     "</span>" +
     (test.tags.length ? "<span>" + esc(test.tags.join(", ")) + "</span>" : "") +
     '</p><p class="rerun"><span class="label">rerun</span> <code>sedum run ' +
-    esc(shellArg(test.file)) +
+    esc(rerunArgs(test)) +
     "</code></p>" +
     (test.goal
       ? '<section class="goal goal-context" aria-label="Goal and verification"><h3 class="label">Goal</h3><p class="goal-text">' +

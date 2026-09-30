@@ -10,10 +10,11 @@ import {
   needsAttention,
   runIsTrustworthy,
   score,
+  rerunArgs,
   selectedAttempt,
-  shellArg,
   sourceStack,
   stepStatus,
+  stepText,
 } from "./shared.js";
 
 /*
@@ -227,7 +228,7 @@ function stepLines(
   evidenceDirectory: string | null,
 ): string[] {
   const out = [
-    `${stepStatus(step)} — ${step.phase} step ${step.index} (${step.kind}): ${oneLine(step.sentence) || "(no sentence recorded)"}`,
+    `${stepStatus(step)} — ${step.phase} step ${step.index} (${step.kind}): ${oneLine(stepText(step)) || "(no sentence recorded)"}`,
     `  where: ${sourceStack(step.sourceStack)}`,
   ];
   if (step.detail) out.push(`  result: ${oneLine(step.detail)}`);
@@ -307,7 +308,7 @@ function attentionLines(
   if (attempt.timeoutReason) out.push(`timeout: ${attempt.timeoutReason}`);
   const history = earlierAttempts(test);
   if (history) out.push(history);
-  out.push(`rerun: sedum run ${shellArg(test.file)}`);
+  out.push(`rerun: sedum run ${rerunArgs(test)}`);
   return out;
 }
 

@@ -1,0 +1,14 @@
+{
+  "name": "@sedum-dev/example-saucedemo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "sedum run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "10.6.0",
+    "sedum-cli": "workspace:*"
+  }
+}

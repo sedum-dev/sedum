@@ -20,8 +20,13 @@ export interface ProjectFiles {
   readonly problems: readonly DiscoveryProblem[];
 }
 
-const TEST_SUFFIX = ".test.yaml";
+/** YAML tests and TypeScript tests; a `*.test.ts` file may declare several. */
+export const TEST_SUFFIXES = [".test.yaml", ".test.ts"] as const;
 const MODULE_SUFFIX = ".module.yaml";
+
+function isTestFile(name: string): boolean {
+  return TEST_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
 
 function contains(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
@@ -93,7 +98,7 @@ export async function discoverProjectFiles(
       fix: "Run the command from the project root, or pass paths inside it.",
     });
   const add = (file: string) => {
-    if (file.endsWith(TEST_SUFFIX)) tests.add(file);
+    if (isTestFile(file)) tests.add(file);
     else modules.add(file);
   };
 
@@ -119,7 +124,7 @@ export async function discoverProjectFiles(
       }
       const found = await walkSuiteFiles(
         real,
-        [TEST_SUFFIX, MODULE_SUFFIX],
+        [...TEST_SUFFIXES, MODULE_SUFFIX],
         (folder) =>
           problems.push({
             code: "unreadable_directory",
@@ -132,11 +137,11 @@ export async function discoverProjectFiles(
       continue;
     }
     const name = path.basename(absolute);
-    if (!name.endsWith(TEST_SUFFIX) && !name.endsWith(MODULE_SUFFIX)) {
+    if (!isTestFile(name) && !name.endsWith(MODULE_SUFFIX)) {
       problems.push({
         code: "unsupported_file",
         path: requested,
-        message: `${requested} is not a *.test.yaml or *.module.yaml file.`,
+        message: `${requested} is not a *.test.ts, *.test.yaml, or *.module.yaml file.`,
         fix: "Pass a test file, a module file, or a directory.",
       });
       continue;

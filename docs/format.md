@@ -1,6 +1,11 @@
-# Test file format
+# YAML test format
 
-A test is one `*.test.yaml` file. Its path relative to the repository is its identity; use an optional `id` to keep that identity stable across renames. Use `description` for a human-readable title. You can omit `sedum`; it means format version 1. `sedum: 1` is also accepted.
+Tests can be written in TypeScript or YAML. [TypeScript tests](typescript-tests.md)
+are the default and can run code between steps; this page describes YAML
+tests, which are a list of sentences and need no code. Both formats run side by
+side in one project.
+
+A YAML test is one `*.test.yaml` file. Its path relative to the repository is its identity; use an optional `id` to keep that identity stable across renames. Use `description` for a human-readable title. You can omit `sedum`; it means format version 1. `sedum: 1` is also accepted.
 
 ```yaml
 description: a customer signs in
