@@ -153,3 +153,37 @@ describe("cache outcome in terminal summary", () => {
     }
   });
 });
+
+describe("vision fallback in terminal summary", () => {
+  it("says whether vision ran and warns about a rejected key", async () => {
+    const render = async (key: "accepted" | "rejected") => {
+      const recorder = new RunRecorder(async () => undefined, `vision-${key}`);
+      await recorder.start();
+      await recorder.selectTests(0, {
+        parallel: { requested: 1, lanes: 1 },
+        shard: null,
+        providerConcurrency: 2,
+        vision: { model: "google/gemini-3.8-flash", key },
+      });
+      await recorder.finish();
+      return renderRunSummary(
+        recorder.snapshot,
+        { stdoutIsTTY: false, stderrIsTTY: false, color: false },
+        {
+          progressPath: "progress.json",
+          resultPath: "result.json",
+          authoritative: true,
+        },
+        false,
+      );
+    };
+    const accepted = await render("accepted");
+    expect(accepted).toContain(
+      "vision google/gemini-3.8-flash: enabled, not used; every click was resolved from the page text",
+    );
+    expect(accepted).not.toContain("vision warning");
+    expect(await render("rejected")).toContain(
+      "vision warning: OpenRouter rejected OPEN_ROUTER_API_KEY",
+    );
+  });
+});

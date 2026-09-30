@@ -223,6 +223,13 @@ export const ResultExecutionSchema = z.strictObject({
     })
     .nullable(),
   providerConcurrency: z.number().int().positive(),
+  /** Present when vision fallback is enabled; `key` is checked before tests run. */
+  vision: z
+    .strictObject({
+      model: z.string().min(1).max(200),
+      key: z.enum(["accepted", "rejected", "unreachable"]),
+    })
+    .optional(),
 });
 export const RunResultSchema = z.strictObject({
   schemaVersion: z.literal(1),

@@ -1,6 +1,11 @@
 import { lstat, mkdir, mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { findBrowserExecutable, type BrowserKind } from "@sedum-dev/core";
+import {
+  findBrowserExecutable,
+  probeOpenRouterKey,
+  type BrowserKind,
+  type VisionKeyProbe,
+} from "@sedum-dev/core";
 import {
   probeTypeSafeApiKey,
   type AuthProbeResult,
@@ -19,6 +24,8 @@ export type DoctorCheckId =
   | "api_network"
   | "api_key"
   | "api_auth"
+  | "vision_key"
+  | "vision_auth"
   | "output";
 
 export interface DoctorCheck {
@@ -43,6 +50,12 @@ export interface DoctorProbes {
     options: { readonly baseURL: string; readonly model: string },
   ) => Promise<AuthProbeResult>;
   readonly output?: (config: ResolvedProjectConfig) => Promise<void>;
+  readonly visionAuth?: (apiKey: string) => Promise<VisionKeyProbe>;
+}
+
+export interface DoctorOptions {
+  /** Check the vision fallback's OpenRouter key even when config leaves it off. */
+  readonly vision?: boolean;
 }
 
 const pass = (id: DoctorCheckId, message: string): DoctorCheck => ({
@@ -136,6 +149,7 @@ export async function checkOutputWritable(
 export async function executeDoctorCommand(
   cwd: string,
   probes: DoctorProbes = {},
+  options: DoctorOptions = {},
 ): Promise<DoctorResult> {
   const checks: DoctorCheck[] = [];
   const version = probes.nodeVersion ?? process.versions.node;
@@ -284,6 +298,49 @@ export async function executeDoctorCommand(
                 "Check API availability and account access, then retry.",
               ),
     );
+  }
+
+  if (config && (options.vision || config.vision.enabled)) {
+    const visionKey = config.visionApiKey?.trim();
+    checks.push(
+      visionKey
+        ? pass(
+            "vision_key",
+            "OpenRouter API key for vision fallback is present.",
+          )
+        : fail(
+            "vision_key",
+            "Vision fallback is enabled but OPEN_ROUTER_API_KEY is missing.",
+            "Set OPEN_ROUTER_API_KEY in the environment or the project-root .env.",
+          ),
+    );
+    if (visionKey) {
+      const result = await (probes.visionAuth ?? probeOpenRouterKey)(
+        visionKey,
+      ).catch((): VisionKeyProbe => "unreachable");
+      checks.push(
+        result === "accepted"
+          ? pass("vision_auth", "OpenRouter accepted the vision key.")
+          : result === "rejected"
+            ? fail(
+                "vision_auth",
+                "OpenRouter rejected OPEN_ROUTER_API_KEY.",
+                "Replace OPEN_ROUTER_API_KEY with a valid OpenRouter key and rerun doctor.",
+              )
+            : fail(
+                "vision_auth",
+                "OpenRouter could not be reached to check the vision key.",
+                "Check access to https://openrouter.ai and retry.",
+              ),
+      );
+    } else
+      checks.push(
+        fail(
+          "vision_auth",
+          "The vision key could not be checked without a key.",
+          "Set OPEN_ROUTER_API_KEY, then rerun doctor.",
+        ),
+      );
   }
 
   if (config) {

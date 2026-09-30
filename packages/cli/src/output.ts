@@ -80,6 +80,25 @@ function executionLines(value: RunResult): string[] {
       ]),
     ),
   ];
+  if (execution?.vision) {
+    const steps = value.tests.flatMap((test) =>
+      test.attempts.flatMap((attempt) => attempt.steps),
+    );
+    const used = steps.filter((step) => step.locator?.vision).length;
+    lines.push(
+      used
+        ? `vision ${execution.vision.model}: used on ${used} step(s)`
+        : `vision ${execution.vision.model}: enabled, not used; every click was resolved from the page text`,
+    );
+    if (execution.vision.key === "rejected")
+      lines.push(
+        "vision warning: OpenRouter rejected OPEN_ROUTER_API_KEY, so vision fallback cannot work. Check it with `sedum doctor --vision`.",
+      );
+    else if (execution.vision.key === "unreachable")
+      lines.push(
+        "vision warning: OpenRouter could not be reached to check OPEN_ROUTER_API_KEY.",
+      );
+  }
   const limited = calls.filter((call) => call.rateLimited).length;
   const waitMs = calls.reduce(
     (sum, call) => sum + (call.rateLimitWaitMs ?? 0),

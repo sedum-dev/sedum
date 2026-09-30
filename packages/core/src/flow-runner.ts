@@ -1065,7 +1065,17 @@ async function executeSentence(
           code: resolved.reason,
           message: resolved.diagnostic.vision?.failure
             ? `Could not resolve this ${step.op} step: vision ${resolved.diagnostic.vision.failure}${resolved.diagnostic.vision.httpStatus ? ` (HTTP ${resolved.diagnostic.vision.httpStatus})` : ""}.`
-            : `Could not resolve this ${step.op} step.`,
+            : dependencies.visionResolver && step.op === "click"
+              ? resolved.diagnostic.vision?.outcome === "abstained"
+                ? `Could not resolve this ${step.op} step: the vision model did not find a matching element either.`
+                : !resolved.diagnostic.vision
+                  ? `Could not resolve this ${step.op} step. Vision fallback could not run: ${
+                      resolved.reason === "no_candidates"
+                        ? "the page offered no clickable elements"
+                        : "it needs 2 to 40 fully visible, unobscured controls on screen"
+                    }.`
+                  : `Could not resolve this ${step.op} step.`
+              : `Could not resolve this ${step.op} step.`,
         },
       });
     return record(
