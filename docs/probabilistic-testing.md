@@ -200,6 +200,15 @@ If a step keeps getting `low_confidence` or `contradiction`, read the page
 text in the report. Usually the claim is vague, or the page really does say
 two things.
 
+The judge reads the page's text, not its pixels. Colors, icons without a
+name, images and layout are not in that text, so a claim about them cannot be
+confirmed. One visual case is covered: a bare count on an icon-only control,
+such as the "1" on a cart icon, appears as `cart icon badge: 1` when the
+control's class, id or test hook names a known icon (cart, notifications,
+menu, and similar). For anything else visual, claim the text the change
+produces instead, for example `verify the Sauce Labs Backpack button now says
+Remove` rather than a claim about a colored badge.
+
 ## What the scores are not
 
 The scores are the model's confidence, not measured frequencies. A score of

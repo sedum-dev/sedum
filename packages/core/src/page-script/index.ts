@@ -710,6 +710,46 @@ if (!window.__sedum) {
     if (kbdText && kbdText === shown) addPart("keyboard shortcut");
     return parts.join(", ");
   }
+  /**
+   * The icon kind a bare count belongs to, such as "cart" for the "1" in a
+   * cart link's badge. A count alone ("Swag Labs 1 Products") says nothing a
+   * reader of the page text could check, while a person sees it on the icon.
+   * Looks at the count's own element and up to three ancestors, stopping at
+   * the first control, and only when that control shows no other text.
+   */
+  function countBadgeKind(node: Element, count: string): string {
+    const tokens: string[] = [];
+    let control: Element | null = null;
+    for (
+      let current: Element | null = node, depth = 0;
+      current && current !== document.body && depth < 4;
+      current = composedParent(current), depth++
+    ) {
+      tokens.push(
+        ...[
+          current.getAttribute("class") ?? "",
+          current.id,
+          current.getAttribute("data-test") ?? "",
+          current.getAttribute("data-testid") ?? "",
+        ]
+          .join(" ")
+          .toLocaleLowerCase()
+          .split(/\s+/)
+          .map((token) => token.replace(/[_:#/.]+/g, "-"))
+          .filter(Boolean),
+      );
+      if (interactive(current)) {
+        control = current;
+        break;
+      }
+    }
+    if (!control) return "";
+    if (publicText(control, true).replace(/\s+/g, "") !== count) return "";
+    const kind = ICON_KINDS.find(([pattern]) =>
+      tokens.some((token) => pattern.test(token)),
+    );
+    return kind?.[1] ?? "";
+  }
   function clippedAway(element: Element): boolean {
     const box = element.getBoundingClientRect();
     const x = box.left + box.width / 2;
@@ -1496,8 +1536,13 @@ if (!window.__sedum) {
         continue;
       }
       if (!parent || !visible(parent) || excludedTextAncestor(parent)) continue;
-      const part = (node.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (!part) continue;
+      const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!text) continue;
+      const kind = /^\d{1,4}\+?$/.test(text)
+        ? countBadgeKind(parent, text)
+        : "";
+      // The control shows only this count, so it is a badge on the icon.
+      const part = kind ? `${kind} icon badge: ${text}` : text;
       size += Array.from(part).length + (pieces.length ? 1 : 0);
       if (size > DIGEST_LIMIT)
         return {

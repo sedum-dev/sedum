@@ -355,6 +355,20 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       ).toBe("lohi");
       await context.close();
     });
+    it("names a bare count by the icon it sits on in the page text", async () => {
+      const { page, context } = await fresh();
+      await page.evaluate(`document.querySelector('#app').innerHTML =
+        '<header><a class="shopping_cart_link" data-test="shopping-cart-link" href="#cart"><span class="shopping_cart_badge">1</span></a><span>Products</span></header>' +
+        '<p>Items left: <span>3</span></p>' +
+        '<nav><a class="pager" href="#p2">2</a><a class="notifications-bell" href="#n">12+</a></nav>'`);
+      const digest = await pageDigest(page);
+      expect(digest.complete).toBe(true);
+      expect(digest.text).toContain("cart icon badge: 1 Products");
+      // A count outside a control, or in a control with no icon kind, is kept as is.
+      expect(digest.text).toContain("Items left: 3");
+      expect(digest.text).toMatch(/(?:^| )2 notifications icon badge: 12\+/u);
+      await context.close();
+    });
     it("resolves a repeated product button on a dense local page without a wrong click", async () => {
       const { page, context } = await fresh();
       await page.evaluate(`document.querySelector('#app').innerHTML =
