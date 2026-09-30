@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { BrowserPage } from "./browser-driver.js";
-import { pageVersion, visualCandidates } from "./page-bridge.js";
+import { pageVersion, quietPage, visualCandidates } from "./page-bridge.js";
 import type { Candidate, PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
@@ -271,6 +271,13 @@ export async function captureVisionObservation(
   candidates: readonly Candidate[];
 } | null> {
   if (!page.captureFrame) return null;
+  // Navigation can look ready while delayed UI work (for example a closing
+  // menu) is still pending. Settle before spending the single vision request,
+  // using the same bounded quiet period as the runner's stale re-observation.
+  // Never relabel an old candidate set against a newer page revision.
+  const settled = await quietPage(page, 1_000, 4_000);
+  if (!settled.quiet || !sameVisualVersion(settled.version, version))
+    return null;
   const visual = await visualCandidates(page);
   if (!sameVisualVersion(visual.version, version)) return null;
   const boxes = visual.boxes.filter((box) =>

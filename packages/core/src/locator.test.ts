@@ -1854,29 +1854,33 @@ describe("vision fallback boundaries", () => {
       }
     },
   );
-  it("reports a page that moved under the vision capture as stale, not ambiguous", async () => {
-    const { vision, jev } = setup();
-    const recorded = recordedPage(items);
-    // The page settles after the text model answered: its revision moves
-    // and the capture's snapshot check throws.
-    vi.mocked(captureVisionObservation).mockImplementationOnce(async () => {
-      recorded.setVersion({ ...initial, revision: initial.revision + 1 });
-      throw new Error("stale visual observation");
-    });
-    const result = await resolveTarget(recorded.page, jev, {
-      operation: "click",
-      sentence: "click the Edit next to the mountain photo",
-      visionResolver: vision,
-    });
-    expect(result).toMatchObject({
-      kind: "unresolved",
-      reason: "stale",
-      diagnostic: {
-        gate: "repeated_member_no_evidence:vision_stale_capture",
-      },
-    });
-    expect(vision.choose).not.toHaveBeenCalled();
-  });
+  it.each(["throw", "null"])(
+    "reports a stale %s capture before spending the vision request",
+    async (mode) => {
+      const { vision, jev } = setup();
+      const recorded = recordedPage(items);
+      // The page settles after the text model answered: its revision moves
+      // and either the snapshot check throws or capture declines the frame.
+      vi.mocked(captureVisionObservation).mockImplementationOnce(async () => {
+        recorded.setVersion({ ...initial, revision: initial.revision + 1 });
+        if (mode === "null") return null;
+        throw new Error("stale visual observation");
+      });
+      const result = await resolveTarget(recorded.page, jev, {
+        operation: "click",
+        sentence: "click the Edit next to the mountain photo",
+        visionResolver: vision,
+      });
+      expect(result).toMatchObject({
+        kind: "unresolved",
+        reason: "stale",
+        diagnostic: {
+          gate: "repeated_member_no_evidence:vision_stale_capture",
+        },
+      });
+      expect(vision.choose).not.toHaveBeenCalled();
+    },
+  );
   it("offers count-varying controls with distinct destinations to vision", async () => {
     const links = items.map((item, index) => ({
       ...item,
@@ -1972,13 +1976,17 @@ describe("vision fallback boundaries", () => {
           call,
         };
       });
-      expect(
-        await resolveTarget(page, jev, {
-          operation: "click",
-          sentence: "click the right Edit",
-          visionResolver: vision,
-        }),
-      ).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+      const result = await resolveTarget(page, jev, {
+        operation: "click",
+        sentence: "click the right Edit",
+        visionResolver: vision,
+      });
+      expect(result).toMatchObject({ kind: "unresolved", reason: "ambiguous" });
+      if (mode === "stale")
+        expect(result.diagnostic.vision).toMatchObject({
+          outcome: "failed",
+          failure: "stale_page",
+        });
       expect(vision.choose).toHaveBeenCalledTimes(1);
     },
   );
@@ -2023,7 +2031,13 @@ describe("vision fallback boundaries", () => {
     expect(abstained).toMatchObject({
       kind: "unresolved",
       reason: "none",
-      diagnostic: { vision: { outcome: "abstained" } },
+      diagnostic: {
+        vision: {
+          outcome: "abstained",
+          reason: "none",
+          abstentionReason: "no visible match",
+        },
+      },
     });
     // Without vision, "none" is unchanged.
     expect(

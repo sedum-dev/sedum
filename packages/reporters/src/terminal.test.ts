@@ -3,6 +3,26 @@ import path from "node:path";
 import { RunRecorder, type ResultStep, type RunResult } from "@sedum-dev/core";
 import { ReporterLifecycle } from "./lifecycle.js";
 import { createTerminalReporter, type ReporterContext } from "./terminal.js";
+import { visionSummary } from "./shared.js";
+
+it("distinguishes the vision trigger from its abstention reason", () => {
+  const observed = step();
+  observed.locator = {
+    source: "none",
+    confidence: null,
+    options: [],
+    cache: null,
+    vision: {
+      outcome: "abstained",
+      reason: "none",
+      abstentionReason: "insufficient_visual_evidence",
+      elapsedMs: 20,
+    },
+  };
+  expect(visionSummary(observed)).toBe(
+    "Vision fallback: abstained · model unrecorded · 20 ms · trigger: none · abstention: insufficient_visual_evidence",
+  );
+});
 
 const context: ReporterContext = {
   stdoutIsTTY: false,
