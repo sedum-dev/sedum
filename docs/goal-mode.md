@@ -23,8 +23,10 @@ must be nonblank strings; mixing them with `steps` is invalid. Module files
 remain authored steps. Existing `before`/`after` hooks and module calls work:
 failed setup skips the goal, and teardown runs after ordinary goal failures.
 
-Goals type only supplied `data` or values remembered by setup, not generated
-text. Environment-derived values remain opaque. A goal must earn an unflagged
+With the TypeSafe provider, goals can automatically generate synthetic data
+with Faker when no applicable supplied or remembered value exists. No profile
+or `generate` declaration is needed. Environment-derived values remain opaque.
+A goal must earn an unflagged
 independent verification pass using configured assertion thresholds. The
 planner's DONE is never itself a passing verdict. Goal execution retains
 24-request, 18-action and 120-second defaults; global CLI cancellation also
@@ -40,7 +42,72 @@ values. Run with `--replay` to inspect post-action frames in the HTML player;
 sensitive pages remain excluded. Replay is a visual review of the recorded run,
 not a re-execution of its actions. Planner/Judge usage is counted only once.
 The underlying API remains `runGoal(page, planner, judge, options)` with
-`TypeSafeAdapter.chooseGoal`. Authored-step execution is unchanged.
+`TypeSafeAdapter.chooseGoal` and `chooseGoalValue`. Authored-step execution is unchanged.
+
+## Automatic data proof of concept
+
+```yaml
+url: /signup
+goal: Create a new test account and complete its profile.
+verify: The profile was saved successfully.
+```
+
+For each fill, Jev first chooses a field, then makes a second bounded Choice
+among supplied bindings, remembered generated bindings, 180 local Faker
+generators, and `BLOCKED`. Both requests count against the goal budget. Faker
+executes locally; there is no text-generation model or model-authored code.
+Supplied binding names are visible to the operation planner, including when
+their values are secret. Custom planners without `chooseGoalValue` retain the
+original supplied-binding-only behavior.
+
+Generated values live for one goal invocation. Each gets a stable binding ID,
+generator identity, original field/page context, and successful-use context.
+Confirmation fields and later pages can reuse that ID; a different entity can
+select a new value from the same generator. Values stay opaque in model inputs
+and report text; screenshots/video are not masked. A field already containing
+known data is omitted from fill choices. A provably pre-dispatch stale retry
+retains its selected value. Unknown dispatch outcomes stop the goal.
+
+The TypeScript `runGoal` options accept `dataSeed`, returned on `GoalResult`;
+otherwise the runner chooses a random seed. The POC uses English/base locale
+data and pinned Faker 10.6.0. Reproduction also requires the same sequence of
+generator choices. YAML needs no new syntax and does not yet expose a seed.
+
+Limitations: applicable-value selection and refusing to fabricate existing
+credentials are model instructions, not a security guarantee. Use disposable
+test environments. The catalog excludes arbitrary helpers, payment credentials,
+structured results, and date methods needing formatting/reference dates. Email
+generation uses reserved example domains. Independently generated attributes
+do not yet form a coherent person/address; uniqueness is not guaranteed.
+Native constraints and length limits are checked before filling, but custom
+application validation is not inferred. Constraint mismatch stops the goal;
+there is no regeneration loop or automatic correction of already-filled data.
+The complete value-choice list (catalog + bindings + BLOCKED) must fit 255
+options and the existing provider request-size bound.
+
+Reproduce the live local experiment with Node 22.18+ and `TYPESAFE_API_KEY`
+available in the environment:
+
+```sh
+pnpm build
+node scripts/goal-faker-experiment.ts
+```
+
+The script starts and closes a disposable fixture server and fresh browser
+contexts. It writes timestamped JSON receipts and screenshots under
+`.amp/in/artifacts/goal-faker`; it makes paid Jev calls, never contacts a real
+signup service, and does not retry failed goals until they pass.
+
+Two initial live runs on 2026-09-30 used `jev-1.13.0`. Both made the six correct
+value-source choices: first name, account email, reuse for confirmation,
+biography, a new recipient email, and reuse of the account email on a second
+page. Both dispatched 8 actions in 16 requests and passed every exact DOM/data
+check. **Both remained failed goals** because the independent Judge rejected
+the visible confirmation; no gates were relaxed. Missing-credentials controls
+typed nothing: one operation abstention and one explicit value `BLOCKED`.
+The first experiment used Bun and encountered a fixture-server shutdown error
+after saving its receipts; the documented Node invocation exited normally.
+These are feasibility observations, not a reliability estimate.
 
 ## Decision and execution boundaries
 
@@ -49,8 +116,9 @@ The design follows `model.py` (`action_space`, `choose`), `agent.py`, and
 
 1. Observe Sedum's complete digest and click/fill candidates.
 2. Offer `CLICK`, `TYPE`, `DONE`, and `BLOCKED`; omit unavailable operations.
-   `TYPE` choices are observed field/supplied data-binding pairs. No generative
-   text model, model-authored selectors, JavaScript, coordinates, or URLs.
+   `TYPE` chooses an observed field when automatic data is supported; otherwise
+   it chooses a field/supplied-binding pair. No generative text model,
+   model-authored selectors, JavaScript, coordinates, or URLs.
 3. Ask the operation question and speculative operation-specific target
    questions in **one** System One request. Shared state includes the offered
    targets, redacted page digest, and ten recent actions.
@@ -59,6 +127,8 @@ The design follows `model.py` (`action_space`, `choose`), `agent.py`, and
    Apply the strict locator's confidence floor 0.3 and default lead floor 0.1.
    Experimental `operationMinMargin` changes only the operation lead floor;
    target gates and independent verification remain unchanged.
+   Automatic fills then make a value-source request with the same confidence
+   and margin gates, before the freshness checks and dispatch below.
 5. Sedum has one operation-specific snapshot, so recollect the chosen operation
    and require the exact page version and whole candidate surface to match.
    Remap its private reference, then execute through `executeStep`.

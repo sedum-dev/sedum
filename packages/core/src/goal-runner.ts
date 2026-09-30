@@ -1,4 +1,6 @@
 import type { BrowserPage } from "./browser-driver.js";
+import { randomInt } from "node:crypto";
+import { goalGenerators } from "./goal-data.js";
 import {
   verify,
   AssertionEngineError,
@@ -18,6 +20,7 @@ import {
   executeStep,
   ResolvedStepTarget,
   StepExecutionError,
+  RuntimeValue,
   type StepCommand,
 } from "./step-executor.js";
 
@@ -31,6 +34,13 @@ export interface GoalState {
   readonly declaredDataKeys?: readonly string[];
   readonly completionCriteria?: readonly string[];
   readonly operationInstructions?: string;
+  readonly automaticData?: boolean;
+}
+export interface GoalValueState {
+  readonly goal: string;
+  readonly page: string;
+  readonly field: string;
+  readonly choices: Readonly<Record<string, string>>;
 }
 export interface GoalChoice {
   readonly choice: string;
@@ -43,6 +53,11 @@ export interface GoalDecision {
   readonly call: ProviderCall;
 }
 export interface GoalPlanner {
+  /** Optional for older providers; enables automatic synthetic data in goal mode. */
+  chooseGoalValue?(
+    state: GoalValueState,
+    options?: ProviderCallOptions,
+  ): Promise<{ readonly value: GoalChoice; readonly call: ProviderCall }>;
   /** Exactly one HTTP attempt; operation and speculative target heads share it. */
   chooseGoal(
     state: GoalState,
@@ -61,7 +76,11 @@ export interface GoalOptions {
   readonly timeoutMs?: number;
   /** Experimental operation-only margin; target margin and confidence floors stay fixed. */
   readonly operationMinMargin?: number;
+  /** Reproduce the POC's local Faker sequence (English locale, pinned version). */
+  readonly dataSeed?: number;
   readonly signal?: AbortSignal;
+  /** Register generated text with the host's report redactor before any fill. */
+  readonly onGeneratedValue?: (value: RuntimeValue) => void;
   /** Awaited after each dispatched action; contains no typed values. */
   readonly onAction?: (action: GoalAction) => Promise<void>;
 }
@@ -80,6 +99,7 @@ export interface GoalAction {
   readonly calls: readonly ProviderCall[];
 }
 export interface GoalResult {
+  readonly dataSeed?: number;
   readonly status: "passed" | "failed";
   readonly reason: string;
   readonly requests: number;
@@ -108,7 +128,9 @@ export function goalOperations(state: GoalState): Record<string, string> {
       Object.keys(state.targets).map((op) => [
         op,
         op === "TYPE"
-          ? "Fill one field with a supplied data binding"
+          ? state.automaticData
+            ? "Fill one field using supplied, remembered, or automatically generated synthetic data"
+            : "Fill one field with a supplied data binding"
           : "Click one observed element",
       ]),
     ),
@@ -156,7 +178,7 @@ function same(a: PageVersion, b: PageVersion): boolean {
   );
 }
 
-/** No generated text, selectors, JavaScript, arbitrary keys, or navigation URLs. */
+/** Only host-owned value generators; no model-authored text or executable code. */
 export async function runGoal(
   page: BrowserPage,
   planner: GoalPlanner,
@@ -168,6 +190,16 @@ export async function runGoal(
   const maxActions = options.maxActions ?? 18;
   const timeoutMs = options.timeoutMs ?? 120_000;
   const operationMinMargin = options.operationMinMargin ?? 0.1;
+  const dataSeed = options.dataSeed ?? randomInt(0x7fffffff);
+  if (!Number.isSafeInteger(dataSeed))
+    throw new RangeError("Invalid data seed");
+  const generators = planner.chooseGoalValue
+    ? goalGenerators(dataSeed)
+    : undefined;
+  const data: Record<string, ResolvedDataEntry> = { ...options.data };
+  const generated = new Map<string, string>();
+  // A selected value survives a provably pre-dispatch stale retry.
+  const pendingValues = new Map<string, string>();
   if (
     !Number.isFinite(operationMinMargin) ||
     operationMinMargin < 0 ||
@@ -232,6 +264,7 @@ export async function runGoal(
   let pendingCall = false;
   let reportedCalls = 0;
   const result = (reason: string, detail?: string): GoalResult => ({
+    ...(generators ? { dataSeed } : {}),
     status: reason === "verified" ? "passed" : "failed",
     reason,
     requests,
@@ -290,14 +323,21 @@ export async function runGoal(
       const bindingKeys = new Map<string, string>();
       // Read only binding matches and occupancy, never send field values to the model.
       const fieldState = await active(
-        page.evaluate<{ populated: boolean; bindings: string[] }[]>(
+        page.evaluate<
+          {
+            populated: boolean;
+            bindings: string[];
+            constraints?: Record<string, string>;
+          }[]
+        >(
           `(({ refs, bindings }) => refs.map(ref => {
           const element = [...document.querySelectorAll('[data-sedum-ref]')].find(e => e.getAttribute('data-sedum-ref') === ref);
           const value = element && ('value' in element ? element.value : element.textContent);
-          return { populated: !!value, bindings: bindings.filter(([,text]) => value === text).map(([key]) => key) };
+          const constraints = Object.fromEntries(['autocomplete', 'minlength', 'maxlength', 'pattern', 'min', 'max', 'step', 'required'].filter(key => element?.hasAttribute(key)).map(key => [key, element.getAttribute(key)]));
+          return { populated: !!value, bindings: bindings.filter(([,text]) => value === text).map(([key]) => key), constraints };
         }))(${JSON.stringify({
           refs: fills.candidates.map((c) => c.ref),
-          bindings: Object.entries(options.data ?? {}).map(([key, entry]) => [
+          bindings: Object.entries(data).map(([key, entry]) => [
             key,
             entry.value.reveal(),
           ]),
@@ -331,7 +371,20 @@ export async function runGoal(
       for (const [index, c] of fills.candidates.entries()) {
         if (c.disabled || !c.editable) continue;
         const current = fieldState[index]!;
-        for (const [key, entry] of Object.entries(options.data ?? {})) {
+        if (generators) {
+          // Already holds known data: don't repeatedly fill or regenerate it.
+          if (current.bindings.length) continue;
+          const id = `t${commands.size}`;
+          (targets.TYPE ??= {})[id] =
+            `${describe(c)} inputType=${c.inputType} constraints=${project(JSON.stringify(current.constraints ?? {}))} current=${current.populated ? "populated (unknown value)" : "empty"}`;
+          commands.set(id, {
+            op: "type",
+            target: target(c),
+            value: new RuntimeValue(""),
+          });
+          continue;
+        }
+        for (const [key, entry] of Object.entries(data)) {
           if (current.bindings.includes(key)) continue;
           const id = `t${commands.size}`;
           (targets.TYPE ??= {})[id] =
@@ -357,6 +410,9 @@ export async function runGoal(
       seen.set(fingerprint, visits);
       if (visits > 3) return result("no_progress");
       const state: GoalState = {
+        ...(generators
+          ? { automaticData: true, declaredDataKeys: Object.keys(data) }
+          : {}),
         goal: project(options.goal),
         page: project(digest.text),
         recentActions: history.slice(-10),
@@ -441,9 +497,86 @@ export async function runGoal(
             return name ? `"${name}"` : id;
           }),
         );
-      const command = commands.get(head.choice);
+      let command = commands.get(head.choice);
       if (!command) return result("invalid_target");
       if (actions >= maxActions) return result("action_limit");
+      let valueIdentity: string | undefined;
+      if (command.op === "type" && generators && planner.chooseGoalValue) {
+        const ref = command.target.driverTarget().ref;
+        const field = fills.candidates.find((c) => c.ref === ref)!;
+        const identity = JSON.stringify([
+          digest.version.document,
+          digest.version.route,
+          field.signals.nodeId ?? field.signals.path,
+          field.name,
+        ]);
+        valueIdentity = identity;
+        let key = pendingValues.get(identity);
+        if (!key) {
+          const choices: Record<string, string> = {
+            BLOCKED:
+              "Requires unavailable real credentials, OTP, specific factual text, or unsupported constraints; do not invent it",
+            ...Object.fromEntries(
+              Object.entries(data).map(([id, entry]) => [
+                `use.${id}`,
+                generated.has(id)
+                  ? `REUSE ${id}: ${project(generated.get(id)!)}`
+                  : `USE supplied {{${id}}}${entry.sensitive ? " (secret)" : ` = ${project(entry.value.reveal())}`}`,
+              ]),
+            ),
+            ...generators.descriptions,
+          };
+          if (Object.keys(choices).length > 255)
+            return result("value_candidate_limit");
+          if (requests >= maxRequests) return result("request_limit");
+          requests++;
+          pendingCall = true;
+          const selected = await active(
+            planner.chooseGoalValue(
+              {
+                goal: project(options.goal),
+                page: project(digest.text),
+                field: targets.TYPE![head.choice]!,
+                choices,
+              },
+              { signal, maxAttempts: 1 },
+            ),
+          );
+          calls.push(selected.call);
+          pendingCall = false;
+          if (!goalChoiceAccepted(selected.value, Object.keys(choices)))
+            return result(
+              "value_abstention",
+              uncertain(
+                `value for ${field.name}`,
+                selected.value,
+                digest.version.route,
+              ),
+            );
+          const id = selected.value.choice;
+          if (id === "BLOCKED") return result("value_blocked");
+          if (id.startsWith("use.")) key = id.slice(4);
+          else {
+            key = `generated_${generated.size + 1}`;
+            while (key in data) key = `_${key}`;
+            const value = new RuntimeValue(
+              generators.generate(id),
+              `{{${key}}}`,
+            );
+            data[key] = { value, sensitive: true, opaqueValues: [value] };
+            taints.push(data[key]!);
+            options.onGeneratedValue?.(value);
+            generated.set(
+              key,
+              `${id} selected for ${describe(field)} on ${project(digest.version.route)} (not yet filled)`,
+            );
+          }
+          pendingValues.set(identity, key);
+        }
+        bindingKeys.set(head.choice, key);
+        command = { ...command, value: data[key]!.value };
+        targets.TYPE![head.choice] += ` ← {{${key}}}`;
+      }
       // Sedum owns ONE operation-specific snapshot. Recollect the chosen operation
       // and require its entire surface and exact version to match before remapping refs.
       if (command.op !== "click" && command.op !== "type")
@@ -467,6 +600,22 @@ export async function runGoal(
       const chosen = fresh.candidates[index];
       if (!chosen) return result("invalid_target");
       const refreshed = { ...command, target: target(chosen) };
+      if (generators && command.op === "type") {
+        const valid = await active(
+          page.evaluate<boolean>(`(({ ref, value }) => {
+          const original = [...document.querySelectorAll('[data-sedum-ref]')].find(e => e.getAttribute('data-sedum-ref') === ref);
+          if (!original) return false;
+          const input = original.cloneNode(false);
+          if (!('value' in input)) return true;
+          input.value = value;
+          return input.value === value &&
+            (input.maxLength === undefined || input.maxLength < 0 || value.length <= input.maxLength) &&
+            (input.minLength === undefined || input.minLength < 0 || value.length >= input.minLength) &&
+            input.checkValidity();
+        })(${JSON.stringify({ ref: chosen.ref, value: command.value.reveal() })})`),
+        );
+        if (!valid) return result("value_constraint_mismatch");
+      }
       if (signal.aborted) return result("timeout");
       // Consume and record BEFORE dispatch. Any executor failure terminates; never replay.
       actions++;
@@ -529,6 +678,12 @@ export async function runGoal(
       });
       reportedCalls = calls.length;
       if (failed) throw failure;
+      if (valueIdentity) pendingValues.delete(valueIdentity);
+      if (binding && generated.has(binding))
+        generated.set(
+          binding,
+          `${generated.get(binding)!.replace(" (not yet filled)", "")}; filled ${describe(chosen)} on ${project(digest.version.route)}`,
+        );
     }
     return result("timeout");
   } catch (error) {

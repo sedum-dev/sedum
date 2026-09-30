@@ -16,6 +16,142 @@ import type { ProviderCall } from "./provider.js";
 describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
   "goal executor on the existing checkout fixture",
   () => {
+    it("generates, reuses across fields and pages, and distinguishes a second person", async () => {
+      const site = await startFixtureSite();
+      const browser = await new PlaywrightBrowserDriver().launch({
+        browser: "chromium",
+      });
+      const call: ProviderCall = {
+        model: "scripted",
+        requestedModel: "scripted",
+        attempts: 1,
+        usage: { inputTokens: 1, outputTokens: 0 },
+        rate: null,
+        totalCostUsd: 0,
+        successfulResponseCostUsd: 0,
+      };
+      const choice = (id: string, ids: string[]): GoalChoice => ({
+        choice: id,
+        confidence: 1,
+        probabilities: Object.fromEntries(
+          ids.map((key) => [key, key === id ? 1 : 0]),
+        ),
+      });
+      const values: string[] = [];
+      const states: string[] = [];
+      try {
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        await page.goto(site.baseUrl + "/synthetic-profile");
+        const steps = [
+          "First name",
+          "Account email",
+          "Confirm account email",
+          "Sample biography",
+          "Continue to recipient",
+          "Recipient email",
+          "Account email for receipt",
+          "Save profile",
+        ];
+        let step = 0;
+        let valueCalls = 0;
+        const result = await runGoal(
+          page,
+          {
+            chooseGoal: async (state) => {
+              states.push(JSON.stringify(state));
+              const name = steps[step++];
+              const op = name
+                ? name === "Continue to recipient" || name === "Save profile"
+                  ? "CLICK"
+                  : "TYPE"
+                : "DONE";
+              if (!name)
+                return {
+                  operation: choice("DONE", Object.keys(goalOperations(state))),
+                  call,
+                };
+              const id = Object.entries(state.targets[op]!).find(([, text]) =>
+                text.includes(`"name":"${name}"`),
+              )?.[0];
+              expect(id).toBeDefined();
+              // A filled field must disappear from the type choices.
+              if (name === "Confirm account email")
+                expect(
+                  Object.values(state.targets.TYPE!).join(" "),
+                ).not.toContain('"name":"Account email"');
+              return {
+                operation: choice(op, Object.keys(goalOperations(state))),
+                target: choice(id!, Object.keys(state.targets[op]!)),
+                call,
+              };
+            },
+            chooseGoalValue: async (state) => {
+              states.push(JSON.stringify(state));
+              const id = [
+                "use.first",
+                "faker.internet.exampleEmail",
+                "use.generated_1",
+                "faker.person.bio",
+                "faker.internet.exampleEmail",
+                "use.generated_1",
+              ][valueCalls++]!;
+              if (id === "use.generated_1")
+                expect(state.choices[id]).toContain("Account email");
+              return { value: choice(id, Object.keys(state.choices)), call };
+            },
+          },
+          {
+            holds: async (_claim, digest) => {
+              expect(digest.text).toContain("Profile saved");
+              return { holds: 0.99, contradicted: 0.01, call };
+            },
+          },
+          {
+            goal: "Create a test profile and add another recipient",
+            verify: ["Profile saved"],
+            dataSeed: 53,
+            data: resolveData(
+              {
+                first: {
+                  value: "SuppliedFirst",
+                  source: { file: "test", line: 1, col: 1 },
+                },
+              },
+              {},
+            ),
+            onGeneratedValue: (value) => {
+              values.push(value.reveal());
+            },
+          },
+        );
+        expect(result).toMatchObject({
+          status: "passed",
+          actions: 8,
+          requests: 16,
+        });
+        const saved = await page.evaluate<{
+          profile: Record<string, string>;
+          recipient: Record<string, string>;
+        }>(
+          `({profile:JSON.parse(sessionStorage.getItem('profile')),recipient:JSON.parse(sessionStorage.getItem('recipient'))})`,
+        );
+        expect(saved.profile.first).toBe("SuppliedFirst");
+        expect(saved.profile.email).toMatch(/@example\.(com|net|org)$/);
+        expect(saved.profile.confirm).toBe(saved.profile.email);
+        expect(saved.recipient.receipt).toBe(saved.profile.email);
+        expect(saved.recipient.recipient).not.toBe(saved.profile.email);
+        expect(saved.profile.bio!.length).toBeGreaterThan(0);
+        expect(values).toHaveLength(3);
+        for (const value of values)
+          expect(JSON.stringify([states, result])).not.toContain(value);
+        await context.close();
+      } finally {
+        await browser.close();
+        await site.close();
+      }
+    }, 30_000);
+
     it.each([true, false])(
       "runs YAML goal through the flow runner, hooks and report (verification passes=%s)",
       async (passes) => {

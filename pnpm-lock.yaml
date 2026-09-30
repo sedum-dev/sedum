@@ -83,6 +83,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@faker-js/faker':
+        specifier: 10.6.0
+        version: 10.6.0
       jiti:
         specifier: 2.7.0
         version: 2.7.0
