@@ -184,6 +184,12 @@ describe("HTML report", () => {
     expect(renderHtml(incomplete)).toContain("unknown or incomplete");
   });
 
+  it("never wraps a score, duration or cost mid-number", async () => {
+    const html = renderHtml(await example());
+    expect(html).toContain(".steps td.num,.steps th{white-space:nowrap}");
+    expect(html).toMatch(/<td class="num[^"]*">/u);
+  });
+
   it("embeds only supplied replay frames and escapes player JSON", async () => {
     const result = await example();
     const html = renderHtml(result, {
