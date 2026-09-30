@@ -85,12 +85,35 @@ function executionLines(value: RunResult): string[] {
     const steps = value.tests.flatMap((test) =>
       test.attempts.flatMap((attempt) => attempt.steps),
     );
-    const used = steps.filter((step) => step.locator?.vision).length;
-    lines.push(
-      used
-        ? `vision ${execution.vision.model}: used on ${used} step(s)`
-        : `vision ${execution.vision.model}: enabled, not used; every click was resolved from the page text`,
+    const attempts = steps.flatMap((step) =>
+      step.locator?.vision ? [step.locator.vision] : [],
     );
+    const selected = attempts.filter(
+      (vision) => vision.outcome === "selected",
+    ).length;
+    const abstained = attempts.filter(
+      (vision) => vision.outcome === "abstained",
+    ).length;
+    const failed = attempts.filter(
+      (vision) =>
+        vision.outcome === "failed" || (!vision.outcome && vision.failure),
+    ).length;
+    const unrecorded = attempts.length - selected - abstained - failed;
+    lines.push(
+      attempts.length
+        ? `vision ${execution.vision.model}: attempted on ${attempts.length} step(s); ${selected} selected, ${abstained} abstained, ${failed} failed${unrecorded ? `, ${unrecorded} outcome unrecorded` : ""}`
+        : `vision ${execution.vision.model}: enabled, no fallback attempted`,
+    );
+    const failedWithoutVision = steps.filter(
+      (step) =>
+        step.operation === "click" &&
+        (step.verdict === "failed" || step.state === "error") &&
+        !step.locator?.vision,
+    ).length;
+    if (failedWithoutVision)
+      lines.push(
+        `vision not attempted on ${failedWithoutVision} failed click step(s); see step errors for details`,
+      );
     if (execution.vision.key === "rejected")
       lines.push(
         "vision warning: OpenRouter rejected OPEN_ROUTER_API_KEY, so vision fallback cannot work. Check it with `sedum doctor --vision`.",
