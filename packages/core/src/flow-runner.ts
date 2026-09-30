@@ -43,6 +43,7 @@ import {
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 import { resolveTarget, type LocatorResult } from "./locator.js";
 import type { VisionResolver } from "./vision.js";
+import { chooseOption } from "./dropdown-option.js";
 import {
   gotoUrlParts,
   pressKey,
@@ -1052,9 +1053,15 @@ async function executeSentence(
       },
     );
   }
+  let chosenOption: string | null = null;
   const commandFor = (target: ResolvedStepTarget): StepCommand =>
     step.op === "click"
-      ? { op: "click", target }
+      ? {
+          op: "click",
+          target,
+          chooseOption: (labels) =>
+            (chosenOption = chooseOption(step.text, labels)),
+        }
       : { op: "type", target, value: typeValue! };
   let command = commandFor(resolved.target);
   // An action may navigate or rerender. Preserve metadata from the accepted
@@ -1167,6 +1174,9 @@ async function executeSentence(
       replayFrame,
       targetBox,
       page: locatedPage,
+      ...(chosenOption === null
+        ? {}
+        : { detail: `Chose "${chosenOption}" in the dropdown.` }),
     });
   } catch (error) {
     if (isRunWideProviderError(error)) throw error;

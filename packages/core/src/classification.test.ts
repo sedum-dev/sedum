@@ -373,6 +373,16 @@ describe("sentence classification", () => {
       "click",
     );
     expect(
+      patternOperation('select "Price (low to high)" in the sort dropdown'),
+    ).toBe("click");
+    expect(patternOperation('choose "Canada" from the country list')).toBe(
+      "click",
+    );
+    expect(patternOperation("select the cheapest shipping")).toBeNull();
+    expect(
+      patternOperation('select "Canada" from the list and click Save'),
+    ).toBeNull();
+    expect(
       validateOperand("type {{first}} then {{last}}", "type"),
     ).toBeTruthy();
   });

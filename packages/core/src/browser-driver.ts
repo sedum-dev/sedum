@@ -139,6 +139,22 @@ export class BrowserDriverError extends Error {
   }
 }
 
+/** A click on a native dropdown chooses one of its options instead. */
+export interface ClickOptions {
+  readonly timeoutMs?: number;
+  /** Returns the option label to choose, or null when none is named. */
+  readonly chooseOption?: (labels: readonly string[]) => string | null;
+}
+
+export type ClickResult =
+  | AimResult
+  | {
+      readonly actionable: false;
+      readonly reason: "option_not_named";
+      /** The enabled options, so the step can say what to name. */
+      readonly options: readonly string[];
+    };
+
 export interface BrowserPage {
   readonly url: string;
   readonly closed: boolean;
@@ -149,10 +165,7 @@ export interface BrowserPage {
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
   evaluate<T>(expression: string, argument?: unknown): Promise<T>;
-  clickRef(
-    aim: Aim,
-    options?: { readonly timeoutMs?: number },
-  ): Promise<AimResult>;
+  clickRef(aim: Aim, options?: ClickOptions): Promise<ClickResult>;
   fillRef(
     target: FillTarget,
     value: string,
@@ -467,10 +480,7 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
-  async clickRef(
-    aim: Aim,
-    options: { readonly timeoutMs?: number } = {},
-  ): Promise<AimResult> {
+  async clickRef(aim: Aim, options: ClickOptions = {}): Promise<ClickResult> {
     const state = this.state();
     if (state.closed || state.crashed || state.disconnected)
       throw operationError(new Error("page is not available"), state, "page");
@@ -542,6 +552,55 @@ class PlaywrightPage implements BrowserPage {
         reason: "stale" as const,
       }));
       if (!ready.actionable) return ready as AimResult;
+      if (options.chooseOption) {
+        // A native <select> opens a browser-drawn list that page clicks cannot
+        // reach, so clicking it changes nothing. Choose the named option.
+        const native = await element
+          .evaluate((node) =>
+            node instanceof HTMLSelectElement && !node.multiple
+              ? Array.from(node.options).map((option) => ({
+                  label: (option.label || option.text)
+                    .replace(/\s+/g, " ")
+                    .trim(),
+                  disabled:
+                    option.disabled ||
+                    (option.parentElement instanceof HTMLOptGroupElement &&
+                      option.parentElement.disabled),
+                }))
+              : null,
+          )
+          .catch(() => null);
+        if (native) {
+          const label = options.chooseOption(
+            native.map((option) => option.label),
+          );
+          const index = native.findIndex((option) => option.label === label);
+          if (label === null || index < 0)
+            return {
+              actionable: false,
+              reason: "option_not_named",
+              options: native
+                .filter((option) => !option.disabled)
+                .map((option) => option.label),
+            };
+          if (native[index]!.disabled)
+            return { actionable: false, reason: "not_actionable" };
+          const hide = await this.highlight(element);
+          try {
+            await element.selectOption({ index }, { timeout: remaining() });
+            return { actionable: true, aim };
+          } catch (error) {
+            return {
+              actionable: false,
+              reason: "action_started",
+              retryable: false,
+              callLog: safeCallLog(error),
+            };
+          } finally {
+            await hide();
+          }
+        }
+      }
       const hide = await this.highlight(element);
       try {
         // Playwright and the browser own final actionability, event dispatch,

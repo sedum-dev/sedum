@@ -105,6 +105,8 @@ export type StepCommand =
   | {
       readonly op: "click";
       readonly target: ResolvedStepTarget;
+      /** Picks the option to choose when the target is a native dropdown. */
+      readonly chooseOption?: (labels: readonly string[]) => string | null;
     }
   | {
       readonly op: "type";
@@ -147,8 +149,10 @@ export class StepExecutionError extends Error {
     code: StepFailureCode,
     phase: StepFailurePhase,
     callLog: readonly string[] = [],
+    /** A reader-facing explanation that replaces the generic message. */
+    detail?: string,
   ) {
-    super(`${op} failed: ${code}`);
+    super(detail ?? `${op} failed: ${code}`);
     this.name = "StepExecutionError";
     this.op = op;
     this.code = code;
@@ -310,7 +314,27 @@ export async function executeStep(
         if (options.signal?.aborted)
           throw new StepExecutionError(op, "canceled", phase);
         phase = "post_dispatch";
-        const result = await active(page.clickRef(aimed.aim, { timeoutMs }));
+        const result = await active(
+          page.clickRef(aimed.aim, {
+            timeoutMs,
+            ...(command.chooseOption
+              ? { chooseOption: command.chooseOption }
+              : {}),
+          }),
+        );
+        if (!result.actionable && result.reason === "option_not_named")
+          throw new StepExecutionError(
+            op,
+            "invalid_input",
+            "pre_dispatch",
+            [],
+            result.options.length
+              ? `This is a dropdown. Name the option to choose, one of: ${result.options
+                  .slice(0, 12)
+                  .map((label) => `"${label}"`)
+                  .join(", ")}${result.options.length > 12 ? ", …" : ""}.`
+              : "This is a dropdown with no option that can be chosen.",
+          );
         if (!result.actionable)
           throw new StepExecutionError(
             op,
