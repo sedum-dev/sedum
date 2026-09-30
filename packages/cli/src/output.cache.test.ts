@@ -181,7 +181,7 @@ describe("vision fallback in terminal summary", () => {
     };
     const accepted = await render("accepted");
     expect(accepted).toContain(
-      "vision google/gemini-3.8-flash: enabled, not used; every click was resolved from the page text",
+      "vision google/gemini-3.8-flash: enabled, no fallback attempted",
     );
     expect(accepted).not.toContain("vision warning");
     expect(await render("rejected")).toContain(
