@@ -570,6 +570,8 @@ if (!window.__sedum) {
       let distance = Infinity;
       if (sameLine && rect.right <= box.left + 2)
         distance = box.left - rect.right;
+      else if (sameLine && rect.left >= box.right - 2)
+        distance = rect.left - box.right;
       else if (rect.bottom <= box.top + 2 && rect.left < box.right)
         distance = box.top - rect.bottom;
       if (distance > 400) continue;
@@ -667,14 +669,25 @@ if (!window.__sedum) {
         addPart(`placeholder "${clip(placeholder)}"`, placeholder);
       // A field named only by an example value ("E.g. 10,000", "AB0A 0AA")
       // is known by the caption a person reads beside or above it.
+      const ariaLabel = element.getAttribute("aria-label")?.trim();
+      const labelledBy = element
+        .getAttribute("aria-labelledby")
+        ?.split(/\s+/)
+        .some((id) => {
+          const labelled = document.getElementById(id);
+          return labelled && referencedLabelText(labelled);
+        });
+      const nativeLabel = Array.from(element.labels ?? []).some((node) =>
+        Boolean(publicText(node).trim()),
+      );
       if (
         placeholder &&
         placeholder === name &&
-        !element.hasAttribute("aria-label") &&
-        !element.hasAttribute("aria-labelledby") &&
-        !element.labels?.length
+        !ariaLabel &&
+        !labelledBy &&
+        !nativeLabel
       ) {
-        const caption = rowLabel(element) || nearbyText(element);
+        const caption = nearbyText(element) || rowLabel(element);
         if (caption && caption !== placeholder)
           addPart(`label "${clip(caption)}"`, caption);
       }

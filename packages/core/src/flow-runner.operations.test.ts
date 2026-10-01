@@ -41,6 +41,9 @@ async function run(
       text: vi.fn(async () => "Example page text"),
       settle: vi.fn(async () => ({ settled: true, elapsedMs: 1 })),
       goto: vi.fn<(url: string) => Promise<void>>(async () => {}),
+      history: vi.fn<(move: "back" | "forward" | "reload") => Promise<void>>(
+        async () => {},
+      ),
       press: vi.fn<(key: string) => Promise<void>>(async () => {}),
       scroll: vi.fn<(deltaY: number) => Promise<void>>(async () => {}),
       close: vi.fn(async () => {}),
@@ -170,14 +173,11 @@ describe("documented step operations", () => {
     expect(outcome.result.status, JSON.stringify(outcome.result)).toBe(
       "passed",
     );
-    const scripts = outcome.page.evaluate.mock.calls.map(([script]) => script);
-    expect(
-      scripts.filter((script) =>
-        ["history.back()", "history.forward()", "location.reload()"].includes(
-          script,
-        ),
-      ),
-    ).toEqual(["history.back()", "history.forward()", "location.reload()"]);
+    expect(outcome.page.history.mock.calls.map(([move]) => move)).toEqual([
+      "back",
+      "forward",
+      "reload",
+    ]);
     expect(outcome.steps.map((step) => step.detail)).toEqual([
       "Went back in history.",
       "Went forward in history.",
