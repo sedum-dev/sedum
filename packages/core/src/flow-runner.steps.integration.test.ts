@@ -7,12 +7,15 @@ import { PlaywrightBrowserDriver } from "./browser-driver.js";
 import { NoopClassificationCache } from "./classification-cache.js";
 import { runFlow } from "./flow-runner.js";
 import type {
+  Judge,
   JudgeDecision,
   JudgePageDigest,
   ProviderCall,
+  Resolver,
   ResolverCandidates,
   ResolverDecision,
 } from "./provider.js";
+import { ProviderError } from "./provider.js";
 import { RunRecorder } from "./run-recorder.js";
 
 const call: ProviderCall = {
@@ -112,24 +115,28 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       url: string,
       steps: readonly string[],
       verifyGraceMs = 0,
+      signal?: AbortSignal,
+      overrides: { holds?: Judge["holds"]; choose?: Resolver["choose"] } = {},
     ) {
       const file = path.join(root, `flow-${++counter}.test.yaml`);
       await writeFile(
         file,
         `url: ${base}${url}\nsteps:\n${steps.map((step) => `  - ${JSON.stringify(step)}`).join("\n")}\n`,
       );
-      const judge = vi.fn(holds);
-      const resolver = vi.fn(choose);
+      const judge = vi.fn(overrides.holds ?? holds);
+      const resolver = vi.fn(overrides.choose ?? choose);
       const recorder = new RunRecorder(async () => undefined, `run-${counter}`);
       await recorder.start();
       const started = performance.now();
       const flow = await runFlow(file, {
         repoRoot: root,
         browser: new PlaywrightBrowserDriver(),
+        browserKind: "chromium",
         classificationCache: new NoopClassificationCache(),
         provider: { classifyBatch: vi.fn(), choose: resolver, holds: judge },
         env: {},
         verifyGraceMs,
+        ...(signal ? { signal } : {}),
         report: {
           recorder,
           privacy: { secretValues: [], sensitiveOrigins: [] },
@@ -195,6 +202,114 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       );
       expect(outcome.flow.status).toBe("failed");
       expect(outcome.judge).toHaveBeenCalledTimes(1);
+    }, 30_000);
+
+    it("stops a wait when the run is canceled and keeps billed judgements", async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 500);
+      const outcome = await run(
+        "/static",
+        ["wait up to 6 seconds until the page shows Ready"],
+        0,
+        controller.signal,
+      );
+      clearTimeout(timer);
+      expect(outcome.flow.status).toBe("could_not_run");
+      expect(outcome.elapsedMs).toBeLessThan(2_000);
+      expect(outcome.steps[0]).toMatchObject({
+        state: "error",
+        error: { code: "canceled" },
+      });
+      expect(outcome.steps[0]!.calls.length).toBe(
+        outcome.judge.mock.calls.length,
+      );
+    }, 30_000);
+
+    it("bounds an in-flight judgement by the wait deadline", async () => {
+      const outcome = await run(
+        "/static",
+        ["wait up to 1 second until the page shows Ready"],
+        0,
+        undefined,
+        {
+          holds: async (_claim, _digest, options) =>
+            await new Promise<JudgeDecision>((_resolve, reject) => {
+              options?.signal?.addEventListener(
+                "abort",
+                () => reject(new ProviderError("timeout", "deadline", 1, call)),
+                { once: true },
+              );
+            }),
+        },
+      );
+      expect(outcome.elapsedMs).toBeLessThan(2_000);
+      expect(outcome.flow.status).toBe("could_not_run");
+      expect(outcome.steps[0]).toMatchObject({
+        state: "error",
+        error: { code: "observation_timeout" },
+      });
+      expect(outcome.steps[0]!.calls).toHaveLength(1);
+    }, 30_000);
+
+    it("keeps earlier judgement receipts when a retry hits a run-wide error", async () => {
+      let attempts = 0;
+      const outcome = await run(
+        "/late",
+        ["wait up to 6 seconds until the page shows Ready"],
+        0,
+        undefined,
+        {
+          holds: async () => {
+            attempts++;
+            if (attempts === 1) return { holds: 0.03, contradicted: 0.9, call };
+            throw new ProviderError("authentication", "bad key", 1);
+          },
+        },
+      );
+      expect(outcome.flow.status).toBe("could_not_run");
+      expect(outcome.steps[0]!.calls).toHaveLength(2);
+      expect(outcome.steps[0]!.calls[1]?.costUsd).toBeNull();
+    }, 30_000);
+
+    it("keeps earlier locator receipts when auto-wait hits a run-wide error", async () => {
+      let attempts = 0;
+      const outcome = await run(
+        "/late",
+        ["click the Continue button"],
+        4_000,
+        undefined,
+        {
+          choose: async (...args) => {
+            attempts++;
+            if (attempts === 1) return choose(args[0], args[1]);
+            throw new ProviderError("authentication", "bad key", 1);
+          },
+        },
+      );
+      expect(outcome.flow.status).toBe("could_not_run");
+      expect(outcome.steps[0]!.calls).toHaveLength(2);
+      expect(outcome.steps[0]!.calls[1]?.costUsd).toBeNull();
+    }, 30_000);
+
+    it("stops target auto-wait when the run is canceled", async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 500);
+      const outcome = await run(
+        "/late",
+        ["click the Continue button"],
+        4_000,
+        controller.signal,
+      );
+      clearTimeout(timer);
+      expect(outcome.flow.status).toBe("could_not_run");
+      expect(outcome.elapsedMs).toBeLessThan(2_000);
+      expect(outcome.steps[0]).toMatchObject({
+        state: "error",
+        error: { code: "canceled" },
+      });
+      expect(outcome.steps[0]!.calls.length).toBe(
+        outcome.resolver.mock.calls.length,
+      );
     }, 30_000);
 
     it("waits for a click target to appear within the grace", async () => {
