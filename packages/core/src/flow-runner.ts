@@ -51,11 +51,18 @@ import {
   historyMove,
   pressKey,
   scrollDirection,
+  elementClaim,
   waitDurationMs,
   waitUntilTimeoutMs,
+  type ElementClaim,
 } from "./step-operands.js";
 import { stageEntry } from "./page-cache.js";
-import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
+import {
+  controlState,
+  pageVersion,
+  quietPage,
+  readTarget,
+} from "./page-bridge.js";
 import type { PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
@@ -342,6 +349,21 @@ export function runtimeFailure(file: string, error: unknown): FlowRunResult {
     message: "The browser run could not be completed safely.",
     fix: "Check the browser, provider, and test input, then rerun the test.",
   };
+}
+
+const CLAIM_PREFIX =
+  /^\s*(?:verify|assert|check|confirm|ensure|expect|measure|note|observe|wait\s+(?:up\s+to\s+\d+(?:\.\d+)?\s*(?:s|secs?|seconds?)\s+)?(?:until|for))\b\s*(?:that\s+|whether\s+|if\s+)?/iu;
+
+/** Puts model-visible values into a sentence; secrets stay placeholders. */
+function withValues(
+  text: string,
+  data: Readonly<Record<string, ResolvedDataEntry>>,
+): string {
+  return text.replace(
+    /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
+    (placeholder, key: string) =>
+      data[key]?.modelVisible ? data[key].value.reveal() : placeholder,
+  );
 }
 
 function claim(
@@ -1034,8 +1056,146 @@ export async function executeSentence(
         },
       );
     };
+    // A claim about one control's state is checked on the control itself.
+    // It is located like a click or type target, and its state is read and
+    // compared here; a field's value never reaches the model.
+    const checkElement = async (element: ElementClaim, limitMs: number) => {
+      const deadline = performance.now() + limitMs;
+      const earlier: ReturnType<typeof resultCall>[] = [];
+      let last: LocatorResult | undefined;
+      let message = "The control is not in the expected state.";
+      let staleRetried = false;
+      const target = withValues(element.target, data);
+      const locateAs = (operation: "click" | "fill") =>
+        resolveTarget(page, dependencies.provider, {
+          operation,
+          sentence:
+            operation === "fill" ? `type into ${target}` : `click ${target}`,
+          projectText: (text: string) => redactOpaqueText(text, opaqueEntries),
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        });
+      // A read-only or disabled field is no typing target, but it is still
+      // on the page as a control.
+      const locate = async () => {
+        const found = await locateAs(element.operation);
+        if (
+          element.operation !== "fill" ||
+          found.kind === "resolved" ||
+          (found.reason !== "none" && found.reason !== "no_candidates")
+        )
+          return found;
+        const control = await locateAs("click");
+        return control.kind === "resolved" &&
+          ["input", "textarea"].includes(control.target.driverTarget().tag)
+          ? { ...control, calls: [...found.calls, ...control.calls] }
+          : { ...found, calls: [...found.calls, ...control.calls] };
+      };
+      const expected = element.expect;
+      for (;;) {
+        if (dependencies.signal?.aborted) break;
+        const before = await pageVersion(page).catch(() => null);
+        if (last)
+          earlier.push(
+            ...last.calls.map((call) => resultCall(call, "locator")),
+          );
+        last = await reobserve(page, await locate(), locate, {
+          staleRetry: true,
+          ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+        });
+        let holds = false;
+        if (last.kind !== "resolved") {
+          const missing =
+            last.reason === "none" || last.reason === "no_candidates";
+          holds = missing && expected.kind === "present" && !expected.present;
+          message = missing
+            ? "No such control is on the page."
+            : `The control could not be found (${last.reason}).`;
+        } else if (expected.kind === "present") {
+          holds = expected.present;
+          message = "The control is on the page.";
+        } else {
+          const state = await controlState(page, last.target.driverTarget());
+          if (state.status === "ok") {
+            const value = (text: string) => text.replace(/\s+/gu, " ").trim();
+            const wanted =
+              expected.kind === "value"
+                ? value(
+                    expected.value.replace(
+                      /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
+                      (placeholder, key: string) =>
+                        data[key]?.value.reveal() ?? placeholder,
+                    ),
+                  )
+                : "";
+            holds =
+              expected.kind === "disabled"
+                ? state.disabled === expected.disabled
+                : expected.kind === "checked"
+                  ? state.checked === expected.checked
+                  : expected.kind === "focused"
+                    ? state.focused === expected.focused
+                    : expected.kind === "empty"
+                      ? state.value !== null &&
+                        (value(state.value) === "") === expected.empty
+                      : state.value !== null && value(state.value) === wanted;
+            message =
+              expected.kind === "disabled"
+                ? `The control is ${state.disabled ? "disabled" : "enabled"}.`
+                : expected.kind === "checked"
+                  ? state.checked === null
+                    ? "The control cannot be checked."
+                    : `The control is ${state.checked ? "checked" : "unchecked"}.`
+                  : expected.kind === "focused"
+                    ? `The control is ${state.focused ? "" : "not "}focused.`
+                    : state.value === null
+                      ? "The control holds no readable value."
+                      : "The field holds a different value.";
+          } else {
+            message = "The page changed while the control was read.";
+            if (!staleRetried) {
+              staleRetried = true;
+              await quietPage(page, 80, 2_000).catch(() => undefined);
+              continue;
+            }
+          }
+        }
+        if (holds)
+          return record("continue", { locator: last, failedCalls: earlier });
+        // Read again only once the page changes, until the deadline.
+        let changed = false;
+        while (performance.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const now = await pageVersion(page).catch(() => null);
+          // No version means a navigation is under way: read again.
+          if (!before || !now) {
+            changed = true;
+            break;
+          }
+          if (
+            now.revision !== before.revision ||
+            now.document !== before.document ||
+            now.route !== before.route
+          ) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) break;
+        await quietPage(page, 80, 2_000).catch(() => undefined);
+      }
+      return record("failed", {
+        ...(last ? { locator: last } : {}),
+        failedCalls: earlier,
+        error: { code: "element_state", message },
+      });
+    };
     const until = step.op === "verify" ? waitUntilTimeoutMs(step.text) : null;
     const graceMs = dependencies.verifyGraceMs ?? 0;
+    const element =
+      step.op === "verify"
+        ? elementClaim(step.text.replace(CLAIM_PREFIX, ""))
+        : null;
+    if (element) return checkElement(element, until ?? graceMs);
     if (until !== null) return waitUntil(until, 5_000);
     if (step.op === "verify" && graceMs > 0) return waitUntil(graceMs, null);
     try {

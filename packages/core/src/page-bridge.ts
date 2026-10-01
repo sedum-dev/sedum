@@ -8,6 +8,7 @@ import {
   type PageVersion,
   type FillTarget,
   type ReadTargetResult,
+  type ControlStateResult,
   type PageBridge,
 } from "./page-protocol.js";
 import { matchEntry, type CacheEntry, type MatchResult } from "./page-cache.js";
@@ -30,6 +31,7 @@ type Method =
   | "findBySignals"
   | "clickTarget"
   | "readTarget"
+  | "controlState"
   | "clearRefs";
 function validVersion(value: unknown): value is PageVersion {
   if (!value || typeof value !== "object") return false;
@@ -77,11 +79,13 @@ async function call<T>(
   const result = await page.evaluate<{
     installed: boolean;
     protocol?: number;
+    missingMethod?: boolean;
     value?: T;
   }>(`((argument) => {
     const bridge = window.__sedum;
     if (!bridge) return { installed: false };
     if (bridge.protocol !== ${PAGE_PROTOCOL}) return { installed: true, protocol: bridge.protocol };
+    if (typeof bridge[${JSON.stringify(method)}] !== "function") return { installed: true, protocol: bridge.protocol, missingMethod: true };
     return Promise.resolve(bridge[${JSON.stringify(method)}](argument)).then(value => ({ installed: true, protocol: bridge.protocol, value: value ?? null }));
   })(${JSON.stringify(argument ?? null)})`);
   if (!result || !result.installed)
@@ -89,7 +93,7 @@ async function call<T>(
       "missing",
       "Sedum page script was not installed in this document.",
     );
-  if (result.protocol !== PAGE_PROTOCOL)
+  if (result.protocol !== PAGE_PROTOCOL || result.missingMethod)
     throw new PageScriptError(
       "incompatible",
       `Sedum page script protocol ${result.protocol} is incompatible with ${PAGE_PROTOCOL}.`,
@@ -220,4 +224,24 @@ export async function matchLiveEntry(
     true,
     runtimeDependent,
   );
+}
+
+export async function controlState(
+  page: BrowserPage,
+  target: FillTarget,
+): Promise<ControlStateResult> {
+  const result = await call<ControlStateResult>(page, "controlState", target);
+  if (
+    !result ||
+    (result.status !== "stale" &&
+      !(
+        result.status === "ok" &&
+        typeof result.disabled === "boolean" &&
+        (typeof result.checked === "boolean" || result.checked === null) &&
+        typeof result.focused === "boolean" &&
+        (typeof result.value === "string" || result.value === null)
+      ))
+  )
+    throw new PageScriptError("invalid-result", "Invalid control state.");
+  return result;
 }

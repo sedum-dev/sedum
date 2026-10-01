@@ -129,6 +129,88 @@ export function waitUntilTimeoutMs(sentence: string): number | null {
   return Math.min(WAIT_UNTIL_MAX_MS, Math.max(1_000, Number(limit[1]) * 1000));
 }
 
+const CONTROL_NOUN =
+  "button|link|field|input|text\\s*box|search\\s*box|box|checkbox|check\\s*box|radio(?:\\s+button)?|toggle|switch|dropdown|select|tab|menu\\s+item|option|icon";
+const FIELD_NOUN = /\b(?:field|input|text\s*box|search\s*box|box)$/iu;
+const STATE_CLAIM = new RegExp(
+  `^(?:the\\s+|a\\s+|an\\s+)?(.+?\\b(?:${CONTROL_NOUN}))\\s+(?:is|are)\\s+(not\\s+)?(shown|visible|displayed|present|enabled|disabled|checked|unchecked|ticked|focused|empty)\\s*\\.?$`,
+  "iu",
+);
+const VALUE_CLAIM = new RegExp(
+  `^(?:the\\s+)?(.+?\\b(?:field|input|text\\s*box|search\\s*box|box))\\s+(?:contains|shows|has\\s+the\\s+value|has\\s+value|is\\s+set\\s+to|reads)\\s+(.+?)\\s*\\.?$`,
+  "iu",
+);
+
+export type ElementExpectation =
+  | { readonly kind: "present"; readonly present: boolean }
+  | { readonly kind: "disabled"; readonly disabled: boolean }
+  | { readonly kind: "checked"; readonly checked: boolean }
+  | { readonly kind: "focused"; readonly focused: boolean }
+  | { readonly kind: "empty"; readonly empty: boolean }
+  | { readonly kind: "value"; readonly value: string };
+export interface ElementClaim {
+  /** The control as the sentence names it, such as `the Save button`. */
+  readonly target: string;
+  readonly operation: "click" | "fill";
+  readonly expect: ElementExpectation;
+}
+
+/**
+ * A claim about one control's state, such as `the Save button is disabled`
+ * or `the Email field contains {{email}}`. Sedum locates the control and reads
+ * its state instead of asking the Judge, since page text carries no control
+ * state and field values stay private. Null for any other claim.
+ */
+export function elementClaim(claim: string): ElementClaim | null {
+  const text = canonicalSentence(claim);
+  if (/^(?:there\s+is\s+)?no\s+/iu.test(text)) return null;
+  const valued = VALUE_CLAIM.exec(text);
+  if (valued)
+    return {
+      target: valued[1]!,
+      operation: "fill",
+      expect: {
+        kind: "value",
+        value: valued[2]!.replace(/^(["“'])(.*)(["”'])$/u, "$2"),
+      },
+    };
+  const state = STATE_CLAIM.exec(text);
+  if (!state) return null;
+  const target = state[1]!;
+  const negated = !!state[2];
+  const word = state[3]!.toLowerCase();
+  const fill = FIELD_NOUN.test(target);
+  const expect: ElementExpectation | null = [
+    "shown",
+    "visible",
+    "displayed",
+    "present",
+  ].includes(word)
+    ? negated
+      ? null
+      : { kind: "present", present: true }
+    : word === "enabled"
+      ? { kind: "disabled", disabled: negated }
+      : word === "disabled"
+        ? { kind: "disabled", disabled: !negated }
+        : ["checked", "ticked"].includes(word)
+          ? { kind: "checked", checked: !negated }
+          : word === "unchecked"
+            ? { kind: "checked", checked: negated }
+            : word === "focused"
+              ? { kind: "focused", focused: !negated }
+              : word === "empty" && fill
+                ? { kind: "empty", empty: !negated }
+                : null;
+  if (!expect) return null;
+  // A disabled field is not a typing target, so it is found as a control.
+  return {
+    target,
+    operation: fill && expect.kind !== "disabled" ? "fill" : "click",
+    expect,
+  };
+}
+
 /** `go back`, `go forward`, `reload the page`: a move in the browser history. */
 export function historyMove(
   sentence: string,
