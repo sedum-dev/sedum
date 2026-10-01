@@ -6,6 +6,7 @@ import { NoopClassificationCache } from "./classification-cache.js";
 import * as locatorModule from "./locator.js";
 import * as pageBridge from "./page-bridge.js";
 import { runFlow } from "./flow-runner.js";
+import { ProviderError } from "./provider.js";
 import { RunRecorder } from "./run-recorder.js";
 
 async function runHooks(
@@ -21,6 +22,7 @@ async function runHooks(
     readonly finalize?: boolean;
     readonly readText?: string;
     readonly pageText?: string;
+    readonly staleThenRunWide?: boolean;
   } = {},
 ) {
   const root =
@@ -67,7 +69,7 @@ async function runHooks(
       close: vi.fn(async () => {}),
       evaluate: vi.fn(async (expression: string) => {
         const value = expression.includes('bridge["quiet"]')
-          ? { quiet: true, version }
+          ? { quiet: true, version: { ...version } }
           : expression.includes('bridge["collect"]') ||
               expression.includes('bridge["findBySignals"]')
             ? options.readText
@@ -82,13 +84,15 @@ async function runHooks(
               : expression.includes('bridge["digest"]')
                 ? {
                     protocol: 1,
-                    version,
-                    text: options.readText
-                      ? `Example page ${options.readText}`
-                      : "Example page",
+                    version: { ...version },
+                    text: options.staleThenRunWide
+                      ? `Example page ${version.revision}`
+                      : options.readText
+                        ? `Example page ${options.readText}`
+                        : "Example page",
                     complete: true,
                   }
-                : version;
+                : { ...version };
         return { installed: true, protocol: 1, value };
       }),
     };
@@ -108,7 +112,10 @@ async function runHooks(
     let index = 0;
     const holds = vi.fn(async (_claim: string) => {
       void _claim;
+      if (options.staleThenRunWide && index++ > 0)
+        throw new ProviderError("authentication", "bad key", 1);
       const probability = options.judgements?.[index++] ?? 0.95;
+      if (options.staleThenRunWide) version.revision++;
       return {
         holds: probability,
         contradicted: 1 - probability,
@@ -391,6 +398,16 @@ describe("hook and module attempt lifecycle", () => {
       run.report.tests[0]?.attempts[0]?.steps[1]?.judgement?.judgedExcerpt;
     expect(excerpt).toContain("$42");
     expect(excerpt).not.toContain("[REDACTED]");
+  });
+
+  it("keeps the stale judgement receipt when its retry hits a run-wide error", async () => {
+    const run = await runHooks("steps:\n  - verify the page is ready\n", {
+      staleThenRunWide: true,
+    });
+    expect(run.result.status).toBe("could_not_run");
+    const calls = run.report.tests[0]?.attempts[0]?.steps[0]?.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls?.[1]?.costUsd).toBeNull();
   });
 
   it("re-observes a remember target that went stale while it was resolved", async () => {

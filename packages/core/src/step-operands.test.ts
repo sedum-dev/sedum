@@ -7,6 +7,7 @@ import {
   pressKey,
   scrollDirection,
   waitDurationMs,
+  waitUntilTimeoutMs,
 } from "./step-operands.js";
 
 describe("step operands", () => {
@@ -88,5 +89,33 @@ describe("history and path navigation", () => {
       expect(validateOperand(sentence, "goto")).toBeNull();
     }
     expect(validateOperand("goto the clients page", "goto")).not.toBeNull();
+  });
+});
+
+describe("wait until a claim holds", () => {
+  it("classifies a wait for a claim as a verify, and a wait for a time as a wait", () => {
+    expect(patternOperation("wait until the reply is shown")).toBe("verify");
+    expect(
+      patternOperation(
+        "wait up to 90 seconds until the reply is shown and the list is updated",
+      ),
+    ).toBe("verify");
+    expect(patternOperation("wait for the Save button to be enabled")).toBe(
+      "verify",
+    );
+    expect(patternOperation("wait for 2 seconds")).toBe("wait");
+    expect(patternOperation("wait 500 ms")).toBe("wait");
+  });
+
+  it("reads how long a wait may judge its claim", () => {
+    expect(waitUntilTimeoutMs("wait until the reply is shown")).toBe(30_000);
+    expect(
+      waitUntilTimeoutMs("wait up to 90 seconds until the reply is shown"),
+    ).toBe(90_000);
+    expect(
+      waitUntilTimeoutMs("wait up to 600 seconds until the reply is shown"),
+    ).toBe(120_000);
+    expect(waitUntilTimeoutMs("wait for 2 seconds")).toBeNull();
+    expect(waitUntilTimeoutMs("verify the reply is shown")).toBeNull();
   });
 });

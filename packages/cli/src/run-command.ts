@@ -114,6 +114,15 @@ const SUPPORTED_REPORTERS: readonly string[] = [
   "junit",
 ];
 
+/** Internal escape hatch: default to 5 s and reject unbounded timer values. */
+export function verifyGraceMs(value: string | undefined): number {
+  if (value === undefined) return 5_000;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 120_000
+    ? parsed
+    : 5_000;
+}
+
 /** A run-level diagnostic for rejections that no running test owned. */
 export function strayRejectionDiagnostic(
   strays: readonly UnattributedRejection[],
@@ -1002,6 +1011,7 @@ export async function executeRunCommand(
                 browserKind: config.browser,
                 viewport: config.viewport,
                 verifyPolicy: config.thresholds,
+                verifyGraceMs: verifyGraceMs(process.env.SEDUM_VERIFY_GRACE_MS),
                 ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
                 ...(options.urlOverride
                   ? { urlOverride: options.urlOverride }

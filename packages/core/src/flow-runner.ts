@@ -52,6 +52,7 @@ import {
   pressKey,
   scrollDirection,
   waitDurationMs,
+  waitUntilTimeoutMs,
 } from "./step-operands.js";
 import { stageEntry } from "./page-cache.js";
 import { pageVersion, quietPage, readTarget } from "./page-bridge.js";
@@ -59,6 +60,7 @@ import type { PageVersion } from "./page-protocol.js";
 import {
   ProviderError,
   isRunWideProviderError,
+  unknownCostCall,
   type Judge,
   type ProviderCall,
   type Resolver,
@@ -122,6 +124,11 @@ export interface FlowRunnerDependencies {
   readonly browserKind?: BrowserKind;
   readonly viewport?: { readonly width: number; readonly height: number };
   readonly verifyPolicy?: VerifyPolicy;
+  /**
+   * How long a failing verify keeps judging the page while it changes, like
+   * Playwright's expect. Omitted or 0 judges once.
+   */
+  readonly verifyGraceMs?: number;
   readonly baseUrl?: string;
   readonly urlOverride?: string;
   readonly slowMoMs?: number;
@@ -343,7 +350,7 @@ function claim(
 ): string {
   return step.text
     .replace(
-      /^\s*(?:verify|assert|check|confirm|ensure|expect|measure|note|observe)\b\s*(?:that\s+|whether\s+|if\s+)?/iu,
+      /^\s*(?:verify|assert|check|confirm|ensure|expect|measure|note|observe|wait\s+(?:up\s+to\s+\d+(?:\.\d+)?\s*(?:s|secs?|seconds?)\s+)?(?:until|for))\b\s*(?:that\s+|whether\s+|if\s+)?/iu,
       "",
     )
     .trim()
@@ -680,9 +687,19 @@ export async function executeSentence(
   };
   // A provider failure every later step would hit too is recorded on this
   // step with its real cause, then ends the attempt and the run.
-  const runWide = async (error: ProviderError): Promise<ProviderError> => {
+  const runWide = async (
+    error: ProviderError,
+    facts: Pick<StepFacts, "failedCalls"> = {},
+  ): Promise<ProviderError> => {
     const outcome = providerFailure(step.source.file, error);
+    const modality =
+      step.op === "verify" || step.op === "measure" ? "judge" : "locator";
     await record(outcome, {
+      ...facts,
+      failedCalls: [
+        ...(facts.failedCalls ?? []),
+        resultCall(unknownCostCall(error), modality),
+      ],
       error: { code: outcome.code, message: outcome.message },
     });
     return error;
@@ -693,7 +710,9 @@ export async function executeSentence(
   const quiet = await quietPage(page, 80, 4_000).catch(() => ({
     quiet: false,
   }));
-  if (!quiet.quiet)
+  // A wait polls the page itself, busy or not: that is what it waits through.
+  const waits = step.op === "verify" && waitUntilTimeoutMs(step.text) !== null;
+  if (!quiet.quiet && !waits)
     return record(
       unsupported(
         step.source.file,
@@ -856,17 +875,169 @@ export async function executeSentence(
       projectText: (text: string) => redactOpaqueText(text, opaqueEntries),
     };
     // A measure records both scores and never gates the test.
-    const judge = (): Promise<VerifyResult | MeasureResult> =>
+    const judge = (
+      signal = dependencies.signal,
+      observationTimeoutMs?: number,
+    ): Promise<VerifyResult | MeasureResult> =>
       step.op === "measure"
-        ? measure(page, dependencies.provider, claim(step, data), assertion)
+        ? measure(page, dependencies.provider, claim(step, data), {
+            ...assertion,
+            ...(signal ? { signal } : {}),
+            ...(observationTimeoutMs === undefined
+              ? {}
+              : { observationTimeoutMs }),
+          })
         : verify(page, dependencies.provider, claim(step, data), {
             ...assertion,
+            ...(signal ? { signal } : {}),
+            ...(observationTimeoutMs === undefined
+              ? {}
+              : { observationTimeoutMs }),
             ...(dependencies.verifyPolicy ?? {}),
           });
     const outcome = (result: VerifyResult | MeasureResult) =>
       result.kind === "verify" && result.verdict === "failed"
         ? "failed"
         : "continue";
+    // `wait until …` judges the claim again each time the page changes, and
+    // passes as soon as it holds. A plain verify does the same for a short
+    // grace, like Playwright's expect, so a claim made just after an action
+    // sees the page the action leads to. Only a changed page is judged again;
+    // earlier judgements are billed as failed calls.
+    const waitUntil = async (
+      limitMs: number,
+      pollUnchangedMs: number | null,
+    ) => {
+      const deadline = performance.now() + limitMs;
+      const earlier: ReturnType<typeof resultCall>[] = [];
+      let last: VerifyResult | MeasureResult | undefined;
+      let lastError: unknown;
+      for (;;) {
+        if (dependencies.signal?.aborted) {
+          if (last)
+            earlier.push(resultCall(last.call, "judge", last.elapsedMs));
+          last = undefined;
+          lastError = new AssertionEngineError("canceled");
+          break;
+        }
+        const before = await pageVersion(page).catch(() => null);
+        try {
+          const remainingMs = Math.max(
+            1,
+            Math.ceil(deadline - performance.now()),
+          );
+          const deadlineSignal = AbortSignal.timeout(remainingMs);
+          const signal = dependencies.signal
+            ? AbortSignal.any([dependencies.signal, deadlineSignal])
+            : deadlineSignal;
+          const result = await judge(signal, remainingMs);
+          if (outcome(result) === "continue")
+            return record("continue", {
+              verify: result,
+              // Every earlier judgement was billed too.
+              failedCalls: last
+                ? [...earlier, resultCall(last.call, "judge", last.elapsedMs)]
+                : earlier,
+            });
+          if (last)
+            earlier.push(resultCall(last.call, "judge", last.elapsedMs));
+          last = result;
+          lastError = undefined;
+        } catch (error) {
+          if (isRunWideProviderError(error)) {
+            const failedCalls = [...earlier];
+            if (last)
+              failedCalls.push(resultCall(last.call, "judge", last.elapsedMs));
+            throw await runWide(error, { failedCalls });
+          }
+          if (error instanceof AssertionEngineError && error.failedCall)
+            earlier.push(resultCall(error.failedCall, "judge"));
+          if (performance.now() >= deadline && !dependencies.signal?.aborted) {
+            lastError =
+              error instanceof AssertionEngineError
+                ? new AssertionEngineError(
+                    "observation_timeout",
+                    error.failedCall,
+                  )
+                : new AssertionEngineError("observation_timeout");
+            break;
+          }
+          // Only a stale or unsettled page is worth reading again, or one
+          // replaced mid-read by a navigation; the deadline bounds the retries.
+          if (
+            !(error instanceof AssertionEngineError) ||
+            ![
+              "stale_observation",
+              "observation_timeout",
+              "browser_failure",
+            ].includes(error.code)
+          ) {
+            lastError = error;
+            break;
+          }
+          lastError = error;
+        }
+        let changed = false;
+        const pollBy =
+          pollUnchangedMs === null
+            ? deadline
+            : Math.min(deadline, performance.now() + pollUnchangedMs);
+        while (performance.now() < pollBy) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          if (dependencies.signal?.aborted) break;
+          const now = await pageVersion(page).catch(() => null);
+          // No version means a navigation is under way: read again.
+          if (!before || !now) {
+            changed = true;
+            break;
+          }
+          if (
+            now.revision !== before.revision ||
+            now.document !== before.document ||
+            now.route !== before.route
+          ) {
+            changed = true;
+            break;
+          }
+        }
+        if (dependencies.signal?.aborted) {
+          if (last)
+            earlier.push(resultCall(last.call, "judge", last.elapsedMs));
+          last = undefined;
+          lastError = new AssertionEngineError("canceled");
+          break;
+        }
+        if (performance.now() >= deadline && !changed) break;
+        if (!changed && pollUnchangedMs === null) break;
+        await quietPage(page, 80, 2_000).catch(() => undefined);
+        if (performance.now() >= deadline) break;
+      }
+      if (last)
+        return record(outcome(last), { verify: last, failedCalls: earlier });
+      return record(
+        unsupported(
+          step.source.file,
+          step.source,
+          lastError instanceof Error
+            ? lastError.message
+            : "The assertion could not be judged.",
+        ),
+        {
+          failedCalls: earlier,
+          error: {
+            code:
+              lastError instanceof AssertionEngineError
+                ? lastError.code
+                : "assertion_error",
+            message: "The assertion could not be judged.",
+          },
+        },
+      );
+    };
+    const until = step.op === "verify" ? waitUntilTimeoutMs(step.text) : null;
+    const graceMs = dependencies.verifyGraceMs ?? 0;
+    if (until !== null) return waitUntil(until, 5_000);
+    if (step.op === "verify" && graceMs > 0) return waitUntil(graceMs, null);
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider
@@ -897,7 +1068,7 @@ export async function executeSentence(
             });
           } catch (retryError) {
             if (isRunWideProviderError(retryError))
-              throw await runWide(retryError);
+              throw await runWide(retryError, { failedCalls: priorCalls });
             return record(
               unsupported(
                 step.source.file,
@@ -1159,6 +1330,75 @@ export async function executeSentence(
       },
     );
   }
+  // Like Playwright's auto-wait: a target that is not on the page yet may
+  // appear while the page is still changing. Locate again after each change,
+  // within the same grace a verify gets; a page that stays put costs nothing.
+  const missing = (result: LocatorResult) =>
+    result.kind !== "resolved" &&
+    (result.reason === "none" || result.reason === "no_candidates");
+  const actionGraceMs = dependencies.verifyGraceMs ?? 0;
+  if (missing(resolved) && actionGraceMs > 0) {
+    const deadline = performance.now() + actionGraceMs;
+    const earlier: ProviderCall[] = [];
+    while (
+      missing(resolved) &&
+      performance.now() < deadline &&
+      !dependencies.signal?.aborted
+    ) {
+      const before =
+        (resolved.kind !== "resolved"
+          ? resolved.diagnostic.observationVersion
+          : undefined) ?? (await pageVersion(page).catch(() => null));
+      let changed = false;
+      while (performance.now() < deadline) {
+        if (dependencies.signal?.aborted) break;
+        const now = await pageVersion(page).catch(() => null);
+        if (
+          !before ||
+          !now ||
+          now.revision !== before.revision ||
+          now.document !== before.document ||
+          now.route !== before.route
+        ) {
+          changed = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      if (!changed) break;
+      await quietPage(page, 80, 2_000).catch(() => undefined);
+      earlier.push(...resolved.calls);
+      try {
+        resolved = await locate();
+      } catch (error) {
+        if (isRunWideProviderError(error)) {
+          const failedCalls = earlier.map((call) =>
+            resultCall(call, "locator"),
+          );
+          throw await runWide(error, { failedCalls });
+        }
+        break;
+      }
+    }
+    if (earlier.length)
+      resolved = { ...resolved, calls: [...earlier, ...resolved.calls] };
+  }
+  if (dependencies.signal?.aborted)
+    return record(
+      unsupported(
+        step.source.file,
+        step.source,
+        "The target could not be resolved because the run was canceled.",
+      ),
+      {
+        locator: resolved,
+        error: {
+          code: "canceled",
+          message:
+            "The target could not be resolved because the run was canceled.",
+        },
+      },
+    );
   if (resolved.kind !== "resolved") {
     if (
       resolved.reason === "none" ||
