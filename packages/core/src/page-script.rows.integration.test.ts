@@ -15,6 +15,7 @@ const ROWS = `
   .trigger { width: 24px; height: 24px; }
   .row:hover .actions { visibility: visible; }
   .menu { display: none; }
+  .trigger .open-menu { position: absolute; }
 </style>
 <div class="list">
   <div class="row" id="alpha"><span>Alpha report</span>
@@ -27,6 +28,14 @@ const ROWS = `
       <div class="menu"><div role="button"><i class="fa-pencil"></i>Rename</div><div role="button"><i class="fa-trash"></i>Delete</div></div>
     </div></div>
   </div>
+</div>
+<div class="row" id="gamma"><span>Gamma report</span>
+  <div style="visibility:hidden"><div role="button" class="trigger"><i class="fa-gear"></i></div></div>
+</div>
+<div class="row" id="delta"><span>Delta report</span>
+  <div><div role="button" tabindex="0" class="trigger"><i class="fa-ellipsis"></i>
+    <div class="open-menu"><div role="button">Archive</div><div role="button">Share</div></div>
+  </div></div>
 </div>
 <script>
   for (const trigger of document.querySelectorAll(".trigger"))
@@ -81,8 +90,13 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(rows.map((row) => row.name)).toEqual([
         "Alpha report",
         "Beta report",
+        "Gamma report",
       ]);
-      const triggers = found.candidates.filter((c) => c.role === "button");
+      // Delta's open menu shows text of its own, so those items are the
+      // targets, not the row around them.
+      const triggers = found.candidates
+        .filter((c) => c.role === "button")
+        .filter((c) => c.peers[0] !== "Delta report");
       // Named by its own icon, not the closed menu's; menu items are not
       // offered until the menu opens.
       expect(triggers.map((trigger) => trigger.name)).toEqual([
@@ -94,6 +108,28 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         ["Beta report"],
       ]);
       expect(triggers[0]!.signals.nameHint).toContain("pencil Rename");
+      await context.close();
+    });
+
+    it("offers no hidden control that no hover rule reveals", async () => {
+      const { page, context } = await fresh();
+      const found = await collectCandidates(page, "click");
+      // Gamma's gear is hidden with no :hover rule to show it.
+      expect(found.candidates.map((c) => c.name)).not.toContain("gear");
+      await context.close();
+    });
+
+    it("keeps an open menu's items out of the name of the control that opened it", async () => {
+      const { page, context } = await fresh();
+      const found = await collectCandidates(page, "click");
+      const names = found.candidates.map((c) => c.name);
+      // The open menu's items are their own targets, and the trigger is
+      // still named by its icon rather than "Archive Share".
+      expect(names).toEqual(expect.arrayContaining(["Archive", "Share"]));
+      expect(names).not.toContain("Archive Share");
+      expect(
+        found.candidates.find((c) => c.peers[0] === "Delta report")?.name,
+      ).toBe("ellipsis");
       await context.close();
     });
 
