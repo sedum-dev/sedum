@@ -896,7 +896,10 @@ export async function executeSentence(
           if (outcome(result) === "continue")
             return record("continue", {
               verify: result,
-              failedCalls: earlier,
+              // Every earlier judgement was billed too.
+              failedCalls: last
+                ? [...earlier, resultCall(last.call, "judge", last.elapsedMs)]
+                : earlier,
             });
           if (last)
             earlier.push(resultCall(last.call, "judge", last.elapsedMs));
