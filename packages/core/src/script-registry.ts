@@ -82,6 +82,11 @@ export interface Ai {
     sentences: readonly string[],
     values?: AiValues,
   ): Promise<void>;
+  /**
+   * Ask whether a claim holds on the page now, to branch on what the page
+   * shows. It is judged like a verify, never retried, and never fails the test.
+   */
+  holds(claim: string, values?: AiValues): Promise<boolean>;
   /** Read the text of the element a description refers to. */
   extract(description: string): Promise<string>;
   extract<T>(description: string, parser: Parser<T>): Promise<T>;

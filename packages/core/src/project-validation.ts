@@ -6,6 +6,7 @@ import {
   classifySentenceSteps,
   type ClassifyFlowOptions,
 } from "./flow-classification.js";
+import { WAIT_UNTIL } from "./classification.js";
 import {
   findIdentityCollisions,
   loadFlowFile,
@@ -233,21 +234,39 @@ async function validateScriptFile(
       fix: "Keep shared steps in fewer modules.",
     });
   diagnostics.push(...warnings);
-  const sentences: SentenceStep[] = scans
-    .flatMap((scan) => scan.sentences)
-    .map((item) => ({
-      kind: "sentence",
-      phase: "steps",
-      text: item.text,
-      tokens: tokenizeStep(item.text).tokens,
-      source: item.source,
-    }));
+  const scanned = scans.flatMap((scan) => scan.sentences);
+  const sentences: SentenceStep[] = scanned.map((item) => ({
+    kind: "sentence",
+    phase: "steps",
+    text: item.text,
+    tokens: tokenizeStep(item.text).tokens,
+    source: item.source,
+  }));
   const checked = await classifySentenceSteps(sentences, classify);
   diagnostics.push(...checked.diagnostics);
+  const invalidChecks: FlowDiagnostic[] = [];
+  scanned.forEach((item, index) => {
+    const classified = checked.classification.steps[index];
+    if (
+      !item.check ||
+      !classified ||
+      (classified.op === "verify" && !WAIT_UNTIL.test(item.text))
+    )
+      return;
+    invalidChecks.push({
+      severity: "error",
+      code: "invalid_check",
+      source: item.source,
+      message: "ai.holds takes one claim about the page.",
+      fix: 'Write ai.holds("the passkey screen is shown").',
+    });
+  });
+  diagnostics.push(...invalidChecks);
   // A sentence that is not a literal was not checked: never report it valid.
   const complete =
     checked.classification.steps.every((step) => step !== null) &&
     checked.diagnostics.length === 0 &&
+    invalidChecks.length === 0 &&
     warnings.length === 0;
   return {
     headers,

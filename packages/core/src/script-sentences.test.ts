@@ -44,6 +44,7 @@ describe("literal ai sentences in TypeScript tests", () => {
         '    "click the Cart link",',
         "  ]);",
         '  await ai.group("Pay", async () => { await ai("click Pay"); });',
+        '  const optional = await ai.holds("the passkey screen is shown");',
         '  const total = await ai.extract("the order total");',
         "});",
       ].join("\n"),
@@ -58,6 +59,11 @@ describe("literal ai sentences in TypeScript tests", () => {
       { text: "click Next", source: { file, line: 3, col: 54 } },
       { text: "click the Cart link", source: { file, line: 5, col: 5 } },
       { text: "click Pay", source: { file, line: 7, col: 48 } },
+      {
+        text: "the passkey screen is shown",
+        source: { file, line: 8, col: 35 },
+        check: true,
+      },
     ]);
     expect(scan.warnings).toEqual([]);
   });
@@ -192,6 +198,17 @@ describe("literal ai sentences in TypeScript tests", () => {
     ],
     ["an optional call", 'await ai?.("click A");'],
     ["a parenthesized callee", 'await (ai)("click A");'],
+    ["an alias of ai.holds", "const holds = ai.holds;"],
+    ["a parenthesized ai.holds callee", 'await (ai.holds)("click A");'],
+    ["ai.holds without a claim", "await ai.holds();"],
+    ["ai.holds with a claim list", 'await ai.holds(["one", "two"]);'],
+    [
+      "ai.holds with a declared claim list",
+      'const claims = ["one", "two"];\nawait ai.holds(claims);',
+    ],
+    ["ai.holds with null values", 'await ai.holds("claim", null);'],
+    ["ai.holds with string values", 'await ai.holds("claim", "values");'],
+    ["ai.holds with extra arguments", 'await ai.holds("claim", {}, "extra");'],
     [
       "a list pushed to",
       'const steps = ["click A"];\nsteps.push("type {{x into y");\nawait ai(steps);',
@@ -207,6 +224,25 @@ describe("literal ai sentences in TypeScript tests", () => {
   ])("warns about %s", (_name, source) => {
     const scan = scanScriptSentences(source, file);
     expect(scan.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("discovers optional ai.holds calls as checks", () => {
+    const scan = scanScriptSentences(
+      [
+        'await ai.holds?.("the cart is shown");',
+        'await ai?.holds("the checkout is shown");',
+        'await ai?.holds?.("the receipt is shown");',
+        'await ai.holds("the account is shown", { account: "business" });',
+      ].join("\n"),
+      file,
+    );
+    expect(scan.sentences.map(({ text, check }) => ({ text, check }))).toEqual([
+      { text: "the cart is shown", check: true },
+      { text: "the checkout is shown", check: true },
+      { text: "the receipt is shown", check: true },
+      { text: "the account is shown", check: true },
+    ]);
+    expect(scan.warnings).toEqual([]);
   });
 
   it.each([

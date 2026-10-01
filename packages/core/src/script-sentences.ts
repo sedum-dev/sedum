@@ -4,6 +4,8 @@ import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
 export interface ScriptSentence {
   readonly text: string;
   readonly source: FlowSource;
+  /** The sentence is a claim passed to `ai.holds`, not a general step. */
+  readonly check?: true;
 }
 
 export interface ScriptSentenceScan {
@@ -262,10 +264,11 @@ export function tokenize(source: string): Token[] {
 }
 
 /**
- * Find the literal sentences passed to `ai(...)`, `ai([...])`, and
- * `ai.group(name, [...])`. A sentence built with `${}` or `+` is reported as
- * a warning: it defeats the classification cache and cannot be checked
- * before a run. `ai.extract` takes a description, not a step, so it is skipped.
+ * Find the literal sentences passed to `ai(...)`, `ai([...])`,
+ * `ai.group(name, [...])`, and `ai.holds(...)`. A sentence built with `${}` or
+ * `+` is reported as a warning: it defeats the classification cache and cannot
+ * be checked before a run. `ai.extract` takes a description, not a step, so it
+ * is skipped.
  */
 export function scanScriptSentences(
   source: string,
@@ -799,6 +802,77 @@ export function scanScriptSentences(
     }
     if (isPunct(index + 1, "(")) {
       call(index + 1);
+      continue;
+    }
+    const member = isPunct(index + 1, ".")
+      ? index + 2
+      : isPunct(index + 1, "?") && isPunct(index + 2, ".")
+        ? index + 3
+        : undefined;
+    let holdsOpen: number | undefined;
+    if (
+      member !== undefined &&
+      at(member)?.kind === "ident" &&
+      at(member)!.value === "holds"
+    ) {
+      const after = member + 1;
+      if (isPunct(after, "(")) holdsOpen = after;
+      else if (
+        isPunct(after, "?") &&
+        isPunct(after + 1, ".") &&
+        isPunct(after + 2, "(")
+      )
+        holdsOpen = after + 2;
+    }
+    if (holdsOpen !== undefined) {
+      const first = holdsOpen + 1;
+      const firstToken = at(first);
+      const declared =
+        firstToken?.kind === "ident"
+          ? constants.get(firstToken.value)
+          : undefined;
+      if (
+        isPunct(first, ")") ||
+        isPunct(first, "[") ||
+        (declared !== undefined && isPunct(declared, "["))
+      ) {
+        unchecked(
+          token,
+          "ai.holds requires one string claim, so this value is not checked before a run.",
+        );
+        continue;
+      }
+      const afterClaim = skipExpression(first);
+      if (isPunct(afterClaim, ",")) {
+        const valuesIndex = afterClaim + 1;
+        const values = at(valuesIndex);
+        const afterValues = skipExpression(valuesIndex);
+        const validValues =
+          isPunct(valuesIndex, "{") ||
+          (values?.kind === "ident" && values.value !== "null");
+        if (!validValues || isPunct(afterValues, ",")) {
+          unchecked(
+            token,
+            "This ai.holds call has invalid or extra arguments, so its claim is not checked before a run.",
+          );
+          continue;
+        }
+      }
+      const before = sentences.length;
+      call(holdsOpen);
+      for (let found = before; found < sentences.length; found++)
+        sentences[found] = { ...sentences[found]!, check: true };
+      continue;
+    }
+    if (
+      member !== undefined &&
+      at(member)?.kind === "ident" &&
+      at(member)!.value === "holds"
+    ) {
+      unchecked(
+        token,
+        "This ai.holds call is written indirectly, so its claim is not checked before a run.",
+      );
       continue;
     }
     if (
