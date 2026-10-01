@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { patternOperation, validateOperand } from "./classification.js";
 import {
+  countText,
   elementClaim,
+  literalShown,
+  textClaim,
   gotoPathParts,
   gotoUrlParts,
   historyMove,
@@ -155,5 +158,53 @@ describe("control state claims", () => {
     expect(elementClaim("the Economy option is selected")).toBeNull();
     expect(elementClaim("no Search field is shown")).toBeNull();
     expect(elementClaim("the Add account button is not shown")).toBeNull();
+  });
+});
+
+describe("exact text claims", () => {
+  it("reads quoted presence, absence, counts, alternatives, and URLs", () => {
+    expect(textClaim('the text "Total" is not shown')).toEqual({
+      text: "Total",
+      expect: { kind: "present", present: false },
+    });
+    expect(textClaim('"Add debt" appears once')?.expect).toEqual({
+      kind: "count",
+      count: 1,
+    });
+    expect(textClaim('"{{name}}" appears exactly 2 times')).toEqual({
+      text: "{{name}}",
+      expect: { kind: "count", count: 2 },
+    });
+    expect(
+      textClaim('the text "Create a passkey" or "Terms & Conditions" is shown'),
+    ).toEqual({
+      text: "Create a passkey",
+      alternatives: ["Create a passkey", "Terms & Conditions"],
+      expect: { kind: "present", present: true },
+    });
+    expect(textClaim('the page URL contains "/sign-up"')?.expect).toEqual({
+      kind: "url",
+      contains: true,
+    });
+    expect(textClaim("the text Total is shown")).toBeNull();
+  });
+
+  it("passes an unquoted literal only when it is on the page", () => {
+    expect(literalShown("the text Welcome back! is shown")).toBe(
+      "Welcome back!",
+    );
+    expect(literalShown("the text Welcome is not shown")).toBeNull();
+    expect(literalShown('the text "Welcome" is shown')).toBeNull();
+    // A semantic claim must still be judged: matching text elsewhere is not
+    // evidence that it is a heading, label, or message.
+    expect(literalShown("the heading Welcome is shown")).toBeNull();
+    expect(literalShown("the label Name is shown")).toBeNull();
+    expect(literalShown("the message Name is required is shown")).toBeNull();
+  });
+
+  it("counts text with spacing ignored", () => {
+    expect(countText("Add debt  Total\nAdd debt", "Add debt")).toBe(2);
+    expect(countText("Welcome BACK", "welcome back", true)).toBe(1);
+    expect(countText("Welcome BACK", "welcome back")).toBe(0);
   });
 });

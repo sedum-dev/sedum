@@ -51,15 +51,20 @@ import {
   historyMove,
   pressKey,
   scrollDirection,
+  countText,
   elementClaim,
+  literalShown,
+  textClaim,
   waitDurationMs,
   waitUntilTimeoutMs,
   type ElementClaim,
+  type TextClaim,
 } from "./step-operands.js";
 import { stageEntry } from "./page-cache.js";
 import {
   controlState,
   pageVersion,
+  visibleText,
   quietPage,
   readTarget,
 } from "./page-bridge.js";
@@ -921,6 +926,19 @@ export async function executeSentence(
       result.kind === "verify" && result.verdict === "failed"
         ? "failed"
         : "continue";
+    // The text a person can read: what the Judge reads, without its limit.
+    const readableText = async () => {
+      const text = await visibleText(page);
+      if (text === null) throw new Error("The page text could not be read.");
+      return text;
+    };
+    // A literal named without quotes that is on the page needs no Judge;
+    // when it is not, the Judge decides, since the author may paraphrase.
+    const literalText =
+      step.op === "verify"
+        ? literalShown(step.text.replace(CLAIM_PREFIX, ""))
+        : null;
+    const literal = literalText ? withValues(literalText, data) : null;
     // `wait until …` judges the claim again each time the page changes, and
     // passes as soon as it holds. A plain verify does the same for a short
     // grace, like Playwright's expect, so a claim made just after an action
@@ -930,6 +948,9 @@ export async function executeSentence(
       limitMs: number,
       pollUnchangedMs: number | null,
     ) => {
+      // A zero limit is used only to try an unquoted literal once before a
+      // normal Judge observation. It is not a one-millisecond deadline.
+      const bounded = limitMs > 0;
       const deadline = performance.now() + limitMs;
       const earlier: ReturnType<typeof resultCall>[] = [];
       let last: VerifyResult | MeasureResult | undefined;
@@ -943,16 +964,27 @@ export async function executeSentence(
           break;
         }
         const before = await pageVersion(page).catch(() => null);
+        if (literal) {
+          await quietPage(page, 80, 2_000).catch(() => undefined);
+          const shown = await readableText()
+            .then((text) => countText(text, literal, true) > 0)
+            .catch(() => false);
+          if (shown) return record("continue", { failedCalls: earlier });
+        }
         try {
-          const remainingMs = Math.max(
-            1,
-            Math.ceil(deadline - performance.now()),
-          );
-          const deadlineSignal = AbortSignal.timeout(remainingMs);
-          const signal = dependencies.signal
-            ? AbortSignal.any([dependencies.signal, deadlineSignal])
-            : deadlineSignal;
-          const result = await judge(signal, remainingMs);
+          let result: VerifyResult | MeasureResult;
+          if (!bounded) result = await judge();
+          else {
+            const remainingMs = Math.max(
+              1,
+              Math.ceil(deadline - performance.now()),
+            );
+            const deadlineSignal = AbortSignal.timeout(remainingMs);
+            const signal = dependencies.signal
+              ? AbortSignal.any([dependencies.signal, deadlineSignal])
+              : deadlineSignal;
+            result = await judge(signal, remainingMs);
+          }
           if (outcome(result) === "continue")
             return record("continue", {
               verify: result,
@@ -974,7 +1006,11 @@ export async function executeSentence(
           }
           if (error instanceof AssertionEngineError && error.failedCall)
             earlier.push(resultCall(error.failedCall, "judge"));
-          if (performance.now() >= deadline && !dependencies.signal?.aborted) {
+          if (
+            bounded &&
+            performance.now() >= deadline &&
+            !dependencies.signal?.aborted
+          ) {
             lastError =
               error instanceof AssertionEngineError
                 ? new AssertionEngineError(
@@ -992,6 +1028,8 @@ export async function executeSentence(
               "stale_observation",
               "observation_timeout",
               "browser_failure",
+              // Too much text to judge: the literal can still turn up.
+              ...(literal ? ["oversize_digest", "resource_ceiling"] : []),
             ].includes(error.code)
           ) {
             lastError = error;
@@ -1189,15 +1227,99 @@ export async function executeSentence(
         error: { code: "element_state", message },
       });
     };
+    // Quoted text is checked exactly on the page's visible text.
+    const checkText = async (claimed: TextClaim, limitMs: number) => {
+      const deadline = performance.now() + limitMs;
+      const reveal = (text: string) =>
+        text.replace(
+          /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
+          (placeholder, key: string) =>
+            data[key]?.value.reveal() ?? placeholder,
+        );
+      const wanted = (claimed.alternatives ?? [claimed.text]).map(reveal);
+      let message = "";
+      for (;;) {
+        const before = await pageVersion(page).catch(() => null);
+        await quietPage(page, 80, 2_000).catch(() => undefined);
+        let found: number;
+        try {
+          const haystack =
+            claimed.expect.kind === "url" ? "" : await readableText();
+          // With alternatives, the count is of every one together.
+          found = wanted.reduce(
+            (sum, text) =>
+              sum +
+              (claimed.expect.kind === "url"
+                ? Number(page.url.includes(text))
+                : countText(haystack, text, claimed.ignoreCase)),
+            0,
+          );
+        } catch {
+          return record(
+            unsupported(
+              step.source.file,
+              step.source,
+              "The page text could not be read.",
+            ),
+            {
+              error: {
+                code: "text_unreadable",
+                message: "The page text could not be read.",
+              },
+            },
+          );
+        }
+        const expected = claimed.expect;
+        const holds =
+          expected.kind === "present"
+            ? found > 0 === expected.present
+            : expected.kind === "url"
+              ? found > 0 === expected.contains
+              : found === expected.count;
+        if (holds) return record("continue", {});
+        message =
+          expected.kind === "url"
+            ? `The page address ${found ? "contains" : "does not contain"} the text.`
+            : found === 0
+              ? "The text is not on the page."
+              : `The text appears ${found === 1 ? "once" : `${found} times`} on the page.`;
+        let changed = false;
+        while (performance.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const now = await pageVersion(page).catch(() => null);
+          // No version means a navigation is under way: read again.
+          if (!before || !now) {
+            changed = true;
+            break;
+          }
+          if (
+            now.revision !== before.revision ||
+            now.document !== before.document ||
+            now.route !== before.route
+          ) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) break;
+      }
+      return record("failed", { error: { code: "text_check", message } });
+    };
     const until = step.op === "verify" ? waitUntilTimeoutMs(step.text) : null;
+    const quoted =
+      step.op === "verify"
+        ? textClaim(step.text.replace(CLAIM_PREFIX, ""))
+        : null;
     const graceMs = dependencies.verifyGraceMs ?? 0;
+    if (quoted) return checkText(quoted, until ?? graceMs);
     const element =
       step.op === "verify"
         ? elementClaim(step.text.replace(CLAIM_PREFIX, ""))
         : null;
     if (element) return checkElement(element, until ?? graceMs);
     if (until !== null) return waitUntil(until, 5_000);
-    if (step.op === "verify" && graceMs > 0) return waitUntil(graceMs, null);
+    if (step.op === "verify" && (graceMs > 0 || literal))
+      return waitUntil(graceMs, null);
     try {
       const result = await judge();
       // The Judge is read-only. If its evidence went stale during the provider

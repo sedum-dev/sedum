@@ -32,6 +32,7 @@ type Method =
   | "clickTarget"
   | "readTarget"
   | "controlState"
+  | "visibleText"
   | "clearRefs";
 function validVersion(value: unknown): value is PageVersion {
   if (!value || typeof value !== "object") return false;
@@ -244,4 +245,12 @@ export async function controlState(
   )
     throw new PageScriptError("invalid-result", "Invalid control state.");
   return result;
+}
+
+/** Visible page text with no size limit; null when it cannot be read. */
+export async function visibleText(page: BrowserPage): Promise<string | null> {
+  const result = await call<DigestResult>(page, "visibleText");
+  return result && result.complete && typeof result.text === "string"
+    ? result.text
+    : null;
 }

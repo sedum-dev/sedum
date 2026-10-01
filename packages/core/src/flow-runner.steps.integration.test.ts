@@ -78,6 +78,11 @@ const PAGES: Record<string, string> = {
   "/static": "<main><p>Nothing changes here</p></main>",
   "/redirect": `<main><p>Redirecting</p><script>setTimeout(() => { location.href = "/done"; }, 600);</script></main>`,
   "/done": "<main><h1>All done</h1></main>",
+  "/semantic": "<main><button>Add account</button></main>",
+  "/list": `<main><h1>Accounts</h1><ul><li>SeedBank £1</li><li>NewBank £2</li></ul>
+    <p>Total £3</p><button>Add account</button>
+    <aside inert style="position:fixed;left:-9999px">Ask Pennee SecretBank</aside>
+    <p>${"Long filler text. ".repeat(400)}</p></main>`,
   "/form": `<main>
     <label>Name <input id="name"></label>
     <label>Email <input readonly value="ada@example.com"></label>
@@ -388,6 +393,65 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         );
         expect(outcome.judge).not.toHaveBeenCalled();
       }
+    }, 30_000);
+
+    it("checks quoted text, counts, and the URL exactly", async () => {
+      const outcome = await run(
+        "/list",
+        [
+          'verify "{{bank}}" appears once',
+          'verify "Bank" appears exactly 2 times',
+          'verify the text "Add account" is shown',
+          'verify the text "DeletedBank" is not shown',
+          'verify the text "Missing" or "Total £3" is shown',
+          'verify the page URL contains "/list"',
+          // Text in an inert panel off screen is not readable.
+          'verify the text "SecretBank" is not shown',
+        ],
+        0,
+        undefined,
+        undefined,
+        { bank: "SeedBank" },
+      );
+      expect(
+        outcome.flow.status,
+        JSON.stringify(
+          outcome.steps.map((step) => [step.sentence, step.error]),
+        ),
+      ).toBe("passed");
+      expect(outcome.judge).not.toHaveBeenCalled();
+    }, 30_000);
+
+    it("fails an exact check with what the page shows", async () => {
+      const outcome = await run("/list", ['verify "Bank" appears once']);
+      expect(outcome.flow.status).toBe("failed");
+      expect(outcome.steps[0]?.error).toMatchObject({
+        code: "text_check",
+        message: "The text appears 2 times on the page.",
+      });
+    }, 30_000);
+
+    it("passes a literal on the page without the Judge, even past its size limit", async () => {
+      // The page is too long for the Judge, so only the literal path works.
+      const outcome = await run("/list", ["verify the text total £3 is shown"]);
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+      expect(outcome.judge).not.toHaveBeenCalled();
+    }, 30_000);
+
+    it("cannot judge a missing literal on a page too long for the Judge", async () => {
+      const outcome = await run("/list", [
+        "verify the text Overdraft is shown",
+      ]);
+      expect(outcome.flow.status).toBe("could_not_run");
+      expect(outcome.steps[0]?.error?.code).toBe("oversize_digest");
+    }, 30_000);
+
+    it("does not satisfy a heading claim with matching button text", async () => {
+      const outcome = await run("/semantic", [
+        "verify the heading Add account is shown",
+      ]);
+      expect(outcome.flow.status).toBe("failed");
+      expect(outcome.judge).toHaveBeenCalledOnce();
     }, 30_000);
 
     it("does not infer emptiness from an unreadable password", async () => {

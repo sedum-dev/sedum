@@ -211,6 +211,116 @@ export function elementClaim(claim: string): ElementClaim | null {
   };
 }
 
+const QUOTED = `(?:"([^"]+)"|“([^”]+)”)`;
+const SHOWN = "(?:shown|visible|displayed|present|on\\s+the\\s+page)";
+const QUOTED_LIST = `((?:"[^"]+"|“[^”]+”)(?:\\s*(?:,|or|,\\s*or)\\s*(?:"[^"]+"|“[^”]+”))*)`;
+const TEXT_PRESENCE = new RegExp(
+  `^(?:the\\s+)?(?:texts?\\s+)?${QUOTED_LIST}\\s+(?:is|are)\\s+(not\\s+)?${SHOWN}\\s*\\.?$`,
+  "iu",
+);
+const quotedTexts = (list: string): string[] =>
+  [...list.matchAll(/"([^"]+)"|“([^”]+)”/gu)].map((m) => m[1] ?? m[2]!);
+const TEXT_ABSENCE = new RegExp(
+  `^(?:there\\s+is\\s+)?no\\s+(?:text\\s+)?${QUOTED}(?:\\s+is)?\\s+${SHOWN}\\s*\\.?$|^(?:the\\s+)?(?:text\\s+)?${QUOTED}\\s+does\\s+not\\s+appear\\s*\\.?$`,
+  "iu",
+);
+const TEXT_COUNT = new RegExp(
+  `^(?:the\\s+)?(?:text\\s+)?${QUOTED}\\s+(?:appears|is\\s+shown|occurs)\\s+(?:exactly\\s+)?(once|twice|\\d+\\s+times?)\\s*\\.?$`,
+  "iu",
+);
+
+/**
+ * `the text Welcome back! is shown`, without quotes: the text as written, in
+ * any letter case, or null. Its presence settles the claim at once; its
+ * absence does not, since a person may paraphrase what the page says.
+ */
+export function literalShown(claim: string): string | null {
+  const text = canonicalSentence(claim);
+  if (/["“]/u.test(text)) return null;
+  const literal = LITERAL_PRESENCE.exec(text);
+  return literal && !literal[2] ? literal[1]! : null;
+}
+/** `the text Welcome back! is shown`: a literal named without quotes. */
+const LITERAL_PRESENCE =
+  /^the\s+text\s+(.+?)\s+(?:is|are)\s+(not\s+)?(?:shown|visible|displayed|present|on\s+the\s+page)\s*$/iu;
+
+export interface TextClaim {
+  /** The quoted text, which may hold {{name}} values. */
+  readonly text: string;
+  /** Alternatives joined by "or": the claim holds when any one does. */
+  readonly alternatives?: readonly string[];
+  /** Named without quotes, so letter case is not compared. */
+  readonly ignoreCase?: boolean;
+  readonly expect:
+    | { readonly kind: "present"; readonly present: boolean }
+    | { readonly kind: "count"; readonly count: number }
+    | { readonly kind: "url"; readonly contains: boolean };
+}
+const URL_CLAIM = new RegExp(
+  `^(?:the\\s+)?(?:page\\s+|current\\s+)?(?:url|address)\\s+(does\\s+not\\s+contain|contains|includes)\\s+${QUOTED_LIST}\\s*\\.?$`,
+  "iu",
+);
+
+/**
+ * A claim about exact, quoted page text: `the text "Total" is not shown`,
+ * `"Add debt" appears once`, `"SeedBank" appears exactly 2 times`. Quotes ask
+ * for an exact check, so it is made on the page text, not by the Judge.
+ */
+export function textClaim(claim: string): TextClaim | null {
+  const text = canonicalSentence(claim);
+  const url = URL_CLAIM.exec(text);
+  if (url) {
+    const texts = quotedTexts(url[2]!);
+    return {
+      text: texts[0]!,
+      ...(texts.length > 1 ? { alternatives: texts } : {}),
+      expect: { kind: "url", contains: !/not/iu.test(url[1]!) },
+    };
+  }
+  const presence = TEXT_PRESENCE.exec(text);
+  if (presence) {
+    const texts = quotedTexts(presence[1]!);
+    return {
+      text: texts[0]!,
+      ...(texts.length > 1 ? { alternatives: texts } : {}),
+      expect: { kind: "present", present: !presence[2] },
+    };
+  }
+  const absence = TEXT_ABSENCE.exec(text);
+  if (absence)
+    return {
+      text: absence[1] ?? absence[2] ?? absence[3] ?? absence[4]!,
+      expect: { kind: "present", present: false },
+    };
+  const counted = TEXT_COUNT.exec(text);
+  if (!counted) return null;
+  const word = counted[3]!.toLowerCase();
+  return {
+    text: counted[1] ?? counted[2]!,
+    expect: {
+      kind: "count",
+      count:
+        word === "once" ? 1 : word === "twice" ? 2 : Number.parseInt(word, 10),
+    },
+  };
+}
+
+/** Non-overlapping occurrences of `needle` in page text, spacing ignored. */
+export function countText(
+  haystack: string,
+  needle: string,
+  ignoreCase = false,
+): number {
+  const space = (text: string) => {
+    const spaced = text.replace(/\s+/gu, " ").trim();
+    return ignoreCase ? spaced.toLocaleLowerCase() : spaced;
+  };
+  const page = space(haystack);
+  const wanted = space(needle);
+  if (!wanted) return 0;
+  return page.split(wanted).length - 1;
+}
+
 /** `go back`, `go forward`, `reload the page`: a move in the browser history. */
 export function historyMove(
   sentence: string,
