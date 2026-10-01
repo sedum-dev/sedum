@@ -75,6 +75,15 @@ const PAGES: Record<string, string> = {
   "/static": "<main><p>Nothing changes here</p></main>",
   "/redirect": `<main><p>Redirecting</p><script>setTimeout(() => { location.href = "/done"; }, 600);</script></main>`,
   "/done": "<main><h1>All done</h1></main>",
+  "/form": `<main>
+    <label>Name <input id="name"></label>
+    <label>Email <input readonly value="ada@example.com"></label>
+    <label><input type="checkbox"> Remember me</label>
+    <button aria-label="Search"><i class="fa-search"></i></button>
+    <div role="button" id="save" aria-disabled="true">Save</div>
+    <script>document.querySelector("#name").addEventListener("input", (event) => {
+      document.querySelector("#save").setAttribute("aria-disabled", String(!event.target.value));
+    });</script></main>`,
 };
 
 describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
@@ -112,11 +121,15 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       url: string,
       steps: readonly string[],
       verifyGraceMs = 0,
+      data: Record<string, string> = {},
     ) {
       const file = path.join(root, `flow-${++counter}.test.yaml`);
+      const values = Object.entries(data)
+        .map(([key, value]) => `  ${key}: ${JSON.stringify(value)}\n`)
+        .join("");
       await writeFile(
         file,
-        `url: ${base}${url}\nsteps:\n${steps.map((step) => `  - ${JSON.stringify(step)}`).join("\n")}\n`,
+        `url: ${base}${url}\n${values ? `data:\n${values}` : ""}steps:\n${steps.map((step) => `  - ${JSON.stringify(step)}`).join("\n")}\n`,
       );
       const judge = vi.fn(holds);
       const resolver = vi.fn(choose);
@@ -207,6 +220,54 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const once = await run("/late", ["click the Continue button"], 0);
       expect(once.flow.status).toBe("failed");
       expect(once.steps[0]?.error?.code).toBe("no_match");
+    }, 30_000);
+
+    it("checks a control's state on the control", async () => {
+      const outcome = await run(
+        "/form",
+        [
+          "verify the Save button is disabled",
+          "type {{name}} in the Name field",
+          "verify the Save button is enabled",
+          "click the Remember me checkbox",
+          "verify the Remember me checkbox is checked",
+          "verify the Search button is shown",
+          // The Search icon button is no field.
+          "verify the Search field is not shown",
+        ],
+        0,
+        { name: "Ada" },
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+      // State is read on the page, never judged.
+      expect(outcome.judge).not.toHaveBeenCalled();
+    }, 30_000);
+
+    it("compares a field's value without showing it to the model", async () => {
+      const passing = await run(
+        "/form",
+        ["verify the Email field contains {{email}}"],
+        0,
+        { email: "ada@example.com" },
+      );
+      expect(passing.flow.status, JSON.stringify(passing.flow)).toBe("passed");
+      const failing = await run(
+        "/form",
+        ["verify the Email field contains {{email}}"],
+        0,
+        { email: "grace@example.com" },
+      );
+      expect(failing.flow.status).toBe("failed");
+      expect(failing.steps[0]?.error).toMatchObject({
+        code: "element_state",
+        message: "The field holds a different value.",
+      });
+      for (const outcome of [passing, failing]) {
+        expect(JSON.stringify(outcome.resolver.mock.calls)).not.toMatch(
+          /ada@example|grace@example/u,
+        );
+        expect(outcome.judge).not.toHaveBeenCalled();
+      }
     }, 30_000);
   },
 );
