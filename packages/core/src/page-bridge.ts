@@ -8,6 +8,7 @@ import {
   type PageVersion,
   type FillTarget,
   type ReadTargetResult,
+  type ControlStateResult,
   type PageBridge,
 } from "./page-protocol.js";
 import { matchEntry, type CacheEntry, type MatchResult } from "./page-cache.js";
@@ -30,6 +31,7 @@ type Method =
   | "findBySignals"
   | "clickTarget"
   | "readTarget"
+  | "controlState"
   | "clearRefs";
 function validVersion(value: unknown): value is PageVersion {
   if (!value || typeof value !== "object") return false;
@@ -220,4 +222,22 @@ export async function matchLiveEntry(
     true,
     runtimeDependent,
   );
+}
+
+export async function controlState(
+  page: BrowserPage,
+  target: FillTarget,
+): Promise<ControlStateResult> {
+  const result = await call<ControlStateResult>(page, "controlState", target);
+  if (
+    !result ||
+    (result.status !== "stale" &&
+      !(
+        result.status === "ok" &&
+        typeof result.disabled === "boolean" &&
+        typeof result.focused === "boolean"
+      ))
+  )
+    throw new PageScriptError("invalid-result", "Invalid control state.");
+  return result;
 }

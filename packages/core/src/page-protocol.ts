@@ -118,6 +118,18 @@ export interface FillTarget {
 export type ReadTargetResult =
   | { readonly status: "ok"; readonly text: string }
   | { readonly status: "stale" | "empty" | "too_long" };
+/** A located control's state, for claims a person checks by looking at it. */
+export type ControlStateResult =
+  | {
+      readonly status: "ok";
+      readonly disabled: boolean;
+      /** Null when the control cannot be checked. */
+      readonly checked: boolean | null;
+      readonly focused: boolean;
+      /** A text field's value; null for other controls and password fields. */
+      readonly value: string | null;
+    }
+  | { readonly status: "stale" };
 export type AimResult =
   | { readonly actionable: true; readonly aim: Aim }
   | {
@@ -160,6 +172,7 @@ export interface PageBridge {
   checkAim(aim: Aim): AimResult;
   fillElement(target: FillTarget): Element | null;
   readTarget(target: FillTarget): ReadTargetResult;
+  controlState(target: FillTarget): ControlStateResult;
   clearRefs(): void;
 }
 declare global {

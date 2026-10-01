@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { patternOperation, validateOperand } from "./classification.js";
 import {
+  elementClaim,
   gotoPathParts,
   gotoUrlParts,
   historyMove,
@@ -117,5 +118,49 @@ describe("wait until a claim holds", () => {
     ).toBe(120_000);
     expect(waitUntilTimeoutMs("wait for 2 seconds")).toBeNull();
     expect(waitUntilTimeoutMs("verify the reply is shown")).toBeNull();
+  });
+});
+
+describe("control state claims", () => {
+  it("reads claims about one control's state", () => {
+    expect(elementClaim("the Save debt button is disabled")).toEqual({
+      target: "Save debt button",
+      operation: "click",
+      expect: { kind: "disabled", disabled: true },
+    });
+    expect(elementClaim("the Save debt button is enabled")?.expect).toEqual({
+      kind: "disabled",
+      disabled: false,
+    });
+    expect(elementClaim("the Email field contains {{email}}")).toEqual({
+      target: "Email field",
+      operation: "fill",
+      expect: { kind: "value", value: "{{email}}" },
+    });
+    expect(elementClaim("the Search field is focused")?.expect).toEqual({
+      kind: "focused",
+      focused: true,
+    });
+    expect(elementClaim("the Select all checkbox is checked")?.expect).toEqual({
+      kind: "checked",
+      checked: true,
+    });
+    expect(elementClaim("no Search field is shown")?.expect).toEqual({
+      kind: "present",
+      present: false,
+    });
+    expect(elementClaim("the Add account button is not shown")?.expect).toEqual(
+      {
+        kind: "present",
+        present: false,
+      },
+    );
+  });
+
+  it("leaves claims about page content to the Judge", () => {
+    expect(elementClaim("the heading No debts so far is shown")).toBeNull();
+    expect(elementClaim("the message Name is required is shown")).toBeNull();
+    expect(elementClaim("the Select date range filter is shown")).toBeNull();
+    expect(elementClaim("the table shows SeedDebt with balance £1")).toBeNull();
   });
 });

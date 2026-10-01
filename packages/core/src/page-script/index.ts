@@ -16,6 +16,7 @@ import {
   type PageBridge,
   type PageVersion,
   type ReadTargetResult,
+  type ControlStateResult,
 } from "../page-protocol.js";
 
 if (!window.__sedum) {
@@ -1801,6 +1802,60 @@ if (!window.__sedum) {
     if (Array.from(text).length > 4096) return { status: "too_long" };
     return { status: "ok", text };
   }
+  function controlState(target: FillTarget): ControlStateResult {
+    const current = version();
+    if (
+      !snapshot ||
+      (snapshot.operation !== "click" && snapshot.operation !== "fill") ||
+      !same(snapshot.version, current) ||
+      !same(target.version, current)
+    )
+      return { status: "stale" };
+    const element = refElement(target.ref);
+    const candidate = snapshot.candidates.find(
+      (item) => item.ref === target.ref,
+    );
+    if (
+      !element ||
+      !candidate ||
+      element.tagName.toLowerCase() !== target.tag ||
+      candidate.name !== target.name
+    )
+      return { status: "stale" };
+    const toggle = toggleLabel(element) ?? element;
+    const ariaChecked = toggle.getAttribute("aria-checked");
+    const checked = isToggle(toggle)
+      ? toggle.checked
+      : ariaChecked === "true" || ariaChecked === "mixed"
+        ? true
+        : ariaChecked === "false"
+          ? false
+          : null;
+    const active = (root: Document | ShadowRoot): Element | null => {
+      const focused = root.activeElement;
+      return focused?.shadowRoot
+        ? (active(focused.shadowRoot) ?? focused)
+        : focused;
+    };
+    const focused = active(document);
+    const textField =
+      (element instanceof HTMLInputElement &&
+        FILLABLE_INPUT_TYPES.has(element.type) &&
+        element.type !== "password") ||
+      element instanceof HTMLTextAreaElement;
+    return {
+      status: "ok",
+      disabled: disabled(element),
+      checked,
+      focused:
+        !!focused && (focused === element || deepContains(element, focused)),
+      value: textField
+        ? (element as HTMLInputElement | HTMLTextAreaElement).value
+        : element instanceof HTMLElement && element.isContentEditable
+          ? (element.textContent ?? "")
+          : null,
+    };
+  }
   function aim(ref: string, expected?: Aim): AimResult {
     const current = version();
     if (!snapshot || !same(snapshot.version, current))
@@ -1954,6 +2009,7 @@ if (!window.__sedum) {
     },
     clickTarget: (ref) => aim(ref),
     readTarget,
+    controlState,
     checkAim: (expected) => aim(expected.ref, expected),
     fillElement,
     clearRefs,
