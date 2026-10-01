@@ -546,6 +546,20 @@ class PlaywrightPage implements BrowserPage {
           },
           { expected: aim, element },
         );
+      if (aim.hover) {
+        // The control is shown by a hover rule on its row: rest the pointer
+        // where it will be drawn, then wait for it to appear.
+        const box = await element.boundingBox().catch(() => null);
+        if (!box) return { actionable: false, reason: "not_actionable" };
+        await this.page.mouse.move(box.x + aim.point.x, box.y + aim.point.y);
+        try {
+          await element.waitForElementState("visible", {
+            timeout: Math.min(2_000, remaining()),
+          });
+        } catch {
+          return { actionable: false, reason: "not_actionable" };
+        }
+      }
       const still = await validateElement().catch(() => ({
         actionable: false as const,
         reason: "stale" as const,
