@@ -7,6 +7,7 @@ import {
   pageDigest,
   pageVersion,
   quietPage,
+  controlState,
 } from "./page-bridge.js";
 import { stageEntry, type CacheEntry } from "./page-cache.js";
 import type { Candidate, CandidatePage, PageVersion } from "./page-protocol.js";
@@ -70,6 +71,22 @@ describe("page bridge boundary", () => {
     ).rejects.toMatchObject({ code: "invalid-result" });
     await expect(
       pageVersion(fake(() => ({ installed: true, protocol: 1, value: null }))),
+    ).rejects.toMatchObject({ code: "invalid-result" });
+    await expect(
+      controlState(
+        fake(() => ({ installed: true, protocol: 1, missingMethod: true })),
+        { ref: "r1", version, tag: "input", name: "Email" },
+      ),
+    ).rejects.toMatchObject({ code: "incompatible" });
+    await expect(
+      controlState(
+        fake(() => ({
+          installed: true,
+          protocol: 1,
+          value: { status: "ok", disabled: false, focused: false },
+        })),
+        { ref: "r1", version, tag: "input", name: "Email" },
+      ),
     ).rejects.toMatchObject({ code: "invalid-result" });
     expect(() =>
       quietPage(

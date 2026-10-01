@@ -145,16 +145,6 @@ describe("control state claims", () => {
       kind: "checked",
       checked: true,
     });
-    expect(elementClaim("no Search field is shown")?.expect).toEqual({
-      kind: "present",
-      present: false,
-    });
-    expect(elementClaim("the Add account button is not shown")?.expect).toEqual(
-      {
-        kind: "present",
-        present: false,
-      },
-    );
   });
 
   it("leaves claims about page content to the Judge", () => {
@@ -162,5 +152,8 @@ describe("control state claims", () => {
     expect(elementClaim("the message Name is required is shown")).toBeNull();
     expect(elementClaim("the Select date range filter is shown")).toBeNull();
     expect(elementClaim("the table shows SeedDebt with balance £1")).toBeNull();
+    expect(elementClaim("the Economy option is selected")).toBeNull();
+    expect(elementClaim("no Search field is shown")).toBeNull();
+    expect(elementClaim("the Add account button is not shown")).toBeNull();
   });
 });

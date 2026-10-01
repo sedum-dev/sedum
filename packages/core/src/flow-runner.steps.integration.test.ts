@@ -78,6 +78,7 @@ const PAGES: Record<string, string> = {
   "/form": `<main>
     <label>Name <input id="name"></label>
     <label>Email <input readonly value="ada@example.com"></label>
+    <label>Password <input type="password" value="hunter2"></label>
     <label><input type="checkbox"> Remember me</label>
     <button aria-label="Search"><i class="fa-search"></i></button>
     <div role="button" id="save" aria-disabled="true">Save</div>
@@ -139,6 +140,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const flow = await runFlow(file, {
         repoRoot: root,
         browser: new PlaywrightBrowserDriver(),
+        browserKind: "chromium",
         classificationCache: new NoopClassificationCache(),
         provider: { classifyBatch: vi.fn(), choose: resolver, holds: judge },
         env: {},
@@ -232,8 +234,6 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
           "click the Remember me checkbox",
           "verify the Remember me checkbox is checked",
           "verify the Search button is shown",
-          // The Search icon button is no field.
-          "verify the Search field is not shown",
         ],
         0,
         { name: "Ada" },
@@ -266,6 +266,21 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         expect(JSON.stringify(outcome.resolver.mock.calls)).not.toMatch(
           /ada@example|grace@example/u,
         );
+        expect(outcome.judge).not.toHaveBeenCalled();
+      }
+    }, 30_000);
+
+    it("does not infer emptiness from an unreadable password", async () => {
+      for (const claim of [
+        "verify the Password field is empty",
+        "verify the Password field is not empty",
+      ]) {
+        const outcome = await run("/form", [claim]);
+        expect(outcome.flow.status).toBe("failed");
+        expect(outcome.steps[0]?.error).toMatchObject({
+          code: "element_state",
+          message: "The control holds no readable value.",
+        });
         expect(outcome.judge).not.toHaveBeenCalled();
       }
     }, 30_000);

@@ -1822,10 +1822,10 @@ if (!window.__sedum) {
       candidate.name !== target.name
     )
       return { status: "stale" };
-    const toggle = toggleLabel(element) ?? element;
-    const ariaChecked = toggle.getAttribute("aria-checked");
-    const checked = isToggle(toggle)
-      ? toggle.checked
+    const control = toggleLabel(element) ?? element;
+    const ariaChecked = control.getAttribute("aria-checked");
+    const checked = isToggle(control)
+      ? control.checked
       : ariaChecked === "true" || ariaChecked === "mixed"
         ? true
         : ariaChecked === "false"
@@ -1845,10 +1845,10 @@ if (!window.__sedum) {
       element instanceof HTMLTextAreaElement;
     return {
       status: "ok",
-      disabled: disabled(element),
+      disabled: disabled(control),
       checked,
       focused:
-        !!focused && (focused === element || deepContains(element, focused)),
+        !!focused && (focused === control || deepContains(control, focused)),
       value: textField
         ? (element as HTMLInputElement | HTMLTextAreaElement).value
         : element instanceof HTMLElement && element.isContentEditable

@@ -1002,6 +1002,7 @@ export async function executeSentence(
       const earlier: ReturnType<typeof resultCall>[] = [];
       let last: LocatorResult | undefined;
       let message = "The control is not in the expected state.";
+      let staleRetried = false;
       const target = withValues(element.target, data);
       const locateAs = (operation: "click" | "fill") =>
         resolveTarget(page, dependencies.provider, {
@@ -1072,8 +1073,8 @@ export async function executeSentence(
                   : expected.kind === "focused"
                     ? state.focused === expected.focused
                     : expected.kind === "empty"
-                      ? (state.value !== null && value(state.value) === "") ===
-                        expected.empty
+                      ? state.value !== null &&
+                        (value(state.value) === "") === expected.empty
                       : state.value !== null && value(state.value) === wanted;
             message =
               expected.kind === "disabled"
@@ -1087,7 +1088,14 @@ export async function executeSentence(
                     : state.value === null
                       ? "The control holds no readable value."
                       : "The field holds a different value.";
-          } else message = "The page changed while the control was read.";
+          } else {
+            message = "The page changed while the control was read.";
+            if (!staleRetried) {
+              staleRetried = true;
+              await quietPage(page, 80, 2_000).catch(() => undefined);
+              continue;
+            }
+          }
         }
         if (holds)
           return record("continue", { locator: last, failedCalls: earlier });
