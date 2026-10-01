@@ -501,6 +501,8 @@ async function reobserve(
 export interface SentencePresentation {
   readonly group?: readonly string[];
   readonly display?: string;
+  /** A question the test branches on: judged once and never gating. */
+  readonly check?: boolean;
 }
 
 /** @internal Execute one classified sentence and record it as one step. */
@@ -580,7 +582,7 @@ export async function executeSentence(
     const isError =
       typeof outcome === "object" && outcome.status === "could_not_run";
     const failed =
-      outcome === "failed" ||
+      (outcome === "failed" && !presentation.check) ||
       (typeof outcome === "object" && outcome.status === "failed");
     const flags = facts.verify?.kind === "verify" ? facts.verify.flags : [];
     const needsEvidence = failed || isError || flags.length > 0;
@@ -596,11 +598,12 @@ export async function executeSentence(
       : sensitive
         ? { status: "omitted" as const, reason: "sensitive_page" }
         : (facts.replayFrame ?? (await capture("replay", acceptedVersion)));
+    // A check answers the test's question, so like a measure it has no verdict.
     const kind =
-      step.op === "verify"
-        ? "verify"
-        : step.op === "measure"
-          ? "measure"
+      step.op === "measure" || (step.op === "verify" && presentation.check)
+        ? "measure"
+        : step.op === "verify"
+          ? "verify"
           : "action";
     const pageInfo =
       facts.page ??
@@ -1229,7 +1232,7 @@ export async function executeSentence(
       step.op === "verify"
         ? textClaim(step.text.replace(CLAIM_PREFIX, ""))
         : null;
-    const graceMs = dependencies.verifyGraceMs ?? 0;
+    const graceMs = presentation.check ? 0 : (dependencies.verifyGraceMs ?? 0);
     if (quoted) return checkText(quoted, until ?? graceMs);
     const element =
       step.op === "verify"

@@ -456,7 +456,7 @@ export async function runScriptTest(
       step: ClassifiedFlowSentence,
       scope: Record<string, ResolvedDataEntry>,
       presentation: SentencePresentation,
-    ): Promise<void> => {
+    ): Promise<boolean> => {
       let outcome: Awaited<ReturnType<typeof executeSentence>>;
       try {
         outcome = await executeSentence(
@@ -472,17 +472,21 @@ export async function runScriptTest(
         // if the test body catches it.
         return stop(runtimeFailure(absolute, error) as Problem);
       }
-      if (outcome === "continue") return;
+      if (outcome === "continue") return true;
+      // A check answers the test's question; it never fails the test.
+      if (outcome === "failed" && presentation.check) return false;
       if (outcome === "failed")
         stop({ status: "failed", file: absolute, source: step.source });
       else if (outcome.status !== "passed") stop(outcome);
+      return true;
     };
 
     const sentence = async (
       text: unknown,
       values: AiValues | undefined,
       source: FlowSource,
-    ): Promise<void> => {
+      check = false,
+    ): Promise<boolean> => {
       try {
         if (typeof text !== "string" || !text.trim())
           throw new ScriptUsageError(
@@ -525,6 +529,12 @@ export async function runScriptTest(
             ),
           );
         const classified = checked.classification.steps[0];
+        if (check && classified && classified.op !== "verify")
+          throw new ScriptUsageError(
+            "invalid_check",
+            "ai.holds takes one claim about the page.",
+            'Write ai.holds("the passkey screen is shown").',
+          );
         if (checked.diagnostics.length || !classified) {
           const diagnostic = checked.diagnostics[0];
           stop({
@@ -551,7 +561,7 @@ export async function runScriptTest(
           inlineValues(template, classified!.op, own),
           source,
         );
-        await runStep(
+        const held = await runStep(
           {
             ...shown,
             op: classified!.op,
@@ -559,11 +569,12 @@ export async function runScriptTest(
             probability: classified!.probability,
           },
           scope,
-          { group: [...groups] },
+          { group: [...groups], ...(check ? { check: true } : {}) },
         );
         // `remember ... as {{name}}` makes a binding for later steps.
         for (const [key, entry] of Object.entries(scope))
           if (!(key in own) && !(key in bindings)) bindings[key] = entry;
+        return held;
       } catch (error) {
         if (error instanceof ScriptUsageError) usage(error, source);
         throw error;
@@ -589,6 +600,21 @@ export async function runScriptTest(
           await exclusive(source, () => sentence(item, values, source));
       } else await exclusive(source, () => sentence(input, values, source));
     };
+    const holds = (
+      claim: unknown,
+      values: AiValues | undefined,
+      source: FlowSource,
+    ): Promise<boolean> =>
+      exclusive(source, () =>
+        sentence(
+          typeof claim === "string" && !/^\s*(?:verify|wait)\b/iu.test(claim)
+            ? `verify ${claim.trim()}`
+            : claim,
+          values,
+          source,
+          true,
+        ),
+      );
 
     /**
      * A step promise that the test never awaits must not crash the process
@@ -720,6 +746,8 @@ export async function runScriptTest(
       });
       return parser ? parser.parse(text) : text;
     };
+    ai.holds = ((claim: string, values?: AiValues) =>
+      track(holds(claim, values, where(new Error().stack)))) as Ai["holds"];
     ai.extract = ((description: string, parser?: Parser<unknown>) =>
       track(
         extract(description, parser, where(new Error().stack)),

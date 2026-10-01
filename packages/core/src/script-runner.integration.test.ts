@@ -392,6 +392,23 @@ test("late", { url: "/home?user=Ada" }, async ({ ai }) => {
       });
     }, 60_000);
 
+    it("answers ai.holds without failing the test", async () => {
+      const { outcome, result } = await run(
+        "holds.test.ts",
+        `test("branches", { url: "/home" }, async ({ ai }) => {
+          const shown = await ai.holds("the page shows Cart total");
+          const missing = await ai.holds("the page shows Checkout complete");
+          if (!shown || missing) throw new Error(\`unexpected \${shown} \${missing}\`);
+        });`,
+      );
+      expect(outcome).toEqual({ status: "passed", file: expect.any(String) });
+      const steps = result.tests[0]!.attempts[0]!.steps;
+      expect(steps.map((step) => [step.sentence, step.verdict])).toEqual([
+        ["verify the page shows Cart total", null],
+        ["verify the page shows Checkout complete", null],
+      ]);
+    }, 60_000);
+
     it("describes a failed extract without exposing the internal remember step", async () => {
       const { outcome, result } = await run(
         "missing-extract.test.ts",
