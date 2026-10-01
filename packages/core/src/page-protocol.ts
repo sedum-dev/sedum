@@ -99,6 +99,8 @@ export interface Aim {
   readonly tag: string;
   readonly name: string;
   readonly point: { readonly x: number; readonly y: number };
+  /** The control shows only while the pointer rests on it, so hover first. */
+  readonly hover?: boolean;
   readonly box?: {
     readonly x: number;
     readonly y: number;

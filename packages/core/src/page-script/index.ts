@@ -313,18 +313,33 @@ if (!window.__sedum) {
     }
     return false;
   }
-  function publicText(element: Element, visualOnly = false): string {
+  function publicText(
+    element: Element,
+    visualOnly = false,
+    ownOnly = false,
+  ): string {
     const parts: string[] = [];
     for (const node of flatTextNodes(element)) {
       const parent = node.parentElement;
       if (
         parent &&
         visible(parent, visualOnly) &&
-        !excludedTextAncestor(parent)
+        !excludedTextAncestor(parent) &&
+        !(ownOnly && insideNestedControl(element, parent))
       )
         parts.push(node.textContent ?? "");
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+  /** Whether `node` sits in a control nested inside `element`, such as a menu item. */
+  function insideNestedControl(element: Element, node: Element): boolean {
+    for (
+      let current: Element | null = node;
+      current && current !== element;
+      current = composedParent(current)
+    )
+      if (interactive(current)) return true;
+    return false;
   }
   function referencedLabelText(element: Element): string {
     // ARIA names may explicitly reference visually hidden text inside the
@@ -383,8 +398,10 @@ if (!window.__sedum) {
       const value = element.value.trim();
       if (value) return value;
     }
+    // Text of a control nested inside, such as the items of a menu the
+    // control opens, names that control, not this one.
     return (
-      publicText(element, visualOnly) ||
+      publicText(element, visualOnly, true) ||
       element.getAttribute("title")?.trim() ||
       ""
     );
@@ -473,6 +490,9 @@ if (!window.__sedum) {
   function iconName(element: Element): string {
     for (const node of Array.from(element.querySelectorAll("i,span,em"))) {
       if (node.textContent?.trim()) continue;
+      // The icon of a nested control, or of a closed popup, is not this one's.
+      if (!node.getClientRects().length || insideNestedControl(element, node))
+        continue;
       for (const token of Array.from(node.classList)) {
         const match =
           /^(?:fa|bi|glyphicon|icon|mdi|ti|ri)-([a-z][a-z0-9-]*)$/.exec(token);
@@ -708,6 +728,29 @@ if (!window.__sedum) {
       if (kind) addPart(`${kind[1]} icon`, kind[1]);
     }
     if (kbdText && kbdText === shown) addPart("keyboard shortcut");
+    // A control holding a closed menu: what the menu offers, icons included,
+    // so "the pencil button" or "the button with Edit" still finds it.
+    const items = Array.from(element.querySelectorAll("*"))
+      .filter((node) => node !== element && interactive(node) && !visible(node))
+      .slice(0, 6)
+      .map((node) => {
+        const glyph = Array.from(node.querySelectorAll("i,span,em"))
+          .flatMap((icon) => Array.from(icon.classList))
+          .map(
+            (token) =>
+              /^(?:fa|bi|icon|mdi|ti|ri)-([a-z][a-z0-9-]*)$/.exec(token)?.[1],
+          )
+          .find(
+            (name) =>
+              name && !/^(lg|[0-9]x|fw|solid|regular|light)$/.test(name),
+          );
+        return [glyph?.replace(/-/g, " "), referencedLabelText(node)]
+          .filter(Boolean)
+          .join(" ");
+      })
+      .filter(Boolean);
+    if (items.length)
+      addPart(`menu "${clip(items.join(", "), 80)}"`, items.join(" "));
     return parts.join(", ");
   }
   /**
@@ -823,7 +866,9 @@ if (!window.__sedum) {
   }
   /**
    * An element the page styles as clickable but marks up with no role: the
-   * outermost element with a pointer cursor, holding no real control.
+   * outermost element with a pointer cursor. A real control inside it is the
+   * target instead, unless the controls inside show no text of their own,
+   * as in a list row whose only control is an icon that opens its menu.
    */
   function pointerTarget(element: Element): boolean {
     if (
@@ -836,12 +881,89 @@ if (!window.__sedum) {
     if (parent && getComputedStyle(parent).cursor === "pointer") return false;
     for (let node = parent; node; node = composedParent(node))
       if (interactive(node)) return false;
-    // A real control inside, including in a shadow root, is the target instead.
     const inside = allElements(element, 500);
-    return (
-      !!inside &&
-      !inside.some((node) => interactive(node) || node.hasAttribute("role"))
+    if (!inside) return false;
+    const controls = inside.filter(
+      (node) => interactive(node) || node.hasAttribute("role"),
     );
+    if (!controls.length) return true;
+    return (
+      controls.every(
+        (control) => !interactive(control) || !publicText(control, true),
+      ) && !!publicText(element, false, true)
+    );
+  }
+  type HoverRule = { readonly revealed: string; readonly host: string };
+  let hoverRules: readonly HoverRule[] | undefined;
+  /**
+   * Stylesheet rules that show an element while an ancestor is hovered, such
+   * as `.row:hover .actions { visibility: visible }`. Read once per scan.
+   */
+  function readHoverRules(): readonly HoverRule[] {
+    const rules: HoverRule[] = [];
+    const visit = (list: CSSRuleList) => {
+      for (const rule of Array.from(list)) {
+        if (rule instanceof CSSStyleRule) {
+          const style = rule.style;
+          const reveals =
+            style.visibility === "visible" ||
+            (style.opacity !== "" && Number.parseFloat(style.opacity) > 0);
+          if (!reveals || !rule.selectorText.includes(":hover")) continue;
+          for (const selector of rule.selectorText.split(",")) {
+            const at = selector.indexOf(":hover");
+            if (at < 0) continue;
+            const host = selector.slice(0, at).trim();
+            const revealed = selector.replace(/:hover/g, "").trim();
+            if (!host || host === revealed) continue;
+            try {
+              document.querySelector(host);
+              document.querySelector(revealed);
+              rules.push({ revealed, host });
+            } catch {
+              // A selector this browser cannot parse reveals nothing.
+            }
+          }
+        } else if ("cssRules" in rule) {
+          visit((rule as CSSGroupingRule).cssRules);
+        }
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        visit(sheet.cssRules);
+      } catch {
+        // Cross-origin sheets cannot be read.
+      }
+    }
+    return rules;
+  }
+  /**
+   * The ancestor whose hover shows a control that is laid out but hidden,
+   * such as a row's actions button; null for any other hidden control.
+   */
+  function hoverHost(element: Element): Element | null {
+    if (!interactive(element) || !element.getClientRects().length) return null;
+    if (element.closest("[hidden],[inert],[aria-hidden='true']")) return null;
+    hoverRules ??= readHoverRules();
+    for (
+      let node: Element | null = element;
+      node && node !== document.body;
+      node = composedParent(node)
+    ) {
+      const style = getComputedStyle(node);
+      if (style.display === "none") return null;
+      // An item of a closed menu needs its control opened, not a hover.
+      if (node !== element && interactive(node)) return null;
+      for (const rule of hoverRules) {
+        if (!node.matches(rule.revealed)) continue;
+        const host = composedParent(node)?.closest(rule.host);
+        if (host && visible(host)) return host;
+      }
+    }
+    return null;
+  }
+  function hoverRevealed(element: Element): boolean {
+    return !visible(element) && !!hoverHost(element);
   }
   type Heading = { text: string; root: Element | null; level: number };
   const SECTIONING = "article,aside,main,nav,section";
@@ -1186,8 +1308,12 @@ if (!window.__sedum) {
         region = lastUnique;
         break;
       }
+      // Icon buttons repeated on every row, shown or revealed on hover,
+      // bound the context to their own row.
       const sameLabel = Array.from(possible).filter(
-        (item) => visible(item) && label(item) === name,
+        (item) =>
+          (visible(item) || hoverRevealed(item)) &&
+          (label(item) || mediaName(item) || iconName(item)) === name,
       );
       if (sameLabel.length > 1) {
         region = lastUnique;
@@ -1195,6 +1321,8 @@ if (!window.__sedum) {
       }
       lastUnique = region;
       if (region.matches("article,li,[data-product],[role='listitem']")) break;
+      // A row the page makes clickable is one item, like a list item.
+      if (operation === "click" && pointerTarget(region)) break;
       // Read targets have no same-labelled button to bound their context.
       // Repeated styled containers are also item boundaries (for example,
       // product cards built from divs). Do not borrow another card's title.
@@ -1292,6 +1420,7 @@ if (!window.__sedum) {
     };
     const outline: Heading[] = [];
     titleCache.clear();
+    hoverRules = undefined;
     for (const element of elements) {
       if (element.matches("h1,h2,h3,h4,h5,h6,[role='heading']")) {
         const text = visible(element) ? publicText(element) : "";
@@ -1312,7 +1441,8 @@ if (!window.__sedum) {
         !(
           visible(element) ||
           transparentToggle(element) ||
-          (operation === "click" && ariaHiddenOnly(element))
+          (operation === "click" &&
+            (ariaHiddenOnly(element) || hoverRevealed(element)))
         ) ||
         (operation === "read"
           ? !readable(element)
@@ -1682,11 +1812,15 @@ if (!window.__sedum) {
       (expected && expected.name !== candidate.name)
     )
       return { actionable: false, reason: "stale" };
+    // A control shown only while its row is hovered is aimed at through the
+    // row: the pointer lands on the row first, which reveals the control.
+    const shownBy = visible(element) ? null : hoverHost(element);
     if (
       !(
         visible(element) ||
         transparentToggle(element) ||
-        ariaHiddenOnly(element)
+        ariaHiddenOnly(element) ||
+        shownBy
       ) ||
       disabled(element)
     )
@@ -1720,7 +1854,7 @@ if (!window.__sedum) {
         const y = rect.top + rect.height * fy!;
         if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
         const hit = deepElementFromPoint(x, y);
-        if (hit && deepContains(element, hit)) {
+        if (hit && deepContains(shownBy ?? element, hit)) {
           return {
             actionable: true,
             aim: {
@@ -1731,6 +1865,7 @@ if (!window.__sedum) {
               tag: element.tagName.toLowerCase(),
               name: candidate.name,
               point: { x: rect.width * fx!, y: rect.height * fy! },
+              ...(shownBy ? { hover: true } : {}),
               box: {
                 x: Math.max(0, rect.left / innerWidth),
                 y: Math.max(0, rect.top / innerHeight),
