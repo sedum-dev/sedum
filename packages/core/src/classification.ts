@@ -131,6 +131,12 @@ const BINDING = new RegExp(`\\bas\\s+${PLACEHOLDER}\\s*\\.?$`, "iu");
 const HTTP_URL = /https?:\/\/\S+/giu;
 const WAIT_DURATION =
   /^wait\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\s*\.?$/iu;
+/**
+ * `wait until the reply is shown`, or `wait up to 90 seconds until …`: a
+ * verify that judges the claim again as the page changes, until it holds.
+ */
+export const WAIT_UNTIL =
+  /^wait\s+(?:up\s+to\s+\d+(?:\.\d+)?\s*(?:s|secs?|seconds?)\s+)?(?:until|for)\s+(?!\d+(?:\.\d+)?\s*(?:ms|milliseconds?|s|seconds?)\s*\.?$)\S/iu;
 const HISTORY_MOVE =
   /^(?:(?:go|navigate)\s+(?:back(?:\s+to\s+the\s+previous\s+page)?|forward)|(?:reload|refresh)(?:\s+the\s+page)?)\s*\.?$/iu;
 const DURATION_OPERAND =
@@ -207,6 +213,8 @@ export function preflightSentence(
 export function patternOperation(sentence: string): StepOperationKind | null {
   const text = canonicalSentence(sentence);
   if (preflightSentence(text)) return null;
+  // A wait for a claim is a read-only check, whatever the claim says.
+  if (WAIT_UNTIL.test(text)) return "verify";
   // History moves and paths on the current site are navigations.
   if (
     HISTORY_MOVE.test(text) ||
@@ -458,7 +466,10 @@ export async function classifySteps(
             leading === "scroll"
           ? leading
           : null;
-    if (lexicalOp) {
+    if (
+      lexicalOp &&
+      !(lexicalOp === "wait" && WAIT_UNTIL.test(step.sentence))
+    ) {
       const operandError = validateOperand(step.sentence, lexicalOp);
       if (operandError) {
         fail(index, "invalid_operand", operandError);

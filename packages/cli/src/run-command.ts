@@ -1002,6 +1002,9 @@ export async function executeRunCommand(
                 browserKind: config.browser,
                 viewport: config.viewport,
                 verifyPolicy: config.thresholds,
+                verifyGraceMs: Number(
+                  process.env.SEDUM_VERIFY_GRACE_MS ?? 5_000,
+                ),
                 ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
                 ...(options.urlOverride
                   ? { urlOverride: options.urlOverride }

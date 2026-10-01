@@ -1,4 +1,4 @@
-import { canonicalSentence } from "./classification.js";
+import { canonicalSentence, WAIT_UNTIL } from "./classification.js";
 
 /**
  * Operand extraction for the operations that need no locator. Classification
@@ -113,6 +113,20 @@ export function gotoUrlParts(
   }
   literals.push(rest);
   return { literals, names };
+}
+
+export const WAIT_UNTIL_DEFAULT_MS = 30_000;
+export const WAIT_UNTIL_MAX_MS = 120_000;
+/**
+ * How long a `wait until …` step may keep judging its claim, or null for any
+ * other sentence. `wait up to 90 seconds until …` sets the limit.
+ */
+export function waitUntilTimeoutMs(sentence: string): number | null {
+  const text = canonicalSentence(sentence);
+  if (!WAIT_UNTIL.test(text)) return null;
+  const limit = /^wait\s+up\s+to\s+(\d+(?:\.\d+)?)/iu.exec(text);
+  if (!limit) return WAIT_UNTIL_DEFAULT_MS;
+  return Math.min(WAIT_UNTIL_MAX_MS, Math.max(1_000, Number(limit[1]) * 1000));
 }
 
 /** `go back`, `go forward`, `reload the page`: a move in the browser history. */
