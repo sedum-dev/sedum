@@ -17,7 +17,11 @@ const call = {
   totalCostUsd: null,
 };
 
-async function run(steps: readonly string[], holds = 0.95) {
+async function run(
+  steps: readonly string[],
+  holds = 0.95,
+  route = "https://example.test/",
+) {
   const root = await mkdtemp(path.join(tmpdir(), "sedum-ops-"));
   try {
     const file = path.join(root, "ops.test.yaml");
@@ -27,7 +31,7 @@ async function run(steps: readonly string[], holds = 0.95) {
     );
     const version = {
       document: "doc-1",
-      route: "https://example.test/",
+      route,
       revision: 1,
     };
     const page = {
@@ -71,7 +75,7 @@ async function run(steps: readonly string[], holds = 0.95) {
       provider: { classifyBatch: vi.fn(), choose: vi.fn(), holds: judge },
       classificationCache: new NoopClassificationCache(),
       env: {},
-      baseUrl: version.route,
+      baseUrl: route.startsWith("http") ? route : "https://example.test/",
       report: {
         recorder,
         privacy: { secretValues: [] },
@@ -159,5 +163,47 @@ describe("documented step operations", () => {
       flags: [],
       judgement: { holds: 0.05, threshold: null, band: null },
     });
+  });
+
+  it("moves through the page's own history", async () => {
+    const outcome = await run(["go back", "go forward", "reload the page"]);
+    expect(outcome.result.status, JSON.stringify(outcome.result)).toBe(
+      "passed",
+    );
+    const scripts = outcome.page.evaluate.mock.calls.map(([script]) => script);
+    expect(
+      scripts.filter((script) =>
+        ["history.back()", "history.forward()", "location.reload()"].includes(
+          script,
+        ),
+      ),
+    ).toEqual(["history.back()", "history.forward()", "location.reload()"]);
+    expect(outcome.steps.map((step) => step.detail)).toEqual([
+      "Went back in history.",
+      "Went forward in history.",
+      "Reloaded the page.",
+    ]);
+  });
+
+  it("opens a path on the current page's site", async () => {
+    const outcome = await run(
+      ["goto /items/{{sku}}?ref=1"],
+      0.95,
+      "https://shop.example.test/start",
+    );
+    expect(outcome.result.status, JSON.stringify(outcome.result)).toBe(
+      "passed",
+    );
+    expect(outcome.page.goto.mock.calls.at(-1)?.[0]).toBe(
+      "https://shop.example.test/items/backpack?ref=1",
+    );
+  });
+
+  it("refuses a path when the page is not on a site", async () => {
+    const outcome = await run(["goto /items"], 0.95, "about:blank");
+    expect(outcome.result.status).toBe("could_not_run");
+    expect(JSON.stringify(outcome.result)).toContain(
+      "A /path needs a page on a site to start from.",
+    );
   });
 });
