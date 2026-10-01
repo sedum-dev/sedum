@@ -14,6 +14,9 @@ const FORM = `
   <div style="display:flex;gap:8px"><span>Outstanding balance</span><input placeholder="E.g. 10,000"></div>
   <label>Email <input placeholder="you@example.com"></label>
   <input aria-label="Search" placeholder="Type to search">
+  <div style="display:flex;gap:8px"><span>Reference</span><input aria-label="" placeholder="E.g. ref"></div>
+  <div style="display:flex;gap:8px"><span>Account number</span><input aria-labelledby="missing" placeholder="E.g. 123"></div>
+  <section><p>Account details</p><div style="height:60px"></div><div style="display:flex;gap:8px"><div><div><div><input placeholder="E.g. 5"></div></div></div><span>Monthly payment</span></div></section>
 </form>
 <section><p>Unrelated heading text</p><div style="height:700px"></div><input placeholder="E.g. 4.5"></section>`;
 
@@ -56,6 +59,10 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       );
       expect(hints["AB0A 0AA"]).toBe('label "Postal code"');
       expect(hints["E.g. 10,000"]).toBe('label "Outstanding balance"');
+      expect(hints["E.g. ref"]).toBe('label "Reference"');
+      expect(hints["E.g. 123"]).toBe('label "Account number"');
+      // Prefer the close caption on the right over a farther heading above.
+      expect(hints["E.g. 5"]).toBe('label "Monthly payment"');
       // A labelled field keeps its label as the name and gets no caption.
       expect(hints["Email"]).not.toContain("label");
       expect(hints["Search"]).not.toContain("label");
