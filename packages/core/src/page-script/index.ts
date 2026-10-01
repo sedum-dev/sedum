@@ -1629,6 +1629,10 @@ if (!window.__sedum) {
     return parts.join(" ").replace(/\s+/g, " ").trim();
   }
   function digest(): DigestResult {
+    return pageText(DIGEST_LIMIT);
+  }
+  /** The visible text a person reads, in the topmost dialog if one is open. */
+  function pageText(limit: number): DigestResult {
     const current = version();
     const selectedModal = modal();
     if (selectedModal === undefined)
@@ -1687,7 +1691,7 @@ if (!window.__sedum) {
             : selection;
         if (!part) continue;
         size += Array.from(part).length + (pieces.length ? 1 : 0);
-        if (size > DIGEST_LIMIT)
+        if (size > limit)
           return {
             protocol: PAGE_PROTOCOL,
             version: current,
@@ -1707,7 +1711,7 @@ if (!window.__sedum) {
       // The control shows only this count, so it is a badge on the icon.
       const part = kind ? `${kind} icon badge: ${text}` : text;
       size += Array.from(part).length + (pieces.length ? 1 : 0);
-      if (size > DIGEST_LIMIT)
+      if (size > limit)
         return {
           protocol: PAGE_PROTOCOL,
           version: current,
@@ -2002,6 +2006,7 @@ if (!window.__sedum) {
     },
     collect,
     digest,
+    visibleText: () => pageText(Number.MAX_SAFE_INTEGER),
     pageVersion: version,
     findBySignals: ({ operation }) => {
       const first = collect({ operation });

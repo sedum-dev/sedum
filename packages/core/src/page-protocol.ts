@@ -162,6 +162,8 @@ export interface PageBridge {
     version?: PageVersion;
   }): CandidatePage;
   digest(): DigestResult;
+  /** The digest's text without its size limit, for exact text checks. */
+  visibleText(): DigestResult;
   pageVersion(): PageVersion;
   quiet(input: {
     ms: number;
