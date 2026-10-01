@@ -14,7 +14,8 @@ const FORM = `
   <div style="display:flex;gap:8px"><span>Outstanding balance</span><input placeholder="E.g. 10,000"></div>
   <label>Email <input placeholder="you@example.com"></label>
   <input aria-label="Search" placeholder="Type to search">
-</form>`;
+</form>
+<section><p>Unrelated heading text</p><div style="height:700px"></div><input placeholder="E.g. 4.5"></section>`;
 
 describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
   "fields named by an example value",
@@ -45,7 +46,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
 
     it("hints the caption a person reads beside or above the field", async () => {
       const context = await session.newContext({
-        viewport: { width: 700, height: 500 },
+        viewport: { width: 700, height: 1200 },
       });
       const page = await context.newPage();
       await page.goto(base);
@@ -58,6 +59,10 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       // A labelled field keeps its label as the name and gets no caption.
       expect(hints["Email"]).not.toContain("label");
       expect(hints["Search"]).not.toContain("label");
+      // Text far above the field is not its caption, and the name stays the
+      // placeholder either way.
+      expect(hints["E.g. 4.5"]).toBe("");
+      expect(found.candidates.map((c) => c.name)).toContain("AB0A 0AA");
       await context.close();
     });
   },
