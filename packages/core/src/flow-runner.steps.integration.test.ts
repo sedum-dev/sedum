@@ -55,7 +55,8 @@ function choose(
 
 /** `the text X is shown` holds when the judged page text contains X. */
 function holds(claim: string, digest: JudgePageDigest): Promise<JudgeDecision> {
-  const fragment = /text\s+(.+?)\s+is\s+shown$/u.exec(claim)?.[1] ?? claim;
+  const match = /(?:text\s+(.+?)\s+is\s+shown|shows\s+(.+))$/u.exec(claim);
+  const fragment = match?.[1] ?? match?.[2] ?? claim;
   const found = digest.text.includes(fragment);
   return Promise.resolve({
     holds: found ? 0.97 : 0.03,
@@ -86,7 +87,9 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       root = await mkdtemp(path.join(tmpdir(), "sedum-steps-"));
       server = createServer((request, response) => {
         const page = PAGES[new URL(request.url ?? "/", "http://x").pathname];
-        response.writeHead(page ? 200 : 404, { "content-type": "text/html" });
+        response.writeHead(page ? 200 : 404, {
+          "content-type": "text/html; charset=utf-8",
+        });
         response.end(
           page ? `<!doctype html><html><body>${page}</body></html>` : "missing",
         );
@@ -136,14 +139,18 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         },
       });
       const elapsedMs = performance.now() - started;
-      await recorder.finish();
+      await recorder.finish(
+        flow.status === "could_not_run"
+          ? { code: flow.code, message: flow.message }
+          : null,
+      );
       const steps_ = recorder.snapshot.tests[0]?.attempts[0]?.steps ?? [];
       return { flow, steps: steps_, judge, resolver, elapsedMs };
     }
 
     it("waits until a claim holds, judging again as the page changes", async () => {
       const outcome = await run("/late", [
-        "wait up to 6 seconds until the text Ready is shown",
+        "wait up to 6 seconds until the page shows Ready",
       ]);
       expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
       expect(outcome.judge.mock.calls.length).toBeGreaterThan(1);
@@ -155,7 +162,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
 
     it("fails a wait at its limit with the last judgement", async () => {
       const outcome = await run("/static", [
-        "wait up to 2 seconds until the text Ready is shown",
+        "wait up to 2 seconds until the page shows Ready",
       ]);
       expect(outcome.flow.status).toBe("failed");
       expect(outcome.elapsedMs).toBeGreaterThanOrEqual(1_900);
@@ -167,19 +174,15 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
 
     it("waits through a navigation", async () => {
       const outcome = await run("/redirect", [
-        "wait up to 6 seconds until the text All done is shown",
+        "wait up to 6 seconds until the page shows All done",
       ]);
       expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
     }, 30_000);
 
     it("gives a failing verify a grace while the page changes", async () => {
-      const graced = await run(
-        "/late",
-        ["verify the text Ready is shown"],
-        4_000,
-      );
+      const graced = await run("/late", ["verify the page shows Ready"], 4_000);
       expect(graced.flow.status, JSON.stringify(graced.flow)).toBe("passed");
-      const once = await run("/late", ["verify the text Ready is shown"], 0);
+      const once = await run("/late", ["verify the page shows Ready"], 0);
       expect(once.flow.status).toBe("failed");
       expect(once.judge).toHaveBeenCalledTimes(1);
     }, 30_000);
@@ -187,7 +190,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
     it("does not judge a page that stays put again", async () => {
       const outcome = await run(
         "/static",
-        ["verify the text Ready is shown"],
+        ["verify the page shows Ready"],
         1_500,
       );
       expect(outcome.flow.status).toBe("failed");
