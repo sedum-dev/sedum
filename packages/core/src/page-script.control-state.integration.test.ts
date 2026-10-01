@@ -11,6 +11,7 @@ const FORM = `
 <input aria-label="Password" type="password" value="hunter2">
 <input aria-label="Search" autofocus>
 <label><input type="checkbox" checked> Select all</label>
+<label><input type="checkbox" disabled hidden> Archived</label>
 <div role="button" aria-disabled="true">Save debt</div>`;
 
 describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
@@ -61,6 +62,10 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         value: "ada@example.com",
       });
       expect(await state("Select all")).toMatchObject({ checked: true });
+      expect(await state("Archived")).toMatchObject({
+        checked: false,
+        disabled: true,
+      });
       expect(await state("Save debt")).toMatchObject({ disabled: true });
       const fill = await collectCandidates(page, "fill");
       const read = async (name: string) => {

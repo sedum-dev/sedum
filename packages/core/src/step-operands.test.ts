@@ -148,16 +148,6 @@ describe("control state claims", () => {
       kind: "checked",
       checked: true,
     });
-    expect(elementClaim("no Search field is shown")?.expect).toEqual({
-      kind: "present",
-      present: false,
-    });
-    expect(elementClaim("the Add account button is not shown")?.expect).toEqual(
-      {
-        kind: "present",
-        present: false,
-      },
-    );
   });
 
   it("leaves claims about page content to the Judge", () => {
@@ -165,6 +155,9 @@ describe("control state claims", () => {
     expect(elementClaim("the message Name is required is shown")).toBeNull();
     expect(elementClaim("the Select date range filter is shown")).toBeNull();
     expect(elementClaim("the table shows SeedDebt with balance £1")).toBeNull();
+    expect(elementClaim("the Economy option is selected")).toBeNull();
+    expect(elementClaim("no Search field is shown")).toBeNull();
+    expect(elementClaim("the Add account button is not shown")).toBeNull();
   });
 });
 
@@ -200,11 +193,13 @@ describe("exact text claims", () => {
     expect(literalShown("the text Welcome back! is shown")).toBe(
       "Welcome back!",
     );
-    expect(literalShown("the message Name is required is shown")).toBe(
-      "Name is required",
-    );
     expect(literalShown("the text Welcome is not shown")).toBeNull();
     expect(literalShown('the text "Welcome" is shown')).toBeNull();
+    // A semantic claim must still be judged: matching text elsewhere is not
+    // evidence that it is a heading, label, or message.
+    expect(literalShown("the heading Welcome is shown")).toBeNull();
+    expect(literalShown("the label Name is shown")).toBeNull();
+    expect(literalShown("the message Name is required is shown")).toBeNull();
   });
 
   it("counts text with spacing ignored", () => {

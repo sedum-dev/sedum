@@ -133,11 +133,7 @@ const CONTROL_NOUN =
   "button|link|field|input|text\\s*box|search\\s*box|box|checkbox|check\\s*box|radio(?:\\s+button)?|toggle|switch|dropdown|select|tab|menu\\s+item|option|icon";
 const FIELD_NOUN = /\b(?:field|input|text\s*box|search\s*box|box)$/iu;
 const STATE_CLAIM = new RegExp(
-  `^(?:the\\s+|a\\s+|an\\s+)?(.+?\\b(?:${CONTROL_NOUN}))\\s+(?:is|are)\\s+(not\\s+)?(shown|visible|displayed|present|hidden|absent|gone|enabled|disabled|checked|unchecked|ticked|selected|focused|empty)\\s*\\.?$`,
-  "iu",
-);
-const ABSENT_CLAIM = new RegExp(
-  `^(?:there\\s+is\\s+)?no\\s+(.+?\\b(?:${CONTROL_NOUN}))(?:\\s+is)?\\s+(?:shown|visible|displayed|present)\\s*\\.?$`,
+  `^(?:the\\s+|a\\s+|an\\s+)?(.+?\\b(?:${CONTROL_NOUN}))\\s+(?:is|are)\\s+(not\\s+)?(shown|visible|displayed|present|enabled|disabled|checked|unchecked|ticked|focused|empty)\\s*\\.?$`,
   "iu",
 );
 const VALUE_CLAIM = new RegExp(
@@ -167,13 +163,7 @@ export interface ElementClaim {
  */
 export function elementClaim(claim: string): ElementClaim | null {
   const text = canonicalSentence(claim);
-  const absent = ABSENT_CLAIM.exec(text);
-  if (absent)
-    return {
-      target: absent[1]!,
-      operation: FIELD_NOUN.test(absent[1]!) ? "fill" : "click",
-      expect: { kind: "present", present: false },
-    };
+  if (/^(?:there\s+is\s+)?no\s+/iu.test(text)) return null;
   const valued = VALUE_CLAIM.exec(text);
   if (valued)
     return {
@@ -196,22 +186,22 @@ export function elementClaim(claim: string): ElementClaim | null {
     "displayed",
     "present",
   ].includes(word)
-    ? { kind: "present", present: !negated }
-    : ["hidden", "absent", "gone"].includes(word)
-      ? { kind: "present", present: negated }
-      : word === "enabled"
-        ? { kind: "disabled", disabled: negated }
-        : word === "disabled"
-          ? { kind: "disabled", disabled: !negated }
-          : ["checked", "ticked", "selected"].includes(word)
-            ? { kind: "checked", checked: !negated }
-            : word === "unchecked"
-              ? { kind: "checked", checked: negated }
-              : word === "focused"
-                ? { kind: "focused", focused: !negated }
-                : word === "empty" && fill
-                  ? { kind: "empty", empty: !negated }
-                  : null;
+    ? negated
+      ? null
+      : { kind: "present", present: true }
+    : word === "enabled"
+      ? { kind: "disabled", disabled: negated }
+      : word === "disabled"
+        ? { kind: "disabled", disabled: !negated }
+        : ["checked", "ticked"].includes(word)
+          ? { kind: "checked", checked: !negated }
+          : word === "unchecked"
+            ? { kind: "checked", checked: negated }
+            : word === "focused"
+              ? { kind: "focused", focused: !negated }
+              : word === "empty" && fill
+                ? { kind: "empty", empty: !negated }
+                : null;
   if (!expect) return null;
   // A disabled field is not a typing target, so it is found as a control.
   return {
@@ -252,7 +242,7 @@ export function literalShown(claim: string): string | null {
 }
 /** `the text Welcome back! is shown`: a literal named without quotes. */
 const LITERAL_PRESENCE =
-  /^the\s+(?:text|message|heading|label)\s+(.+?)\s+(?:is|are)\s+(not\s+)?(?:shown|visible|displayed|present|on\s+the\s+page)\s*$/iu;
+  /^the\s+text\s+(.+?)\s+(?:is|are)\s+(not\s+)?(?:shown|visible|displayed|present|on\s+the\s+page)\s*$/iu;
 
 export interface TextClaim {
   /** The quoted text, which may hold {{name}} values. */

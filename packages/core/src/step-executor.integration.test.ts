@@ -236,6 +236,28 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await context.close();
     });
 
+    it("moves backward, forward, and reloads through the browser driver", async () => {
+      const { page, context } = await fresh();
+      try {
+        await page.goto(`${base}/first`);
+        await page.goto(`${base}/second`);
+
+        await executeStep(page, { op: "history", move: "back" });
+        expect(page.url).toBe(`${base}/first`);
+
+        await executeStep(page, { op: "history", move: "forward" });
+        expect(page.url).toBe(`${base}/second`);
+
+        await page.evaluate("sessionStorage.reloadMarker = 'present'");
+        await executeStep(page, { op: "history", move: "reload" });
+        expect(await page.evaluate("sessionStorage.reloadMarker")).toBe(
+          "present",
+        );
+      } finally {
+        await context.close();
+      }
+    });
+
     it("replaces a field value, emits input, and fails safe on a cloned ref", async () => {
       const { page, context } = await fresh();
       await page.evaluate(

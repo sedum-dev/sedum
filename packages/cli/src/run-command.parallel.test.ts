@@ -130,7 +130,7 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
   };
 });
 
-import { executeRunCommand } from "./run-command.js";
+import { executeRunCommand, verifyGraceMs } from "./run-command.js";
 
 let root: string | undefined;
 let previous: string | undefined;
@@ -168,6 +168,18 @@ async function project(count: number): Promise<string[]> {
 
 const base = { replay: false, evidence: false, sensitiveOrigins: [] };
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+describe("verify grace environment override", () => {
+  it("accepts a bounded duration and zero, otherwise uses the CLI default", () => {
+    expect(verifyGraceMs(undefined)).toBe(5_000);
+    expect(verifyGraceMs("0")).toBe(0);
+    expect(verifyGraceMs("1250.5")).toBe(1_250.5);
+    expect(verifyGraceMs("-1")).toBe(5_000);
+    expect(verifyGraceMs("Infinity")).toBe(5_000);
+    expect(verifyGraceMs("120001")).toBe(5_000);
+    expect(verifyGraceMs("not-a-duration")).toBe(5_000);
+  });
+});
 
 describe("parallel sedum run", () => {
   it("runs lanes concurrently yet records tests in selection order", async () => {
