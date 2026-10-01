@@ -42,6 +42,7 @@ function fakePage() {
   const press = vi.fn(async () => undefined);
   const scroll = vi.fn(async () => undefined);
   const goto = vi.fn(async (url: string) => ({ url }));
+  const history = vi.fn(async () => ({ url: version.route }));
   const settle = vi.fn(async () => ({ settled: true, elapsedMs: 1 }));
   const evaluate = vi.fn(async (expression: string) => {
     let value: unknown;
@@ -63,6 +64,7 @@ function fakePage() {
       press,
       scroll,
       goto,
+      history,
       settle,
       evaluate,
     } as unknown as BrowserPage,
@@ -71,6 +73,7 @@ function fakePage() {
     press,
     scroll,
     goto,
+    history,
     settle,
     setVersion(next: PageVersion) {
       current = next;
@@ -142,6 +145,19 @@ describe("step executor", () => {
     );
     controller.abort();
     await expect(pending).rejects.toMatchObject({ code: "canceled" });
+  });
+
+  it("does not hide a failed history dispatch", async () => {
+    const fixture = fakePage();
+    fixture.history.mockRejectedValueOnce(new Error("history failed"));
+    await expect(
+      executeStep(fixture.page, { op: "history", move: "back" }),
+    ).rejects.toMatchObject({
+      op: "history",
+      code: "operation_failed",
+      phase: "post_dispatch",
+      retryable: false,
+    });
   });
 
   it("lets only argument-free Playwright call-log lines through", () => {

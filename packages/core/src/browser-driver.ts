@@ -106,6 +106,8 @@ export interface NavigationResult {
   readonly url: string;
 }
 
+export type HistoryMove = "back" | "forward" | "reload";
+
 export interface SettleResult {
   readonly settled: boolean;
   readonly elapsedMs: number;
@@ -164,6 +166,10 @@ export interface BrowserPage {
   /** The underlying Playwright objects, for code in `*.test.ts` bodies. */
   playwright?(): { readonly page: Page; readonly context: BrowserContext };
   goto(url: string, options?: NavigationOptions): Promise<NavigationResult>;
+  history(
+    move: HistoryMove,
+    options?: NavigationOptions,
+  ): Promise<NavigationResult>;
   settle(options?: SettleOptions): Promise<SettleResult>;
   text(): Promise<string>;
   evaluate<T>(expression: string, argument?: unknown): Promise<T>;
@@ -405,6 +411,36 @@ class PlaywrightPage implements BrowserPage {
       if (options.safeDiagnostics)
         throw safeOperationError(error, this.state(), "Navigation");
       throw operationError(error, this.state(), "page");
+    }
+  }
+
+  async history(
+    move: HistoryMove,
+    options: NavigationOptions = {},
+  ): Promise<NavigationResult> {
+    const currentState = this.state();
+    if (
+      currentState.closed ||
+      currentState.crashed ||
+      currentState.disconnected
+    ) {
+      throw operationError(
+        new Error("page is not available"),
+        currentState,
+        "page",
+      );
+    }
+    const navigation = {
+      timeout: options.timeoutMs ?? DEFAULT_NAVIGATION_TIMEOUT_MS,
+      waitUntil: options.waitUntil ?? "domcontentloaded",
+    } as const;
+    try {
+      if (move === "back") await this.page.goBack(navigation);
+      else if (move === "forward") await this.page.goForward(navigation);
+      else await this.page.reload(navigation);
+      return { url: this.page.url() };
+    } catch (error) {
+      throw safeOperationError(error, this.state(), "History navigation");
     }
   }
 
