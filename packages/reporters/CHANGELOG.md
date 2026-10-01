@@ -1,5 +1,18 @@
 # @sedum-dev/reporters
 
+## 0.1.0-alpha.7
+
+### Patch Changes
+
+- Updated dependencies [4985099]
+- Updated dependencies [db3272b]
+- Updated dependencies [9a94894]
+- Updated dependencies [9e2bec1]
+- Updated dependencies [16e7c00]
+- Updated dependencies [245261c]
+- Updated dependencies [757f45f]
+  - @sedum-dev/core@0.1.0-alpha.7
+
 ## 0.1.0-alpha.6
 
 ### Patch Changes

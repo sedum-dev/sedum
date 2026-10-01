@@ -1,5 +1,17 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.7
+
+### Patch Changes
+
+- 4985099: Branch on what the page shows. `await ai.holds("the passkey screen is shown")` judges a claim like a verify and returns `true` or `false`; it never fails the test and is recorded without a verdict. Use it for screens that appear only sometimes, such as an optional prompt, instead of reading the URL or the DOM in code.
+- db3272b: Click rows and the actions buttons that appear when a row is hovered. A clickable row (a pointer-cursor element) is now a target even when it holds icon-only controls, such as a list row with an actions menu, so `click the Alpha report row` works. A control that a stylesheet `:hover` rule reveals is offered too; Sedum rests the pointer on its row before clicking it, so `click the actions button on the Alpha report row` works. A control's name no longer includes the text or icons of a closed menu nested inside it, an icon button's context is bounded to its own row, and the button's hint lists what its menu offers.
+- 9a94894: Check a control's state in a sentence. `verify the Save button is disabled` (or `enabled`), `verify the Email field contains {{email}}`, `verify the Search field is shown`, `is focused`, `is empty`, and `verify the Select all checkbox is checked` locate the control the way a click or type step does and read its state directly; page text carries no control state. A field's value is compared in the runner and never sent to the model, and password fields are never read.
+- 9e2bec1: Check exact text without the Judge. Quoted text asks for an exact check on the page's visible text: `verify the text "Total" is not shown`, `verify "Add debt" appears once`, `verify "{{name}}" appears exactly 2 times`, `verify the text "A" or "B" is shown`, and `verify the page URL contains "/sign-up"`. Unquoted `the text X is shown` passes at once when X is on the page, in any letter case, and otherwise goes to the Judge as before, since the author may paraphrase. These checks read text the same way the Judge does, with no 4,096-character limit.
+- 16e7c00: Navigate by path and through the browser history. `goto /practice/clients/{{id}}` opens a path on the site the test is on, so a test needs no full address for each environment. `go back`, `go forward`, and `reload the page` move through the page's history as the browser's buttons do.
+- 245261c: Find fields by the caption beside or above them. A field with no label, named only by an example value such as `AB0A 0AA` or `E.g. 10,000`, now carries that caption as a hint, so `type SW1A 1AA in the Postal code field` finds it.
+- 757f45f: Wait for the page the way a person does. `wait until the reply is shown` (or `wait up to 90 seconds until …`, 30 seconds by default, at most 120) judges its claim again each time the page changes and passes as soon as it holds, through slow server responses and redirects. The CLI also gives a failing `verify`, and a click or type whose target is not on the page yet, a 5-second grace like Playwright's auto-wait: the step is judged or located again only when the page changes, so a page that stays put costs no extra model calls. Set `SEDUM_VERIFY_GRACE_MS=0` to judge once.
+
 ## 0.1.0-alpha.6
 
 ### Patch Changes
