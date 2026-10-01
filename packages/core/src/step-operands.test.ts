@@ -200,11 +200,13 @@ describe("exact text claims", () => {
     expect(literalShown("the text Welcome back! is shown")).toBe(
       "Welcome back!",
     );
-    expect(literalShown("the message Name is required is shown")).toBe(
-      "Name is required",
-    );
     expect(literalShown("the text Welcome is not shown")).toBeNull();
     expect(literalShown('the text "Welcome" is shown')).toBeNull();
+    // A semantic claim must still be judged: matching text elsewhere is not
+    // evidence that it is a heading, label, or message.
+    expect(literalShown("the heading Welcome is shown")).toBeNull();
+    expect(literalShown("the label Name is shown")).toBeNull();
+    expect(literalShown("the message Name is required is shown")).toBeNull();
   });
 
   it("counts text with spacing ignored", () => {

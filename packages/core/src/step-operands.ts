@@ -252,7 +252,7 @@ export function literalShown(claim: string): string | null {
 }
 /** `the text Welcome back! is shown`: a literal named without quotes. */
 const LITERAL_PRESENCE =
-  /^the\s+(?:text|message|heading|label)\s+(.+?)\s+(?:is|are)\s+(not\s+)?(?:shown|visible|displayed|present|on\s+the\s+page)\s*$/iu;
+  /^the\s+text\s+(.+?)\s+(?:is|are)\s+(not\s+)?(?:shown|visible|displayed|present|on\s+the\s+page)\s*$/iu;
 
 export interface TextClaim {
   /** The quoted text, which may hold {{name}} values. */
