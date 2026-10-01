@@ -604,8 +604,23 @@ export async function runScriptTest(
       claim: unknown,
       values: AiValues | undefined,
       source: FlowSource,
-    ): Promise<boolean> =>
-      exclusive(source, () =>
+    ): Promise<boolean> => {
+      // A check asks about the page; an action would be judged as a claim.
+      if (
+        typeof claim === "string" &&
+        /^\s*(?:click|tap|double[ -]?click|type|enter|fill|press|goto|go\s+(?:to|back|forward)|navigate|open|scroll|remember|extract|select|choose|pick|reload|refresh|wait\s+\d)\b/iu.test(
+          claim,
+        )
+      )
+        usage(
+          new ScriptUsageError(
+            "invalid_check",
+            "ai.holds takes one claim about the page, not an action.",
+            'Write ai.holds("the passkey screen is shown").',
+          ),
+          source,
+        );
+      return exclusive(source, () =>
         sentence(
           typeof claim === "string" && !/^\s*(?:verify|wait)\b/iu.test(claim)
             ? `verify ${claim.trim()}`
@@ -615,6 +630,7 @@ export async function runScriptTest(
           true,
         ),
       );
+    };
 
     /**
      * A step promise that the test never awaits must not crash the process
