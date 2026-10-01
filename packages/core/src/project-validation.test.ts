@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   FileClassificationCache,
@@ -36,6 +37,9 @@ import {
 } from "./project-validation.js";
 
 const roots: string[] = [];
+const scriptApi = pathToFileURL(
+  fileURLToPath(new URL("./script-api.ts", import.meta.url)),
+).href;
 afterEach(async () => {
   for (const root of roots.splice(0))
     await rm(root, { recursive: true, force: true });
@@ -406,6 +410,71 @@ describe("project validation", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.counts.unreferencedModules).toBe(0);
     expect(result.fullyValidated).toBe(true);
+  });
+
+  it("rejects actions and waits passed to ai.holds during validation", async () => {
+    const root = await project({
+      "holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("invalid checks", async ({ ai }) => {
+  await ai.holds("click the Checkout button");
+  await ai.holds("wait until Checkout complete is shown");
+  await ai.holds?.("click the optional Checkout button");
+  await ai?.holds("wait until optional Checkout is shown");
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual([
+      "holds.test.ts:3:18 invalid_check",
+      "holds.test.ts:4:18 invalid_check",
+      "holds.test.ts:5:20 invalid_check",
+      "holds.test.ts:6:19 invalid_check",
+    ]);
+    expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
+  });
+
+  it("does not approve indirect ai.holds calls it cannot inspect", async () => {
+    const root = await project({
+      "indirect-holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("indirect checks", async ({ ai }) => {
+  const holds = ai.holds;
+  await (ai.holds)("click the Checkout button");
+  await holds("wait until Checkout is shown");
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual([
+      "indirect-holds.test.ts:3:17 unchecked_call",
+      "indirect-holds.test.ts:4:10 unchecked_call",
+    ]);
+    expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
+  });
+
+  it("does not approve missing or list-shaped ai.holds claims", async () => {
+    const root = await project({
+      "shaped-holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("invalid check shapes", async ({ ai }) => {
+  await ai.holds();
+  await ai.holds(["one claim", "another claim"]);
+  const claims = ["one claim", "another claim"];
+  await ai.holds(claims);
+  await ai.holds("the page is shown", null);
+  await ai.holds("the page is shown", "not values");
+  await ai.holds("the page is shown", {}, "extra");
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual([
+      "shaped-holds.test.ts:3:9 unchecked_call",
+      "shaped-holds.test.ts:4:9 unchecked_call",
+      "shaped-holds.test.ts:6:9 unchecked_call",
+      "shaped-holds.test.ts:7:9 unchecked_call",
+      "shaped-holds.test.ts:8:9 unchecked_call",
+      "shaped-holds.test.ts:9:9 unchecked_call",
+    ]);
+    expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
   });
 
   it("checks entry URLs exactly as run does when a baseUrl setting is given", async () => {

@@ -9,6 +9,7 @@ import {
   classifySentenceSteps,
   type ClassifiedFlowSentence,
 } from "./flow-classification.js";
+import { WAIT_UNTIL } from "./classification.js";
 import {
   closeQuietly,
   executeSentence,
@@ -529,7 +530,11 @@ export async function runScriptTest(
             ),
           );
         const classified = checked.classification.steps[0];
-        if (check && classified && classified.op !== "verify")
+        if (
+          check &&
+          classified &&
+          (classified.op !== "verify" || WAIT_UNTIL.test(text))
+        )
           throw new ScriptUsageError(
             "invalid_check",
             "ai.holds takes one claim about the page.",
@@ -604,33 +609,10 @@ export async function runScriptTest(
       claim: unknown,
       values: AiValues | undefined,
       source: FlowSource,
-    ): Promise<boolean> => {
-      // A check asks about the page; an action would be judged as a claim.
-      if (
-        typeof claim === "string" &&
-        /^\s*(?:click|tap|double[ -]?click|type|enter|fill|press|goto|go\s+(?:to|back|forward)|navigate|open|scroll|remember|extract|select|choose|pick|reload|refresh|wait\s+\d)\b/iu.test(
-          claim,
-        )
-      )
-        usage(
-          new ScriptUsageError(
-            "invalid_check",
-            "ai.holds takes one claim about the page, not an action.",
-            'Write ai.holds("the passkey screen is shown").',
-          ),
-          source,
-        );
-      return exclusive(source, () =>
-        sentence(
-          typeof claim === "string" && !/^\s*(?:verify|wait)\b/iu.test(claim)
-            ? `verify ${claim.trim()}`
-            : claim,
-          values,
-          source,
-          true,
-        ),
-      );
-    };
+    ): Promise<boolean> =>
+      // Classify the caller's words before treating them as a check. Prefixing
+      // `verify` would turn an action into a claim and make it look read-only.
+      exclusive(source, () => sentence(claim, values, source, true));
 
     /**
      * A step promise that the test never awaits must not crash the process

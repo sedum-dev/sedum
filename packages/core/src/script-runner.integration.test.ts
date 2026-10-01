@@ -6,6 +6,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { PlaywrightBrowserDriver } from "./browser-driver.js";
 import { NoopClassificationCache } from "./classification-cache.js";
+import {
+  MODEL_CHOICES,
+  type ModelChoice,
+  type ModelClassification,
+} from "./classification.js";
 import type { FlowRunResult } from "./flow-runner.js";
 import type {
   JudgeDecision,
@@ -31,6 +36,22 @@ const call: ProviderCall = {
   successfulResponseCostUsd: 0,
   totalCostUsd: 0,
 };
+
+/** Classify plain claims for ai.holds, and expose non-pattern actions. */
+function classify(sentences: readonly string[]) {
+  const answers: ModelClassification[] = sentences.map((sentence) => {
+    const op: ModelChoice = /^submit\b/iu.test(sentence) ? "click" : "verify";
+    return {
+      op,
+      probabilities: Object.fromEntries(
+        MODEL_CHOICES.map((choice) => [choice, choice === op ? 0.97 : 0.003]),
+      ) as Record<ModelChoice, number>,
+      model: "fake",
+      requestedModel: "fake",
+    };
+  });
+  return Promise.resolve({ answers, calls: [call] });
+}
 
 /** Pick the candidate the sentence names, longest name first. */
 function choose(
@@ -151,7 +172,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const recorder = new RunRecorder(async () => undefined, name);
       await recorder.start();
       const provider = {
-        classifyBatch: vi.fn(),
+        classifyBatch: vi.fn(classify),
         choose: vi.fn(choose),
         holds: vi.fn(holds),
       };
@@ -408,8 +429,8 @@ test("late", { url: "/home?user=Ada" }, async ({ ai }) => {
       expect(outcome).toEqual({ status: "passed", file: expect.any(String) });
       const steps = result.tests[0]!.attempts[0]!.steps;
       expect(steps.map((step) => [step.sentence, step.verdict])).toEqual([
-        ["verify the page shows Cart total", null],
-        ["verify the page shows Checkout complete", null],
+        ["the page shows Cart total", null],
+        ["the page shows Checkout complete", null],
       ]);
     }, 60_000);
 
@@ -429,17 +450,40 @@ test("late", { url: "/home?user=Ada" }, async ({ ai }) => {
       expect(performance.now() - started).toBeLessThan(10_000);
     }, 60_000);
 
-    it("rejects ai.holds given an action instead of a claim", async () => {
+    it("classifies ai.holds input before accepting it as a claim", async () => {
+      const claim = await run(
+        "holds-leading-action-word.test.ts",
+        `test("claim", { url: "/home" }, async ({ ai }) => {
+          if (await ai.holds("Open menu is shown")) throw new Error("unexpected");
+        });`,
+      );
+      expect(claim.outcome).toEqual({
+        status: "passed",
+        file: expect.any(String),
+      });
+
       const { outcome } = await run(
         "holds-action.test.ts",
         `test("action", { url: "/home" }, async ({ ai }) => {
-          await ai.holds("click the Add Camera button");
+          await ai.holds("submit the checkout form");
         });`,
       );
       expect(outcome).toMatchObject({
         status: "could_not_run",
         code: "invalid_test",
-        message: "ai.holds takes one claim about the page, not an action.",
+        message: "ai.holds takes one claim about the page.",
+      });
+
+      const waiting = await run(
+        "holds-wait.test.ts",
+        `test("wait", { url: "/home" }, async ({ ai }) => {
+          await ai.holds("wait until Checkout complete is shown");
+        });`,
+      );
+      expect(waiting.outcome).toMatchObject({
+        status: "could_not_run",
+        code: "invalid_test",
+        message: "ai.holds takes one claim about the page.",
       });
     }, 60_000);
 

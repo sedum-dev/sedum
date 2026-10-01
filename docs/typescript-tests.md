@@ -158,6 +158,21 @@ await ai.group("Checkout", async () => {
 
 ## Reading from the page
 
+`ai.holds(claim, values?)` asks whether a claim holds on the page now, so a
+test can branch when a screen appears only sometimes. It returns `true` or
+`false`, never fails the test just because the claim is false, and is recorded
+without a pass/fail verdict. Unlike a verify step, it does not use the
+configured verify grace period.
+
+```ts
+if (await ai.holds("the passkey enrollment screen is shown")) {
+  await ai("click the Skip button");
+}
+```
+
+Pass a claim, not an action or a wait instruction. Claims are classified and
+judged through the same deterministic and model-backed paths as verify steps.
+
 `ai.extract(description)` returns the text of the element the description
 names, found the same way as a `remember` target. Pass a parser, such as a zod
 schema, to convert it:
