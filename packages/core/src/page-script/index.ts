@@ -664,6 +664,19 @@ if (!window.__sedum) {
       const placeholder = element.getAttribute("placeholder")?.trim() ?? "";
       if (placeholder && placeholder !== name)
         addPart(`placeholder "${clip(placeholder)}"`, placeholder);
+      // A field named only by an example value ("E.g. 10,000", "AB0A 0AA")
+      // is known by the caption a person reads beside or above it.
+      if (
+        placeholder &&
+        placeholder === name &&
+        !element.hasAttribute("aria-label") &&
+        !element.hasAttribute("aria-labelledby") &&
+        !element.labels?.length
+      ) {
+        const caption = rowLabel(element) || nearbyText(element);
+        if (caption && caption !== placeholder)
+          addPart(`label "${clip(caption)}"`, caption);
+      }
     }
     const named =
       element.hasAttribute("aria-label") ||
