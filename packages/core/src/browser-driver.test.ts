@@ -60,6 +60,9 @@ class FakePage extends EventEmitter {
     this.currentUrl = url;
     return null;
   });
+  readonly goBack = vi.fn(async () => null);
+  readonly goForward = vi.fn(async () => null);
+  readonly reload = vi.fn(async () => null);
   readonly waitForLoadState = vi.fn(async () => undefined);
   readonly innerText = vi.fn(async () => "fixture page");
   readonly screenshot = vi.fn(async (options: unknown) => {
@@ -287,6 +290,18 @@ describe("PlaywrightBrowserDriver", () => {
     expect(await page.goto("http://127.0.0.1:4173")).toEqual({
       url: "http://127.0.0.1:4173",
     });
+    await expect(page.history("back")).resolves.toEqual({
+      url: "http://127.0.0.1:4173",
+    });
+    await expect(page.history("forward")).resolves.toEqual({
+      url: "http://127.0.0.1:4173",
+    });
+    await expect(page.history("reload")).resolves.toEqual({
+      url: "http://127.0.0.1:4173",
+    });
+    expect(browser.context.page.goBack).toHaveBeenCalledOnce();
+    expect(browser.context.page.goForward).toHaveBeenCalledOnce();
+    expect(browser.context.page.reload).toHaveBeenCalledOnce();
     expect(await page.text()).toBe("fixture page");
     expect(await page.settle()).toMatchObject({ settled: true });
     expect(
@@ -311,6 +326,9 @@ describe("PlaywrightBrowserDriver", () => {
     await expect(page.goto("http://example.test")).rejects.toMatchObject({
       code: "page-closed",
     });
+    await expect(page.history("back")).rejects.toMatchObject({
+      code: "page-closed",
+    });
     await expect(page.settle()).rejects.toMatchObject({ code: "page-closed" });
     await expect(page.evaluate("document.title")).rejects.toMatchObject({
       code: "page-closed",
@@ -331,6 +349,12 @@ describe("PlaywrightBrowserDriver", () => {
       new Error("navigation failed"),
     );
     await expect(page.goto("http://example.test")).rejects.toMatchObject({
+      code: "operation-failed",
+    });
+    browser.context.page.goBack.mockRejectedValueOnce(
+      new Error("history navigation failed"),
+    );
+    await expect(page.history("back")).rejects.toMatchObject({
       code: "operation-failed",
     });
     browser.context.page.innerText.mockRejectedValueOnce(

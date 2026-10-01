@@ -46,7 +46,9 @@ import type { VisionResolver } from "./vision.js";
 import type { RejectionRouter } from "./script-rejections.js";
 import { chooseOption } from "./dropdown-option.js";
 import {
+  gotoPathParts,
   gotoUrlParts,
+  historyMove,
   pressKey,
   scrollDirection,
   waitDurationMs,
@@ -991,25 +993,53 @@ export async function executeSentence(
         deltaY: direction === "down" ? deltaY : -deltaY,
       };
     } else {
-      const parts = gotoUrlParts(step.text);
-      if (parts === null) return invalid("Name exactly one http(s) address.");
-      const values = parts.names.map((name) => data[name]?.value);
-      if (values.some((value) => value === undefined))
-        return record("failed", {
-          error: {
-            code: "missing_remembered_binding",
-            message:
-              "This step needs a value that is unavailable in this attempt.",
-          },
-        });
-      const url = new RuntimeUrl(parts.literals, values as RuntimeValue[]);
-      try {
-        new URL(url.reveal());
-      } catch {
-        return invalid("The goto address is not a valid URL.");
+      const move = historyMove(step.text);
+      const path = move ? null : gotoPathParts(step.text);
+      let origin = "";
+      if (path) {
+        try {
+          origin = new URL(page.url).origin;
+        } catch {
+          return invalid("A /path needs a page on a site to start from.");
+        }
+        if (!/^https?:/u.test(origin))
+          return invalid("A /path needs a page on a site to start from.");
       }
-      command = { op: "goto", url };
-      detail = `Opened ${url.toString()}.`;
+      const parts = move
+        ? null
+        : path
+          ? {
+              ...path,
+              literals: [origin + path.literals[0]!, ...path.literals.slice(1)],
+            }
+          : gotoUrlParts(step.text);
+      if (move) {
+        command = { op: "history", move };
+        detail =
+          move === "reload" ? "Reloaded the page." : `Went ${move} in history.`;
+      } else if (parts === null)
+        return invalid(
+          "Name exactly one http(s) address or a /path on this site.",
+        );
+      else {
+        const values = parts.names.map((name) => data[name]?.value);
+        if (values.some((value) => value === undefined))
+          return record("failed", {
+            error: {
+              code: "missing_remembered_binding",
+              message:
+                "This step needs a value that is unavailable in this attempt.",
+            },
+          });
+        const url = new RuntimeUrl(parts.literals, values as RuntimeValue[]);
+        try {
+          new URL(url.reveal());
+        } catch {
+          return invalid("The goto address is not a valid URL.");
+        }
+        command = { op: "goto", url };
+        detail = `Opened ${url.toString()}.`;
+      }
     }
     try {
       await executeStep(page, command, {

@@ -114,3 +114,40 @@ export function gotoUrlParts(
   literals.push(rest);
   return { literals, names };
 }
+
+/** `go back`, `go forward`, `reload the page`: a move in the browser history. */
+export function historyMove(
+  sentence: string,
+): "back" | "forward" | "reload" | null {
+  const text = canonicalSentence(sentence).replace(/\.$/u, "");
+  if (/^(?:go|navigate)\s+back(?:\s+to\s+the\s+previous\s+page)?$/iu.test(text))
+    return "back";
+  if (/^(?:go|navigate)\s+forward$/iu.test(text)) return "forward";
+  if (/^(?:reload|refresh)(?:\s+the\s+page)?$/iu.test(text)) return "reload";
+  return null;
+}
+
+/**
+ * `goto /practice/clients/{{id}}`: a path on the current site, split like
+ * {@link gotoUrlParts}. The runner puts the page's origin in front.
+ */
+export function gotoPathParts(
+  sentence: string,
+): { readonly literals: string[]; readonly names: string[] } | null {
+  const path = /^(?:goto|go\s+to|navigate\s+to|open)\s+(\/\S*)\s*$/iu.exec(
+    canonicalSentence(sentence),
+  )?.[1];
+  if (!path) return null;
+  const literals: string[] = [];
+  const names: string[] = [];
+  let rest = path.replace(/[.,;]+$/u, "");
+  for (;;) {
+    const match = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/u.exec(rest);
+    if (!match) break;
+    literals.push(rest.slice(0, match.index));
+    names.push(match[1]!);
+    rest = rest.slice(match.index + match[0].length);
+  }
+  literals.push(rest);
+  return { literals, names };
+}

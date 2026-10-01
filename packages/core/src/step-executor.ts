@@ -1,5 +1,5 @@
 import { inspect } from "node:util";
-import type { BrowserPage } from "./browser-driver.js";
+import type { BrowserPage, HistoryMove } from "./browser-driver.js";
 import { clickTarget, pageVersion, quietPage } from "./page-bridge.js";
 import type { Aim, FillTarget, PageVersion } from "./page-protocol.js";
 import { safeCallLog } from "./safe-diagnostics.js";
@@ -115,6 +115,7 @@ export type StepCommand =
     }
   | { readonly op: "press"; readonly key: string }
   | { readonly op: "goto"; readonly url: RuntimeUrl }
+  | { readonly op: "history"; readonly move: HistoryMove }
   | { readonly op: "scroll"; readonly deltaY: number }
   | { readonly op: "wait"; readonly durationMs: number };
 
@@ -200,7 +201,7 @@ function sameVersion(a: PageVersion, b: PageVersion): boolean {
 /** No action is replayed if observation after dispatch fails. */
 async function observeRoute(
   page: BrowserPage,
-  op: "click" | "press",
+  op: "click" | "press" | "history",
   before: PageVersion,
   remaining: (defaultMs: number, phase: StepFailurePhase) => number,
 ): Promise<StepOutcome> {
@@ -402,6 +403,16 @@ export async function executeStep(
               new Error(`Call log:\n${(result.callLog ?? []).join("\n")}`),
             ),
           );
+        break;
+      }
+      case "history": {
+        const before = await active(pageVersion(page));
+        const timeoutMs = remaining(30_000, phase);
+        phase = "post_dispatch";
+        await active(page.history(command.move, { timeoutMs }));
+        outcome = await active(
+          observeRoute(page, "history", before, remaining),
+        );
         break;
       }
       case "press": {
