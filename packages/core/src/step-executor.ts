@@ -115,6 +115,7 @@ export type StepCommand =
     }
   | { readonly op: "press"; readonly key: string }
   | { readonly op: "goto"; readonly url: RuntimeUrl }
+  | { readonly op: "history"; readonly move: "back" | "forward" | "reload" }
   | { readonly op: "scroll"; readonly deltaY: number }
   | { readonly op: "wait"; readonly durationMs: number };
 
@@ -402,6 +403,24 @@ export async function executeStep(
               new Error(`Call log:\n${(result.callLog ?? []).join("\n")}`),
             ),
           );
+        break;
+      }
+      case "history": {
+        const before = await active(pageVersion(page));
+        phase = "post_dispatch";
+        // The page's own history, as the browser's Back button would use it.
+        await active(
+          page
+            .evaluate(
+              command.move === "back"
+                ? "history.back()"
+                : command.move === "forward"
+                  ? "history.forward()"
+                  : "location.reload()",
+            )
+            .catch(() => undefined),
+        );
+        outcome = await active(observeRoute(page, "press", before, remaining));
         break;
       }
       case "press": {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { patternOperation, validateOperand } from "./classification.js";
 import {
+  gotoPathParts,
   gotoUrlParts,
+  historyMove,
   pressKey,
   scrollDirection,
   waitDurationMs,
@@ -48,5 +51,42 @@ describe("step operands", () => {
       },
     );
     expect(gotoUrlParts("goto the home page")).toBeNull();
+  });
+});
+
+describe("history and path navigation", () => {
+  it("reads a move in the browser history", () => {
+    expect(historyMove("go back")).toBe("back");
+    expect(historyMove("go back to the previous page.")).toBe("back");
+    expect(historyMove("navigate forward")).toBe("forward");
+    expect(historyMove("reload the page")).toBe("reload");
+    expect(historyMove("refresh")).toBe("reload");
+    expect(historyMove("go back to the cart")).toBeNull();
+  });
+
+  it("splits a path on the current site around its values", () => {
+    expect(gotoPathParts("goto /practice/workspace")).toEqual({
+      literals: ["/practice/workspace"],
+      names: [],
+    });
+    expect(gotoPathParts("go to /clients/{{id}}/overview")).toEqual({
+      literals: ["/clients/", "/overview"],
+      names: ["id"],
+    });
+    expect(gotoPathParts("goto https://example.com/")).toBeNull();
+    expect(gotoPathParts("goto the clients page")).toBeNull();
+  });
+
+  it("classifies history moves and paths as navigations offline", () => {
+    for (const sentence of [
+      "go back",
+      "reload the page",
+      "goto /practice/clients",
+      "navigate to /clients/{{id}}",
+    ]) {
+      expect(patternOperation(sentence)).toBe("goto");
+      expect(validateOperand(sentence, "goto")).toBeNull();
+    }
+    expect(validateOperand("goto the clients page", "goto")).not.toBeNull();
   });
 });

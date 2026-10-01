@@ -131,6 +131,8 @@ const BINDING = new RegExp(`\\bas\\s+${PLACEHOLDER}\\s*\\.?$`, "iu");
 const HTTP_URL = /https?:\/\/\S+/giu;
 const WAIT_DURATION =
   /^wait\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\s*\.?$/iu;
+const HISTORY_MOVE =
+  /^(?:(?:go|navigate)\s+(?:back(?:\s+to\s+the\s+previous\s+page)?|forward)|(?:reload|refresh)(?:\s+the\s+page)?)\s*\.?$/iu;
 const DURATION_OPERAND =
   /\b(\d+(?:\.\d+)?)\s*(ms|milliseconds?|s|seconds?)\b/giu;
 const KNOWN_KEY =
@@ -205,6 +207,12 @@ export function preflightSentence(
 export function patternOperation(sentence: string): StepOperationKind | null {
   const text = canonicalSentence(sentence);
   if (preflightSentence(text)) return null;
+  // History moves and paths on the current site are navigations.
+  if (
+    HISTORY_MOVE.test(text) ||
+    /^(?:goto|go\s+to|navigate\s+to)\s+\/\S*\s*$/iu.test(text)
+  )
+    return "goto";
   // Side-effecting fast paths require an unambiguous single clause.
   if (
     /^(?:click|type|enter|fill|press|goto|go\s+to|navigate\s+to|scroll|wait|remember|select|choose|pick)\b/iu.test(
@@ -266,8 +274,14 @@ export function validateOperand(
     if (!operand || quotes.length + placeholders.length !== 1)
       return 'Name one value, such as {{key}} or "{{user}}@example.com", and a field.';
   } else if (op === "goto") {
+    if (
+      HISTORY_MOVE.test(text) ||
+      /^(?:goto|go\s+to|navigate\s+to)\s+\/\S*\s*$/iu.test(text)
+    )
+      return null;
     const urls = text.match(HTTP_URL) ?? [];
-    if (urls.length !== 1) return "Name exactly one http(s) address.";
+    if (urls.length !== 1)
+      return "Name exactly one http(s) address or a /path on this site.";
   } else if (op === "press") {
     const explicit =
       /^(?:press|hit|strike)\s+(?:the\s+)?(?:"[^"]+"|[\w-]+)(?:\s+key)?\s*\.?$/iu.test(
