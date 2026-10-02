@@ -15,6 +15,7 @@ import {
 } from "./config.js";
 import type { CliDiagnostic } from "./diagnostics.js";
 import { loadProjectContext } from "./project-context.js";
+import { createCliProvider } from "./provider-factory.js";
 
 /** Must match the requested model `sedum run` stores classifications under. */
 export const CLASSIFICATION_MODEL = DEFAULT_PROVIDER_MODEL;
@@ -23,17 +24,9 @@ export type ClassificationProviderFactory = (options: {
   readonly apiKey?: string;
   readonly baseURL: string;
   readonly model: string;
+  readonly providerName?: "typesafe" | "clef";
+  readonly accountId?: string;
 }) => ClassificationProvider | Promise<ClassificationProvider>;
-
-/** Loaded only for `--online`, so offline commands never touch the provider. */
-export const createTypeSafeClassifier: ClassificationProviderFactory = async ({
-  apiKey,
-  baseURL,
-  model,
-}) => {
-  const { TypeSafeAdapter } = await import("@sedum-dev/provider-typesafe");
-  return new TypeSafeAdapter({ ...(apiKey ? { apiKey } : {}), baseURL, model });
-};
 
 export interface ValidateCommandOptions {
   readonly paths: readonly string[];
@@ -71,7 +64,7 @@ function emptyProjectProblem(
 const missingKey: CliDiagnostic = {
   code: "missing_key",
   message: "`sedum validate --online` needs a configured model provider.",
-  fix: "Set TYPESAFE_API_KEY for the configured endpoint and rerun; otherwise omit --online.",
+  fix: "Set the selected provider's credentials (TYPESAFE_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN) and rerun; otherwise omit --online.",
 };
 
 async function onlineProvider(
@@ -88,6 +81,14 @@ async function onlineProvider(
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
         baseURL: config.providerBaseUrl,
         model: config.providerModel,
+        ...(config.providerName === "clef"
+          ? {
+              providerName: config.providerName,
+              ...(config.cloudflareAccountId
+                ? { accountId: config.cloudflareAccountId }
+                : {}),
+            }
+          : {}),
       }),
       model: config.providerModel,
     };
@@ -101,6 +102,18 @@ async function onlineProvider(
     };
   }
 }
+
+/** Only the explicit online path constructs a provider. */
+export const createSelectedClassifier: ClassificationProviderFactory = (
+  options,
+) =>
+  createCliProvider({
+    providerName: options.providerName ?? "typesafe",
+    apiKey: options.apiKey,
+    cloudflareAccountId: options.accountId,
+    providerModel: options.model,
+    providerBaseUrl: options.baseURL,
+  });
 
 export async function executeValidateCommand(
   options: ValidateCommandOptions,
@@ -148,6 +161,7 @@ export async function executeValidateCommand(
   const cache = await FileClassificationCache.load(
     path.join(discovery.root, ".sedum", "classifications.json"),
     classificationModel,
+    config.providerName,
   );
   const result = await validateProject(discovery, {
     repoRoot: discovery.root,

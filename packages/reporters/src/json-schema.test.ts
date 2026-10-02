@@ -26,7 +26,14 @@ async function samples(): Promise<RunResult[]> {
   const recorder = new RunRecorder(async () => undefined, "live-snapshot");
   await recorder.start();
   await recorder.startTest({ id: "live", file: "live.test.yaml" });
-  await recorder.addStep(reportStep("live-action", 1, "action"));
+  const step = reportStep("live-action", 1, "action");
+  await recorder.addStep({
+    ...step,
+    calls: step.calls.map((call, index) => ({
+      ...call,
+      provider: index === 0 ? "clef" : "typesafe",
+    })),
+  });
   const running = recorder.snapshot;
   await recorder.finishTest("failed");
   await recorder.finish();

@@ -61,11 +61,11 @@ selectors. Everything between steps is ordinary code: Playwright's `page` and
 `expect`, test data from any library, API calls to seed or skip setup, and
 helper functions.
 
-Sedum uses a model for two jobs only: finding the element a sentence refers to,
-and judging whether a claim such as "a list of products with prices is shown"
-holds on the page. That model is [Jev](https://typesafe.ai), from TypeSafe. It
-returns probabilities, not free text. Everything else is deterministic:
-clicking, typing, waiting, verdicts, and exit codes run on Playwright.
+Sedum uses a decision model for bounded tasks such as finding the element a
+sentence refers to and judging whether a claim holds on the page. TypeSafe Jev
+is the default; Cloudflare Clef is an opt-in text provider. Both return
+probabilities, not free text. Everything else is deterministic: clicking,
+typing, waiting, verdicts, and exit codes run on Playwright.
 
 > **Status: pre-alpha.** The first alpha is on npm as `sedum-cli`. The test
 > format may change before 1.0, and Windows is experimental. Linux and macOS
@@ -73,7 +73,8 @@ clicking, typing, waiting, verdicts, and exit codes run on Playwright.
 
 ## Quickstart
 
-You need Node.js 20.19 or newer and a [TypeSafe](https://typesafe.ai) API key or a compatible provider key.
+You need Node.js 20.19 or newer and credentials for TypeSafe (the default), a
+compatible TypeSafe endpoint, or Cloudflare Clef.
 
 ```sh
 mkdir my-sedum-tests && cd my-sedum-tests
@@ -90,6 +91,10 @@ For a compatible provider, set `TYPESAFE_BASE_URL` to its API root and
 `TYPESAFE_API_KEY` to that provider's key. Set `TYPESAFE_DEFAULT_MODEL` if its
 model name differs from the default. See
 [provider configuration](docs/configuration.md).
+
+To use Cloudflare Workers AI instead, select `provider: {name: clef, model:
+clef}` (or `clef-flash`) and set `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_AUTH_TOKEN`. See [Clef provider](docs/provider-clef.md).
 
 The example signs in to a demo shop. To see a failure, change its last step to
 a false claim, such as `verify an error message says the password is incorrect`,
@@ -206,8 +211,10 @@ steps in a `*.module.yaml` file and call it with `use:`. See the
   environments, thresholds, and `.env`.
 - [Probabilistic testing](docs/probabilistic-testing.md): how scores become
   verdicts, flags, and exit codes.
-- [Privacy](docs/provider-typesafe.md): exactly what is sent to the model, and
-  what never is.
+- [Provider privacy](docs/provider-typesafe.md): what bounded data is sent to
+  the default provider, and what is excluded.
+- [Clef provider](docs/provider-clef.md): Cloudflare setup, models, pricing,
+  privacy, and current text-only scope.
 - [All documentation](docs/README.md)
 
 ## Coming next

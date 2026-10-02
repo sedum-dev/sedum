@@ -7,18 +7,19 @@ import {
   loadFlowFile,
   resolveFlowModules,
 } from "@sedum-dev/core";
-import {
-  TypeSafeAdapter,
-  type RelevanceTest,
-} from "@sedum-dev/provider-typesafe";
 import { loadProjectConfig, type ResolvedProjectConfig } from "./config.js";
 import { discoverRunTests, type RunFilters } from "./run-selection.js";
+import {
+  createCliProvider,
+  type RelevanceProvider,
+  type RelevanceTest,
+} from "./provider-factory.js";
 
 const exec = promisify(execFile);
 export class AffectedSelectionError extends Error {}
 export type RelevanceProviderFactory = (
   config: ResolvedProjectConfig,
-) => Pick<TypeSafeAdapter, "scoreRelevance">;
+) => RelevanceProvider | Promise<RelevanceProvider>;
 
 /** No shell, fetch, checkout, or index mutation. Compare the merge base to the working tree. */
 export async function readBranchDiff(
@@ -212,12 +213,9 @@ export async function selectAffectedTests(options: {
   options.signal?.throwIfAborted();
   const scores = branch.diff
     ? await (
-        options.createProvider?.(config) ??
-        new TypeSafeAdapter({
-          ...(config.apiKey ? { apiKey: config.apiKey } : {}),
-          baseURL: config.providerBaseUrl,
-          model: config.providerModel,
-        })
+        options.createProvider
+          ? await options.createProvider(config)
+          : await createCliProvider(config)
       ).scoreRelevance(
         branch.diff,
         tests,

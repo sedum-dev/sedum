@@ -13,7 +13,7 @@ out of saved results.
 Git diff, test YAML, and referenced module YAML as source text. It does not
 expand environment variables, but literal secrets in those files or the diff
 are sent as-is. `--sensitive-origin` protects browser evidence, not these source
-inputs. Review source before opting in. See [Git-diff selection](cli.md#experimental-git-diff-selection-with-jev)
+inputs. Review source before opting in. See [Git-diff selection](cli.md#experimental-git-diff-selection)
 for selection probabilities, input limits, and separate selection costs.
 
 In a terminal, Sedum shows token use and cost after each run. A

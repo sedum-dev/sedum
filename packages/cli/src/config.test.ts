@@ -34,6 +34,7 @@ describe("project configuration", () => {
       viewport: { width: 1280, height: 900 },
       thresholds: { minP: 0.75, band: 0.15, contradictionCutoff: 0.5 },
       baseUrl: null,
+      providerName: "typesafe",
       providerBaseUrl: "https://api.typesafe.ai",
       providerModel: "jev-latest",
       vision: {
@@ -46,6 +47,49 @@ describe("project configuration", () => {
     expect(config.outputDir).toBe(path.join(root, ".sedum", "runs"));
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.thresholds)).toBe(true);
+  });
+
+  it("selects Clef credentials and excludes Cloudflare secrets from test variables", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "provider:\n  name: clef\n  model: clef-flash\n",
+    );
+    const config = await loadProjectConfig(root, {
+      CLOUDFLARE_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+      CLOUDFLARE_AUTH_TOKEN: "cloudflare-secret",
+      TYPESAFE_API_KEY: "ignored-typesafe-secret",
+    });
+    expect(config).toMatchObject({
+      providerName: "clef",
+      providerModel: "clef-flash",
+      cloudflareAccountId: "0123456789abcdef0123456789abcdef",
+      apiKey: "cloudflare-secret",
+    });
+    expect(config.variables.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
+    expect(config.variables.CLOUDFLARE_AUTH_TOKEN).toBeUndefined();
+  });
+
+  it("defaults Clef to clef and validates its account and model", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "provider:\n  name: clef\n",
+    );
+    await expect(loadProjectConfig(root, {})).resolves.toMatchObject({
+      providerName: "clef",
+      providerModel: "clef",
+    });
+    await expect(
+      loadProjectConfig(root, { CLOUDFLARE_ACCOUNT_ID: "not-an-account" }),
+    ).rejects.toBeInstanceOf(ProjectConfigError);
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "provider:\n  name: clef\n  model: arbitrary\n",
+    );
+    await expect(loadProjectConfig(root, {})).rejects.toBeInstanceOf(
+      ProjectConfigError,
+    );
   });
 
   it("suggests the intended key for a misspelt config key", async () => {

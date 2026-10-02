@@ -65,6 +65,9 @@ importers:
       '@sedum-dev/core':
         specifier: workspace:*
         version: link:../core
+      '@sedum-dev/provider-clef':
+        specifier: workspace:*
+        version: link:../provider-clef
       '@sedum-dev/provider-typesafe':
         specifier: workspace:*
         version: link:../provider-typesafe
@@ -86,6 +89,9 @@ importers:
       jiti:
         specifier: 2.7.0
         version: 2.7.0
+      p-queue:
+        specifier: 9.3.3
+        version: 9.3.3
       playwright:
         specifier: 1.63.0
         version: 1.63.0
@@ -106,6 +112,12 @@ importers:
         specifier: 0.4.7
         version: 0.4.7
 
+  packages/provider-clef:
+    dependencies:
+      '@sedum-dev/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/provider-typesafe:
     dependencies:
       '@sedum-dev/core':
@@ -114,9 +126,6 @@ importers:
       '@typesafe-ai/sdk':
         specifier: 0.6.0
         version: 0.6.0
-      p-queue:
-        specifier: 9.3.3
-        version: 9.3.3
 
   packages/reporters:
     dependencies:

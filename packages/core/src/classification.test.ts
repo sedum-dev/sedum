@@ -652,4 +652,42 @@ describe("sentence classification", () => {
     expect(merged.get("activate Save").answer?.op).toBe("click");
     expect(merged.get("activate Cancel").answer?.op).toBe("click");
   });
+
+  it("namespaces equal classifications by provider and preserves mixed saves", async () => {
+    const path = await cacheFile();
+    const typesafe = await FileClassificationCache.load(
+      path,
+      "same-model",
+      "typesafe",
+    );
+    const clef = await FileClassificationCache.load(path, "same-model", "clef");
+    const answer = {
+      op: "click" as const,
+      probabilities: distribution("click"),
+      model: "same-model",
+      requestedModel: "same-model",
+    };
+    typesafe.put("activate Save", answer);
+    clef.put("activate Save", answer);
+    await typesafe.save();
+    await clef.save();
+    expect(
+      (await FileClassificationCache.load(path, "same-model", "typesafe")).get(
+        "activate Save",
+      ).reason,
+    ).toBe("hit");
+    expect(
+      (await FileClassificationCache.load(path, "same-model", "clef")).get(
+        "activate Save",
+      ).reason,
+    ).toBe("hit");
+    const file = JSON.parse(await readFile(path, "utf8")) as {
+      entries: Record<string, { provider?: string }>;
+    };
+    expect(
+      Object.values(file.entries)
+        .map((entry) => entry.provider)
+        .sort(),
+    ).toEqual(["clef", "typesafe"]);
+  });
 });

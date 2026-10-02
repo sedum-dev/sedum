@@ -26,7 +26,7 @@ import type { RunCommandExecution, RunCommandOptions } from "./run-command.js";
 import type { RelevanceProviderFactory } from "./affected-selection.js";
 import type { DoctorProbes } from "./doctor-command.js";
 import {
-  createTypeSafeClassifier,
+  createSelectedClassifier,
   executeValidateCommand,
   type ClassificationProviderFactory,
 } from "./validate-command.js";
@@ -293,7 +293,7 @@ export async function runCli(
     )
     .option(
       "--affected",
-      "experimental: send Git diff and test sources to Jev; run relevant tests",
+      "experimental: send Git diff and test sources to the text provider; run relevant tests",
       false,
     )
     .option("--base <ref>", "base ref for --affected (default main or master)")
@@ -304,7 +304,7 @@ export async function runCli(
     )
     .option(
       "--selection-only",
-      "with --affected, print selection JSON without running tests (calls Jev)",
+      "with --affected, print selection JSON without running tests (calls the text provider)",
       false,
     )
     .option(
@@ -495,7 +495,7 @@ export async function runCli(
             await import("./affected-selection.js");
           const { ProviderError } = await import("@sedum-dev/core");
           writeErr(
-            "Experimental selection sends the tracked Git diff and test/module sources to the configured TypeSafe provider. Full CI is still recommended.\n",
+            "Experimental selection sends the tracked Git diff and test/module sources to the configured provider. Full CI is still recommended.\n",
           );
           try {
             const selection = await selectAffectedTests({
@@ -764,7 +764,7 @@ export async function runCli(
         online: options.online,
         cwd,
         createProvider:
-          runtime.createClassificationProvider ?? createTypeSafeClassifier,
+          runtime.createClassificationProvider ?? createSelectedClassifier,
         ...(runtime.signal ? { signal: runtime.signal } : {}),
       });
       const problems = execution.discovery?.problems ?? [];

@@ -198,7 +198,7 @@ describe("sedum validate", () => {
     expect(output.exitCode).toBe(3);
     expect(output.stdout).toBe("");
     expect(output.stderr).toBe(
-      "`sedum validate --online` needs a configured model provider.\nFix: Set TYPESAFE_API_KEY for the configured endpoint and rerun; otherwise omit --online.\n",
+      "`sedum validate --online` needs a configured model provider.\nFix: Set the selected provider's credentials (TYPESAFE_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN) and rerun; otherwise omit --online.\n",
     );
     const broken = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
@@ -238,7 +238,7 @@ describe("sedum validate", () => {
     });
     expect(output.stdout).toContain("t.test.yaml:3:13: warning ");
     expect(output.stdout).toContain("Checked 1 test and 0 modules: 1 warning.");
-    expect(output.exitCode).toBe(0);
+    expect(output.exitCode, output.stdout + output.stderr).toBe(0);
   });
 
   it("exits 3 when the online provider fails, even with other findings", async () => {
@@ -493,11 +493,13 @@ describe("project configuration", () => {
           }),
         }) as const,
     );
+    vi.stubEnv("TYPESAFE_API_KEY", "");
     const output = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
       capabilities: plain,
       createClassificationProvider: factory,
     });
+    vi.unstubAllEnvs();
     expect(output.exitCode).toBe(0);
     expect(factory).toHaveBeenCalledWith({
       apiKey: "gateway-key",
@@ -505,6 +507,63 @@ describe("project configuration", () => {
       model: "gateway-jev",
     });
     expect(output.stdout + output.stderr).not.toContain("gateway-key");
+  });
+
+  it("routes Clef online validation with only its selected credentials", async () => {
+    const cwd = await project({
+      "clef.test.yaml":
+        "url: https://example.test\nsteps:\n  - tidy up the shopping list\n",
+      "sedum.config.yaml":
+        "tests:\n  directory: .\nprovider:\n  name: clef\n  model: clef-flash\n",
+      ".env":
+        "CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef\nCLOUDFLARE_AUTH_TOKEN=clef-token\nTYPESAFE_API_KEY=jev-token\n",
+    });
+    const factory = vi.fn(({ model }: { model: string }) => ({
+      classifyBatch: async () => ({
+        answers: clickReply.answers.map((answer) => ({
+          ...answer,
+          requestedModel: model,
+        })),
+        calls: clickReply.calls.map((call) => ({
+          ...call,
+          requestedModel: model,
+        })),
+      }),
+    }));
+    vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "");
+    vi.stubEnv("CLOUDFLARE_AUTH_TOKEN", "");
+    vi.stubEnv("TYPESAFE_API_KEY", "");
+    const output = await runCli(["validate", "--online"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+      createClassificationProvider: factory,
+    });
+    vi.unstubAllEnvs();
+    expect(output.exitCode, output.stdout + output.stderr).toBe(0);
+    expect(factory).toHaveBeenCalledWith({
+      providerName: "clef",
+      accountId: "0123456789abcdef0123456789abcdef",
+      apiKey: "clef-token",
+      baseURL: "https://api.typesafe.ai",
+      model: "clef-flash",
+    });
+    expect(JSON.stringify(factory.mock.calls)).not.toContain("jev-token");
+    expect(output.stdout + output.stderr).not.toContain("clef-token");
+  });
+
+  it("selects the Clef cache namespace offline without reading credentials", async () => {
+    const cwd = await project({
+      ...VALID,
+      "sedum.config.yaml":
+        "tests:\n  directory: .\nprovider:\n  name: clef\n  model: clef\n",
+    });
+    await mkdir(path.join(cwd, ".env"));
+    const output = await runCli(["validate"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+      createClassificationProvider: noProvider,
+    });
+    expect(output.exitCode).toBe(0);
   });
 });
 
