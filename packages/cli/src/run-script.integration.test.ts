@@ -387,7 +387,7 @@ test("ordinary retry", { url: "/help" }, async () => { expect(1).toBe(2); });`,
       seen.goalCalls = 0;
       try {
         const validation = await executeValidateCommand({
-          paths: [file],
+          paths: ["tests/goal-retry.test.ts"],
           online: false,
           cwd: root,
           createProvider: () => {
@@ -396,7 +396,7 @@ test("ordinary retry", { url: "/help" }, async () => { expect(1).toBe(2); });`,
         });
         expect(validation.result?.fullyValidated).toBe(true);
         const output = await executeRunCommand({
-          paths: [file],
+          paths: ["tests/goal-retry.test.ts"],
           retries: 1,
           evidence: false,
           replay: false,
