@@ -10,6 +10,16 @@ function page(title: string, body: string, script = ""): string {
 }
 
 const pages: Record<string, string> = {
+  "/synthetic-profile": page(
+    "Synthetic profile fixture",
+    `<h1>Create a test profile</h1><form><label>First name <input name="first" required autocomplete="given-name"></label><label>Account email <input name="email" type="email" size="48" required></label><label>Confirm account email <input name="confirm" type="email" size="48" required></label><label>Sample biography <textarea name="bio" cols="48" rows="3" style="vertical-align:top" required></textarea></label><button>Continue to recipient</button></form><p role="status" id="message"></p>`,
+    `document.querySelector('form').onsubmit=event=>{event.preventDefault();const data=Object.fromEntries(new FormData(event.target));if(data.email!==data.confirm){document.querySelector('#message').textContent='Emails must match';return}sessionStorage.setItem('profile',JSON.stringify(data));location.href='/synthetic-recipient'}`,
+  ),
+  "/synthetic-recipient": page(
+    "Another recipient",
+    `<h1>Add a different recipient</h1><form><label>Recipient email <input name="recipient" type="email" size="48" required></label><label>Account email for receipt <input name="receipt" type="email" size="48" required></label><button>Save profile</button></form><p role="status" id="message"></p>`,
+    `document.querySelector('form').onsubmit=event=>{event.preventDefault();const profile=JSON.parse(sessionStorage.getItem('profile'));const data=Object.fromEntries(new FormData(event.target));if(data.recipient===profile.email||data.receipt!==profile.email){document.querySelector('#message').textContent='Use a different recipient and the original account email for receipt';return}sessionStorage.setItem('recipient',JSON.stringify(data));document.querySelector('form').remove();document.querySelector('#message').textContent='Profile saved'}`,
+  ),
   "/login": page(
     "Fixture login",
     `<h1>Sign in</h1><form id="login"><label>Username <input name="username" autocomplete="off"></label><label>Password <input name="password" type="password"></label><button type="submit">Login</button></form><p id="message" role="status"></p>`,

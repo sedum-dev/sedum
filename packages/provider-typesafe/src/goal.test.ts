@@ -34,6 +34,75 @@ function reply(operation: string, target: unknown) {
   );
 }
 describe("goal speculative heads", () => {
+  it("selects a value source as one bounded choice with reuse instructions", async () => {
+    const choices = {
+      BLOCKED: "No suitable source",
+      "use.generated_1": "Account email",
+      "faker.internet.exampleEmail": "New email",
+    };
+    const fetch = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(Object.keys(body.questions)).toEqual(["value"]);
+      expect(body.questions.value.criteria).toEqual(choices);
+      expect(body.questions.value.instructions.rules).toContain("REUSE");
+      expect(body.questions.value.instructions.rules).toContain(
+        "Never fabricate existing login credentials",
+      );
+      expect(body.state.field).toBe("Confirm email");
+      return new Response(
+        JSON.stringify({
+          model: "jev-test",
+          usage: { input_tokens: 100, output_tokens: 0 },
+          answers: { value: answer("use.generated_1", Object.keys(choices)) },
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    });
+    const result = await new TypeSafeAdapter({
+      apiKey: "test",
+      fetch,
+    }).chooseGoalValue({
+      goal: "Create account",
+      page: "Signup",
+      field: "Confirm email",
+      choices,
+    });
+    expect(result.value.choice).toBe("use.generated_1");
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects unoffered generators and does not retry value requests", async () => {
+    const input = {
+      goal: "Create account",
+      page: "Signup",
+      field: "Email",
+      choices: { BLOCKED: "Unavailable" },
+    };
+    const fetch = vi.fn(
+      async () => new Response("unavailable", { status: 529 }),
+    );
+    await expect(
+      new TypeSafeAdapter({ apiKey: "test", fetch }).chooseGoalValue(input),
+    ).rejects.toMatchObject({ attempts: 1 });
+    expect(fetch).toHaveBeenCalledOnce();
+    await expect(
+      new TypeSafeAdapter({
+        apiKey: "test",
+        fetch: async () =>
+          new Response(
+            JSON.stringify({
+              model: "jev-test",
+              usage: { input_tokens: 100, output_tokens: 0 },
+              answers: {
+                value: answer("faker.helpers.fake", ["faker.helpers.fake"]),
+              },
+            }),
+            { headers: { "content-type": "application/json" } },
+          ),
+      }).chooseGoalValue(input),
+    ).rejects.toMatchObject({ code: "invalid-response" });
+  });
+
   it("forwards optional host context without changing target rules or action choices", async () => {
     const fetch = vi.fn(async (_input, init) => {
       const body = JSON.parse(String(init?.body));

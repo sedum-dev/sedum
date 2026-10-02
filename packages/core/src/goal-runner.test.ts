@@ -98,6 +98,112 @@ beforeEach(() => {
     elapsedMs: 1,
   });
 });
+describe("automatic goal values", () => {
+  function setup(valueChoice = "faker.internet.exampleEmail") {
+    const original = vi.mocked(collectCandidates).getMockImplementation()!;
+    vi.mocked(collectCandidates).mockImplementation(async (...args) => {
+      const snapshot = await original(...args);
+      return {
+        ...snapshot,
+        total: args[1] === "fill" ? 1 : 0,
+        candidates:
+          args[1] === "fill"
+            ? [
+                {
+                  ref: "email",
+                  tag: "input",
+                  role: "textbox",
+                  name: "Email",
+                  peers: [],
+                  editable: true,
+                  disabled: false,
+                  inputType: "email",
+                  signals: { path: "input" },
+                },
+              ]
+            : [],
+      };
+    });
+    vi.mocked(page.evaluate).mockImplementation(async (expression) =>
+      expression.includes("cloneNode")
+        ? true
+        : [{ populated: false, bindings: [] }],
+    );
+    const model: GoalPlanner = {
+      chooseGoal: vi.fn(async (state) => ({
+        operation: choose("TYPE", Object.keys(goalOperations(state))),
+        target: choose(
+          Object.keys(state.targets.TYPE!)[0]!,
+          Object.keys(state.targets.TYPE!),
+        ),
+        call,
+      })),
+      chooseGoalValue: vi.fn(async (state) => ({
+        value: choose(valueChoice, Object.keys(state.choices)),
+        call,
+      })),
+    };
+    return model;
+  }
+
+  it.each(["BLOCKED", "not-offered"])(
+    "does not dispatch %s value choices",
+    async (id) => {
+      const result = await runGoal(page, setup(id), judge, options);
+      expect(result.reason).toBe(
+        id === "BLOCKED" ? "value_blocked" : "value_abstention",
+      );
+      expect(result.requests).toBe(2);
+      expect(executeStep).not.toHaveBeenCalled();
+    },
+  );
+
+  it("counts the value request against the existing budget", async () => {
+    const model = setup();
+    expect(
+      await runGoal(page, model, judge, { ...options, maxRequests: 1 }),
+    ).toMatchObject({ reason: "request_limit", actions: 0, requests: 1 });
+    expect(model.chooseGoalValue).not.toHaveBeenCalled();
+  });
+
+  it("keeps the same generated value across pre-dispatch staleness", async () => {
+    const model = setup();
+    const onGeneratedValue = vi.fn();
+    vi.mocked(executeStep).mockRejectedValueOnce(
+      new StepExecutionError("type", "stale", "pre_dispatch"),
+    );
+    const result = await runGoal(page, model, judge, {
+      ...options,
+      maxActions: 1,
+      onGeneratedValue,
+    });
+    expect(result.actions).toBe(1);
+    expect(model.chooseGoalValue).toHaveBeenCalledTimes(1);
+    expect(onGeneratedValue).toHaveBeenCalledTimes(1);
+    const commands = vi.mocked(executeStep).mock.calls.map((args) => args[1]);
+    expect(commands).toHaveLength(2);
+    if (commands[0]!.op !== "type" || commands[1]!.op !== "type")
+      throw new Error("Expected fills");
+    expect(commands[0]!.value.reveal()).toBe(commands[1]!.value.reveal());
+    expect(JSON.stringify(result)).not.toContain(commands[0]!.value.reveal());
+  });
+
+  it("stops on constraint mismatch without retrying generation", async () => {
+    const model = setup();
+    vi.mocked(page.evaluate).mockImplementation(async (expression) =>
+      expression.includes("cloneNode")
+        ? false
+        : [{ populated: false, bindings: [] }],
+    );
+    expect(await runGoal(page, model, judge, options)).toMatchObject({
+      reason: "value_constraint_mismatch",
+      actions: 0,
+    });
+    expect(model.chooseGoalValue).toHaveBeenCalledTimes(1);
+    expect(executeStep).not.toHaveBeenCalled();
+  });
+});
+
 describe("bounded goal runner", () => {
   it("pads only singleton target heads for two-option planners", async () => {
     const model: GoalPlanner = {

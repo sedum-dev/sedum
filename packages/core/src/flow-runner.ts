@@ -2248,6 +2248,14 @@ export async function runFlow(
             purposes.push("planner");
             return dependencies.provider.chooseGoal!(state, options);
           },
+          ...(dependencies.provider.chooseGoalValue
+            ? {
+                chooseGoalValue: (state, options) => {
+                  purposes.push("planner");
+                  return dependencies.provider.chooseGoalValue!(state, options);
+                },
+              }
+            : {}),
         },
         {
           holds: (text, digest, options) => {
@@ -2267,6 +2275,14 @@ export async function runFlow(
             ),
           ],
           data,
+          onGeneratedValue: (value: RuntimeValue) => {
+            opaqueEntries.push({
+              value,
+              sensitive: true,
+              opaqueValues: [value],
+            });
+            dependencies.report?.privacy.secretValues.push(value.reveal());
+          },
           ...(dependencies.report
             ? {
                 onAction: async (action: GoalAction) => {
