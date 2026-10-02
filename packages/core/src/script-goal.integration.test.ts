@@ -296,6 +296,23 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(chooseGoal).toHaveBeenCalledTimes(1);
     });
 
+    it("forwards the provider's minimum target choice count", async () => {
+      const { outcome } = await run(
+        `await page.setContent('<main><button>Save</button></main>'); await ai.goal('Inspect');`,
+        {
+          targetChoiceMinOptions: 2,
+          chooseGoal: async (state) => {
+            expect(Object.keys(state.targets.CLICK!)).toEqual([
+              "c0",
+              "__sedum_no_match",
+            ]);
+            return done(state);
+          },
+        },
+      );
+      expect(outcome.status).toBe("passed");
+    });
+
     it.each([
       { generateData: false, supplied: true },
       { generateData: false, supplied: false },

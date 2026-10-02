@@ -16,12 +16,9 @@ import {
   RejectionRouter,
   type UnattributedRejection,
   type VisionKeyProbe,
-} from "@sedum-dev/core";
-import {
   DEFAULT_PROVIDER_CONCURRENCY,
   ProviderGate,
-  TypeSafeAdapter,
-} from "@sedum-dev/provider-typesafe";
+} from "@sedum-dev/core";
 import path from "node:path";
 import { availableParallelism } from "node:os";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -45,6 +42,7 @@ import {
 import { discoverRunTests, type RunFilters } from "./run-selection.js";
 import { planLanes, runPool, type ParallelRequest } from "./run-pool.js";
 import { shardProblems, shardTests, type ShardSpec } from "./run-shard.js";
+import { createCliProvider } from "./provider-factory.js";
 
 export interface RunCommandOptions {
   /**
@@ -943,15 +941,11 @@ export async function executeRunCommand(
         await recorder.addDiscoveryProblems(discoveryProblems);
       if (signal.aborted) throw new Error("canceled");
       const gate = new ProviderGate({ concurrency: providerConcurrency });
-      const provider = new TypeSafeAdapter({
-        ...(config.apiKey ? { apiKey: config.apiKey } : {}),
-        baseURL: config.providerBaseUrl,
-        model: config.providerModel,
-        gate,
-      });
+      const provider = await createCliProvider(config, { gate });
       const cache = await FileClassificationCache.load(
         path.join(config.projectRoot, ".sedum", "classifications.json"),
         config.providerModel,
+        config.providerName,
       );
       const locatorCache = await openLocatorCache(config.projectRoot, {
         disabled: options.locatorCacheDisabled ?? false,

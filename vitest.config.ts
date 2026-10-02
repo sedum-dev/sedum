@@ -9,7 +9,7 @@ export default defineConfig({
       exclude: [
         "packages/*/src/**/*.test.ts",
         "packages/core/src/page-script/**",
-        "packages/*/src/index.ts",
+        "packages/{core,reporters,cli}/src/index.ts",
         "packages/cli/src/cli.ts",
       ],
       reporter: ["text", "json-summary"],

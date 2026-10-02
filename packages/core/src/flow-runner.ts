@@ -188,6 +188,7 @@ export function resultCall(
 ): ResultCall {
   return {
     purpose,
+    ...(call.provider ? { provider: call.provider } : {}),
     ...(call.modality ? { modality: call.modality } : {}),
     requestedModel: call.requestedModel,
     model: call.model,
@@ -253,11 +254,11 @@ function providerFailure(
     },
     authentication: {
       message: "The model provider rejected the API key.",
-      fix: "Set TYPESAFE_API_KEY to a valid key, check it with `sedum doctor`, then rerun.",
+      fix: "Set the selected provider's API key (TYPESAFE_API_KEY or CLOUDFLARE_AUTH_TOKEN), check it with `sedum doctor`, then rerun.",
     },
     configuration: {
       message: "The model provider is not configured correctly.",
-      fix: "Check TYPESAFE_API_KEY, TYPESAFE_BASE_URL and the model with `sedum doctor`, then rerun.",
+      fix: "Check the selected provider's credentials, account or endpoint, and model with `sedum doctor`, then rerun.",
     },
   };
   return {
@@ -2242,6 +2243,12 @@ export async function runFlow(
       const goalResult = await runGoal(
         activePage,
         {
+          ...(dependencies.provider.targetChoiceMinOptions
+            ? {
+                targetChoiceMinOptions:
+                  dependencies.provider.targetChoiceMinOptions,
+              }
+            : {}),
           chooseGoal: (state, options) => {
             purposes.push("planner");
             return dependencies.provider.chooseGoal!(state, options);

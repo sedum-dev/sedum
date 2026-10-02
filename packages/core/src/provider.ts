@@ -46,6 +46,8 @@ export interface ProviderRate {
 }
 
 export interface ProviderCall {
+  /** Concrete provider identity; absent on legacy or genuinely unknown calls. */
+  readonly provider?: string;
   /** Set by the locator for visual fallback calls, independent of model name. */
   readonly modality?: "vision";
   readonly requestedModel: string;
@@ -62,6 +64,27 @@ export interface ProviderCall {
   readonly rateLimitWaitMs?: number;
   /** Milliseconds spent waiting for a provider concurrency slot. */
   readonly queueWaitMs?: number;
+}
+
+/** One complete test projected for provider-neutral affected-test scoring. */
+export interface RelevanceTest {
+  readonly file: string;
+  readonly source: string;
+  readonly modules: readonly {
+    readonly file: string;
+    readonly source: string;
+  }[];
+}
+
+export interface RelevanceProvider {
+  scoreRelevance(
+    diff: string,
+    tests: readonly RelevanceTest[],
+    options?: ProviderCallOptions,
+  ): Promise<{
+    readonly probabilities: readonly number[];
+    readonly calls: readonly ProviderCall[];
+  }>;
 }
 
 export interface ResolverDecision {

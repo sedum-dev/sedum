@@ -63,7 +63,7 @@ jobs:
         if: matrix.node == 24
         env:
           SEDUM_BROWSER_INTEGRATION: "1"
-        run: pnpm exec vitest run packages/cli/src/run-script.integration.test.ts
+        run: pnpm exec vitest run packages/cli/src/run-script.integration.test.ts packages/cli/src/run-clef.integration.test.ts
       - name: YAML goal CLI integration tests
         if: matrix.node == 24
         env:

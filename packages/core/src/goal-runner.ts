@@ -54,12 +54,15 @@ export interface GoalDecision {
   readonly target?: GoalChoice;
   readonly call: ProviderCall;
 }
+export const GOAL_NO_MATCH = "__sedum_no_match";
 export interface GoalPlanner {
   /** Optional for older providers; enables automatic synthetic data in goal mode. */
   chooseGoalValue?(
     state: GoalValueState,
     options?: ProviderCallOptions,
   ): Promise<{ readonly value: GoalChoice; readonly call: ProviderCall }>;
+  /** Minimum target Choice cardinality required by this provider protocol. */
+  readonly targetChoiceMinOptions?: 2;
   /** Exactly one HTTP attempt; operation and speculative target heads share it. */
   chooseGoal(
     state: GoalState,
@@ -471,7 +474,21 @@ async function executeGoal(
         goal: project(options.goal),
         page: project(digest.text),
         recentActions: history.slice(-10),
-        targets,
+        targets:
+          planner.targetChoiceMinOptions === 2
+            ? Object.fromEntries(
+                Object.entries(targets).map(([op, choices]) => [
+                  op,
+                  Object.keys(choices).length === 1
+                    ? {
+                        ...choices,
+                        [GOAL_NO_MATCH]:
+                          "No offered target is appropriate for this operation; abstain",
+                      }
+                    : choices,
+                ]),
+              )
+            : targets,
       };
       if (Buffer.byteLength(JSON.stringify(state)) > 60 * 1024)
         return result("request_too_large");
@@ -554,6 +571,7 @@ async function executeGoal(
             return name ? `"${name}"` : id;
           }),
         );
+      if (head.choice === GOAL_NO_MATCH) return result("target_abstention");
       let command = commands.get(head.choice);
       if (!command) return result("invalid_target");
       if (actions >= maxActions) return result("action_limit");

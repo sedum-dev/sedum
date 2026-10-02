@@ -55,7 +55,10 @@ or when sharing the checkout's Git metadata.
 
 The cache is separate from the classification cache in `.sedum/`. On a miss,
 the normal Resolver may send the step sentence and allowed page excerpts to
-the configured model provider; see [TypeSafe provider](provider-typesafe.md).
+the configured model provider; see [TypeSafe provider](provider-typesafe.md)
+and [Clef provider](provider-clef.md). Locator recipes are provider-independent:
+a locally revalidated hit can be reused after changing providers, so that hit
+does not test the selected provider's decision quality.
 Run results and evidence have their own privacy controls in
 [run results](run-result.md).
 

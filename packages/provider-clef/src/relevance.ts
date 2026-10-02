@@ -1,15 +1,15 @@
-import type { SystemOneRequest } from "@typesafe-ai/sdk";
 import { ProviderError, type RelevanceTest } from "@sedum-dev/core";
+import type { ClefRequest } from "./protocol.js";
 export type { RelevanceTest } from "@sedum-dev/core";
 
-/** Conservative byte budgets leave room within Jev's 32k pair / 64k request token limits. */
+/** Conservative byte budgets leave room under the hosted request limit. */
 export function buildRelevanceRequests(
   diff: string,
   tests: readonly RelevanceTest[],
   model: string,
-): { request: SystemOneRequest; indexes: number[] }[] {
-  const chunks: { request: SystemOneRequest; indexes: number[] }[] = [];
-  let request: SystemOneRequest = { model, state: { diff }, questions: {} };
+): { request: ClefRequest; indexes: number[] }[] {
+  const chunks: { request: ClefRequest; indexes: number[] }[] = [];
+  let request: ClefRequest = { model, state: { diff }, questions: {} };
   let indexes: number[] = [];
   for (const [index, test] of tests.entries()) {
     const key = `test${index}`;
@@ -40,7 +40,10 @@ export function buildRelevanceRequests(
       ...request,
       questions: { ...request.questions, [key]: question },
     };
-    if (Buffer.byteLength(JSON.stringify(candidate), "utf8") > 56_000) {
+    if (
+      indexes.length >= 64 ||
+      Buffer.byteLength(JSON.stringify(candidate), "utf8") > 56_000
+    ) {
       chunks.push({ request, indexes });
       request = single;
       indexes = [index];

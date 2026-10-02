@@ -709,6 +709,12 @@ export async function runScriptTest(
         const result = await runGoalTask(
           activePage,
           {
+            ...(dependencies.provider.targetChoiceMinOptions
+              ? {
+                  targetChoiceMinOptions:
+                    dependencies.provider.targetChoiceMinOptions,
+                }
+              : {}),
             chooseGoal: (state, options) =>
               dependencies.provider.chooseGoal!(state, options).catch(
                 providerFailure,

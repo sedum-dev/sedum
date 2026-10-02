@@ -4,6 +4,7 @@ export const packages = [
     name: "@sedum-dev/provider-typesafe",
     directory: "packages/provider-typesafe",
   },
+  { name: "@sedum-dev/provider-clef", directory: "packages/provider-clef" },
   { name: "@sedum-dev/reporters", directory: "packages/reporters" },
   { name: "sedum-cli", directory: "packages/cli" },
 ];

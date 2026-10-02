@@ -15,6 +15,7 @@ export * from "./page-cache.js";
 export * from "./cache-store.js";
 export * from "./step-executor.js";
 export * from "./provider.js";
+export * from "./provider-gate.js";
 export * from "./vision.js";
 export * from "./locator.js";
 export * from "./flow-types.js";
@@ -30,6 +31,7 @@ export * from "./project-listing.js";
 export * from "./flow-runner.js";
 export * from "./assertion-engine.js";
 export {
+  GOAL_NO_MATCH,
   goalOperations,
   goalChoiceAccepted,
   runGoal,

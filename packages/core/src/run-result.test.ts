@@ -3,6 +3,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { RunRecorder } from "./run-recorder.js";
 import {
+  ResultCallSchema,
   resultTotals,
   runResultJsonSchema,
   validateRunResult,
@@ -69,6 +70,30 @@ function step(
 }
 
 describe("canonical RunResult", () => {
+  it("accepts legacy calls without identity and round-trips provider identity", () => {
+    const legacy = {
+      purpose: "planner",
+      requestedModel: "legacy-model",
+      model: "legacy-model",
+      attempts: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      apiMs: null,
+      inputUsdPerMillion: null,
+      outputUsdPerMillion: null,
+      rateSource: null,
+      rateCheckedAt: null,
+      costUsd: null,
+    };
+    expect(ResultCallSchema.parse(legacy)).not.toHaveProperty("provider");
+    expect(
+      ResultCallSchema.parse({ ...legacy, provider: "clef" }),
+    ).toMatchObject({
+      provider: "clef",
+    });
+    expect(() => ResultCallSchema.parse({ ...legacy, provider: "" })).toThrow();
+  });
+
   it("publishes schema-valid live and final snapshots with report fields", async () => {
     const snapshots = [] as ReturnType<typeof validateRunResult>[];
     const recorder = new RunRecorder(async (value) => {
