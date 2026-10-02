@@ -268,7 +268,7 @@ describe("literal ai sentences in TypeScript tests", () => {
         'await ai.goal(["click A"]);',
         'await ai.goal("Create {{bad binding}}", {});',
         'await ai.goal("Create an account", null);',
-        'await ai.goal("Create an account", {}, extra);',
+        'await ai.goal("Create an account", {}, {}, extra);',
       ].join("\n"),
       file,
     );
@@ -287,6 +287,8 @@ describe("literal ai sentences in TypeScript tests", () => {
   it("accepts trailing commas but warns rather than rejects computed strings and objects", () => {
     const scan = scanScriptSentences(
       `await ai.goal("Save",); await ai.goal("Save", {},);
+       await ai.goal("Save", undefined, { generateData: false },);
+       await ai.goal("Save", {}, { generateData: true });
        await ai.goal(["Save"].join(" "));
        await ai.goal(1 + " task");
        await ai.goal("Save", true ? {} : {});

@@ -76,7 +76,11 @@ export interface Ai {
   /** Run several steps in order; they share one values object. */
   (sentences: readonly string[], values?: AiValues): Promise<void>;
   /** Run a bounded goal until planner completion. Verify the outcome separately. */
-  goal(goal: string, values?: AiValues): Promise<void>;
+  goal(
+    goal: string,
+    values?: AiValues,
+    options?: { readonly generateData?: boolean },
+  ): Promise<void>;
   /** Name a block of steps; every step inside is reported under the name. */
   group<T>(name: string, body: () => Promise<T> | T): Promise<T>;
   group(

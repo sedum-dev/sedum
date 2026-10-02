@@ -645,8 +645,23 @@ export async function runScriptTest(
       text: string,
       values: AiValues | undefined,
       source: FlowSource,
+      options: Parameters<Ai["goal"]>[2],
     ): Promise<void> => {
       try {
+        if (
+          options !== undefined &&
+          (options === null ||
+            typeof options !== "object" ||
+            Array.isArray(options) ||
+            Object.keys(options).some((key) => key !== "generateData") ||
+            (options.generateData !== undefined &&
+              typeof options.generateData !== "boolean"))
+        )
+          throw new ScriptUsageError(
+            "invalid_goal_options",
+            "Goal options must be an object with an optional boolean generateData.",
+            "Pass { generateData: false } to disable automatic data generation.",
+          );
         if (typeof text !== "string" || !text.trim())
           throw new ScriptUsageError(
             "invalid_goal",
@@ -698,7 +713,8 @@ export async function runScriptTest(
               dependencies.provider.chooseGoal!(state, options).catch(
                 providerFailure,
               ),
-            ...(dependencies.provider.chooseGoalValue
+            ...(options?.generateData !== false &&
+            dependencies.provider.chooseGoalValue
               ? {
                   chooseGoalValue: (state, options) =>
                     dependencies.provider.chooseGoalValue!(
@@ -816,9 +832,11 @@ export async function runScriptTest(
         stop(runtimeFailure(absolute, error) as Problem);
       }
     };
-    ai.goal = (text, values) => {
+    ai.goal = (text, values, options) => {
       const source = where(new Error().stack);
-      return track(exclusive(source, () => goal(text, values, source)));
+      return track(
+        exclusive(source, () => goal(text, values, source, options)),
+      );
     };
 
     const group = async (

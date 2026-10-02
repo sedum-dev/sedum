@@ -619,12 +619,23 @@ export function scanScriptSentences(
         }
       }
     }
-    if (isPunct(afterValues, ",") && !isPunct(afterValues + 1, ")"))
+    if (!isPunct(afterValues, ",") || isPunct(afterValues + 1, ")")) return;
+    const optionsIndex = afterValues + 1;
+    const afterOptions = skipExpression(optionsIndex);
+    if (!isPunct(optionsIndex, "{") && value(optionsIndex) !== "undefined")
       goalDiagnostic(
-        at(afterValues)!,
+        at(optionsIndex)!,
+        "warning",
+        "dynamic_goal_options",
+        "These goal options will be validated at run time.",
+        "Pass { generateData: false } to disable automatic data generation.",
+      );
+    if (isPunct(afterOptions, ",") && !isPunct(afterOptions + 1, ")"))
+      goalDiagnostic(
+        at(afterOptions)!,
         "error",
         "invalid_goal",
-        "ai.goal accepts at most a goal and values object.",
+        "ai.goal accepts at most a goal, values, and options object.",
         "Remove the extra argument.",
       );
   };
