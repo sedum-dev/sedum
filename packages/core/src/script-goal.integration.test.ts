@@ -8,6 +8,7 @@ import {
   goalOperations,
   type GoalPlanner,
   type GoalState,
+  type GoalValueState,
   type GoalChoice,
 } from "./goal-runner.js";
 import { runScriptTest } from "./script-runner.js";
@@ -214,6 +215,11 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       `await ai.goal('Use {{broken');`,
       `await ai.goal('Inspect', { value: {} });`,
       `await ai.goal('Inspect', []);`,
+      `await ai.goal('Inspect', undefined, null);`,
+      `await ai.goal('Inspect', undefined, []);`,
+      `await ai.goal('Inspect', undefined, false);`,
+      `await ai.goal('Inspect', undefined, { generateData: 'false' });`,
+      `await ai.goal('Inspect', undefined, { generateDate: false });`,
     ])("validates before planner: %s", async (body) => {
       const chooseGoal = vi.fn(done);
       const { outcome } = await run(body, { chooseGoal });
@@ -289,6 +295,54 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       });
       expect(chooseGoal).toHaveBeenCalledTimes(1);
     });
+
+    it.each([
+      { generateData: false, supplied: true },
+      { generateData: false, supplied: false },
+      { generateData: true, supplied: false },
+    ])(
+      "controls generation independently of supplied values: %j",
+      async ({ generateData, supplied }) => {
+        const chooseGoalValue = vi.fn(async (state: GoalValueState) => ({
+          value: choice(
+            "faker.internet.exampleEmail",
+            Object.keys(state.choices),
+          ),
+          call,
+        }));
+        const { outcome, steps } = await run(
+          `await page.setContent('<main><label>Email<input type="email"></label></main>');
+         await ai.goal('Fill email', ${supplied ? "{ email: secret('fixed@example.org') }" : "undefined"}, { generateData: ${generateData} });
+         ${supplied ? "await expect(page.getByLabel('Email')).toHaveValue('fixed@example.org');" : ""}`,
+          {
+            chooseGoal: async (state) => {
+              if (state.recentActions.length) return done(state);
+              const targets = state.targets.TYPE ?? {};
+              const id = Object.keys(targets)[0];
+              return {
+                operation: choice(
+                  id ? "TYPE" : "BLOCKED",
+                  Object.keys(goalOperations(state)),
+                ),
+                ...(id ? { target: choice(id, Object.keys(targets)) } : {}),
+                call,
+              };
+            },
+            chooseGoalValue,
+          },
+        );
+        expect(outcome.status).toBe(
+          supplied || generateData ? "passed" : "failed",
+        );
+        expect(chooseGoalValue).toHaveBeenCalledTimes(generateData ? 1 : 0);
+        if (!generateData)
+          expect(
+            steps.find((step) => step.goal)?.goal?.dataSeed,
+          ).toBeUndefined();
+        if (!supplied && !generateData)
+          expect(steps.map((step) => step.operation)).toEqual(["goal"]);
+      },
+    );
 
     it.each([true, false])(
       "redacts generated and supplied secrets across goals and verifies, reporting=%s",

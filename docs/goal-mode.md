@@ -4,7 +4,7 @@ TypeScript and YAML deliberately use different completion contracts.
 
 ## TypeScript goals
 
-In a `*.test.ts` test, `ai.goal(goal, values?)` resolves when the planner's
+In a `*.test.ts` test, `ai.goal(goal, values?, options?)` resolves when the planner's
 `DONE` passes the existing confidence and freshness checks. It does not run a
 hidden Judge. Author verification separately when the outcome matters:
 
@@ -38,6 +38,9 @@ Faker values may be reused inside one goal but are not shared across goals;
 generate an identity in TypeScript and explicitly pass it to each call when it
 must be reused. Explicit `{{placeholders}}` must have bindings. The optional
 values argument otherwise follows `ai` conventions, including `secret()`.
+Automatic generation defaults to enabled. Pass `{ generateData: false }` as
+the third argument to restrict fills to supplied or remembered values for that
+goal. Pass `undefined` as the second argument when there are no supplied values.
 
 ```ts
 // TypeSafe can select local Faker values for applicable empty form fields.

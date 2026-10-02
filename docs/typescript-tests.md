@@ -109,7 +109,7 @@ sharing one values object.
 
 ### Goals and separate verification
 
-`ai.goal(goal, values?)` asks the planner to complete a bounded task on the
+`ai.goal(goal, values?, options?)` asks the planner to complete a bounded task on the
 current page:
 
 ```ts
@@ -158,6 +158,22 @@ runs locally for each invocation. Automatically generated values can be reused
 within that goal (for example, in a confirmation field), but are not shared
 with another goal. To reuse an identity, generate it in TypeScript as above and
 pass it explicitly to every goal; wrap sensitive values with `secret()`.
+
+Automatic generation defaults to enabled. Set `generateData: false` in the
+third argument to restrict fills to supplied or remembered values:
+
+```ts
+await ai.goal("Complete the profile for {{email}}", customer, {
+  generateData: false,
+});
+// With no values, allow goals that do not need generated input.
+await ai.goal("Open billing settings", undefined, { generateData: false });
+```
+
+This setting applies only to that invocation. It disables automatic Faker
+generation, not Faker calls you make in TypeScript. Missing data cannot be
+generated; a blocked goal rejects. Completion still depends on the planner,
+so keep independent checks for the outcome you need.
 
 A goal uses the unchanged defaults of 24 requests, 18 dispatched actions, and
 120 seconds. Value-selection requests count toward the same request budget.
