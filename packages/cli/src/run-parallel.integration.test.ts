@@ -168,27 +168,28 @@ describe.skipIf(!browserIntegration)(
         ];
         let action = 0;
         let judged = 0;
+        let valuesSelected = 0;
         transport.fetch = async (_input, init) => {
           const body = JSON.parse(String(init?.body));
           expect(JSON.stringify(body)).not.toContain("fixture_password");
+          const answer = (
+            selected: string,
+            criteria: Record<string, unknown>,
+          ) => ({
+            type: "choice",
+            choice: selected,
+            confidence: 1,
+            probabilities: Object.fromEntries(
+              Object.keys(criteria).map((key) => [
+                key,
+                key === selected ? 1 : 0,
+              ]),
+            ),
+          });
           let answers;
           if (body.questions.operation) {
             const next = actions[action++];
             const op = next?.[0] ?? "DONE";
-            const answer = (
-              selected: string,
-              criteria: Record<string, unknown>,
-            ) => ({
-              type: "choice",
-              choice: selected,
-              confidence: 1,
-              probabilities: Object.fromEntries(
-                Object.keys(criteria).map((key) => [
-                  key,
-                  key === selected ? 1 : 0,
-                ]),
-              ),
-            });
             answers = {
               operation: answer(op, body.questions.operation.criteria),
             } as Record<string, unknown>;
@@ -201,12 +202,20 @@ describe.skipIf(!browserIntegration)(
               const id = Object.entries(criteria).find(
                 ([, label]) =>
                   label.includes(`"name":"${next[1]}"`) &&
-                  (!next[2] ||
-                    label.includes(op === "TYPE" ? `{{${next[2]}}}` : next[2])),
+                  (op === "TYPE" || !next[2] || label.includes(next[2])),
               )?.[0];
               expect(id).toBeDefined();
               answers[head] = answer(id!, criteria);
             }
+          } else if (body.questions.value) {
+            expect(Object.keys(body.questions)).toEqual(["value"]);
+            const next = actions[action - 1]!;
+            expect(next[0]).toBe("TYPE");
+            expect(body.state.field).toContain(`"name":"${next[1]}"`);
+            const id = `use.${next[2]}`;
+            expect(Object.keys(body.questions.value.criteria)).toContain(id);
+            answers = { value: answer(id, body.questions.value.criteria) };
+            valuesSelected++;
           } else {
             expect(Object.keys(body.questions)).toEqual([
               "holds",
@@ -258,7 +267,7 @@ describe.skipIf(!browserIntegration)(
           ]);
           expect(steps[1]!.sentence).toBe("Type {{password}} into Password");
           for (const step of steps.slice(0, -1)) {
-            expect(step.calls).toHaveLength(1);
+            expect(step.calls).toHaveLength(step.operation === "type" ? 2 : 1);
             expect(step.verdict).toBe("passed");
             if (sensitive) {
               expect(step.page).toEqual({
@@ -282,7 +291,7 @@ describe.skipIf(!browserIntegration)(
           );
           const goal = steps.at(-1)!;
           expect(goal.operation).toBe("goal");
-          expect(goal.detail).toContain("10 actions, 12 requests");
+          expect(goal.detail).toContain("10 actions, 17 requests");
           expect(
             goal.calls.filter((call) => call.purpose === "planner"),
           ).toHaveLength(1);
@@ -290,8 +299,9 @@ describe.skipIf(!browserIntegration)(
             goal.calls.filter((call) => call.purpose === "judge"),
           ).toHaveLength(1);
           expect(judged).toBe(1);
-          expect(output.result.totals.modelCalls).toBe(12);
-          expect(output.result.totals.inputTokens).toBe(204);
+          expect(valuesSelected).toBe(5);
+          expect(output.result.totals.modelCalls).toBe(17);
+          expect(output.result.totals.inputTokens).toBe(289);
           expect(JSON.stringify(output.result)).not.toContain(
             "fixture_password",
           );
