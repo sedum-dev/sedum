@@ -20,6 +20,7 @@ export const CLASSIFICATION_PROMPT_VERSION = 1;
 const KEY_DOMAIN = "sedum-classification-v1\0";
 
 interface Entry extends CachedClassification {
+  readonly provider?: string;
   readonly source: "model";
   readonly promptVersion: number;
   readonly operationSetVersion: number;
@@ -35,6 +36,17 @@ export function classificationKey(sentence: string): string {
     .update(KEY_DOMAIN)
     .update(canonicalSentence(sentence))
     .digest("hex");
+}
+
+function providerClassificationKey(provider: string, sentence: string): string {
+  return provider === "typesafe"
+    ? classificationKey(sentence)
+    : createHash("sha256")
+        .update(KEY_DOMAIN)
+        .update(provider)
+        .update("\0")
+        .update(canonicalSentence(sentence))
+        .digest("hex");
 }
 
 function validEntry(value: unknown): value is Entry {
@@ -70,6 +82,7 @@ export class FileClassificationCache implements ClassificationCache {
   private constructor(
     readonly path: string,
     readonly requestedModel: string,
+    readonly provider: string,
     entries: Record<string, Entry>,
     readonly loadReason: "ok" | "absent" | "corrupt" | "format_mismatch",
     private readonly invalidKeys: Readonly<Record<string, string>>,
@@ -80,13 +93,17 @@ export class FileClassificationCache implements ClassificationCache {
   static async load(
     path: string,
     requestedModel: string,
+    provider = "typesafe",
   ): Promise<FileClassificationCache> {
+    if (!provider.trim())
+      throw new TypeError("Cache provider must be nonempty");
     try {
       const value = JSON.parse(await fs.readFile(path, "utf8")) as unknown;
       if (!value || typeof value !== "object" || Array.isArray(value))
         return new FileClassificationCache(
           path,
           requestedModel,
+          provider,
           {},
           "corrupt",
           {},
@@ -96,6 +113,7 @@ export class FileClassificationCache implements ClassificationCache {
         return new FileClassificationCache(
           path,
           requestedModel,
+          provider,
           {},
           "format_mismatch",
           {},
@@ -108,6 +126,7 @@ export class FileClassificationCache implements ClassificationCache {
         return new FileClassificationCache(
           path,
           requestedModel,
+          provider,
           {},
           "corrupt",
           {},
@@ -128,6 +147,7 @@ export class FileClassificationCache implements ClassificationCache {
       return new FileClassificationCache(
         path,
         requestedModel,
+        provider,
         entries,
         "ok",
         invalidKeys,
@@ -137,6 +157,7 @@ export class FileClassificationCache implements ClassificationCache {
         return new FileClassificationCache(
           path,
           requestedModel,
+          provider,
           {},
           "absent",
           {},
@@ -144,6 +165,7 @@ export class FileClassificationCache implements ClassificationCache {
       return new FileClassificationCache(
         path,
         requestedModel,
+        provider,
         {},
         "corrupt",
         {},
@@ -152,16 +174,19 @@ export class FileClassificationCache implements ClassificationCache {
   }
 
   get(sentence: string): CacheLookup {
-    const entry = this.entries[classificationKey(sentence)];
+    const key = providerClassificationKey(this.provider, sentence);
+    const entry = this.entries[key];
     if (!entry)
       return {
         answer: null,
         reason:
-          this.invalidKeys[classificationKey(sentence)] ??
+          this.invalidKeys[key] ??
           (this.loadReason === "ok" ? "absent" : this.loadReason),
       };
     if (entry.requestedModel !== this.requestedModel)
       return { answer: null, reason: "model_mismatch" };
+    if ((entry.provider ?? "typesafe") !== this.provider)
+      return { answer: null, reason: "provider_mismatch" };
     // Reapply the current gate even if the entry was valid on load.
     const decision = evaluateModelAnswer(entry);
     if (!decision.accepted)
@@ -179,11 +204,12 @@ export class FileClassificationCache implements ClassificationCache {
     const probabilities = Object.fromEntries(
       MODEL_CHOICES.map((key) => [key, answer.probabilities[key]]),
     ) as Record<ModelChoice, number>;
-    this.entries[classificationKey(sentence)] = {
+    this.entries[providerClassificationKey(this.provider, sentence)] = {
       op: answer.op,
       probabilities,
       model: answer.model,
       requestedModel: answer.requestedModel,
+      provider: this.provider,
       source: "model",
       promptVersion: CLASSIFICATION_PROMPT_VERSION,
       operationSetVersion: OPERATION_SET_VERSION,
@@ -218,6 +244,7 @@ export class FileClassificationCache implements ClassificationCache {
       const latest = await FileClassificationCache.load(
         this.path,
         this.requestedModel,
+        this.provider,
       );
       const merged = { ...latest.entries, ...this.entries };
       const sorted = Object.fromEntries(

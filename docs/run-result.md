@@ -57,6 +57,13 @@ destination.
 
 The model has ordered tests, whole-test attempts, steps, and observation attempts. Only the selected terminal attempt contributes to final test/step outcome counts; all attempts contribute to model usage and cost. Unknown actual cost is `null`, not zero. Each model call carries its model ID, tokens, rate provenance, and actual cost when known. Whole-test retries from `--retries` create separate attempts. Locator cache outcomes are recorded explicitly; no cache hit is inferred from an absence of model calls.
 
+New provider calls also carry an optional `provider` identity such as `clef`.
+It is optional so existing v1 results remain valid; an absent value is unknown,
+not inferred from the model name. Readers that previously rejected every
+unknown call field must be upgraded before reading new results. Failed Clef
+attempts may have unreported usage, so retry cost remains unknown rather than
+being reported as free.
+
 `execution`, when present, records how the run was scheduled:
 
 - `parallel.requested` is the `--parallel` value, a number or `"auto"`.

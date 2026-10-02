@@ -18,6 +18,9 @@ thresholds:
   lowConfidenceBand: 0.15
   contradiction: 0.5
 
+# Optional. TypeSafe with jev-latest remains the default.
+# provider: { name: clef, model: clef }
+
 vision:
   enabled: false
   model: google/gemini-3.8-flash
@@ -58,7 +61,7 @@ test globs.
 Sedum reads at most one dotenv file: `<project-root>/.env`. It never searches a
 test directory, child, parent project, or sibling project for secrets. Values
 from the invoking process override `.env`; both override config variables with
-the same name. `TYPESAFE_API_KEY` is accepted only from the process or this
+the same name. Provider credentials are accepted only from the process or this
 `.env`, never from `sedum.config.yaml`. `.env` is ignored by Git and should not
 be committed.
 
@@ -79,6 +82,21 @@ to TypeSafe and the model to `jev-latest`; the API key is read from
 `TYPESAFE_API_KEY`.
 Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
 from `sedum.config.yaml`.
+
+To use Cloudflare Workers AI Clef for text decisions, configure one of the two
+supported models:
+
+```yaml
+provider:
+  name: clef
+  model: clef # or clef-flash
+```
+
+Then set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` in the invoking
+environment or project-root `.env`. Sedum builds the fixed Cloudflare account
+and model route; Clef does not support a custom endpoint. Selecting Clef does
+not change the default for other projects and does not enable vision. See
+[Clef provider](provider-clef.md) for scope, privacy, costs, and testing.
 
 An absolute test `url` is unchanged. A relative test URL resolves against
 `baseUrl` with standard URL semantics, and a missing test URL uses `baseUrl`

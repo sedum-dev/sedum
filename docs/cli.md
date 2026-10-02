@@ -69,10 +69,10 @@ Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` f
 
 `--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. A test that passes only after a failed attempt is flagged `flaky`: it still counts as passed, but it appears in the flags summary, and `--strict` exits 2 for it as for any flagged pass. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
-### Experimental Git-diff selection with Jev
+### Experimental Git-diff selection
 
 ```sh
-# Preview probabilities and selection as JSON; calls Jev but starts no browser.
+# Preview probabilities and selection as JSON; calls the text provider but starts no browser.
 sedum run --affected --selection-only
 
 # Score the suite, then run selected tests with the normal runner.
@@ -81,11 +81,12 @@ sedum run --affected --base origin/main --threshold 0.05 --parallel 4
 ```
 
 This opt-in proof of concept sends the **tracked Git diff and complete test/module
-sources** to the configured TypeSafe provider. Review those files for secrets
+sources** to the configured text provider. Review those files for secrets
 before using it. Environment placeholders are not expanded for selection, but
 literal secrets in source or the diff are not redacted. It uses the same
-`TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`, and `TYPESAFE_DEFAULT_MODEL` settings as
-the runner. Selection makes additional billable calls.
+provider configuration and credentials as the runner. For Clef those are
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN`; for TypeSafe, they are the
+`TYPESAFE_*` settings. Selection makes additional billable calls.
 
 The default base is the first available ref in this order: local `main`,
 `origin/main`, local `master`, `origin/master`. `--base` accepts another ref.
@@ -95,7 +96,7 @@ unstaged changes across the Git repository. No fetch happens automatically.
 Untracked, non-ignored files cause an error: stage intended files or ignore
 unrelated files first. Shallow clones need enough history to find a merge base.
 
-Each discovered test becomes one independent Jev **Noul** question: could the
+Each discovered test becomes one independent binary question: could the
 changed code affect behavior exercised by this test? Its question contains the
 YAML source and all referenced module sources; the diff is shared state. Normal
 path/name/tag filters apply before relevance selection.
@@ -248,6 +249,7 @@ To resolve such a sentence, either rephrase it with an obvious supported verb, o
 
 ```sh
 TYPESAFE_API_KEY=... sedum validate --online
+# Or select Clef in sedum.config.yaml and set its two Cloudflare credentials.
 git add .sedum/classifications.json
 ```
 

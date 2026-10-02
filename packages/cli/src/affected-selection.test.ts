@@ -295,6 +295,46 @@ it("forces dependents of a retargeted module symlink even with zero relevance", 
   ]);
 });
 
+it("routes affected selection through the configured Clef credentials only", async () => {
+  await fixture();
+  await write(
+    "sedum.config.yaml",
+    "provider:\n  name: clef\n  model: clef-flash\n",
+  );
+  await write(
+    ".env",
+    "CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef\nCLOUDFLARE_AUTH_TOKEN=clef-token\nTYPESAFE_API_KEY=jev-token\n",
+  );
+  await write(".git/info/exclude", ".env\n");
+  await write("app.ts", "export const cartTotal = 99;\n");
+  const createProvider = vi.fn(() => ({
+    scoreRelevance: async () => ({ probabilities: [0, 0], calls: [] }),
+  }));
+  vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "");
+  vi.stubEnv("CLOUDFLARE_AUTH_TOKEN", "");
+  vi.stubEnv("TYPESAFE_API_KEY", "");
+  try {
+    await selectAffectedTests({
+      cwd: root,
+      paths: [],
+      filters: {},
+      threshold: 0.5,
+      createProvider,
+    });
+  } finally {
+    vi.unstubAllEnvs();
+  }
+  expect(createProvider).toHaveBeenCalledWith(
+    expect.objectContaining({
+      providerName: "clef",
+      providerModel: "clef-flash",
+      cloudflareAccountId: "0123456789abcdef0123456789abcdef",
+      apiKey: "clef-token",
+    }),
+  );
+  expect(JSON.stringify(createProvider.mock.calls)).not.toContain("jev-token");
+});
+
 it("does not call Jev or execute the full suite when the diff or selection is empty", async () => {
   await fixture();
   const scoreRelevance = vi.fn(async () => ({

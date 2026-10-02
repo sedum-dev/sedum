@@ -17,6 +17,8 @@ import {
   type ResolvedProjectConfig,
 } from "./config.js";
 
+const CLOUDFLARE_API = "https://api.cloudflare.com";
+
 export type DoctorCheckId =
   | "node"
   | "config"
@@ -91,7 +93,10 @@ export function browserAvailable(kind: BrowserKind): boolean {
 }
 
 export function keyPresent(config: ResolvedProjectConfig): boolean {
-  return Boolean(config.apiKey?.trim());
+  return Boolean(
+    config.apiKey?.trim() &&
+    (config.providerName !== "clef" || config.cloudflareAccountId?.trim()),
+  );
 }
 
 async function networkReachable(baseURL: string): Promise<boolean> {
@@ -208,7 +213,10 @@ export async function executeDoctorCommand(
     );
   }
 
-  const providerBaseUrl = config?.providerBaseUrl ?? DEFAULT_PROVIDER_BASE_URL;
+  const providerBaseUrl =
+    config?.providerName === "clef"
+      ? CLOUDFLARE_API
+      : (config?.providerBaseUrl ?? DEFAULT_PROVIDER_BASE_URL);
   const providerModel = config?.providerModel ?? DEFAULT_PROVIDER_MODEL;
   let network = false;
   try {
@@ -239,7 +247,9 @@ export async function executeDoctorCommand(
         : fail(
             "api_key",
             "Provider API key is missing.",
-            "Set TYPESAFE_API_KEY for the configured endpoint.",
+            config.providerName === "clef"
+              ? "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN."
+              : "Set TYPESAFE_API_KEY for the configured endpoint.",
           ),
   );
 
@@ -270,16 +280,34 @@ export async function executeDoctorCommand(
   else {
     let result: AuthProbeResult;
     try {
-      result = await (probes.auth ?? probeTypeSafeApiKey)(key, {
-        baseURL: providerBaseUrl,
-        model: providerModel,
-      });
+      if (config.providerName === "clef") {
+        result = probes.auth
+          ? await probes.auth(key, {
+              baseURL: providerBaseUrl,
+              model: providerModel,
+            })
+          : await (
+              await import("@sedum-dev/provider-clef")
+            ).probeClefApiKey(key, {
+              accountId: config.cloudflareAccountId!,
+              model: providerModel,
+            });
+      } else
+        result = await (probes.auth ?? probeTypeSafeApiKey)(key, {
+          baseURL: providerBaseUrl,
+          model: providerModel,
+        });
     } catch {
       result = "unavailable";
     }
     checks.push(
       result === "accepted"
-        ? pass("api_auth", "Model provider API accepted the key.")
+        ? pass(
+            "api_auth",
+            config.providerName === "clef"
+              ? "Cloudflare completed the explicitly billable inference probe."
+              : "Model provider API accepted the key.",
+          )
         : result === "rejected"
           ? fail(
               "api_auth",

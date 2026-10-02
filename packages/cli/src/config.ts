@@ -52,7 +52,9 @@ export interface ResolvedProjectConfig {
   readonly reporterDir: string;
   readonly baseUrl: string | null;
   readonly variables: Readonly<Record<string, string | undefined>>;
+  readonly providerName: "typesafe" | "clef";
   readonly apiKey: string | undefined;
+  readonly cloudflareAccountId: string | undefined;
   readonly providerBaseUrl: string;
   readonly providerModel: string;
   readonly vision: {
@@ -78,6 +80,7 @@ interface RawConfig extends RawEnvironment {
   readonly environment?: unknown;
   readonly environments?: unknown;
   readonly vision?: unknown;
+  readonly provider?: unknown;
 }
 
 const DEFAULTS = {
@@ -116,12 +119,14 @@ const allowed = {
     "variables",
     "environments",
     "vision",
+    "provider",
   ]),
   tests: new Set(["directory", "include", "exclude"]),
   viewport: new Set(["width", "height"]),
   thresholds: new Set(["verify", "lowConfidenceBand", "contradiction"]),
   environment: new Set(["baseUrl", "variables"]),
   vision: new Set(["enabled", "model", "timeoutMs"]),
+  provider: new Set(["name", "model"]),
 };
 
 function source(
@@ -233,7 +238,12 @@ function scalarVariables(
   }
   const result: Record<string, string> = {};
   for (const [name, item] of Object.entries(value)) {
-    if (name === "TYPESAFE_API_KEY" || name === "OPEN_ROUTER_API_KEY") {
+    if (
+      name === "TYPESAFE_API_KEY" ||
+      name === "OPEN_ROUTER_API_KEY" ||
+      name === "CLOUDFLARE_ACCOUNT_ID" ||
+      name === "CLOUDFLARE_AUTH_TOKEN"
+    ) {
       diagnostic(
         diagnostics,
         file,
@@ -591,6 +601,7 @@ export async function loadProjectConfig(
       ["viewport", allowed.viewport],
       ["thresholds", allowed.thresholds],
       ["vision", allowed.vision],
+      ["provider", allowed.provider],
     ] as const;
     for (const [key, names] of maps)
       mapUnknownKeys(
@@ -633,6 +644,7 @@ export async function loadProjectConfig(
     ["thresholds", raw.thresholds],
     ["environments", raw.environments],
     ["vision", raw.vision],
+    ["provider", raw.provider],
   ] as const)
     if (value !== undefined && !object(value))
       diagnostic(
@@ -649,6 +661,7 @@ export async function loadProjectConfig(
   const thresholds = object(raw.thresholds) ? raw.thresholds : {};
   const environments = object(raw.environments) ? raw.environments : {};
   const vision = object(raw.vision) ? raw.vision : {};
+  const provider = object(raw.provider) ? raw.provider : {};
   for (const [name, value] of Object.entries(environments)) {
     if (!object(value)) {
       diagnostic(
@@ -845,12 +858,51 @@ export async function loadProjectConfig(
   };
   const providerValue = (name: string): string | undefined =>
     hostEnvironment[name]?.trim() || fileEnvironment[name]?.trim() || undefined;
+  const providerNameValue = provider.name ?? "typesafe";
+  const providerName =
+    providerNameValue === "typesafe" || providerNameValue === "clef"
+      ? providerNameValue
+      : "typesafe";
+  if (providerNameValue !== "typesafe" && providerNameValue !== "clef")
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("provider.name"),
+      "provider.name",
+      "invalid_config_provider",
+      "Configuration key `provider.name` must be `typesafe` or `clef`.",
+      "Choose one of the supported provider names.",
+    );
+  const configuredModel = provider.model;
+  const validClefModel =
+    configuredModel === "clef" || configuredModel === "clef-flash";
+  if (
+    configuredModel !== undefined &&
+    (typeof configuredModel !== "string" ||
+      !configuredModel.trim() ||
+      (providerName === "clef" && !validClefModel))
+  )
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("provider.model"),
+      "provider.model",
+      "invalid_config_provider_model",
+      providerName === "clef"
+        ? "Clef provider model must be `clef` or `clef-flash`."
+        : "Provider model must be nonempty text.",
+      providerName === "clef"
+        ? "Use `provider.model: clef`."
+        : "Use a nonempty model name.",
+    );
   const customProvider = {
     baseUrl: providerValue("TYPESAFE_BASE_URL"),
     model: providerValue("TYPESAFE_DEFAULT_MODEL"),
   };
   let providerBaseUrl = DEFAULT_PROVIDER_BASE_URL;
-  if (customProvider.baseUrl) {
+  if (providerName === "typesafe" && customProvider.baseUrl) {
     try {
       const parsed = new URL(customProvider.baseUrl);
       if (
@@ -875,12 +927,43 @@ export async function loadProjectConfig(
       });
     }
   }
-  const providerModel = customProvider.model ?? DEFAULT_PROVIDER_MODEL;
-  const apiKey = providerValue("TYPESAFE_API_KEY");
+  const providerModel =
+    providerName === "clef"
+      ? typeof configuredModel === "string" && validClefModel
+        ? configuredModel
+        : "clef"
+      : typeof configuredModel === "string" && configuredModel.trim()
+        ? configuredModel.trim()
+        : (customProvider.model ?? DEFAULT_PROVIDER_MODEL);
+  const apiKey =
+    providerName === "clef"
+      ? providerValue("CLOUDFLARE_AUTH_TOKEN")
+      : providerValue("TYPESAFE_API_KEY");
+  const cloudflareAccountId =
+    providerName === "clef"
+      ? providerValue("CLOUDFLARE_ACCOUNT_ID")
+      : undefined;
+  if (
+    providerName === "clef" &&
+    cloudflareAccountId !== undefined &&
+    !/^[a-f\d]{32}$/iu.test(cloudflareAccountId)
+  )
+    diagnostics.push({
+      code: "invalid_cloudflare_account_id",
+      file: environmentFile,
+      line: 1,
+      col: 1,
+      key: "CLOUDFLARE_ACCOUNT_ID",
+      message:
+        "CLOUDFLARE_ACCOUNT_ID must be exactly 32 hexadecimal characters.",
+      fix: "Copy the account ID from the Cloudflare dashboard.",
+    });
   const visionApiKey = providerValue("OPEN_ROUTER_API_KEY");
   // Credentials configure integrations; they are not test variables and must
   // not be forwarded through the flow environment.
   variables.OPEN_ROUTER_API_KEY = undefined;
+  variables.CLOUDFLARE_ACCOUNT_ID = undefined;
+  variables.CLOUDFLARE_AUTH_TOKEN = undefined;
   const visionEnabledValue = overrides.vision?.enabled ?? vision.enabled;
   const visionEnabled = visionEnabledValue ?? DEFAULTS.vision.enabled;
   if (typeof visionEnabled !== "boolean")
@@ -986,7 +1069,9 @@ export async function loadProjectConfig(
     reporterDir,
     baseUrl,
     variables,
+    providerName,
     apiKey,
+    cloudflareAccountId,
     providerBaseUrl,
     providerModel,
     vision: {

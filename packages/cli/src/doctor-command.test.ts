@@ -43,7 +43,9 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     reporterDir: path.join(root, ".sedum", "reports"),
     baseUrl: null,
     variables: {},
+    providerName: "typesafe",
     apiKey: "SECRET-KEY",
+    cloudflareAccountId: undefined,
     providerBaseUrl: "https://api.typesafe.ai",
     providerModel: "jev-latest",
     vision: {
@@ -252,6 +254,92 @@ describe("sedum doctor", () => {
     ).toBe("fail");
     expect(JSON.stringify(result)).not.toContain("SECRET-KEY");
   });
+
+  it("uses Cloudflare's fixed route and validates one billed Clef inference", async () => {
+    const base = await fixture();
+    const config = {
+      ...base,
+      providerName: "clef" as const,
+      providerModel: "clef-flash",
+      cloudflareAccountId: "0123456789abcdef0123456789abcdef",
+      apiKey: "cloudflare-token",
+      providerBaseUrl: "https://attacker.invalid/ignored",
+    };
+    const fetch = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        expect(String(input)).toBe(
+          "https://api.cloudflare.com/client/v4/accounts/0123456789abcdef0123456789abcdef/ai/run/@cf/cloudflare/clef-flash",
+        );
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer cloudflare-token",
+        );
+        expect(init?.redirect).toBe("error");
+        const body = JSON.parse(String(init?.body));
+        expect(body.model).toBe("clef-flash");
+        expect(Object.keys(body.questions)).toEqual(["holds", "contradicted"]);
+        return Response.json({
+          success: true,
+          errors: [],
+          messages: [],
+          result: {
+            model: "clef-flash",
+            answers: {
+              holds: { type: "noul", noul: 0.91 },
+              contradicted: { type: "noul", noul: 0.07 },
+            },
+            usage: { input_tokens: 10, output_tokens: 2 },
+          },
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetch);
+    const network = vi.fn(async () => true);
+    const result = await executeDoctorCommand(config.projectRoot, {
+      nodeVersion: "20.19.0",
+      loadConfig: async () => config,
+      browser: () => true,
+      network,
+      output: async () => undefined,
+    });
+    expect(network).toHaveBeenCalledWith("https://api.cloudflare.com");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(
+      result.checks.find((check) => check.id === "api_auth"),
+    ).toMatchObject({
+      status: "pass",
+      message: "Cloudflare completed the explicitly billable inference probe.",
+    });
+    expect(JSON.stringify(result)).not.toContain("cloudflare-token");
+  });
+
+  it.each([
+    [undefined, "cloudflare-token"],
+    ["0123456789abcdef0123456789abcdef", undefined],
+  ])(
+    "does not probe Clef without both account and token",
+    async (accountId, token) => {
+      const base = await fixture();
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      const result = await executeDoctorCommand(base.projectRoot, {
+        nodeVersion: "20.19.0",
+        loadConfig: async () => ({
+          ...base,
+          providerName: "clef",
+          providerModel: "clef",
+          cloudflareAccountId: accountId,
+          apiKey: token,
+        }),
+        browser: () => true,
+        network: async () => true,
+        output: async () => undefined,
+      });
+      expect(fetch).not.toHaveBeenCalled();
+      expect(
+        result.checks.find((check) => check.id === "api_key")?.status,
+      ).toBe("fail");
+    },
+  );
 
   it("keeps JSON parseable on multiple failures and reports exit 3", async () => {
     const config = await fixture();

@@ -14,3 +14,4 @@ These pages describe how to write, configure, and run Sedum tests.
 - [Step classification](classification.md): supported operations, offline validation, and the classification cache.
 - [Local locator cache](locator-cache.md): development and CI defaults, parallel runs, privacy, and clearing the cache.
 - [TypeSafe provider](provider-typesafe.md): provider setup, data sent to the provider, and the opt-in live check.
+- [Clef provider](provider-clef.md): Cloudflare credentials, models, privacy, pricing, and the text-only Phase 1 scope.

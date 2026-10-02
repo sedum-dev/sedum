@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  GOAL_NO_MATCH,
   runGoal,
   goalChoiceAccepted,
   goalOperations,
@@ -98,6 +99,58 @@ beforeEach(() => {
   });
 });
 describe("bounded goal runner", () => {
+  it("pads only singleton target heads for two-option planners", async () => {
+    const model: GoalPlanner = {
+      targetChoiceMinOptions: 2,
+      chooseGoal: vi.fn(async (state) => {
+        expect(Object.keys(state.targets.CLICK!)).toEqual([
+          "c0",
+          GOAL_NO_MATCH,
+        ]);
+        return {
+          operation: choose("CLICK", Object.keys(goalOperations(state))),
+          target: choose("c0", Object.keys(state.targets.CLICK!)),
+          call,
+        };
+      }),
+    };
+    expect(
+      await runGoal(page, model, judge, { ...options, maxActions: 1 }),
+    ).toMatchObject({ reason: "action_limit", actions: 1 });
+    expect(executeStep).toHaveBeenCalledOnce();
+  });
+
+  it("treats a valid reserved target as abstention without dispatch", async () => {
+    const model: GoalPlanner = {
+      targetChoiceMinOptions: 2,
+      chooseGoal: async (state) => ({
+        operation: choose("CLICK", Object.keys(goalOperations(state))),
+        target: choose(GOAL_NO_MATCH, Object.keys(state.targets.CLICK!)),
+        call,
+      }),
+    };
+    expect(await runGoal(page, model, judge, options)).toMatchObject({
+      reason: "target_abstention",
+      actions: 0,
+    });
+    expect(executeStep).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed padded-target response keys", async () => {
+    const model: GoalPlanner = {
+      targetChoiceMinOptions: 2,
+      chooseGoal: async (state) => ({
+        operation: choose("CLICK", Object.keys(goalOperations(state))),
+        target: choose("c0", ["c0", GOAL_NO_MATCH, "invented"]),
+        call,
+      }),
+    };
+    expect(await runGoal(page, model, judge, options)).toMatchObject({
+      reason: "target_abstention",
+      actions: 0,
+    });
+  });
+
   it("observes again after a target went stale before dispatch", async () => {
     vi.mocked(executeStep)
       .mockRejectedValueOnce(

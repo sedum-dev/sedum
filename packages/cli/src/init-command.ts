@@ -35,6 +35,9 @@ test(
 const ENV_EXAMPLE = `# Get a TypeSafe key and put it in .env, or set it in your shell.
 # For a compatible provider, also set TYPESAFE_BASE_URL and optionally TYPESAFE_DEFAULT_MODEL.
 TYPESAFE_API_KEY=
+# If provider.name is clef, use these instead (never commit .env).
+# CLOUDFLARE_ACCOUNT_ID=
+# CLOUDFLARE_AUTH_TOKEN=
 # Public SauceDemo sample account; no Sauce Labs account is required.
 SAUCE_PASSWORD=secret_sauce
 `;
@@ -223,10 +226,18 @@ export async function executeInitCommand(
     const hasEnv = await pathExists(path.join(root, ".env"));
     if (!keyPresent(config))
       next("Add a provider API key", [
-        "Get a key at https://typesafe.ai/.",
+        ...(config.providerName === "clef"
+          ? ["Create a scoped Workers AI token in the Cloudflare dashboard."]
+          : ["Get a key at https://typesafe.ai/."]),
         ...(hasEnv ? [] : ["cp .env.example .env"]),
-        "Open .env and set TYPESAFE_API_KEY to your key (or set it in your shell).",
-        "For a compatible provider, also set TYPESAFE_BASE_URL and use that provider's key as TYPESAFE_API_KEY.",
+        ...(config.providerName === "clef"
+          ? [
+              "Open .env and set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN (or set them in your shell).",
+            ]
+          : [
+              "Open .env and set TYPESAFE_API_KEY to your key (or set it in your shell).",
+              "For a compatible provider, also set TYPESAFE_BASE_URL and use that provider's key as TYPESAFE_API_KEY.",
+            ]),
       ]);
     if (!hasBrowser)
       next(
