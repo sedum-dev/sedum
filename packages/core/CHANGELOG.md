@@ -1,5 +1,21 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.8
+
+### Minor Changes
+
+- 89cbfc8: Add Cloudflare Clef and Clef-flash as opt-in text decision providers while
+  keeping TypeSafe as the default. Include provider-aware classification caches,
+  provider identity in compatible receipts, fixed Cloudflare routing, CLI and
+  doctor integration, bounded retries, and all six text decision operations.
+- 947e960: Add `ai.goal(goal, values?, options?)` to TypeScript tests for bounded planner-driven
+  click and type execution. Accepted planner completion resolves without hidden
+  independent verification; semantic `ai("verify ...")` steps and Playwright
+  assertions remain separately authored. Report planner completion explicitly,
+  support per-invocation automatic Faker data, and prevent automatic whole-test
+  retries after a goal enters planning. Set `options.generateData: false` to disable
+  automatic generation for one goal and use only supplied or remembered values.
+
 ## 0.1.0-alpha.7
 
 ### Patch Changes
