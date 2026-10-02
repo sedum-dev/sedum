@@ -17,6 +17,7 @@ import type {
   JudgeDecision,
   JudgePageDigest,
   ProviderCallOptions,
+  RelevanceProvider,
   Resolver,
   ResolverCandidates,
   ResolverDecision,
@@ -179,7 +180,7 @@ function responseError(
 
 /** One reusable, Node-side adapter supplies both task-specific core interfaces. */
 export class TypeSafeAdapter
-  implements Resolver, Judge, ClassificationProvider
+  implements Resolver, Judge, ClassificationProvider, RelevanceProvider
 {
   private readonly client: TypeSafeClient;
   private readonly model: string;

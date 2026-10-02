@@ -147,6 +147,7 @@ export function validateCall(
           tokens.outputTokens * rate.outputUsdPerMillion) /
         1_000_000;
   return {
+    provider: "typesafe",
     requestedModel,
     model: reply.model,
     attempts,

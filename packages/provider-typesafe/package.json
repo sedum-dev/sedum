@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@sedum-dev/core": "workspace:*",
-    "@typesafe-ai/sdk": "0.6.0",
-    "p-queue": "9.3.3"
+    "@typesafe-ai/sdk": "0.6.0"
   }
 }

@@ -8,7 +8,7 @@ import {
   cooldownDelay,
   nextConcurrency,
   parseRetryAfter,
-} from "./gate.js";
+} from "./provider-gate.js";
 
 describe("parseRetryAfter", () => {
   const now = Date.parse("2026-09-23T12:00:00Z");
