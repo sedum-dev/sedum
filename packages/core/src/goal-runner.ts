@@ -199,7 +199,8 @@ export async function runGoal(
   const data: Record<string, ResolvedDataEntry> = { ...options.data };
   const generated = new Map<string, string>();
   // A selected value survives a provably pre-dispatch stale retry.
-  const pendingValues = new Map<string, string>();
+  let pendingValue:
+    { observation: string; index: number; key: string } | undefined;
   if (
     !Number.isFinite(operationMinMargin) ||
     operationMinMargin < 0 ||
@@ -344,6 +345,22 @@ export async function runGoal(
         })})`,
         ),
       );
+      // Ignore only ephemeral element identities. A replacement may inherit a
+      // pending value only while the entire field surface, visible context and
+      // occupancy remain unchanged. Changed/ambiguous context fails closed.
+      const valueObservation = JSON.stringify([
+        digest.version.document,
+        digest.version.route,
+        digest.text,
+        fills.candidates.map((c) => ({
+          ...c,
+          ref: undefined,
+          signals: { ...c.signals, nodeId: undefined },
+        })),
+        fieldState,
+      ]);
+      if (pendingValue && pendingValue.observation !== valueObservation)
+        return result("stale_value_target");
       const describe = (c: Candidate) =>
         JSON.stringify({
           name: project(c.name),
@@ -373,7 +390,7 @@ export async function runGoal(
         const current = fieldState[index]!;
         if (generators) {
           // Already holds known data: don't repeatedly fill or regenerate it.
-          if (current.bindings.length) continue;
+          if (current.populated && current.bindings.length) continue;
           const id = `t${commands.size}`;
           (targets.TYPE ??= {})[id] =
             `${describe(c)} inputType=${c.inputType} constraints=${project(JSON.stringify(current.constraints ?? {}))} current=${current.populated ? "populated (unknown value)" : "empty"}`;
@@ -440,6 +457,7 @@ export async function runGoal(
         );
       if (!same(digest.version, await active(pageVersion(page)))) continue;
       const op = decision.operation.choice;
+      if (pendingValue && op !== "TYPE") return result("stale_value_target");
       if (op === "BLOCKED") return result("blocked");
       if (op === "DONE") {
         for (const claim of options.verify) {
@@ -500,18 +518,13 @@ export async function runGoal(
       let command = commands.get(head.choice);
       if (!command) return result("invalid_target");
       if (actions >= maxActions) return result("action_limit");
-      let valueIdentity: string | undefined;
       if (command.op === "type" && generators && planner.chooseGoalValue) {
         const ref = command.target.driverTarget().ref;
-        const field = fills.candidates.find((c) => c.ref === ref)!;
-        const identity = JSON.stringify([
-          digest.version.document,
-          digest.version.route,
-          field.signals.nodeId ?? field.signals.path,
-          field.name,
-        ]);
-        valueIdentity = identity;
-        let key = pendingValues.get(identity);
+        const index = fills.candidates.findIndex((c) => c.ref === ref);
+        const field = fills.candidates[index]!;
+        if (pendingValue && pendingValue.index !== index)
+          return result("stale_value_target");
+        let key = pendingValue?.key;
         if (!key) {
           const choices: Record<string, string> = {
             BLOCKED:
@@ -571,7 +584,7 @@ export async function runGoal(
               `${id} selected for ${describe(field)} on ${project(digest.version.route)} (not yet filled)`,
             );
           }
-          pendingValues.set(identity, key);
+          pendingValue = { observation: valueObservation, index, key };
         }
         bindingKeys.set(head.choice, key);
         command = { ...command, value: data[key]!.value };
@@ -678,7 +691,7 @@ export async function runGoal(
       });
       reportedCalls = calls.length;
       if (failed) throw failure;
-      if (valueIdentity) pendingValues.delete(valueIdentity);
+      pendingValue = undefined;
       if (binding && generated.has(binding))
         generated.set(
           binding,

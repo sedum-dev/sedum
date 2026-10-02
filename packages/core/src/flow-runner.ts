@@ -2268,13 +2268,16 @@ export async function runFlow(
             ),
           ],
           data,
+          onGeneratedValue: (value: RuntimeValue) => {
+            opaqueEntries.push({
+              value,
+              sensitive: true,
+              opaqueValues: [value],
+            });
+            dependencies.report?.privacy.secretValues.push(value.reveal());
+          },
           ...(dependencies.report
             ? {
-                onGeneratedValue: (value: RuntimeValue) => {
-                  dependencies.report!.privacy.secretValues.push(
-                    value.reveal(),
-                  );
-                },
                 onAction: async (action: GoalAction) => {
                   await recordGoalAction(
                     activePage,
