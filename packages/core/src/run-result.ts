@@ -138,6 +138,17 @@ export const ResultStepSchema = z.strictObject({
   detail: z.string().max(512),
   /** Enclosing `ai.group` names, outermost first; absent outside a group. */
   group: z.array(z.string().max(120)).max(16).optional(),
+  /** TypeScript goal execution is planner-reported, not independently verified. */
+  goal: z
+    .strictObject({
+      completion: z.literal("planner"),
+      text: z.string(),
+      actions: count,
+      requests: count,
+      reason: z.string(),
+      dataSeed: z.number().int().optional(),
+    })
+    .optional(),
   sourceStack: z.array(ResultSourceSchema).min(1),
   state,
   verdict: verdict.nullable(),

@@ -92,6 +92,41 @@ async function example() {
 }
 
 describe("HTML report", () => {
+  it("shows complete TypeScript task text without presenting it as verified", async () => {
+    const recorder = new RunRecorder(async () => {}, "ts-goal");
+    await recorder.start();
+    await recorder.startTest({ id: "profile", file: "profile.test.ts" });
+    const text = "Create a new profile. ".repeat(40) + "<task-end>";
+    await recorder.addStep({
+      ...step("goal", 1, "passed"),
+      kind: "action",
+      operation: "goal",
+      sentence: "truncated",
+      judgement: null,
+      calls: [],
+      detail: "Planner reported completion; verify the outcome separately.",
+      goal: {
+        completion: "planner",
+        text,
+        actions: 2,
+        requests: 3,
+        reason: "completed",
+        dataSeed: 42,
+      },
+    });
+    await recorder.finishTest("passed");
+    await recorder.finish();
+    const html = renderHtml(recorder.snapshot);
+    expect(html).toContain("&lt;task-end&gt;");
+    expect(html).not.toContain("<task-end>");
+    expect(html).toContain("kind-action");
+    expect(html).toContain(
+      "Planner reported completion; verify the outcome separately.",
+    );
+    expect(html).not.toContain('aria-label="Goal and verification"');
+    expect(renderMarkdown(recorder.snapshot)).toContain("task-end");
+  });
+
   it("identifies vision outcomes and counts billed usage across historical attempts without inventing prices", async () => {
     const result = await visionReport();
     const html = renderHtml(result);

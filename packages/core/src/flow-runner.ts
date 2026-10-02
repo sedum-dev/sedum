@@ -1909,12 +1909,14 @@ function unresolvedWhy(
 }
 
 /** Goal replay frames show the resulting page, never a stale pre-action target box. */
-async function recordGoalAction(
+export async function recordGoalAction(
   page: BrowserPage,
   action: GoalAction,
   report: AttemptReport,
   repoRoot: string,
   source: FlowSource,
+  group?: readonly string[],
+  canceled = false,
 ): Promise<void> {
   const attempt = report.test.currentAttempt!;
   const index = attempt.stepCount + 1;
@@ -1955,9 +1957,12 @@ async function recordGoalAction(
     detail: failed
       ? `Goal action failed: ${action.reason}.`
       : "Goal action; replay shows the resulting page.",
+    ...(group
+      ? { group: group.map((name) => safeText(name, privacy, 120)) }
+      : {}),
     sourceStack: [safeSource(source, repoRoot, privacy)],
-    state: "completed",
-    verdict: action.status,
+    state: canceled ? "error" : "completed",
+    verdict: canceled ? null : action.status,
     flags: [],
     elapsedMs: action.elapsedMs,
     page: sensitive

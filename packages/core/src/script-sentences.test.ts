@@ -245,6 +245,85 @@ describe("literal ai sentences in TypeScript tests", () => {
     expect(scan.warnings).toEqual([]);
   });
 
+  it("validates literal goals without classifying them as step sentences", () => {
+    const scan = scanScriptSentences(
+      [
+        'const ONBOARD = "Create an account and complete its profile";',
+        "await ai.goal(ONBOARD, { email, plan: 'business' });",
+        'await ai.goal("Add two products to {{account}}, check out, and save the receipt");',
+        'await ai("verify the receipt shows the order number");',
+      ].join("\n"),
+      file,
+    );
+    expect(scan.sentences.map((item) => item.text)).toEqual([
+      "verify the receipt shows the order number",
+    ]);
+    expect(scan.warnings).toEqual([]);
+  });
+
+  it("rejects statically provable invalid goals and values", () => {
+    const scan = scanScriptSentences(
+      [
+        'await ai.goal("   ");',
+        'await ai.goal(["click A"]);',
+        'await ai.goal("Create {{bad binding}}", {});',
+        'await ai.goal("Create an account", null);',
+        'await ai.goal("Create an account", {}, {}, extra);',
+      ].join("\n"),
+      file,
+    );
+    expect(scan.sentences).toEqual([]);
+    expect(scan.warnings.map(({ severity, code }) => [severity, code])).toEqual(
+      [
+        ["error", "invalid_goal"],
+        ["error", "invalid_goal"],
+        ["error", "invalid_placeholder"],
+        ["error", "invalid_goal_values"],
+        ["error", "invalid_goal"],
+      ],
+    );
+  });
+
+  it("accepts trailing commas but warns rather than rejects computed strings and objects", () => {
+    const scan = scanScriptSentences(
+      `await ai.goal("Save",); await ai.goal("Save", {},);
+       await ai.goal("Save", undefined, { generateData: false },);
+       await ai.goal("Save", {}, { generateData: true });
+       await ai.goal(["Save"].join(" "));
+       await ai.goal(1 + " task");
+       await ai.goal("Save", true ? {} : {});
+       await ai.goal("Save", values);
+       await ai.goal("Save", false);`,
+      file,
+    );
+    expect(scan.warnings.map(({ severity, code }) => [severity, code])).toEqual(
+      [
+        ["warning", "dynamic_goal"],
+        ["warning", "dynamic_goal"],
+        ["warning", "dynamic_goal_values"],
+        ["warning", "dynamic_goal_values"],
+        ["error", "invalid_goal_values"],
+      ],
+    );
+  });
+
+  it("warns honestly for dynamic goals, unreadable values, and indirect use", () => {
+    const scan = scanScriptSentences(
+      [
+        "await ai.goal(goal);",
+        "await ai.goal(`Create ${kind}`, { ...values });",
+        "const achieve = ai.goal;",
+      ].join("\n"),
+      file,
+    );
+    expect(scan.warnings.map((item) => item.code)).toEqual([
+      "dynamic_goal",
+      "dynamic_goal",
+      "dynamic_goal_values",
+      "unchecked_call",
+    ]);
+  });
+
   it.each([
     ["an alias of ai", 'const step = ai;\nawait step("type {{x into y");'],
     ["ai handed to a member call", 'await ["click A"].map(ai);'],

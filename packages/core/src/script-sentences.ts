@@ -1,4 +1,5 @@
 import type { FlowDiagnostic, FlowSource } from "./flow-types.js";
+import { tokenizeStep } from "./flow-values.js";
 
 /** A literal step sentence written in a `*.test.ts` file. */
 export interface ScriptSentence {
@@ -10,7 +11,7 @@ export interface ScriptSentence {
 
 export interface ScriptSentenceScan {
   readonly sentences: readonly ScriptSentence[];
-  /** Sentences built at run time; they cannot be checked before a run. */
+  /** Static diagnostics, including run-time shapes that cannot be checked. */
   readonly warnings: readonly FlowDiagnostic[];
   /** Parameter names of the functions this file declares, by position. */
   readonly functions: ReadonlyMap<string, readonly string[]>;
@@ -289,6 +290,20 @@ export function scanScriptSentences(
         "This step sentence is not a literal, so it cannot be checked before a run, and a sentence built from values is classified again for every value.",
       fix: 'Write a literal sentence with {{name}} and pass the value separately: ai("type {{email}} into the Email field", { email }).',
     });
+  const goalDiagnostic = (
+    token: Token,
+    severity: FlowDiagnostic["severity"],
+    code: string,
+    message: string,
+    fix: string,
+  ) =>
+    warnings.push({
+      severity,
+      code,
+      source: { file, line: token.line, col: token.col },
+      message,
+      fix,
+    });
   const TERMINATORS = new Set([",", ")", "]", ";"]);
   /** Index of the `,` `)` `]` or `;` that ends the expression at `index`. */
   const skipExpression = (index: number): number => {
@@ -491,6 +506,138 @@ export function scanScriptSentences(
     if (isPunct(first, ")")) return;
     if (isPunct(first, "[")) list(first);
     else argument(first);
+  };
+  /** Validate ai.goal without adding it to the authored step sentences. */
+  const goalCall = (open: number, aiToken: Token): void => {
+    const first = open + 1;
+    if (isPunct(first, ")")) {
+      goalDiagnostic(
+        aiToken,
+        "error",
+        "invalid_goal",
+        "ai.goal requires one nonblank string goal.",
+        'Write ai.goal("Describe the outcome to achieve").',
+      );
+      return;
+    }
+    const firstToken = at(first)!;
+    const end = skipExpression(first);
+    const declared =
+      firstToken.kind === "ident" && end === first + 1
+        ? constants.get(firstToken.value)
+        : undefined;
+    const literal =
+      firstToken.kind === "string" && end === first + 1
+        ? firstToken
+        : declared !== undefined && at(declared)?.kind === "string"
+          ? at(declared)
+          : undefined;
+    if (!literal || literal.kind !== "string" || literal.dynamic) {
+      const provablyNonString =
+        ((isPunct(first, "[") || isPunct(first, "{")) &&
+          match.get(first) === end - 1) ||
+        (end === first + 1 &&
+          (/^\d/u.test(firstToken.value) ||
+            ["null", "true", "false"].includes(firstToken.value)));
+      goalDiagnostic(
+        firstToken,
+        provablyNonString ? "error" : "warning",
+        provablyNonString ? "invalid_goal" : "dynamic_goal",
+        provablyNonString
+          ? "ai.goal requires a string, not this statically readable value."
+          : "This goal is built at run time, so its text and placeholders cannot be checked before a run.",
+        'Pass a literal or a single-use const string to ai.goal("Describe the outcome").',
+      );
+    } else if (!literal.value.trim()) {
+      goalDiagnostic(
+        literal,
+        "error",
+        "invalid_goal",
+        "ai.goal cannot be blank.",
+        "Describe the outcome the planner should achieve.",
+      );
+    } else {
+      for (const problem of tokenizeStep(literal.value).problems) {
+        if (problem.code !== "invalid_placeholder") continue;
+        goalDiagnostic(
+          literal,
+          "error",
+          problem.code,
+          problem.message,
+          problem.fix,
+        );
+      }
+    }
+
+    if (!isPunct(end, ",")) return;
+    const valuesIndex = end + 1;
+    if (isPunct(valuesIndex, ")")) return;
+    const valuesToken = at(valuesIndex);
+    const afterValues = skipExpression(valuesIndex);
+    const readableObject =
+      isPunct(valuesIndex, "{") && match.get(valuesIndex) === afterValues - 1;
+    const invalidValues =
+      (isPunct(valuesIndex, "[") &&
+        match.get(valuesIndex) === afterValues - 1) ||
+      (afterValues === valuesIndex + 1 &&
+        (valuesToken?.kind === "string" ||
+          /^(?:\d|null$|true$|false$)/u.test(valuesToken?.value ?? "")));
+    if (invalidValues)
+      goalDiagnostic(
+        valuesToken ?? aiToken,
+        "error",
+        "invalid_goal_values",
+        "ai.goal values must be an object when supplied.",
+        "Pass values as { name: value }, or omit the second argument.",
+      );
+    else if (!readableObject && valuesToken?.value !== "undefined")
+      goalDiagnostic(
+        valuesToken ?? aiToken,
+        "warning",
+        "dynamic_goal_values",
+        "These values are built at run time and will be validated when the goal runs.",
+        "Use a plain object with statically named properties where practical.",
+      );
+    else if (readableObject) {
+      for (let cursor = valuesIndex + 1; cursor < afterValues - 1; cursor++) {
+        const spread =
+          value(cursor) === "." &&
+          value(cursor + 1) === "." &&
+          value(cursor + 2) === ".";
+        if (
+          spread ||
+          (value(cursor) === "[" && parentOf[cursor] === valuesIndex)
+        ) {
+          goalDiagnostic(
+            at(cursor)!,
+            "warning",
+            "dynamic_goal_values",
+            "This values object has computed or spread entries that cannot be checked before a run.",
+            "Use statically named properties where practical.",
+          );
+          break;
+        }
+      }
+    }
+    if (!isPunct(afterValues, ",") || isPunct(afterValues + 1, ")")) return;
+    const optionsIndex = afterValues + 1;
+    const afterOptions = skipExpression(optionsIndex);
+    if (!isPunct(optionsIndex, "{") && value(optionsIndex) !== "undefined")
+      goalDiagnostic(
+        at(optionsIndex)!,
+        "warning",
+        "dynamic_goal_options",
+        "These goal options will be validated at run time.",
+        "Pass { generateData: false } to disable automatic data generation.",
+      );
+    if (isPunct(afterOptions, ",") && !isPunct(afterOptions + 1, ")"))
+      goalDiagnostic(
+        at(afterOptions)!,
+        "error",
+        "invalid_goal",
+        "ai.goal accepts at most a goal, values, and options object.",
+        "Remove the extra argument.",
+      );
   };
   /** An inline `async () => …`, `function () {…}`, or `(x) => …` body. */
   const inlineFunction = (index: number): boolean => {
@@ -862,6 +1009,27 @@ export function scanScriptSentences(
       call(holdsOpen);
       for (let found = before; found < sentences.length; found++)
         sentences[found] = { ...sentences[found]!, check: true };
+      continue;
+    }
+    if (
+      member !== undefined &&
+      at(member)?.kind === "ident" &&
+      at(member)!.value === "goal"
+    ) {
+      const after = member + 1;
+      const open = isPunct(after, "(")
+        ? after
+        : isPunct(after, "?") &&
+            isPunct(after + 1, ".") &&
+            isPunct(after + 2, "(")
+          ? after + 2
+          : undefined;
+      if (open === undefined)
+        unchecked(
+          token,
+          "This ai.goal use is indirect, so its goal cannot be checked before a run.",
+        );
+      else goalCall(open, token);
       continue;
     }
     if (

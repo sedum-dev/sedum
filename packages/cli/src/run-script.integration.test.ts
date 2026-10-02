@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type {
+  GoalState,
   JudgePageDigest,
   ProviderCall,
   ResolverCandidates,
@@ -35,6 +36,7 @@ const call: ProviderCall = {
 const seen = vi.hoisted(() => ({
   sentences: [] as string[],
   claims: [] as string[],
+  goalCalls: 0,
 }));
 
 /**
@@ -46,6 +48,36 @@ vi.mock("@sedum-dev/provider-typesafe", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("@sedum-dev/provider-typesafe")>();
   class FakeAdapter {
+    async chooseGoal(state: GoalState) {
+      seen.goalCalls++;
+      const target = Object.keys(state.targets.CLICK ?? {})[0];
+      const op = target && state.recentActions.length === 0 ? "CLICK" : "DONE";
+      const ids = [...Object.keys(state.targets), "DONE", "BLOCKED"];
+      return {
+        operation: {
+          choice: op,
+          confidence: 1,
+          probabilities: Object.fromEntries(
+            ids.map((id) => [id, id === op ? 1 : 0]),
+          ),
+        },
+        ...(op === "CLICK"
+          ? {
+              target: {
+                choice: target!,
+                confidence: 1,
+                probabilities: Object.fromEntries(
+                  Object.keys(state.targets.CLICK!).map((id) => [
+                    id,
+                    id === target ? 1 : 0,
+                  ]),
+                ),
+              },
+            }
+          : {}),
+        call,
+      };
+    }
     async classifyBatch(): Promise<never> {
       throw new Error("Every sentence in these tests matches a pattern.");
     }
@@ -338,6 +370,54 @@ test("empty", { url: "/help" }, async () => undefined);
       },
       90_000,
     );
+
+    it("never retries a completed autonomous goal after a deterministic assertion fails", async () => {
+      const file = path.join(root, "tests", "goal-retry.test.ts");
+      await writeFile(
+        file,
+        `import { test, expect } from "sedum-cli";
+test("goal side effect", { url: "/help" }, async ({ ai, page }) => {
+  await page.setContent('<main><button onclick="this.textContent=&quot;Saved&quot;">Save</button></main>');
+  await ai.goal("Save the profile");
+  await expect(page.getByRole("button")).toHaveText("Saved");
+  expect(1).toBe(2);
+});
+test("ordinary retry", { url: "/help" }, async () => { expect(1).toBe(2); });`,
+      );
+      seen.goalCalls = 0;
+      try {
+        const validation = await executeValidateCommand({
+          paths: ["tests/goal-retry.test.ts"],
+          online: false,
+          cwd: root,
+          createProvider: () => {
+            throw new Error("Must remain offline");
+          },
+        });
+        expect(validation.result?.fullyValidated).toBe(true);
+        const output = await executeRunCommand({
+          paths: ["tests/goal-retry.test.ts"],
+          retries: 1,
+          evidence: false,
+          replay: false,
+          sensitiveOrigins: [],
+          locatorCacheDisabled: true,
+        });
+        expect(output.diagnostic).toBeNull();
+        expect(runExitCode(output.result, false)).toBe(1);
+        expect(output.result.tests.map((test) => test.attempts.length)).toEqual(
+          [1, 2],
+        );
+        expect(seen.goalCalls).toBe(2); // CLICK, then DONE; never repeated
+        expect(
+          output.result.tests[0]!.attempts[0]!.steps.map(
+            (step) => step.operation,
+          ),
+        ).toEqual(["click", "goal", "code"]);
+      } finally {
+        await rm(file, { force: true });
+      }
+    });
 
     it("blames no test for a helper written below the tests, even with retries", async () => {
       await writeFile(

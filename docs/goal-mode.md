@@ -1,5 +1,63 @@
 # Goal-based tests
 
+TypeScript and YAML deliberately use different completion contracts.
+
+## TypeScript goals
+
+In a `*.test.ts` test, `ai.goal(goal, values?, options?)` resolves when the planner's
+`DONE` passes the existing confidence and freshness checks. It does not run a
+hidden Judge. Author verification separately when the outcome matters:
+
+```ts
+import { faker } from "@faker-js/faker";
+
+const person = {
+  email: faker.internet.exampleEmail(),
+  name: faker.person.fullName(),
+};
+
+await ai.goal("Create an account for {{email}}", person);
+await expect(page).toHaveURL(/\/profile/);
+
+await ai.goal("Complete the profile for {{email}} as {{name}}", person);
+await ai('verify the page displays the confirmation message "Profile saved"');
+await expect(page.getByRole("status")).toHaveText("Profile saved");
+```
+
+A goal-only TypeScript test is allowed to pass, but its report says the planner
+completed the goal, not that the outcome was independently verified. Semantic
+`ai("verify ...")` and exact Playwright assertions remain separate steps. There
+is no `ai.act`, `ai.assert`, or `ai.verify` API. A separately authored verify
+step keeps the existing standalone flagged-pass and `--strict` policy; it does
+not adopt YAML goal verification's mandatory unflagged-pass policy.
+
+Goals and deterministic steps share a page, so each goal sees changes made by
+earlier goals, authored steps, and Playwright. Planning state, budgets, and
+automatic generated-value memory are fresh for every invocation. Automatic
+Faker values may be reused inside one goal but are not shared across goals;
+generate an identity in TypeScript and explicitly pass it to each call when it
+must be reused. Explicit `{{placeholders}}` must have bindings. The optional
+values argument otherwise follows `ai` conventions, including `secret()`.
+Automatic generation defaults to enabled. Pass `{ generateData: false }` as
+the third argument to restrict fills to supplied or remembered values for that
+goal. Pass `undefined` as the second argument when there are no supplied values.
+
+```ts
+// TypeSafe can select local Faker values for applicable empty form fields.
+await ai.goal("Create a disposable account and complete its profile");
+```
+
+The 24-request, 18-action, and 120-second defaults are unchanged, and automatic
+value selection consumes request budget. Once any valid goal enters planning,
+the whole test is not automatically retried—even if a later assertion,
+verification, or cleanup fails—so completed side effects are not replayed.
+Goal actions remain bounded to click and type; use Playwright or authored steps
+for deterministic navigation, waits, and checks. See
+[TypeScript tests](typescript-tests.md#goals-and-separate-verification) for the
+full authoring contract and privacy limitations.
+
+## YAML goals
+
 Use `goal` and an independent `verify` claim instead of a `steps` list:
 
 ```yaml

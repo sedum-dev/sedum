@@ -14,6 +14,7 @@ import {
   closeQuietly,
   executeSentence,
   firstDiagnostic,
+  recordGoalAction,
   resolveEntryUrl,
   resultCall,
   runtimeFailure,
@@ -23,12 +24,13 @@ import {
   type SentencePresentation,
 } from "./flow-runner.js";
 import type { FlowSource, SentenceStep } from "./flow-types.js";
+import { runGoalTask } from "./goal-runner.js";
 import {
   tokenizeStep,
   validateTypeOperand,
   type ResolvedDataEntry,
 } from "./flow-values.js";
-import { ProviderError } from "./provider.js";
+import { ProviderError, isRunWideProviderError } from "./provider.js";
 import { safeSource, safeText } from "./report-privacy.js";
 import type { ResultStep } from "./run-result.js";
 import { loadScriptFile, type ScriptTest } from "./script-loader.js";
@@ -343,6 +345,7 @@ export async function runScriptTest(
   ) as Record<string, ResolvedDataEntry>;
   const opaqueEntries: ResolvedDataEntry[] = [];
   let firstProblem: Problem | null = null;
+  let goalStarted = false;
   let inFlight: Promise<unknown> | null = null;
   /** Every step promise handed to the test, settled or not. */
   const outstanding = new Set<Promise<unknown>>();
@@ -638,6 +641,210 @@ export async function runScriptTest(
     const ai = ((input: string | readonly string[], values?: AiValues) =>
       track(sentences(input, values, where(new Error().stack)))) as Ai;
 
+    const goal = async (
+      text: string,
+      values: AiValues | undefined,
+      source: FlowSource,
+      options: Parameters<Ai["goal"]>[2],
+    ): Promise<void> => {
+      try {
+        if (
+          options !== undefined &&
+          (options === null ||
+            typeof options !== "object" ||
+            Array.isArray(options) ||
+            Object.keys(options).some((key) => key !== "generateData") ||
+            (options.generateData !== undefined &&
+              typeof options.generateData !== "boolean"))
+        )
+          throw new ScriptUsageError(
+            "invalid_goal_options",
+            "Goal options must be an object with an optional boolean generateData.",
+            "Pass { generateData: false } to disable automatic data generation.",
+          );
+        if (typeof text !== "string" || !text.trim())
+          throw new ScriptUsageError(
+            "invalid_goal",
+            "A goal must be a nonblank string.",
+            'Write ai.goal("Complete the profile").',
+          );
+        const own = valueEntries(values);
+        const scope = { ...bindings, ...own };
+        const tokens = tokenizeStep(text);
+        const problem = tokens.problems[0];
+        if (problem)
+          throw new ScriptUsageError(
+            problem.code,
+            problem.message,
+            problem.fix,
+          );
+        for (const token of tokens.tokens)
+          if (token.kind === "placeholder" && !Object.hasOwn(scope, token.key!))
+            throw new ScriptUsageError(
+              "missing_value",
+              `{{${token.key}}} has no value.`,
+              "Pass its value as the second argument to ai.goal.",
+            );
+        if (!dependencies.provider.chooseGoal)
+          stop({
+            status: "could_not_run",
+            file: absolute,
+            code: "unsupported",
+            source,
+            message: "The configured provider does not support goal planning.",
+          });
+        const register = (entry: ResolvedDataEntry) => {
+          opaqueEntries.push(entry);
+          report?.privacy.secretValues.push(entry.value.reveal());
+        };
+        for (const entry of Object.values(own))
+          if (entry.sensitive) register(entry);
+        goalStarted = true;
+        let reportedCalls = 0;
+        let operationalError: ProviderError | undefined;
+        const providerFailure = (error: unknown): never => {
+          if (isRunWideProviderError(error)) operationalError = error;
+          throw error;
+        };
+        const result = await runGoalTask(
+          activePage,
+          {
+            ...(dependencies.provider.targetChoiceMinOptions
+              ? {
+                  targetChoiceMinOptions:
+                    dependencies.provider.targetChoiceMinOptions,
+                }
+              : {}),
+            chooseGoal: (state, options) =>
+              dependencies.provider.chooseGoal!(state, options).catch(
+                providerFailure,
+              ),
+            ...(options?.generateData !== false &&
+            dependencies.provider.chooseGoalValue
+              ? {
+                  chooseGoalValue: (state, options) =>
+                    dependencies.provider.chooseGoalValue!(
+                      state,
+                      options,
+                    ).catch(providerFailure),
+                }
+              : {}),
+          },
+          {
+            goal: text,
+            data: scope,
+            opaqueEntries,
+            ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+            onGeneratedValue: (value) =>
+              register({ value, sensitive: true, opaqueValues: [value] }),
+            ...(report
+              ? {
+                  onAction: async (action) => {
+                    await recordGoalAction(
+                      activePage,
+                      action,
+                      report,
+                      dependencies.repoRoot,
+                      source,
+                      groups,
+                      action.status === "failed" &&
+                        dependencies.signal?.aborted,
+                    );
+                    reportedCalls += action.calls.length;
+                  },
+                }
+              : {}),
+          },
+        );
+        const operational: Problem | undefined = dependencies.signal?.aborted
+          ? {
+              status: "could_not_run",
+              file: absolute,
+              code: "canceled",
+              source,
+              message: "The run was interrupted.",
+            }
+          : operationalError
+            ? (runtimeFailure(absolute, operationalError) as Problem)
+            : undefined;
+        if (report) {
+          const attempt = report.test.currentAttempt!;
+          const index = attempt.stepCount + 1;
+          const shown = safeText(text, report.privacy, Number.MAX_SAFE_INTEGER);
+          const detail =
+            result.status === "passed"
+              ? "Planner reported completion; verify the outcome separately."
+              : `Goal did not complete: ${result.reason}.${result.detail ? ` ${result.detail}` : ""}`;
+          await report.test.addStep({
+            id: `${attempt.id}:step:${index}`,
+            index,
+            kind: "action",
+            operation: "goal",
+            phase: "steps",
+            sentence: safeText(text, report.privacy, 512),
+            detail: safeText(
+              `${detail} ${result.actions} actions, ${result.requests} requests.`,
+              report.privacy,
+              512,
+            ),
+            group: groups.map((name) => safeText(name, report.privacy, 120)),
+            goal: {
+              completion: "planner",
+              text: shown,
+              actions: result.actions,
+              requests: result.requests,
+              reason: result.reason,
+              ...(result.dataSeed === undefined
+                ? {}
+                : { dataSeed: result.dataSeed }),
+            },
+            sourceStack: [
+              safeSource(source, dependencies.repoRoot, report.privacy),
+            ],
+            state: operational ? "error" : "completed",
+            verdict: operational ? null : result.status,
+            flags: [],
+            elapsedMs: result.elapsedMs,
+            page: { status: "omitted", reason: "goal_summary" },
+            locator: null,
+            judgement: null,
+            observations: [],
+            calls: result.calls
+              .slice(reportedCalls)
+              .map((call) => resultCall(call, "planner")),
+            error:
+              operational?.status === "could_not_run"
+                ? {
+                    code: operational.code,
+                    message: safeText(operational.message, report.privacy, 512),
+                  }
+                : result.status === "passed"
+                  ? null
+                  : {
+                      code: result.reason,
+                      message: safeText(detail, report.privacy, 512),
+                    },
+            evidence: { status: "omitted", reason: "goal_summary" },
+            replayFrame: null,
+            targetBox: null,
+          });
+        }
+        if (operational) stop(operational);
+        if (result.status === "failed")
+          stop({ status: "failed", file: absolute, source, retryable: false });
+      } catch (error) {
+        if (error instanceof ScriptUsageError) usage(error, source);
+        if (isStepStop(error)) throw error;
+        stop(runtimeFailure(absolute, error) as Problem);
+      }
+    };
+    ai.goal = (text, values, options) => {
+      const source = where(new Error().stack);
+      return track(
+        exclusive(source, () => goal(text, values, source, options)),
+      );
+    };
+
     const group = async (
       name: string,
       body: unknown,
@@ -861,9 +1068,14 @@ export async function runScriptTest(
       return { status: "passed", file: absolute };
     }
     if (primary.status === "failed") await report?.test.finishTest("failed");
-    return primary;
+    return primary.status === "failed" && goalStarted
+      ? { ...primary, retryable: false }
+      : primary;
   } catch (error) {
-    if (isStepStop(error)) return error.problem;
+    if (isStepStop(error))
+      return error.problem.status === "failed" && goalStarted
+        ? { ...error.problem, retryable: false }
+        : error.problem;
     return runtimeFailure(absolute, error);
   } finally {
     finished = true;
