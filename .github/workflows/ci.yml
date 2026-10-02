@@ -58,7 +58,7 @@ jobs:
         if: matrix.node == 24
         env:
           SEDUM_BROWSER_INTEGRATION: "1"
-        run: pnpm exec vitest run packages/core/src/browser-driver.integration.test.ts packages/core/src/page-script.integration.test.ts packages/core/src/step-executor.integration.test.ts packages/core/src/assertion-engine.integration.test.ts packages/core/src/goal-runner.integration.test.ts packages/core/src/script-runner.integration.test.ts
+        run: pnpm exec vitest run packages/core/src/browser-driver.integration.test.ts packages/core/src/page-script.integration.test.ts packages/core/src/step-executor.integration.test.ts packages/core/src/assertion-engine.integration.test.ts packages/core/src/goal-runner.integration.test.ts packages/core/src/goal-review.integration.test.ts packages/core/src/script-runner.integration.test.ts
       - name: TypeScript test CLI integration tests
         if: matrix.node == 24
         env:
