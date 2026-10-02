@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   runGoal,
+  runGoalTask,
   goalChoiceAccepted,
   goalOperations,
   type GoalChoice,
@@ -95,6 +96,70 @@ beforeEach(() => {
     op: "click",
     outcome: "acted",
     elapsedMs: 1,
+  });
+});
+describe("planner-only completion", () => {
+  it("returns completed without invoking independent verification", async () => {
+    const model = planner("DONE");
+    const result = await runGoalTask(page, model, { goal: "Open destination" });
+    expect(result).toMatchObject({
+      status: "passed",
+      reason: "completed",
+      requests: 1,
+      actions: 0,
+      verification: [],
+    });
+    expect(verify).not.toHaveBeenCalled();
+    expect(model.chooseGoal).toHaveBeenCalledWith(
+      expect.objectContaining({ completion: "planner" }),
+      expect.objectContaining({ maxAttempts: 1 }),
+    );
+    expect(
+      goalOperations({
+        goal: "x",
+        page: "",
+        targets: {},
+        recentActions: [],
+        completion: "planner",
+      }).DONE,
+    ).not.toContain("verification");
+  });
+
+  it("does not turn YAML empty verification into planner-only success", async () => {
+    await expect(
+      runGoal(page, planner("DONE"), judge, { goal: "x", verify: [] }),
+    ).rejects.toThrow("verification");
+  });
+
+  it.each(["BLOCKED", "UNKNOWN"])(
+    "fails %s instead of completing",
+    async (op) => {
+      expect(await runGoalTask(page, planner(op), { goal: "x" })).toMatchObject(
+        {
+          status: "failed",
+          reason: op === "BLOCKED" ? "blocked" : "operation_abstention",
+        },
+      );
+      expect(verify).not.toHaveBeenCalled();
+    },
+  );
+
+  it("redacts historical values without offering them as fill data", async () => {
+    const value = new RuntimeValue("prior-secret-sentinel", "{{previous}}");
+    vi.mocked(pageDigest).mockResolvedValue({
+      protocol: 1,
+      version,
+      complete: true,
+      text: "Echo prior-secret-sentinel",
+    });
+    const model = planner("DONE");
+    await runGoalTask(page, model, {
+      goal: "Inspect prior-secret-sentinel",
+      opaqueEntries: [{ value, sensitive: true }],
+    });
+    const state = vi.mocked(model.chooseGoal).mock.calls[0]![0];
+    expect(JSON.stringify(state)).not.toContain("prior-secret-sentinel");
+    expect(state.targets.TYPE).toBeUndefined();
   });
 });
 describe("automatic goal values", () => {

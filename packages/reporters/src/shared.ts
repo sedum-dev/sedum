@@ -195,8 +195,9 @@ export function rerunArgs(test: Pick<ResultTest, "file" | "id">): string {
 }
 
 /** A step's sentence under its `ai.group` names, outermost first. */
-export function stepText(step: Pick<ResultStep, "sentence" | "group">): string {
-  return step.group?.length
-    ? `${step.group.join(" › ")} › ${step.sentence}`
-    : step.sentence;
+export function stepText(
+  step: Pick<ResultStep, "sentence" | "group" | "goal">,
+): string {
+  const text = step.goal?.text ?? step.sentence;
+  return step.group?.length ? `${step.group.join(" › ")} › ${text}` : text;
 }

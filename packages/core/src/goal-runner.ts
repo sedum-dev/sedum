@@ -35,6 +35,8 @@ export interface GoalState {
   readonly completionCriteria?: readonly string[];
   readonly operationInstructions?: string;
   readonly automaticData?: boolean;
+  /** TypeScript goals stop at planner completion; YAML requests verification. */
+  readonly completion?: "planner";
 }
 export interface GoalValueState {
   readonly goal: string;
@@ -79,6 +81,8 @@ export interface GoalOptions {
   /** Reproduce the POC's local Faker sequence (English locale, pinned version). */
   readonly dataSeed?: number;
   readonly signal?: AbortSignal;
+  /** Redaction history, never offered as available fill bindings. */
+  readonly opaqueEntries?: readonly ResolvedDataEntry[];
   /** Register generated text with the host's report redactor before any fill. */
   readonly onGeneratedValue?: (value: RuntimeValue) => void;
   /** Awaited after each dispatched action; contains no typed values. */
@@ -134,7 +138,10 @@ export function goalOperations(state: GoalState): Record<string, string> {
           : "Click one observed element",
       ]),
     ),
-    DONE: "All goal requirements are visibly satisfied; request independent verification",
+    DONE:
+      state.completion === "planner"
+        ? "All goal requirements are visibly satisfied; finish the task"
+        : "All goal requirements are visibly satisfied; request independent verification",
     BLOCKED:
       "No offered element or field can move the goal forward from this page; abstain",
   };
@@ -185,6 +192,30 @@ export async function runGoal(
   judge: Judge,
   options: GoalOptions,
 ): Promise<GoalResult> {
+  return executeGoal(page, planner, options, {
+    kind: "verified",
+    judge,
+    claims: options.verify,
+  });
+}
+
+/** @internal TypeScript authoring stops at planner completion, not verification. */
+export function runGoalTask(
+  page: BrowserPage,
+  planner: GoalPlanner,
+  options: Omit<GoalOptions, "verify" | "verifyPolicy">,
+): Promise<GoalResult> {
+  return executeGoal(page, planner, options, { kind: "planner" });
+}
+
+async function executeGoal(
+  page: BrowserPage,
+  planner: GoalPlanner,
+  options: Omit<GoalOptions, "verify">,
+  completion:
+    | { kind: "planner" }
+    | { kind: "verified"; judge: Judge; claims: readonly string[] },
+): Promise<GoalResult> {
   const started = performance.now();
   const maxRequests = options.maxRequests ?? 24;
   const maxActions = options.maxActions ?? 18;
@@ -216,8 +247,8 @@ export async function runGoal(
       throw new RangeError("Invalid goal budget");
   if (
     !options.goal.trim() ||
-    !options.verify.length ||
-    options.verify.some((s) => !s.trim())
+    (completion.kind === "verified" &&
+      (!completion.claims.length || completion.claims.some((s) => !s.trim())))
   )
     throw new TypeError(
       "Goal and independent verification claims are required",
@@ -243,7 +274,10 @@ export async function runGoal(
       signal.removeEventListener("abort", onAbort);
     }
   };
-  const entries = Object.values(options.data ?? {});
+  const entries = [
+    ...Object.values(options.data ?? {}),
+    ...(options.opaqueEntries ?? []),
+  ];
   // Also redact sensitive values constructed by API callers without opaqueValues.
   const taints = entries.map((entry) =>
     entry.sensitive
@@ -266,7 +300,8 @@ export async function runGoal(
   let reportedCalls = 0;
   const result = (reason: string, detail?: string): GoalResult => ({
     ...(generators ? { dataSeed } : {}),
-    status: reason === "verified" ? "passed" : "failed",
+    status:
+      reason === "verified" || reason === "completed" ? "passed" : "failed",
     reason,
     requests,
     actions,
@@ -427,6 +462,9 @@ export async function runGoal(
       seen.set(fingerprint, visits);
       if (visits > 3) return result("no_progress");
       const state: GoalState = {
+        ...(completion.kind === "planner"
+          ? { completion: "planner" as const }
+          : {}),
         ...(generators
           ? { automaticData: true, declaredDataKeys: Object.keys(data) }
           : {}),
@@ -460,13 +498,14 @@ export async function runGoal(
       if (pendingValue && op !== "TYPE") return result("stale_value_target");
       if (op === "BLOCKED") return result("blocked");
       if (op === "DONE") {
-        for (const claim of options.verify) {
+        if (completion.kind === "planner") return result("completed");
+        for (const claim of completion.claims) {
           if (requests >= maxRequests) return result("request_limit");
           requests++;
           const singleAttemptJudge: Judge = {
             holds: (text, snapshot, callOptions) => {
               pendingCall = true;
-              return judge.holds(text, snapshot, {
+              return completion.judge.holds(text, snapshot, {
                 ...callOptions,
                 maxAttempts: 1,
               });

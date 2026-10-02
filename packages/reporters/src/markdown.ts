@@ -284,6 +284,11 @@ function flowDetail(test: ResultTest): string[] {
     return out;
   }
   if (testStatus(test) === "passed") {
+    for (const step of steps.filter((step) => step.goal))
+      out.push(
+        `- **Planner completion (not independently verified)**: ${inline(stepText(step))}`,
+        "",
+      );
     const checks = steps.filter(
       (step) => step.kind === "verify" && step.judgement,
     );
