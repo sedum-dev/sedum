@@ -6,12 +6,14 @@
     "@sedum-dev/core": "0.0.0",
     "@sedum-dev/provider-typesafe": "0.0.0",
     "@sedum-dev/reporters": "0.0.0",
-    "@sedum-dev/example-saucedemo": "0.0.0"
+    "@sedum-dev/example-saucedemo": "0.0.0",
+    "@sedum-dev/provider-clef": "0.1.0-alpha.7"
   },
   "changesets": [
     "agent-markdown-report",
     "ai-holds",
     "cache-not-cacheable",
+    "clef-text-provider",
     "clickable-rows-hover-controls",
     "configurable-system-one-provider",
     "continue-after-test-error",
@@ -45,6 +47,7 @@
     "tidy-leaves-see",
     "tidy-modules-ignore",
     "tidy-visual-observation",
+    "typescript-goals",
     "typescript-tests",
     "vision-feedback",
     "wait-until-auto-wait",
