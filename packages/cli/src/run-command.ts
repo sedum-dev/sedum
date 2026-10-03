@@ -1035,7 +1035,7 @@ export async function executeRunCommand(
               if (result.status === "could_not_run") {
                 // Replace the lane's browser, as Playwright replaces a worker.
                 await browser.recycle();
-                const diagnostic = flowDiagnostic(result);
+                const diagnostic = flowDiagnostic(result, config.providerName);
                 operational ??= diagnostic;
                 if (stopsRun(result.code)) return "stop";
                 erroredTests += 1;
@@ -1139,7 +1139,7 @@ export async function executeRunCommand(
               message: "The run was interrupted.",
               fix: "Rerun the command when you are ready to continue.",
             }
-        : setupDiagnostic(error);
+        : setupDiagnostic(error, config.providerName);
       commit();
       try {
         if (recorder.snapshot.state === "running")

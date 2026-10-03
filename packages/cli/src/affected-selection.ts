@@ -5,9 +5,11 @@ import { promisify } from "node:util";
 import {
   isScriptTestFile,
   loadFlowFile,
+  ProviderError,
   resolveFlowModules,
 } from "@sedum-dev/core";
 import { loadProjectConfig, type ResolvedProjectConfig } from "./config.js";
+import { providerDiagnostic } from "./diagnostics.js";
 import { discoverRunTests, type RunFilters } from "./run-selection.js";
 import {
   createCliProvider,
@@ -211,17 +213,31 @@ export async function selectAffectedTests(options: {
     });
   }
   options.signal?.throwIfAborted();
-  const scores = branch.diff
-    ? await (
-        options.createProvider
-          ? await options.createProvider(config)
-          : await createCliProvider(config)
-      ).scoreRelevance(
-        branch.diff,
-        tests,
-        options.signal ? { signal: options.signal } : undefined,
-      )
-    : { probabilities: tests.map(() => 0), calls: [] };
+  let scores: Awaited<ReturnType<RelevanceProvider["scoreRelevance"]>>;
+  try {
+    scores = branch.diff
+      ? await (
+          options.createProvider
+            ? await options.createProvider(config)
+            : await createCliProvider(config)
+        ).scoreRelevance(
+          branch.diff,
+          tests,
+          options.signal ? { signal: options.signal } : undefined,
+        )
+      : { probabilities: tests.map(() => 0), calls: [] };
+  } catch (error) {
+    if (
+      error instanceof ProviderError &&
+      (error.code === "authentication" || error.code === "configuration")
+    ) {
+      const diagnostic = providerDiagnostic(config.providerName, error.code);
+      throw new AffectedSelectionError(
+        `${diagnostic.message}\nFix: ${diagnostic.fix}`,
+      );
+    }
+    throw error;
+  }
   return {
     base: branch.base,
     mergeBase: branch.mergeBase,

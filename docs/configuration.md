@@ -93,10 +93,13 @@ provider:
 ```
 
 Then set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` in the invoking
-environment or project-root `.env`. Sedum builds the fixed Cloudflare account
-and model route; Clef does not support a custom endpoint. Selecting Clef does
-not change the default for other projects and does not enable vision. See
-[Clef provider](provider-clef.md) for scope, privacy, costs, and testing.
+environment or project-root `.env`. Cloudflare's conventional
+`CLOUDFLARE_API_TOKEN` is accepted as an alias. Process values take precedence
+over `.env` across both names; differing values for both names at the winning
+level are rejected as ambiguous. Sedum builds the fixed Cloudflare account and
+model route; Clef does not support a custom endpoint. Selecting Clef does not
+change the default for other projects and does not enable vision. See [Clef
+provider](provider-clef.md) for scope, privacy, costs, and testing.
 
 An absolute test `url` is unchanged. A relative test URL resolves against
 `baseUrl` with standard URL semantics, and a missing test URL uses `baseUrl`

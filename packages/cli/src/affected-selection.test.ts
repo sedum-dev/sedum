@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { RunRecorder } from "@sedum-dev/core";
+import { ProviderError, RunRecorder } from "@sedum-dev/core";
 import { readBranchDiff, selectAffectedTests } from "./affected-selection.js";
 import { runCli } from "./run-cli.js";
 
@@ -48,6 +48,7 @@ async function fixture(branch = "main") {
   git("checkout", "-b", "feature");
 }
 afterEach(async () => {
+  vi.unstubAllEnvs();
   if (root) await rm(root, { recursive: true, force: true });
 });
 
@@ -312,6 +313,7 @@ it("routes affected selection through the configured Clef credentials only", asy
   }));
   vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "");
   vi.stubEnv("CLOUDFLARE_AUTH_TOKEN", "");
+  vi.stubEnv("CLOUDFLARE_API_TOKEN", "");
   vi.stubEnv("TYPESAFE_API_KEY", "");
   try {
     await selectAffectedTests({
@@ -333,6 +335,40 @@ it("routes affected selection through the configured Clef credentials only", asy
     }),
   );
   expect(JSON.stringify(createProvider.mock.calls)).not.toContain("jev-token");
+});
+
+it("reports rejected Clef affected-selection credentials without leaking the token or naming TypeSafe", async () => {
+  await fixture();
+  await write("sedum.config.yaml", "provider: { name: clef, model: clef }\n");
+  await write(
+    ".env",
+    "CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef\nCLOUDFLARE_API_TOKEN=affected-sentinel-secret\n",
+  );
+  await write(".git/info/exclude", ".env\n");
+  await write("app.ts", "export const cartTotal = 99;\n");
+  vi.stubEnv("CLOUDFLARE_AUTH_TOKEN", "");
+  vi.stubEnv("CLOUDFLARE_API_TOKEN", "");
+  const error = await selectAffectedTests({
+    cwd: root,
+    paths: [],
+    filters: {},
+    threshold: 0.5,
+    createProvider: () => ({
+      scoreRelevance: async () => {
+        throw new ProviderError(
+          "authentication",
+          "rejected affected-sentinel-secret",
+        );
+      },
+    }),
+  }).catch((value) => value);
+  expect(error).toMatchObject({
+    message: expect.stringContaining("Cloudflare rejected"),
+  });
+  expect(error.message).toContain("Workers AI Read and Edit");
+  expect(error.message).toContain("CLOUDFLARE_API_TOKEN");
+  expect(error.message).not.toContain("TYPESAFE_API_KEY");
+  expect(error.message).not.toContain("affected-sentinel-secret");
 });
 
 it("does not call Jev or execute the full suite when the diff or selection is empty", async () => {

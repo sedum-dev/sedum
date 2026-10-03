@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   flowDiagnostic,
   outputDiagnostic,
+  providerDiagnostic,
   renderDiagnostic,
   setupDiagnostic,
 } from "./diagnostics.js";
@@ -46,5 +47,38 @@ describe("actionable CLI diagnostics", () => {
     });
     expect(renderDiagnostic(diagnostic)).not.toContain("sentinel-secret");
     expect(diagnostic.message.length).toBeLessThanOrEqual(512);
+  });
+
+  it("names Cloudflare credentials, account access, and Workers AI permissions for Clef", () => {
+    for (const diagnostic of [
+      providerDiagnostic("clef", "authentication"),
+      flowDiagnostic(
+        {
+          code: "provider_authentication",
+          message: "upstream sentinel-secret",
+        },
+        "clef",
+      ),
+      setupDiagnostic(
+        new ProviderError("configuration", "sentinel-secret"),
+        "clef",
+      ),
+    ]) {
+      expect(`${diagnostic.message}\n${diagnostic.fix}`).toContain(
+        "Cloudflare",
+      );
+      expect(diagnostic.fix).toContain("CLOUDFLARE_ACCOUNT_ID");
+      expect(diagnostic.fix).toContain("CLOUDFLARE_AUTH_TOKEN");
+      expect(diagnostic.fix).toContain("CLOUDFLARE_API_TOKEN");
+      expect(`${diagnostic.message}\n${diagnostic.fix}`).not.toContain(
+        "TYPESAFE_API_KEY",
+      );
+      expect(`${diagnostic.message}\n${diagnostic.fix}`).not.toContain(
+        "sentinel-secret",
+      );
+    }
+    expect(providerDiagnostic("clef", "authentication").fix).toContain(
+      "Workers AI Read and Edit",
+    );
   });
 });

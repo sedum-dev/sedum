@@ -68,6 +68,62 @@ describe("project configuration", () => {
     });
     expect(config.variables.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
     expect(config.variables.CLOUDFLARE_AUTH_TOKEN).toBeUndefined();
+    expect(config.variables.CLOUDFLARE_API_TOKEN).toBeUndefined();
+  });
+
+  it.each(["CLOUDFLARE_AUTH_TOKEN", "CLOUDFLARE_API_TOKEN"])(
+    "accepts the Clef token from %s in the project .env",
+    async (name) => {
+      const root = await temporaryRoot();
+      await writeFile(
+        path.join(root, "sedum.config.yaml"),
+        "provider: { name: clef, model: clef }\n",
+      );
+      await writeFile(
+        path.join(root, ".env"),
+        `CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef\n${name}=file-secret\n`,
+      );
+      const config = await loadProjectConfig(root, {});
+      expect(config.apiKey).toBe("file-secret");
+      expect(config.variables[name]).toBeUndefined();
+    },
+  );
+
+  it("applies process-over-.env precedence across both Cloudflare token names", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "provider: { name: clef, model: clef }\n",
+    );
+    await writeFile(
+      path.join(root, ".env"),
+      "CLOUDFLARE_AUTH_TOKEN=file-auth-secret\nCLOUDFLARE_API_TOKEN=file-api-secret\n",
+    );
+    await expect(
+      loadProjectConfig(root, { CLOUDFLARE_API_TOKEN: "process-secret" }),
+    ).resolves.toMatchObject({ apiKey: "process-secret" });
+  });
+
+  it("rejects conflicting Cloudflare token names at one precedence level without leaking either value", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "provider: { name: clef, model: clef }\n",
+    );
+    const error = await loadProjectConfig(root, {
+      CLOUDFLARE_AUTH_TOKEN: "auth-sentinel-secret",
+      CLOUDFLARE_API_TOKEN: "api-sentinel-secret",
+    }).catch((value) => value);
+    expect(error).toBeInstanceOf(ProjectConfigError);
+    expect(error).toMatchObject({
+      diagnostics: [
+        expect.objectContaining({
+          code: "conflicting_cloudflare_api_tokens",
+          message: expect.stringContaining("CLOUDFLARE_API_TOKEN"),
+        }),
+      ],
+    });
+    expect(JSON.stringify(error)).not.toContain("sentinel-secret");
   });
 
   it("defaults Clef to clef and validates its account and model", async () => {

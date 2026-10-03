@@ -242,7 +242,8 @@ function scalarVariables(
       name === "TYPESAFE_API_KEY" ||
       name === "OPEN_ROUTER_API_KEY" ||
       name === "CLOUDFLARE_ACCOUNT_ID" ||
-      name === "CLOUDFLARE_AUTH_TOKEN"
+      name === "CLOUDFLARE_AUTH_TOKEN" ||
+      name === "CLOUDFLARE_API_TOKEN"
     ) {
       diagnostic(
         diagnostics,
@@ -858,6 +859,24 @@ export async function loadProjectConfig(
   };
   const providerValue = (name: string): string | undefined =>
     hostEnvironment[name]?.trim() || fileEnvironment[name]?.trim() || undefined;
+  const cloudflareTokenFrom = (
+    environment: Readonly<Record<string, string | undefined>>,
+  ): string | undefined => {
+    const authToken = environment.CLOUDFLARE_AUTH_TOKEN?.trim();
+    const apiToken = environment.CLOUDFLARE_API_TOKEN?.trim();
+    if (authToken && apiToken && authToken !== apiToken)
+      diagnostics.push({
+        code: "conflicting_cloudflare_api_tokens",
+        file: environmentFile,
+        line: 1,
+        col: 1,
+        key: "CLOUDFLARE_AUTH_TOKEN",
+        message:
+          "CLOUDFLARE_AUTH_TOKEN and CLOUDFLARE_API_TOKEN contain different values at the same precedence level.",
+        fix: "Keep one token variable, or set both names to the same Workers AI API token.",
+      });
+    return authToken || apiToken || undefined;
+  };
   const providerNameValue = provider.name ?? "typesafe";
   const providerName =
     providerNameValue === "typesafe" || providerNameValue === "clef"
@@ -937,7 +956,8 @@ export async function loadProjectConfig(
         : (customProvider.model ?? DEFAULT_PROVIDER_MODEL);
   const apiKey =
     providerName === "clef"
-      ? providerValue("CLOUDFLARE_AUTH_TOKEN")
+      ? (cloudflareTokenFrom(hostEnvironment) ??
+        cloudflareTokenFrom(fileEnvironment))
       : providerValue("TYPESAFE_API_KEY");
   const cloudflareAccountId =
     providerName === "clef"
@@ -964,6 +984,7 @@ export async function loadProjectConfig(
   variables.OPEN_ROUTER_API_KEY = undefined;
   variables.CLOUDFLARE_ACCOUNT_ID = undefined;
   variables.CLOUDFLARE_AUTH_TOKEN = undefined;
+  variables.CLOUDFLARE_API_TOKEN = undefined;
   const visionEnabledValue = overrides.vision?.enabled ?? vision.enabled;
   const visionEnabled = visionEnabledValue ?? DEFAULTS.vision.enabled;
   if (typeof visionEnabled !== "boolean")
