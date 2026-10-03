@@ -1,6 +1,6 @@
 {
   "name": "@sedum-dev/provider-clef",
-  "version": "0.1.0-alpha.8",
+  "version": "0.1.0-alpha.9",
   "repository": "https://github.com/sedum-dev/sedum",
   "publishConfig": {
     "access": "public"

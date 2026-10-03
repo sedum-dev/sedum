@@ -1,5 +1,14 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.9
+
+### Patch Changes
+
+- 9640bbb: Validate literal `ai.holds` claims offline without requiring a classification cache, while preserving errors and incomplete validation for malformed, dynamic, action, and wait forms.
+- af96cef: Discover and click controls that a CSS hover rule reveals from `display: none`. Hover discovery remains side-effect free, permanently hidden and inert controls stay excluded, and the browser driver hovers the exact snapshot host before revalidating and clicking the exact target.
+- 388a60b: Re-observe goal pages when a target becomes stale before dispatch, while preserving exact target freshness, generated-value privacy, and no-replay guarantees. Stale and blocked goal reports now include actionable safe page, target, frame, and Faker-generator context without exposing generated values.
+- bdcf5bd: Validate literal goal placeholders against statically readable inline and same-file const values objects.
+
 ## 0.1.0-alpha.8
 
 ### Minor Changes
