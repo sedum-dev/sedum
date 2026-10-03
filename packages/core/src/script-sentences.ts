@@ -105,6 +105,16 @@ export function tokenize(source: string): Token[] {
       index++;
     }
   };
+  const identifierEscape = ():
+    { value: string; length: number } | undefined => {
+    const escaped = /^\\u(?:\{([0-9A-Fa-f]{1,6})\}|([0-9A-Fa-f]{4}))/u.exec(
+      source.slice(index),
+    );
+    if (!escaped) return undefined;
+    const code = parseInt(escaped[1] ?? escaped[2]!, 16);
+    if (code > 0x10ffff) return undefined;
+    return { value: String.fromCodePoint(code), length: escaped[0].length };
+  };
   const readQuoted = (quote: string): { value: string; dynamic: boolean } => {
     let value = "";
     let dynamic = false;
@@ -239,11 +249,23 @@ export function tokenize(source: string): Token[] {
         continue;
       }
     }
-    if (IDENT_START.test(char)) {
+    const escapedStart = char === "\\" ? identifierEscape() : undefined;
+    if (
+      IDENT_START.test(char) ||
+      (escapedStart && IDENT_START.test(escapedStart.value))
+    ) {
       let value = "";
-      while (index < source.length && IDENT_PART.test(source[index]!)) {
-        value += source[index]!;
-        advance();
+      while (index < source.length) {
+        const part = source[index]!;
+        if (IDENT_PART.test(part)) {
+          value += part;
+          advance();
+          continue;
+        }
+        const escaped = part === "\\" ? identifierEscape() : undefined;
+        if (!escaped || !IDENT_PART.test(escaped.value)) break;
+        value += escaped.value;
+        advance(escaped.length);
       }
       tokens.push({ kind: "ident", value, line: startLine, col: startCol });
       continue;
@@ -421,10 +443,86 @@ export function scanScriptSentences(
       (next.value === "as" && value(last + 2) === "const")
     );
   };
+  /** Whether this identifier is the complete values argument of `ai.goal`. */
+  const isDirectGoalValues = (index: number): boolean => {
+    const open = parentOf[index];
+    if (open === undefined || !isPunct(open, "(")) return false;
+    const member =
+      value(open - 1) === "goal"
+        ? open - 1
+        : value(open - 1) === "." &&
+            value(open - 2) === "?" &&
+            value(open - 3) === "goal"
+          ? open - 3
+          : undefined;
+    if (member === undefined) return false;
+    const receiver =
+      value(member - 1) === "." && value(member - 2) === "?"
+        ? member - 3
+        : value(member - 1) === "."
+          ? member - 2
+          : undefined;
+    if (value(receiver ?? -1) !== "ai") return false;
+    const afterGoal = skipExpression(open + 1);
+    return (
+      isPunct(afterGoal, ",") &&
+      index === afterGoal + 1 &&
+      skipExpression(index) === index + 1
+    );
+  };
+  /** Top-level own property names of a plain object, if all are readable. */
+  const objectKeys = (open: number): Set<string> | undefined => {
+    const close = match.get(open);
+    if (close === undefined) return undefined;
+    const keys = new Set<string>();
+    let cursor = open + 1;
+    while (cursor < close) {
+      if (isPunct(cursor, ",")) {
+        cursor++;
+        continue;
+      }
+      const key = at(cursor);
+      if (
+        !key ||
+        (key.kind !== "ident" && key.kind !== "string") ||
+        (key.kind === "string" && key.dynamic) ||
+        isPunct(cursor, "[") ||
+        (value(cursor) === "." &&
+          value(cursor + 1) === "." &&
+          value(cursor + 2) === ".")
+      )
+        return undefined;
+      const next = cursor + 1;
+      if (isPunct(next, ":")) {
+        // In an object initializer, `__proto__: value` changes the prototype;
+        // it does not create an own enumerable values entry.
+        if (key.value !== "__proto__") keys.add(key.value);
+        cursor = next + 1;
+        while (
+          cursor < close &&
+          !(parentOf[cursor] === open && isPunct(cursor, ","))
+        )
+          cursor++;
+        continue;
+      }
+      if (
+        key.kind === "ident" &&
+        (cursor + 1 === close || isPunct(cursor + 1, ","))
+      ) {
+        keys.add(key.value);
+        cursor++;
+        continue;
+      }
+      return undefined;
+    }
+    return keys;
+  };
   // A name can be read where it is used only when the file declares it once,
-  // with `const`, as a literal list or sentence, and never rebinds it. A name
-  // declared twice, a `let`, or a loop variable is a run-time value.
+  // with `const`, as a literal list, sentence, or safely used values object,
+  // and never rebinds it. A name declared twice, a `let`, or a loop variable
+  // is a run-time value.
   const constants = new Map<string, number>();
+  const objectConstants = new Map<string, number>();
   {
     const bindings = new Map<string, number>();
     tokens.forEach((token, index) => {
@@ -450,6 +548,20 @@ export function scanScriptSentences(
             : undefined;
       if (last !== undefined && endsCleanly(last))
         constants.set(name.value, start);
+      const objectClose = isPunct(start, "{") ? match.get(start) : undefined;
+      if (
+        objectClose !== undefined &&
+        endsCleanly(objectClose) &&
+        objectKeys(start) !== undefined &&
+        tokens.every(
+          (candidate, candidateIndex) =>
+            candidate.kind !== "ident" ||
+            candidate.value !== name.value ||
+            candidateIndex === index + 1 ||
+            isDirectGoalValues(candidateIndex),
+        )
+      )
+        objectConstants.set(name.value, start);
     });
   }
   const MAX_SENTENCES = 10_000;
@@ -532,6 +644,7 @@ export function scanScriptSentences(
         : declared !== undefined && at(declared)?.kind === "string"
           ? at(declared)
           : undefined;
+    let placeholders: Set<string> | undefined;
     if (!literal || literal.kind !== "string" || literal.dynamic) {
       const provablyNonString =
         ((isPunct(first, "[") || isPunct(first, "{")) &&
@@ -557,7 +670,13 @@ export function scanScriptSentences(
         "Describe the outcome the planner should achieve.",
       );
     } else {
-      for (const problem of tokenizeStep(literal.value).problems) {
+      const tokenized = tokenizeStep(literal.value);
+      placeholders = new Set(
+        tokenized.tokens.flatMap((token) =>
+          token.kind === "placeholder" && token.key ? [token.key] : [],
+        ),
+      );
+      for (const problem of tokenized.problems) {
         if (problem.code !== "invalid_placeholder") continue;
         goalDiagnostic(
           literal,
@@ -574,8 +693,15 @@ export function scanScriptSentences(
     if (isPunct(valuesIndex, ")")) return;
     const valuesToken = at(valuesIndex);
     const afterValues = skipExpression(valuesIndex);
-    const readableObject =
-      isPunct(valuesIndex, "{") && match.get(valuesIndex) === afterValues - 1;
+    const objectIndex =
+      isPunct(valuesIndex, "{") && match.get(valuesIndex) === afterValues - 1
+        ? valuesIndex
+        : valuesToken?.kind === "ident" && afterValues === valuesIndex + 1
+          ? objectConstants.get(valuesToken.value)
+          : undefined;
+    const keys =
+      objectIndex === undefined ? undefined : objectKeys(objectIndex);
+    const readableObject = keys !== undefined;
     const invalidValues =
       (isPunct(valuesIndex, "[") &&
         match.get(valuesIndex) === afterValues - 1) ||
@@ -598,27 +724,16 @@ export function scanScriptSentences(
         "These values are built at run time and will be validated when the goal runs.",
         "Use a plain object with statically named properties where practical.",
       );
-    else if (readableObject) {
-      for (let cursor = valuesIndex + 1; cursor < afterValues - 1; cursor++) {
-        const spread =
-          value(cursor) === "." &&
-          value(cursor + 1) === "." &&
-          value(cursor + 2) === ".";
-        if (
-          spread ||
-          (value(cursor) === "[" && parentOf[cursor] === valuesIndex)
-        ) {
+    else if (readableObject && placeholders)
+      for (const placeholder of placeholders)
+        if (!keys.has(placeholder))
           goalDiagnostic(
-            at(cursor)!,
-            "warning",
-            "dynamic_goal_values",
-            "This values object has computed or spread entries that cannot be checked before a run.",
-            "Use statically named properties where practical.",
+            literal ?? aiToken,
+            "error",
+            "missing_value",
+            `{{${placeholder}}} has no value.`,
+            "Pass its value as the second argument to ai.goal.",
           );
-          break;
-        }
-      }
-    }
     if (!isPunct(afterValues, ",") || isPunct(afterValues + 1, ")")) return;
     const optionsIndex = afterValues + 1;
     const afterOptions = skipExpression(optionsIndex);

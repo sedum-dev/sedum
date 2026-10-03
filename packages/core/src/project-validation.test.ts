@@ -412,6 +412,23 @@ describe("project validation", () => {
     expect(result.fullyValidated).toBe(true);
   });
 
+  it("validates goal placeholders against inline and const object keys", async () => {
+    const root = await project({
+      "goals.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("goal bindings", async ({ ai }) => {
+  await ai.goal("Sign in as {{user}}", { username: "standard_user" });
+  const customer = { user: "standard_user", extra: true };
+  await ai.goal("Sign in as {{user}}", customer);
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual(["goals.test.ts:3:17 missing_value"]);
+    expect(result.diagnostics.map((item) => item.code)).not.toContain(
+      "dynamic_goal_values",
+    );
+    expect(result.fullyValidated).toBe(false);
+  });
+
   it("rejects actions and waits passed to ai.holds during validation", async () => {
     const root = await project({
       "holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
