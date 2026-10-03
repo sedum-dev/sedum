@@ -231,8 +231,11 @@ The design follows `model.py` (`action_space`, `choose`), `agent.py`, and
    Automatic fills then make a value-source request with the same confidence
    and margin gates, before the freshness checks and dispatch below.
 5. Sedum has one operation-specific snapshot, so recollect the chosen operation
-   and require the exact page version and whole candidate surface to match.
-   Remap its private reference, then execute through `executeStep`.
+   and require the exact page version and whole candidate surface to match. If
+   either changed before dispatch, discard the decision and re-observe; never
+   remap or dispatch the stale choice. A pending generated value is reused only
+   when its complete redacted page/field observation is unchanged. Remap the
+   private reference only after an exact match, then execute through `executeStep`.
 6. Record before dispatch. A target that went stale before dispatch provably
    received no input: it is taken back, not reported as an action, and the
    page is observed again (each retry still costs a planner request). Stop on
@@ -259,7 +262,10 @@ probabilities, for example `operation on /checkout-step-one.html: CLICK 0.41,
 TYPE 0.33, BLOCKED 0.17`. Name that page or control in the goal, or move that
 part into authored steps. `BLOCKED` means no offered element or field can move
 the goal forward; every step the goal names, such as signing in or placing an
-order, is treated as expected.
+order, is treated as expected. Stale and blocked goal summaries retain safe
+page evidence and target metadata when reporting is enabled. Their explanation
+names the changed page/target boundary and, for generated data, the selected
+Faker generator, but never the generated value.
 Timeouts with unknown provider usage retain unknown cost rather than zero cost.
 Custom provider implementations must honor cancellation and `maxAttempts: 1`.
 

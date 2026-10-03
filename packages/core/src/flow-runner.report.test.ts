@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { NoopClassificationCache } from "./classification-cache.js";
-import { runFlow } from "./flow-runner.js";
+import { goalFailureArtifacts, runFlow } from "./flow-runner.js";
+import type { GoalResult } from "./goal-runner.js";
 import { RunRecorder } from "./run-recorder.js";
 import type { ProviderCall } from "./provider.js";
 import { ProviderError } from "./provider.js";
@@ -152,6 +153,118 @@ async function reportRun(
 }
 
 describe("runner report facts", () => {
+  it("omits sensitive goal context while retaining only the generator identity", async () => {
+    const saveFrame = vi.fn();
+    const result: GoalResult = {
+      status: "failed",
+      reason: "stale_value_target",
+      detail:
+        "The Account email field changed on https://bank.test/checkout?token=secret; generated-secret@example.org was not dispatched.",
+      actions: 0,
+      requests: 2,
+      elapsedMs: 1,
+      calls: [],
+      history: [],
+      verification: [],
+      failure: {
+        version: {
+          document: "doc-1",
+          route: "https://bank.test/checkout?token=secret",
+          revision: 1,
+        },
+        operation: "type",
+        targetName: "Account email",
+        targetRole: "textbox",
+        generator: "faker.internet.exampleEmail",
+      },
+    };
+    const artifacts = await goalFailureArtifacts(
+      {
+        url: "https://bank.test/checkout?token=secret",
+        closed: false,
+      } as never,
+      result,
+      {
+        privacy: {
+          secretValues: ["generated-secret@example.org"],
+          sensitiveOrigins: ["https://bank.test"],
+        },
+        evidenceEnabled: true,
+        replay: false,
+        saveFrame,
+        test: { currentAttempt: { id: "attempt-1", ordinal: 1 } },
+      } as never,
+      "step-1",
+    );
+
+    expect(artifacts).toMatchObject({
+      page: { status: "omitted", reason: "sensitive_page" },
+      evidence: { status: "omitted", reason: "sensitive_page" },
+      locator: null,
+      detail: expect.stringContaining("faker.internet.exampleEmail"),
+    });
+    expect(JSON.stringify(artifacts)).not.toMatch(
+      /Account email|checkout|token=secret|generated-secret@example\.org/,
+    );
+    expect(saveFrame).not.toHaveBeenCalled();
+  });
+
+  it("does not pair a stale goal target with a newer page or frame", async () => {
+    const current = {
+      document: "doc-1",
+      route: "https://store.test/cart",
+      revision: 2,
+    };
+    const captureFrame = vi.fn(async () => new Uint8Array([1]));
+    const saveFrame = vi.fn();
+    const artifacts = await goalFailureArtifacts(
+      {
+        url: current.route,
+        closed: false,
+        title: vi.fn(async () => "Cart"),
+        captureFrame,
+        evaluate: vi.fn(async () => ({
+          installed: true,
+          protocol: 1,
+          value: current,
+        })),
+      } as never,
+      {
+        status: "failed",
+        reason: "stale_observation",
+        detail: "Checkout changed before dispatch.",
+        actions: 0,
+        requests: 2,
+        elapsedMs: 1,
+        calls: [],
+        history: [],
+        verification: [],
+        failure: {
+          version: { ...current, revision: 1 },
+          operation: "click",
+          targetName: "Checkout",
+          targetRole: "button",
+        },
+      },
+      {
+        privacy: { secretValues: [], sensitiveOrigins: [] },
+        evidenceEnabled: true,
+        replay: false,
+        saveFrame,
+        test: { currentAttempt: { id: "attempt-1", ordinal: 1 } },
+      } as never,
+      "step-1",
+    );
+
+    expect(artifacts).toMatchObject({
+      page: { status: "unavailable", reason: "stale_page" },
+      evidence: { status: "unavailable", reason: "stale_frame" },
+      locator: null,
+    });
+    expect(captureFrame).not.toHaveBeenCalled();
+    expect(saveFrame).not.toHaveBeenCalled();
+  });
+
   it("records complete redacted goal context before browser execution", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "sedum-goal-context-"));
     try {

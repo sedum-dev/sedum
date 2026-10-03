@@ -120,6 +120,17 @@ export interface GoalResult {
    * CLICK 0.46". Contains no typed values.
    */
   readonly detail?: string;
+  /** Safe terminal context for report metadata/evidence; never contains typed values. */
+  readonly failure?: {
+    readonly version: PageVersion;
+    readonly operation?: "click" | "type";
+    readonly targetName?: string;
+    readonly targetRole?: string;
+    readonly confidence?: number | null;
+    readonly probability?: number;
+    /** Allowlisted local generator identity; never the generated value. */
+    readonly generator?: string;
+  };
   readonly verification: readonly {
     claim: string;
     verdict: string;
@@ -234,7 +245,19 @@ async function executeGoal(
   const generated = new Map<string, string>();
   // A selected value survives a provably pre-dispatch stale retry.
   let pendingValue:
-    { observation: string; index: number; key: string } | undefined;
+    | {
+        observation: string;
+        index: number;
+        key: string;
+        generator?: string;
+        fieldName: string;
+        fieldRole: string;
+        route: string;
+        version: PageVersion;
+        confidence: number | null;
+        probability: number;
+      }
+    | undefined;
   if (
     !Number.isFinite(operationMinMargin) ||
     operationMinMargin < 0 ||
@@ -301,6 +324,8 @@ async function executeGoal(
   let actions = 0;
   let pendingCall = false;
   let reportedCalls = 0;
+  let failure: GoalResult["failure"];
+  let staleDetail: string | undefined;
   const result = (reason: string, detail?: string): GoalResult => ({
     ...(generators ? { dataSeed } : {}),
     status:
@@ -312,8 +337,16 @@ async function executeGoal(
     calls,
     history,
     ...(detail ? { detail } : {}),
+    ...(failure ? { failure } : {}),
     verification,
   });
+  const routeName = (route: string) => {
+    try {
+      return new URL(route).pathname || route;
+    } catch {
+      return route;
+    }
+  };
   /** The top of an uncertain choice, so a failed goal says what was close. */
   const uncertain = (
     what: string,
@@ -321,12 +354,7 @@ async function executeGoal(
     route: string,
     label: (choice: string) => string = (choice) => choice,
   ) => {
-    let where = route;
-    try {
-      where = new URL(route).pathname || route;
-    } catch {
-      // Keep the raw route.
-    }
+    const where = routeName(route);
     const top = answer
       ? Object.entries(answer.probabilities)
           .sort((a, b) => b[1] - a[1])
@@ -397,8 +425,25 @@ async function executeGoal(
         })),
         fieldState,
       ]);
-      if (pendingValue && pendingValue.observation !== valueObservation)
-        return result("stale_value_target");
+      if (pendingValue && pendingValue.observation !== valueObservation) {
+        failure = {
+          version: pendingValue.version,
+          operation: "type",
+          targetName: project(pendingValue.fieldName),
+          targetRole: pendingValue.fieldRole,
+          confidence: pendingValue.confidence,
+          probability: pendingValue.probability,
+          ...(pendingValue.generator
+            ? { generator: pendingValue.generator }
+            : {}),
+        };
+        return result(
+          "stale_value_target",
+          project(
+            `The page or fillable-field surface changed before typing into ${pendingValue.fieldName} on ${routeName(pendingValue.route)}; no action was dispatched.${pendingValue.generator ? ` The retained synthetic value came from ${pendingValue.generator}; its value remains hidden.` : ""}`,
+          ),
+        );
+      }
       const describe = (c: Candidate) =>
         JSON.stringify({
           name: project(c.name),
@@ -463,7 +508,10 @@ async function executeGoal(
       ]);
       const visits = (seen.get(fingerprint) ?? 0) + 1;
       seen.set(fingerprint, visits);
-      if (visits > 3) return result("no_progress");
+      if (visits > 3)
+        return staleDetail
+          ? result("stale_observation", staleDetail)
+          : result("no_progress");
       const state: GoalState = {
         ...(completion.kind === "planner"
           ? { completion: "planner" as const }
@@ -512,8 +560,38 @@ async function executeGoal(
         );
       if (!same(digest.version, await active(pageVersion(page)))) continue;
       const op = decision.operation.choice;
-      if (pendingValue && op !== "TYPE") return result("stale_value_target");
-      if (op === "BLOCKED") return result("blocked");
+      if (pendingValue && op !== "TYPE") {
+        failure = {
+          version: pendingValue.version,
+          operation: "type",
+          targetName: project(pendingValue.fieldName),
+          targetRole: pendingValue.fieldRole,
+          confidence: pendingValue.confidence,
+          probability: pendingValue.probability,
+          ...(pendingValue.generator
+            ? { generator: pendingValue.generator }
+            : {}),
+        };
+        return result(
+          "stale_value_target",
+          project(
+            `The planner no longer selected the pending fill for ${pendingValue.fieldName} on ${routeName(pendingValue.route)}; no action was dispatched.${pendingValue.generator ? ` The retained synthetic value came from ${pendingValue.generator}; its value remains hidden.` : ""}`,
+          ),
+        );
+      }
+      if (op === "BLOCKED") {
+        failure = { version: digest.version };
+        const offered = Object.entries(targets)
+          .filter(([, choices]) => Object.keys(choices).length)
+          .map(([name, choices]) => `${name} (${Object.keys(choices).length})`)
+          .join(", ");
+        return result(
+          "blocked",
+          project(
+            `The planner could not find a safe next action on ${routeName(digest.version.route)} after ${actions} dispatched action${actions === 1 ? "" : "s"}; ${offered ? `available targets were ${offered}` : "no click or fill targets were available"}.`,
+          ),
+        );
+      }
       if (op === "DONE") {
         if (completion.kind === "planner") return result("completed");
         for (const claim of completion.claims) {
@@ -579,9 +657,27 @@ async function executeGoal(
         const ref = command.target.driverTarget().ref;
         const index = fills.candidates.findIndex((c) => c.ref === ref);
         const field = fills.candidates[index]!;
-        if (pendingValue && pendingValue.index !== index)
-          return result("stale_value_target");
+        if (pendingValue && pendingValue.index !== index) {
+          failure = {
+            version: pendingValue.version,
+            operation: "type",
+            targetName: project(pendingValue.fieldName),
+            targetRole: pendingValue.fieldRole,
+            confidence: pendingValue.confidence,
+            probability: pendingValue.probability,
+            ...(pendingValue.generator
+              ? { generator: pendingValue.generator }
+              : {}),
+          };
+          return result(
+            "stale_value_target",
+            project(
+              `The pending fill target moved from its observed position before dispatch on ${routeName(pendingValue.route)}; no action was dispatched.${pendingValue.generator ? ` The retained synthetic value came from ${pendingValue.generator}; its value remains hidden.` : ""}`,
+            ),
+          );
+        }
         let key = pendingValue?.key;
+        let generator = pendingValue?.generator;
         if (!key) {
           const choices: Record<string, string> = {
             BLOCKED:
@@ -624,9 +720,25 @@ async function executeGoal(
               ),
             );
           const id = selected.value.choice;
-          if (id === "BLOCKED") return result("value_blocked");
+          if (id === "BLOCKED") {
+            failure = {
+              version: digest.version,
+              operation: "type",
+              targetName: project(field.name),
+              targetRole: field.role,
+              confidence: head.confidence,
+              probability: head.probabilities[head.choice]!,
+            };
+            return result(
+              "value_blocked",
+              project(
+                `No safe supplied or synthetic value was available for ${field.name} on ${routeName(digest.version.route)}; no action was dispatched. Supply test data explicitly or disable this goal's automatic generation.`,
+              ),
+            );
+          }
           if (id.startsWith("use.")) key = id.slice(4);
           else {
+            generator = id;
             key = `generated_${generated.size + 1}`;
             while (key in data) key = `_${key}`;
             const value = new RuntimeValue(
@@ -641,7 +753,18 @@ async function executeGoal(
               `${id} selected for ${describe(field)} on ${project(digest.version.route)} (not yet filled)`,
             );
           }
-          pendingValue = { observation: valueObservation, index, key };
+          pendingValue = {
+            observation: valueObservation,
+            index,
+            key,
+            ...(generator ? { generator } : {}),
+            fieldName: field.name,
+            fieldRole: field.role,
+            route: digest.version.route,
+            version: digest.version,
+            confidence: head.confidence,
+            probability: head.probabilities[head.choice]!,
+          };
         }
         bindingKeys.set(head.choice, key);
         command = { ...command, value: data[key]!.value };
@@ -657,18 +780,45 @@ async function executeGoal(
       );
       const surface = (candidates: readonly Candidate[]) =>
         JSON.stringify(candidates.map((c) => ({ ...c, ref: undefined })));
+      const selectedIndex = source.candidates.findIndex(
+        (c) => c.ref === command.target.driverTarget().ref,
+      );
+      const selected = source.candidates[selectedIndex];
       if (
         !fresh.complete ||
         fresh.next !== null ||
         !same(source.version, fresh.version) ||
         surface(source.candidates) !== surface(fresh.candidates)
-      )
-        return result("stale_observation");
-      const index = source.candidates.findIndex(
-        (c) => c.ref === command.target.driverTarget().ref,
-      );
-      const chosen = fresh.candidates[index];
+      ) {
+        failure = {
+          version: source.version,
+          operation: command.op,
+          ...(selected
+            ? {
+                targetName: project(selected.name),
+                targetRole: selected.role,
+                confidence: head.confidence,
+                probability: head.probabilities[head.choice]!,
+                ...(pendingValue?.generator
+                  ? { generator: pendingValue.generator }
+                  : {}),
+              }
+            : {}),
+        };
+        const changed = !same(source.version, fresh.version)
+          ? `the page version changed from revision ${source.version.revision} to ${fresh.version.revision}`
+          : !fresh.complete || fresh.next !== null
+            ? "the refreshed candidate list was incomplete"
+            : "the available target surface changed";
+        staleDetail = project(
+          `Before ${command.op === "type" ? "typing into" : "clicking"} ${selected?.name ?? "the selected target"} on ${routeName(source.version.route)}, ${changed}; the stale target was not dispatched and Sedum re-observed the page.${pendingValue?.generator ? ` The retained synthetic value came from ${pendingValue.generator}; its value remains hidden.` : ""}`,
+        );
+        continue;
+      }
+      const chosen = fresh.candidates[selectedIndex];
       if (!chosen) return result("invalid_target");
+      failure = undefined;
+      staleDetail = undefined;
       const refreshed = { ...command, target: target(chosen) };
       if (generators && command.op === "type") {
         const valid = await active(
@@ -697,7 +847,7 @@ async function executeGoal(
           ? `Type {{${binding}}} into ${chosen.name}`
           : `Click ${chosen.name}${chosen.peers[0] ? ` (${chosen.peers[0]})` : ""}`,
       );
-      let failure: unknown;
+      let actionFailure: unknown;
       let failed = false;
       try {
         await active(
@@ -711,16 +861,16 @@ async function executeGoal(
         );
       } catch (error) {
         failed = true;
-        failure = error;
+        actionFailure = error;
       }
       // A target that went stale before dispatch provably received no input,
       // so no action happened: take it back and observe the page again.
       // Each retry still costs a planner request, which bounds the loop.
       if (
         failed &&
-        failure instanceof StepExecutionError &&
-        failure.code === "stale" &&
-        failure.phase === "pre_dispatch" &&
+        actionFailure instanceof StepExecutionError &&
+        actionFailure.code === "stale" &&
+        actionFailure.phase === "pre_dispatch" &&
         !signal.aborted
       ) {
         actions--;
@@ -740,14 +890,14 @@ async function executeGoal(
           ? null
           : signal.aborted
             ? "timeout"
-            : failure instanceof StepExecutionError
-              ? `${failure.code}:${failure.phase}`
+            : actionFailure instanceof StepExecutionError
+              ? `${actionFailure.code}:${actionFailure.phase}`
               : "action_failed",
         elapsedMs: performance.now() - actionStarted,
         calls: calls.slice(reportedCalls),
       });
       reportedCalls = calls.length;
-      if (failed) throw failure;
+      if (failed) throw actionFailure;
       pendingValue = undefined;
       if (binding && generated.has(binding))
         generated.set(
