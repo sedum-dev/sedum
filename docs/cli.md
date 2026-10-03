@@ -85,8 +85,9 @@ sources** to the configured text provider. Review those files for secrets
 before using it. Environment placeholders are not expanded for selection, but
 literal secrets in source or the diff are not redacted. It uses the same
 provider configuration and credentials as the runner. For Clef those are
-`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN`; for TypeSafe, they are the
-`TYPESAFE_*` settings. Selection makes additional billable calls.
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` (or its
+`CLOUDFLARE_API_TOKEN` alias); for TypeSafe, they are the `TYPESAFE_*` settings.
+Selection makes additional billable calls.
 
 The default base is the first available ref in this order: local `main`,
 `origin/main`, local `master`, `origin/master`. `--base` accepts another ref.

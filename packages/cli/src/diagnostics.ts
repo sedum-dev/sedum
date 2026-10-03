@@ -12,14 +12,50 @@ export interface CanonicalDiagnosticError {
   readonly message: string;
 }
 
-export function setupDiagnostic(error: unknown): CliDiagnostic {
+export type ProviderName = "typesafe" | "clef";
+
+export function providerDiagnostic(
+  providerName: ProviderName,
+  code: "authentication" | "configuration",
+): CliDiagnostic {
+  if (providerName === "clef")
+    return code === "authentication"
+      ? {
+          code: "provider_authentication",
+          message: "Cloudflare rejected the configured API token.",
+          fix: "Check CLOUDFLARE_ACCOUNT_ID, replace CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN) with a token for that account that has Workers AI Read and Edit permissions, run `sedum doctor`, then rerun.",
+        }
+      : {
+          code: "provider_configuration",
+          message: "The Cloudflare Clef provider is not configured correctly.",
+          fix: "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN), then check the account, Workers AI access, and model with `sedum doctor`.",
+        };
+  return code === "authentication"
+    ? {
+        code: "provider_authentication",
+        message: "The model provider rejected the API key.",
+        fix: "Set TYPESAFE_API_KEY to a valid key, check it with `sedum doctor`, then rerun.",
+      }
+    : {
+        code: "provider_configuration",
+        message: "The model provider is not configured correctly.",
+        fix: "Check TYPESAFE_API_KEY, TYPESAFE_BASE_URL and the model with `sedum doctor`, then rerun.",
+      };
+}
+
+export function setupDiagnostic(
+  error: unknown,
+  providerName: ProviderName = "typesafe",
+): CliDiagnostic {
   if (error instanceof ProjectConfigError) return configDiagnostic(error);
   if (error instanceof ProviderError && error.code === "configuration")
-    return {
-      code: "missing_key",
-      message: "The model provider is not configured.",
-      fix: "Set TYPESAFE_API_KEY for the configured endpoint, then rerun the command.",
-    };
+    return providerName === "clef"
+      ? providerDiagnostic(providerName, "configuration")
+      : {
+          code: "missing_key",
+          message: "The model provider is not configured.",
+          fix: "Set TYPESAFE_API_KEY for the configured endpoint, then rerun the command.",
+        };
   if (error instanceof BrowserDriverError && error.code === "browser-missing")
     return {
       code: "browser_missing",
@@ -75,16 +111,19 @@ export function canonicalDiagnosticError(
   };
 }
 
-export function flowDiagnostic(result: {
-  readonly code: string;
-  readonly message: string;
-  readonly fix?: string;
-  readonly source?: {
-    readonly file: string;
-    readonly line: number;
-    readonly col: number;
-  };
-}): CliDiagnostic {
+export function flowDiagnostic(
+  result: {
+    readonly code: string;
+    readonly message: string;
+    readonly fix?: string;
+    readonly source?: {
+      readonly file: string;
+      readonly line: number;
+      readonly col: number;
+    };
+  },
+  providerName: ProviderName = "typesafe",
+): CliDiagnostic {
   if (
     result.code === "invalid_test" ||
     result.code === "unsupported_test" ||
@@ -155,17 +194,9 @@ export function flowDiagnostic(result: {
       fix: "Lower --parallel or --provider-concurrency, or retry later.",
     };
   if (result.code === "provider_authentication")
-    return {
-      code: result.code,
-      message: "The model provider rejected the API key.",
-      fix: "Set TYPESAFE_API_KEY to a valid key, check it with `sedum doctor`, then rerun.",
-    };
+    return providerDiagnostic(providerName, "authentication");
   if (result.code === "provider_configuration")
-    return {
-      code: result.code,
-      message: "The model provider is not configured correctly.",
-      fix: "Check TYPESAFE_API_KEY, TYPESAFE_BASE_URL and the model with `sedum doctor`, then rerun.",
-    };
+    return providerDiagnostic(providerName, "configuration");
   if (result.code.startsWith("provider_"))
     return {
       code: result.code,
