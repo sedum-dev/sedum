@@ -189,9 +189,6 @@ describe("PlaywrightBrowserDriver", () => {
     });
     const context = await session.newContext();
     const page = await context.newPage();
-    vi.spyOn(browser.context.page, "evaluate").mockResolvedValue({
-      actionable: true,
-    } as never);
     const aim = {
       ref: "target",
       document: "doc",
@@ -201,6 +198,10 @@ describe("PlaywrightBrowserDriver", () => {
       name: "Submit",
       point: { x: 5, y: 5 },
     };
+    vi.spyOn(browser.context.page, "evaluate").mockResolvedValue({
+      actionable: true,
+      aim,
+    } as never);
     await expect(page.clickRef(aim)).resolves.toMatchObject({
       actionable: true,
     });

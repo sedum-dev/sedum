@@ -534,8 +534,8 @@ class PlaywrightPage implements BrowserPage {
       throw operationError(new Error("page is not available"), state, "page");
     const deadline = performance.now() + actionTimeout(options.timeoutMs);
     const remaining = () => Math.max(1, deadline - performance.now());
-    const checked = await this.page
-      .evaluate(
+    const checked: AimResult = await this.page
+      .evaluate<AimResult, Aim>(
         (expected) =>
           window.__sedum?.checkAim(expected) ?? {
             actionable: false,
@@ -544,7 +544,8 @@ class PlaywrightPage implements BrowserPage {
         aim,
       )
       .catch(() => ({ actionable: false as const, reason: "stale" as const }));
-    if (!checked.actionable) return checked as AimResult;
+    if (!checked.actionable) return checked;
+    let dispatchAim = checked.aim;
     const handle = await this.page
       .evaluateHandle((ref) => {
         // Candidates can live in open shadow roots, which selectors do not cross.
@@ -565,7 +566,7 @@ class PlaywrightPage implements BrowserPage {
     try {
       const element = handle.asElement();
       if (!element) return { actionable: false, reason: "target_missing" };
-      const validateElement = () =>
+      const validateElement = (): Promise<AimResult> =>
         this.page.evaluate(
           ({ expected, element }) => {
             if (
@@ -583,37 +584,63 @@ class PlaywrightPage implements BrowserPage {
           { expected: aim, element },
         );
       if (aim.hover) {
-        // The control is shown by a hover rule on its row: rest the pointer
-        // where it will be drawn, then wait for it to appear.
-        const box = await element.boundingBox().catch(() => null);
-        if (!box) return { actionable: false, reason: "not_actionable" };
-        await this.page.mouse.move(box.x + aim.point.x, box.y + aim.point.y);
+        // Discovery is side-effect free. Hover the exact host only after the
+        // action starts, then reacquire the target's real point once revealed.
+        const hoverHandle = await this.page
+          .evaluateHandle(
+            (expected) => window.__sedum?.hoverElement(expected) ?? null,
+            aim,
+          )
+          .catch(() => null);
+        const hoverElement = hoverHandle?.asElement();
+        if (!hoverElement) {
+          await hoverHandle?.dispose().catch(() => undefined);
+          return { actionable: false, reason: "not_actionable" };
+        }
         try {
+          await hoverElement.hover({ timeout: remaining() });
           await element.waitForElementState("visible", {
             timeout: Math.min(2_000, remaining()),
           });
-        } catch {
-          return { actionable: false, reason: "not_actionable" };
+        } catch (error) {
+          return {
+            actionable: false,
+            reason: "action_started",
+            retryable: false,
+            callLog: safeCallLog(error),
+          };
+        } finally {
+          await hoverHandle!.dispose().catch(() => undefined);
         }
       }
       const still = await validateElement().catch(() => ({
         actionable: false as const,
         reason: "stale" as const,
       }));
-      if (!still.actionable) return still as AimResult;
+      if (!still.actionable)
+        return aim.hover
+          ? { actionable: false, reason: "action_started", retryable: false }
+          : (still as AimResult);
+      dispatchAim = still.aim;
       try {
         // Wait for the exact element to settle without moving the pointer or
         // dispatching pointer/input events. The page can change during this wait,
         // so this is not the final snapshot validation.
         await element.waitForElementState("stable", { timeout: remaining() });
       } catch {
-        return { actionable: false, reason: "not_actionable" };
+        return aim.hover
+          ? { actionable: false, reason: "action_started", retryable: false }
+          : { actionable: false, reason: "not_actionable" };
       }
       const ready = await validateElement().catch(() => ({
         actionable: false as const,
         reason: "stale" as const,
       }));
-      if (!ready.actionable) return ready as AimResult;
+      if (!ready.actionable)
+        return aim.hover
+          ? { actionable: false, reason: "action_started", retryable: false }
+          : (ready as AimResult);
+      dispatchAim = ready.aim;
       if (options.chooseOption) {
         // A native <select> opens a browser-drawn list that page clicks cannot
         // reach, so clicking it changes nothing. Choose the named option.
@@ -637,7 +664,13 @@ class PlaywrightPage implements BrowserPage {
             native.map((option) => option.label),
           );
           const index = native.findIndex((option) => option.label === label);
-          if (label === null || index < 0)
+          if (label === null || index < 0) {
+            if (aim.hover)
+              return {
+                actionable: false,
+                reason: "action_started",
+                retryable: false,
+              };
             return {
               actionable: false,
               reason: "option_not_named",
@@ -645,8 +678,19 @@ class PlaywrightPage implements BrowserPage {
                 .filter((option) => !option.disabled)
                 .map((option) => option.label),
             };
-          if (native[index]!.disabled)
-            return { actionable: false, reason: "not_actionable" };
+          }
+          if (native[index]!.disabled) {
+            if (aim.hover)
+              return {
+                actionable: false,
+                reason: "action_started",
+                retryable: false,
+              };
+            return {
+              actionable: false,
+              reason: "not_actionable",
+            };
+          }
           const hide = await this.highlight(element);
           try {
             await element.selectOption({ index }, { timeout: remaining() });
@@ -668,8 +712,11 @@ class PlaywrightPage implements BrowserPage {
         // Playwright and the browser own final actionability, event dispatch,
         // cancellation, and navigation. Once this starts, a failure cannot
         // prove that page handlers saw no side effect, so it is non-retryable.
-        await element.click({ position: aim.point, timeout: remaining() });
-        return { actionable: true, aim };
+        await element.click({
+          position: dispatchAim.point,
+          timeout: remaining(),
+        });
+        return { actionable: true, aim: dispatchAim };
       } catch (error) {
         return {
           actionable: false,

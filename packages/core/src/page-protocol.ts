@@ -172,6 +172,8 @@ export interface PageBridge {
   findBySignals(input: { operation: Operation }): CandidatePage;
   clickTarget(ref: string): AimResult;
   checkAim(aim: Aim): AimResult;
+  /** The exact visible ancestor whose hover reveals an aimed control. */
+  hoverElement(aim: Aim): Element | null;
   fillElement(target: FillTarget): Element | null;
   readTarget(target: FillTarget): ReadTargetResult;
   controlState(target: FillTarget): ControlStateResult;
