@@ -1,5 +1,24 @@
 # sedum-cli
 
+## 0.1.0-alpha.9
+
+### Patch Changes
+
+- 9640bbb: Validate literal `ai.holds` claims offline without requiring a classification cache, while preserving errors and incomplete validation for malformed, dynamic, action, and wait forms.
+- c4ea782: Accept `CLOUDFLARE_API_TOKEN` as an alias for Clef while preserving
+  `CLOUDFLARE_AUTH_TOKEN`, rejecting ambiguous same-level values, and keeping
+  both secrets out of test variables. Make run, affected-selection, validation,
+  and doctor failures name Cloudflare account access and Workers AI permissions
+  instead of incorrectly recommending `TYPESAFE_API_KEY`.
+- Updated dependencies [9640bbb]
+- Updated dependencies [af96cef]
+- Updated dependencies [388a60b]
+- Updated dependencies [bdcf5bd]
+  - @sedum-dev/core@0.1.0-alpha.9
+  - @sedum-dev/provider-clef@0.1.0-alpha.9
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.9
+  - @sedum-dev/reporters@0.1.0-alpha.9
+
 ## 0.1.0-alpha.8
 
 ### Minor Changes
