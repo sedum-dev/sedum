@@ -6,7 +6,13 @@ import {
   classifySentenceSteps,
   type ClassifyFlowOptions,
 } from "./flow-classification.js";
-import { WAIT_UNTIL } from "./classification.js";
+import {
+  canonicalSentence,
+  isClaimSentence,
+  patternOperation,
+  preflightSentence,
+  WAIT_UNTIL,
+} from "./classification.js";
 import {
   findIdentityCollisions,
   loadFlowFile,
@@ -129,6 +135,46 @@ function directSentences(steps: readonly FlowStep[]): SentenceStep[] {
   return steps.filter((step): step is SentenceStep => step.kind === "sentence");
 }
 
+/**
+ * `ai.holds` already declares a sentence to be a read-only claim. Validate
+ * what can be established from its literal without asking classification to
+ * infer an operation.
+ */
+function checkDiagnostics(item: {
+  readonly text: string;
+  readonly source: FlowDiagnostic["source"];
+}): FlowDiagnostic[] {
+  const tokenized = tokenizeStep(item.text);
+  if (tokenized.problems.length)
+    return tokenized.problems.map((problem) => ({
+      severity: "error",
+      code: problem.code,
+      source: item.source,
+      message: problem.message,
+      fix: problem.fix,
+    }));
+  const text = canonicalSentence(item.text);
+  const operation = patternOperation(text);
+  const preflight = preflightSentence(text);
+  if (
+    !text ||
+    (preflight !== null && preflight !== "unsupported") ||
+    WAIT_UNTIL.test(text) ||
+    (operation !== null && operation !== "verify") ||
+    !isClaimSentence(text)
+  )
+    return [
+      {
+        severity: "error",
+        code: "invalid_check",
+        source: item.source,
+        message: "ai.holds takes one claim about the page.",
+        fix: 'Write ai.holds("the passkey screen is shown").',
+      },
+    ];
+  return [];
+}
+
 /** The pre-launch entry-URL failure `sedum run` would report, if any. */
 function entryUrlDiagnostic(
   flow: FlowDefinition,
@@ -150,9 +196,10 @@ function entryUrlDiagnostic(
 }
 
 /**
- * Import a `*.test.ts` file for its `test()` declarations and classify the
- * literal sentences its `ai` calls name. Sentences built at run time are
- * warnings: they can only be classified when they run.
+ * Import a `*.test.ts` file for its `test()` declarations, classify literal
+ * action sentences, and structurally validate literal `ai.holds` claims.
+ * Sentences built at run time are warnings: they can only be checked when they
+ * run.
  */
 async function validateScriptFile(
   file: string,
@@ -235,32 +282,20 @@ async function validateScriptFile(
     });
   diagnostics.push(...warnings);
   const scanned = scans.flatMap((scan) => scan.sentences);
-  const sentences: SentenceStep[] = scanned.map((item) => ({
-    kind: "sentence",
-    phase: "steps",
-    text: item.text,
-    tokens: tokenizeStep(item.text).tokens,
-    source: item.source,
-  }));
+  const sentences: SentenceStep[] = scanned
+    .filter((item) => !item.check)
+    .map((item) => ({
+      kind: "sentence",
+      phase: "steps",
+      text: item.text,
+      tokens: tokenizeStep(item.text).tokens,
+      source: item.source,
+    }));
   const checked = await classifySentenceSteps(sentences, classify);
   diagnostics.push(...checked.diagnostics);
-  const invalidChecks: FlowDiagnostic[] = [];
-  scanned.forEach((item, index) => {
-    const classified = checked.classification.steps[index];
-    if (
-      !item.check ||
-      !classified ||
-      (classified.op === "verify" && !WAIT_UNTIL.test(item.text))
-    )
-      return;
-    invalidChecks.push({
-      severity: "error",
-      code: "invalid_check",
-      source: item.source,
-      message: "ai.holds takes one claim about the page.",
-      fix: 'Write ai.holds("the passkey screen is shown").',
-    });
-  });
+  const invalidChecks = scanned
+    .filter((item) => item.check)
+    .flatMap(checkDiagnostics);
   diagnostics.push(...invalidChecks);
   // A sentence that is not a literal was not checked: never report it valid.
   const complete =

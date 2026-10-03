@@ -162,9 +162,48 @@ const PASSIVE_INTERACTION =
 const ACTION_VERBS =
   "click|type|enter|fill|press|goto|go\\s+to|navigate|verify|assert|measure|note|observe|scroll|wait|remember|capture|record|select|tap|activate|close|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
 const DIRECT_SECOND_ACTION = new RegExp(`^(?:${ACTION_VERBS})\\b`, "iu");
+const CLAIM_PREDICATE =
+  /\b(is|are|was|were|contains|includes|shows|displays|reads|says|matches|appears|exists|remains|looks)\b/iu;
+const CLAIM_SUBJECT_WORD =
+  /^(?:the|a|an|this|that|these|those|there|it|I|we|you|they)\b/iu;
+const BOUND_CLAIM_SUBJECT = /^(?:["']|\{\{)/u;
+const CLAIM_STATE =
+  /^(?:not\s+)?(?:(?:being\s+)?shown|visible|hidden|ready|complete|completed|open|closed|enabled|disabled|selected|checked|empty|available|present|absent|active|inactive|valid|invalid|successful|failed|loading|displayed|focused|required|expanded|collapsed|on|off|correct|incorrect)$/iu;
+const CLAIM_VALUE =
+  /^(?:""|''|\{\{\s*[A-Za-z_]\w*\s*\}\}|true|false|[£$€¥]?\s*[+-]?\d+(?:[.,]\d+)?%?)$/iu;
 
 export function canonicalSentence(sentence: string): string {
   return sentence.normalize("NFC").replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * Whether a sentence has a statically recognizable claim shape. This is
+ * intentionally narrower than natural language: an unreadable shape must not
+ * let an authored action pass offline validation as an `ai.holds` claim.
+ */
+export function isClaimSentence(sentence: string): boolean {
+  const text = canonicalSentence(sentence);
+  if (!CLAIM_SUBJECT_WORD.test(text) && !BOUND_CLAIM_SUBJECT.test(text))
+    return false;
+  const structural = withoutQuotes(text).replace(/\.$/u, "");
+  const predicate = CLAIM_PREDICATE.exec(structural);
+  if (!predicate || predicate.index === 0) return false;
+  const tail = structural.slice(predicate.index + predicate[0].length).trim();
+  switch (predicate[1]!.toLowerCase()) {
+    case "appears":
+    case "exists":
+      return tail === "";
+    case "contains":
+    case "includes":
+    case "shows":
+    case "displays":
+    case "reads":
+    case "says":
+    case "matches":
+      return CLAIM_VALUE.test(tail);
+    default:
+      return CLAIM_STATE.test(tail) || CLAIM_VALUE.test(tail);
+  }
 }
 
 function withoutQuotes(sentence: string): string {

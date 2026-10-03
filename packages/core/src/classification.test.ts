@@ -10,6 +10,7 @@ import {
   canonicalSentence,
   classifySteps,
   evaluateModelAnswer,
+  isClaimSentence,
   patternOperation,
   preflightSentence,
   validateOperand,
@@ -385,6 +386,37 @@ describe("sentence classification", () => {
     expect(
       validateOperand("type {{first}} then {{last}}", "type"),
     ).toBeTruthy();
+  });
+
+  it("accepts only statically recognizable claim shapes", () => {
+    expect(isClaimSentence("the Open menu is shown")).toBe(true);
+    expect(isClaimSentence("the download is complete")).toBe(true);
+    expect(isClaimSentence("The optional prompt appears")).toBe(true);
+    expect(isClaimSentence("the optional prompt appears")).toBe(true);
+    expect(isClaimSentence("the cart contains {{product}}")).toBe(true);
+    expect(isClaimSentence("delete the account")).toBe(false);
+    expect(isClaimSentence("add the item to the basket")).toBe(false);
+    expect(isClaimSentence("buy the product")).toBe(false);
+    expect(isClaimSentence("remove the item from the basket")).toBe(false);
+    expect(isClaimSentence("tap the button that is shown")).toBe(false);
+    expect(isClaimSentence("activate the account if it is ready")).toBe(false);
+    expect(isClaimSentence("please click the Checkout button")).toBe(false);
+    expect(isClaimSentence("could you please click Checkout")).toBe(false);
+    expect(isClaimSentence("verify the account is ready")).toBe(false);
+    expect(isClaimSentence("Delete account is ready")).toBe(false);
+    expect(isClaimSentence("The account is ready, delete it")).toBe(false);
+    expect(isClaimSentence("The account is ready. Delete it")).toBe(false);
+    expect(isClaimSentence("The account is ready: delete it")).toBe(false);
+    expect(isClaimSentence("The account is ready — delete it")).toBe(false);
+    expect(isClaimSentence("The account is ready (delete it)")).toBe(false);
+    expect(isClaimSentence("The account is ready please delete it")).toBe(
+      false,
+    );
+    expect(isClaimSentence("The account is ready… delete it")).toBe(false);
+    expect(isClaimSentence("The account is ready。 delete it")).toBe(false);
+    expect(isClaimSentence("The account is ready.")).toBe(true);
+    expect(isClaimSentence('the receipt says "paid"')).toBe(true);
+    expect(isClaimSentence("the total matches {{total}}")).toBe(true);
   });
 
   it("batches unresolved unique sentences, persists only accepted model results, and replays offline", async () => {
