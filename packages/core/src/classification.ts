@@ -159,12 +159,44 @@ const GERUND_SECOND_ACTION =
   /^(?:clicking|typing|entering|filling|pressing|scrolling|selecting|submitting|tapping|navigating|uploading|downloading|dragging|dropping|verifying|checking|measuring|waiting|remembering|opening(?!\s+(?:hours|times)\b))\b/iu;
 const PASSIVE_INTERACTION =
   /\b(?:is|are|was|were|has|have|had)(?:\s+been)?\s+(?:clicked|typed|entered|filled|pressed|scrolled|selected|submitted|opened|uploaded|downloaded)\b/iu;
-const ACTION_VERBS =
-  "click|type|enter|fill|press|goto|go\\s+to|navigate|verify|assert|measure|note|observe|scroll|wait|remember|capture|record|select|tap|activate|close|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
+const SIDE_EFFECT_VERBS =
+  "click|type|enter|fill|press|goto|go\\s+to|navigate|scroll|wait|remember|capture|record|select|tap|activate|close|drag|drop|upload|download|hover|swipe|double[ -]?click|right[ -]?click";
+const ACTION_VERBS = `${SIDE_EFFECT_VERBS}|verify|assert|measure|note|observe`;
 const DIRECT_SECOND_ACTION = new RegExp(`^(?:${ACTION_VERBS})\\b`, "iu");
+const LEADING_INTERACTION = new RegExp(
+  `^(?:${SIDE_EFFECT_VERBS}|choose|pick|submit|open|log\\s+in|sign\\s+in|reload|refresh)\\b`,
+  "iu",
+);
+const CLAIM_PREDICATE =
+  /\b(?:is|are|was|were|has|have|contains|shows|reads|appears|does)\b/iu;
+const CLAUSE_BREAK =
+  /\b(?:when|until|after|before|once|while|and|then|that|which|if|unless|because|as\s+soon\s+as)\b|[;,]/iu;
+const REQUEST_ADVERB =
+  /^(?:please|kindly|now|first|then|also|immediately)\b[\s,]*/iu;
+const REQUEST_MODAL = /^(?:can|could|would|will|should)\s+you\b[\s,]*/iu;
 
 export function canonicalSentence(sentence: string): string {
   return sentence.normalize("NFC").replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * Whether a sentence is structurally an imperative interaction rather than a
+ * claim. A leading interaction word can also name a subject (`Open menu is
+ * shown`), so a claim predicate in the first clause takes precedence.
+ */
+export function isActionInstruction(sentence: string): boolean {
+  const text = canonicalSentence(sentence);
+  let instruction = text;
+  while (REQUEST_ADVERB.test(instruction))
+    instruction = instruction.replace(REQUEST_ADVERB, "");
+  instruction = instruction.replace(REQUEST_MODAL, "");
+  while (REQUEST_ADVERB.test(instruction))
+    instruction = instruction.replace(REQUEST_ADVERB, "");
+  if (!LEADING_INTERACTION.test(instruction)) return false;
+  const predicate = CLAIM_PREDICATE.exec(instruction);
+  if (!predicate) return true;
+  const clauseBreak = CLAUSE_BREAK.exec(instruction);
+  return clauseBreak !== null && clauseBreak.index < predicate.index;
 }
 
 function withoutQuotes(sentence: string): string {

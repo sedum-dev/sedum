@@ -412,12 +412,60 @@ describe("project validation", () => {
     expect(result.fullyValidated).toBe(true);
   });
 
+  it("validates uncached ai.holds claims offline, including imported helpers", async () => {
+    const root = await project({
+      "holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+import { optionalScreen } from "./support.js";
+test("checks", async ({ ai }) => {
+  await ai.holds("the optional passkey enrollment screen is ready");
+  await ai.holds("the {{plan}} account summary is ready", { plan: "team" });
+  await optionalScreen(ai);
+});`,
+      "support.ts": `export async function optionalScreen(ai) {
+  return ai.holds("Open menu is shown");
+}`,
+    });
+    const { result } = await validate(root);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.calls).toEqual([]);
+    expect(result.files[0]?.coverage?.steps).toBe("checked");
+    expect(result.fullyValidated).toBe(true);
+  });
+
+  it("still classifies neighboring authored actions offline", async () => {
+    const root = await project({
+      "neighbor.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("neighbor", async ({ ai }) => {
+  await ai.holds("the optional passkey enrollment screen is ready");
+  await ai("add the cheapest item to the basket");
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual([
+      "neighbor.test.ts:4:12 unavailable",
+    ]);
+    expect(result.counts.notCheckedOffline).toBe(1);
+    expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
+  });
+
   it("rejects actions and waits passed to ai.holds during validation", async () => {
     const root = await project({
       "holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
 test("invalid checks", async ({ ai }) => {
   await ai.holds("click the Checkout button");
   await ai.holds("wait until Checkout complete is shown");
+  await ai.holds("submit the checkout form");
+  await ai.holds("wait for the receipt to appear");
+  await ai.holds("tap the Checkout button");
+  await ai.holds("activate the account");
+  await ai.holds("close the dialog");
+  await ai.holds("choose the Pro plan");
+  await ai.holds("tap the button that is shown");
+  await ai.holds("please click the Checkout button");
+  await ai.holds("could you please click Checkout");
+  await ai.holds("please, click Checkout");
+  await ai.holds("click Checkout as soon as it is shown");
   await ai.holds?.("click the optional Checkout button");
   await ai?.holds("wait until optional Checkout is shown");
 });`,
@@ -426,9 +474,41 @@ test("invalid checks", async ({ ai }) => {
     expect(located(result, real)).toEqual([
       "holds.test.ts:3:18 invalid_check",
       "holds.test.ts:4:18 invalid_check",
-      "holds.test.ts:5:20 invalid_check",
-      "holds.test.ts:6:19 invalid_check",
+      "holds.test.ts:5:18 invalid_check",
+      "holds.test.ts:6:18 invalid_check",
+      "holds.test.ts:7:18 invalid_check",
+      "holds.test.ts:8:18 invalid_check",
+      "holds.test.ts:9:18 invalid_check",
+      "holds.test.ts:10:18 invalid_check",
+      "holds.test.ts:11:18 invalid_check",
+      "holds.test.ts:12:18 invalid_check",
+      "holds.test.ts:13:18 invalid_check",
+      "holds.test.ts:14:18 invalid_check",
+      "holds.test.ts:15:18 invalid_check",
+      "holds.test.ts:16:20 invalid_check",
+      "holds.test.ts:17:19 invalid_check",
     ]);
+    expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
+  });
+
+  it("fails closed for malformed and dynamic ai.holds claims", async () => {
+    const root = await project({
+      "unsafe-holds.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("unsafe checks", async ({ ai }) => {
+  await ai.holds("the {{bad-name}} plan is shown");
+  await ai.holds("the receipt says \\"paid");
+  const screen = "checkout";
+  await ai.holds(\`the \${screen} screen is shown\`);
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual([
+      "unsafe-holds.test.ts:3:18 invalid_placeholder",
+      "unsafe-holds.test.ts:4:18 unclosed_quote",
+      "unsafe-holds.test.ts:6:18 dynamic_sentence",
+    ]);
+    expect(result.counts).toMatchObject({ errors: 2, warnings: 1 });
     expect(result.files[0]?.coverage?.steps).toBe("incomplete");
     expect(result.fullyValidated).toBe(false);
   });

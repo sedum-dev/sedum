@@ -255,7 +255,10 @@ if (await ai.holds("the passkey enrollment screen is shown")) {
 ```
 
 Pass a claim, not an action or a wait instruction. Claims are classified and
-judged through the same deterministic and model-backed paths as verify steps.
+judged through the same deterministic and model-backed paths as verify steps at
+run time. Offline validation treats a readable `ai.holds` literal as the claim
+the API declares it to be, while still rejecting malformed placeholders,
+actions, waits, and call shapes it cannot inspect.
 
 `ai.extract(description)` returns the text of the element the description
 names, found the same way as a `remember` target. Pass a parser, such as a zod

@@ -118,6 +118,27 @@ describe("sedum validate", () => {
     });
   });
 
+  it("validates a literal ai.holds claim offline without a cache", async () => {
+    const cwd = await project({
+      "holds.test.ts": `import { test } from "sedum-cli";
+test("optional screen", async ({ ai }) => {
+  if (await ai.holds("the optional passkey screen is shown")) {
+    await ai("click the Skip button");
+  }
+});`,
+    });
+    const output = await runCli(["validate"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+      createClassificationProvider: noProvider,
+    });
+    expect(output).toEqual({
+      stdout: "Checked 1 test and 0 modules: all valid.\n",
+      stderr: "",
+      exitCode: 0,
+    });
+  });
+
   it("colors labels only when the terminal allows color", async () => {
     const cwd = await project(BROKEN);
     const colored = await runCli(
