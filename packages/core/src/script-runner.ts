@@ -14,6 +14,7 @@ import {
   closeQuietly,
   executeSentence,
   firstDiagnostic,
+  goalFailureArtifacts,
   recordGoalAction,
   resolveEntryUrl,
   resultCall,
@@ -771,12 +772,18 @@ export async function runScriptTest(
           const attempt = report.test.currentAttempt!;
           const index = attempt.stepCount + 1;
           const shown = safeText(text, report.privacy, Number.MAX_SAFE_INTEGER);
+          const id = `${attempt.id}:step:${index}`;
+          const failureArtifacts =
+            result.status === "failed" && result.failure
+              ? await goalFailureArtifacts(activePage, result, report, id)
+              : undefined;
+          const failureDetail = failureArtifacts?.detail ?? result.detail;
           const detail =
             result.status === "passed"
               ? "Planner reported completion; verify the outcome separately."
-              : `Goal did not complete: ${result.reason}.${result.detail ? ` ${result.detail}` : ""}`;
+              : `Goal did not complete: ${result.reason}.${failureDetail ? ` ${failureDetail}` : ""}`;
           await report.test.addStep({
-            id: `${attempt.id}:step:${index}`,
+            id,
             index,
             kind: "action",
             operation: "goal",
@@ -805,8 +812,11 @@ export async function runScriptTest(
             verdict: operational ? null : result.status,
             flags: [],
             elapsedMs: result.elapsedMs,
-            page: { status: "omitted", reason: "goal_summary" },
-            locator: null,
+            page: failureArtifacts?.page ?? {
+              status: "omitted",
+              reason: "goal_summary",
+            },
+            locator: failureArtifacts?.locator ?? null,
             judgement: null,
             observations: [],
             calls: result.calls
@@ -824,9 +834,12 @@ export async function runScriptTest(
                       code: result.reason,
                       message: safeText(detail, report.privacy, 512),
                     },
-            evidence: { status: "omitted", reason: "goal_summary" },
+            evidence: failureArtifacts?.evidence ?? {
+              status: "omitted",
+              reason: "goal_summary",
+            },
             replayFrame: null,
-            targetBox: null,
+            targetBox: failureArtifacts?.targetBox ?? null,
           });
         }
         if (operational) stop(operational);

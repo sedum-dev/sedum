@@ -422,7 +422,7 @@ test("checks", async ({ ai }) => {
   await optionalScreen(ai);
 });`,
       "support.ts": `export async function optionalScreen(ai) {
-  return ai.holds("Open menu is shown");
+  return ai.holds("the Open menu is shown");
 }`,
     });
     const { result } = await validate(root);
@@ -446,6 +446,23 @@ test("neighbor", async ({ ai }) => {
     ]);
     expect(result.counts.notCheckedOffline).toBe(1);
     expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
+  });
+
+  it("validates goal placeholders against inline and const object keys", async () => {
+    const root = await project({
+      "goals.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("goal bindings", async ({ ai }) => {
+  await ai.goal("Sign in as {{user}}", { username: "standard_user" });
+  const customer = { user: "standard_user", extra: true };
+  await ai.goal("Sign in as {{user}}", customer);
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual(["goals.test.ts:3:17 missing_value"]);
+    expect(result.diagnostics.map((item) => item.code)).not.toContain(
+      "dynamic_goal_values",
+    );
     expect(result.fullyValidated).toBe(false);
   });
 
@@ -487,6 +504,45 @@ test("invalid checks", async ({ ai }) => {
       "holds.test.ts:15:18 invalid_check",
       "holds.test.ts:16:20 invalid_check",
       "holds.test.ts:17:19 invalid_check",
+    ]);
+    expect(result.files[0]?.coverage?.steps).toBe("incomplete");
+    expect(result.fullyValidated).toBe(false);
+  });
+
+  it("fails closed for unrecognized action verbs passed to ai.holds", async () => {
+    const root = await project({
+      "unknown-actions.test.ts": `import { test } from ${JSON.stringify(scriptApi)};
+test("invalid checks", async ({ ai }) => {
+  await ai.holds("add the cheapest item to the basket");
+  await ai.holds("delete the account");
+  await ai.holds("buy the product");
+  await ai.holds("remove the item from the basket");
+  await ai.holds("Delete account is ready");
+  await ai.holds("The account is ready, delete it");
+  await ai.holds("The account is ready. Delete it");
+  await ai.holds("The account is ready: delete it");
+  await ai.holds("The account is ready — delete it");
+  await ai.holds("The account is ready (delete it)");
+  await ai.holds("The account is ready please delete it");
+  await ai.holds("The account is ready… delete it");
+  await ai.holds("The account is ready。 delete it");
+});`,
+    });
+    const { result, real } = await validate(root);
+    expect(located(result, real)).toEqual([
+      "unknown-actions.test.ts:3:18 invalid_check",
+      "unknown-actions.test.ts:4:18 invalid_check",
+      "unknown-actions.test.ts:5:18 invalid_check",
+      "unknown-actions.test.ts:6:18 invalid_check",
+      "unknown-actions.test.ts:7:18 invalid_check",
+      "unknown-actions.test.ts:8:18 invalid_check",
+      "unknown-actions.test.ts:9:18 invalid_check",
+      "unknown-actions.test.ts:10:18 invalid_check",
+      "unknown-actions.test.ts:11:18 invalid_check",
+      "unknown-actions.test.ts:12:18 invalid_check",
+      "unknown-actions.test.ts:13:18 invalid_check",
+      "unknown-actions.test.ts:14:18 invalid_check",
+      "unknown-actions.test.ts:15:18 invalid_check",
     ]);
     expect(result.files[0]?.coverage?.steps).toBe("incomplete");
     expect(result.fullyValidated).toBe(false);

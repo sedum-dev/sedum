@@ -8,7 +8,7 @@ import {
 } from "./flow-classification.js";
 import {
   canonicalSentence,
-  isActionInstruction,
+  isClaimSentence,
   patternOperation,
   preflightSentence,
   WAIT_UNTIL,
@@ -161,7 +161,7 @@ function checkDiagnostics(item: {
     (preflight !== null && preflight !== "unsupported") ||
     WAIT_UNTIL.test(text) ||
     (operation !== null && operation !== "verify") ||
-    isActionInstruction(text)
+    !isClaimSentence(text)
   )
     return [
       {

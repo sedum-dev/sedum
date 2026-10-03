@@ -9,9 +9,13 @@ provider: { name: clef, model: clef }
 
 `model` must be `clef` or `clef-flash`. Set `CLOUDFLARE_ACCOUNT_ID` and
 `CLOUDFLARE_AUTH_TOKEN` in the invoking environment or project-root `.env`.
-Process values take precedence. Never commit `.env`; credentials are excluded
-from test-data expansion and reports. Sedum uses Cloudflare's fixed HTTPS
-Workers AI route. Custom Cloudflare endpoints are not supported.
+Sedum also accepts Cloudflare's conventional `CLOUDFLARE_API_TOKEN` as an
+alias. Process values take precedence over `.env` across both token names. If
+both names at the winning level contain different tokens, Sedum rejects the
+ambiguous configuration; keep one name or make their values identical. Never
+commit `.env`; credentials are excluded from test-data expansion and reports.
+Sedum uses Cloudflare's fixed HTTPS Workers AI route. Custom Cloudflare
+endpoints are not supported.
 
 ## Set up Cloudflare and run Sedum
 
@@ -31,6 +35,7 @@ Workers AI route. Custom Cloudflare endpoints are not supported.
    ```dotenv
    CLOUDFLARE_ACCOUNT_ID=your_account_id
    CLOUDFLARE_AUTH_TOKEN=your_workers_ai_api_token
+   # CLOUDFLARE_API_TOKEN is accepted as an alias for the line above.
    ```
 
 5. Add `provider: { name: clef, model: clef }` to `sedum.config.yaml`. Use

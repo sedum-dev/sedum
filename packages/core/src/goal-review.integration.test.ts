@@ -17,6 +17,7 @@ import {
   goalOperations,
   type GoalChoice,
   type GoalPlanner,
+  type GoalState,
 } from "./goal-runner.js";
 import { runFlow } from "./flow-runner.js";
 import { resolveData } from "./flow-values.js";
@@ -65,7 +66,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
 
     function emailPlanner(): GoalPlanner {
       return {
-        chooseGoal: async (state) => {
+        chooseGoal: vi.fn(async (state: GoalState) => {
           const target = Object.entries(state.targets.TYPE ?? {}).find(
             ([, text]) => text.includes('"name":"Account email"'),
           );
@@ -77,7 +78,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
               : {}),
             call,
           };
-        },
+        }),
         chooseGoalValue: vi.fn(async (state) => ({
           value: choice(
             "faker.internet.exampleEmail",
@@ -95,6 +96,33 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       verify: ["Account email is filled"],
       dataSeed: 53,
     };
+
+    it("re-observes a reactive page revision during Faker selection before dispatch", async () => {
+      const planner = emailPlanner();
+      vi.mocked(planner.chooseGoalValue!).mockImplementationOnce(
+        async (state) => {
+          await page.evaluate(
+            `document.body.setAttribute('data-reactive-revision', '1')`,
+          );
+          return {
+            value: choice(
+              "faker.internet.exampleEmail",
+              Object.keys(state.choices),
+            ),
+            call,
+          };
+        },
+      );
+
+      const result = await runGoal(page, planner, judge, options);
+
+      expect(result).toMatchObject({ status: "passed", actions: 1 });
+      expect(planner.chooseGoal).toHaveBeenCalledTimes(3);
+      expect(planner.chooseGoalValue).toHaveBeenCalledOnce();
+      expect(
+        await page.evaluate("document.querySelector('[name=email]').value"),
+      ).toMatch(/@example\.(com|net|org)$/);
+    });
 
     it.each(["", "$EMPTY"])(
       "keeps empty fields available with empty binding %j",
@@ -162,8 +190,17 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
           expect(result).toMatchObject({
             reason: "stale_value_target",
             actions: 0,
+            detail: expect.stringContaining(
+              "faker.internet.exampleEmail; its value remains hidden",
+            ),
+            failure: {
+              operation: "type",
+              targetName: "Account email",
+              targetRole: "textbox",
+            },
           });
           expect(values).toHaveLength(1);
+          expect(JSON.stringify(result)).not.toContain(values[0]);
           expect(
             await page.evaluate("document.querySelector('[name=email]').value"),
           ).toBe("");

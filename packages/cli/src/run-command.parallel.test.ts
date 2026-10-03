@@ -137,6 +137,7 @@ let previous: string | undefined;
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   state.behavior = undefined;
   state.active = 0;
   state.peak = 0;
@@ -327,6 +328,39 @@ describe("parallel sedum run", () => {
     const second = output.result.tests.find((test) => test.file === names[1]);
     expect(second).toMatchObject({ state: "completed", verdict: "passed" });
     expect(runExitCode(output.result, false)).toBe(3);
+  });
+
+  it("reports missing and rejected Clef credentials without TypeSafe advice or secret leakage", async () => {
+    vi.stubEnv("CLOUDFLARE_AUTH_TOKEN", "");
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", "");
+    const names = await project(1);
+    await writeFile(
+      path.join(root!, "sedum.config.yaml"),
+      "provider: { name: clef, model: clef }\n",
+    );
+    const missing = await executeRunCommand({ ...base, paths: names });
+    expect(missing.diagnostic).toMatchObject({
+      code: "provider_configuration",
+      message: expect.stringContaining("Cloudflare Clef"),
+      fix: expect.stringContaining("CLOUDFLARE_API_TOKEN"),
+    });
+    expect(JSON.stringify(missing)).not.toContain("TYPESAFE_API_KEY");
+
+    await writeFile(
+      path.join(root!, ".env"),
+      "CLOUDFLARE_ACCOUNT_ID=0123456789abcdef0123456789abcdef\nCLOUDFLARE_API_TOKEN=run-sentinel-secret\n",
+    );
+    state.errorCode = "provider_authentication";
+    state.behavior = async () => "could_not_run";
+    const rejected = await executeRunCommand({ ...base, paths: names });
+    expect(rejected.diagnostic).toMatchObject({
+      code: "provider_authentication",
+      message: "Cloudflare rejected the configured API token.",
+      fix: expect.stringContaining("Workers AI Read and Edit"),
+    });
+    expect(rejected.diagnostic?.fix).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(JSON.stringify(rejected)).not.toContain("run-sentinel-secret");
+    expect(JSON.stringify(rejected)).not.toContain("TYPESAFE_API_KEY");
   });
 
   it("records a test-scoped error on its test and runs every other test", async () => {

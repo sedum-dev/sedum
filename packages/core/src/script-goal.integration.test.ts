@@ -55,6 +55,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       planner: Partial<GoalPlanner> = { chooseGoal: done },
       reporting = true,
       signal?: AbortSignal,
+      evidenceEnabled = false,
     ) {
       const file = path.join(root, `${++serial}.test.ts`);
       await writeFile(
@@ -92,11 +93,12 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
               report: {
                 recorder,
                 privacy: { secretValues: [], sensitiveOrigins: [] },
-                evidenceEnabled: false,
+                evidenceEnabled,
                 replay: false,
                 saveFrame: async () => ({
-                  status: "omitted" as const,
-                  reason: "disabled",
+                  status: "captured" as const,
+                  path: "goal-failure.jpg",
+                  mediaType: "image/jpeg" as const,
                 }),
               },
             }
@@ -196,16 +198,26 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
 
     it("keeps goal failure sticky when caught and records BLOCKED", async () => {
       const { outcome, steps } = await run(
-        `try { await ai.goal('Inspect page'); } catch {} `,
+        `await page.setContent('<main><h1>Checkout details</h1></main>'); try { await ai.goal('Inspect page'); } catch {} `,
         {
           chooseGoal: async (state) => ({
             operation: choice("BLOCKED", Object.keys(goalOperations(state))),
             call,
           }),
         },
+        true,
+        undefined,
+        true,
       );
       expect(outcome).toMatchObject({ status: "failed", retryable: false });
-      expect(steps[0]!.goal?.reason).toBe("blocked");
+      expect(steps[0]).toMatchObject({
+        goal: { reason: "blocked" },
+        detail: expect.stringContaining(
+          "no click or fill targets were available",
+        ),
+        page: { status: "available" },
+        evidence: { status: "captured", path: "goal-failure.jpg" },
+      });
     });
 
     it.each([

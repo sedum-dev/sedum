@@ -579,10 +579,27 @@ if (!window.__sedum) {
     }
     return best?.text ?? "";
   }
-  function candidateName(element: Element): string {
+  function hiddenControlText(element: Element): string {
+    const parts: string[] = [];
+    for (const node of flatTextNodes(element)) {
+      const parent = node.parentElement;
+      if (
+        !parent ||
+        parent.closest(
+          "script,style,noscript,input,textarea,select,[contenteditable]",
+        ) ||
+        insideNestedControl(element, parent)
+      )
+        continue;
+      parts.push(node.textContent ?? "");
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+  function candidateName(element: Element, hoverRevealed = false): string {
     const visualOnly = ariaHiddenOnly(element);
     return (
       label(element, visualOnly) ||
+      (hoverRevealed ? hiddenControlText(element) : "") ||
       mediaName(element) ||
       nearbyText(element) ||
       hostLabel(element) ||
@@ -920,38 +937,183 @@ if (!window.__sedum) {
       ) && !!publicText(element, false, true)
     );
   }
-  type HoverRule = { readonly revealed: string; readonly host: string };
+  type HoverProperty = "display" | "visibility" | "opacity";
+  type CascadeRule = {
+    readonly selector: string;
+    readonly match: string;
+    readonly specificity: readonly [number, number, number] | null;
+    readonly order: number;
+    readonly style: CSSStyleDeclaration;
+  };
+  type HoverRule = CascadeRule & {
+    readonly revealed: string;
+    readonly host: string;
+    readonly display: boolean;
+    readonly visibility: boolean;
+    readonly opacity: boolean;
+  };
   let hoverRules: readonly HoverRule[] | undefined;
+  let cascadeRules: readonly CascadeRule[] = [];
+  function selectorList(text: string): string[] {
+    const selectors: string[] = [];
+    let start = 0;
+    let depth = 0;
+    let quote = "";
+    for (let index = 0; index < text.length; index++) {
+      const char = text[index]!;
+      if (quote) {
+        if (char === quote && text[index - 1] !== "\\") quote = "";
+      } else if (char === '"' || char === "'") quote = char;
+      else if (char === "(" || char === "[") depth++;
+      else if (char === ")" || char === "]") depth--;
+      else if (char === "," && depth === 0) {
+        selectors.push(text.slice(start, index).trim());
+        start = index + 1;
+      }
+    }
+    selectors.push(text.slice(start).trim());
+    return selectors.filter(Boolean);
+  }
+  /** Specificity for the deliberately small selector subset we can prove. */
+  function specificity(
+    selector: string,
+  ): readonly [number, number, number] | null {
+    // Functional pseudo-classes, escapes, namespaces and pseudo-elements have
+    // nontrivial specificity. Refuse them rather than guessing actionability.
+    if (/\\|\||::|:[\w-]+\(/.test(selector)) return null;
+    const attributes = selector.match(/\[[^\]]*\]/g)?.length ?? 0;
+    const bare = selector.replace(/\[[^\]]*\]/g, " ");
+    const ids = bare.match(/#[\w-]+/g)?.length ?? 0;
+    const classes = bare.match(/\.[\w-]+/g)?.length ?? 0;
+    const pseudos = bare.match(/:(?!:)[\w-]+/g)?.length ?? 0;
+    const withoutQualifiers = bare
+      .replace(/#[\w-]+|\.[\w-]+|:(?!:)[\w-]+/g, "")
+      .replace(/\*/g, "");
+    const types =
+      withoutQualifiers.match(/(?:^|[\s>+~])([a-zA-Z][\w-]*)/g)?.length ?? 0;
+    return [ids, attributes + classes + pseudos, types];
+  }
+  function stronger(a: CascadeRule, b: CascadeRule, property: HoverProperty) {
+    const importantA = a.style.getPropertyPriority(property) === "important";
+    const importantB = b.style.getPropertyPriority(property) === "important";
+    if (importantA !== importantB) return importantA;
+    if (!a.specificity || !b.specificity) return false;
+    for (let index = 0; index < 3; index++) {
+      if (a.specificity[index] !== b.specificity[index])
+        return a.specificity[index]! > b.specificity[index]!;
+    }
+    return a.order > b.order;
+  }
+  function hoverWins(
+    element: Element,
+    property: HoverProperty,
+    reveal: HoverRule,
+  ): boolean {
+    let winner: CascadeRule | null = null;
+    for (const rule of cascadeRules) {
+      if (!rule.style.getPropertyValue(property)) continue;
+      try {
+        if (!element.matches(rule.match)) continue;
+      } catch {
+        return false;
+      }
+      // Rules in layers, scopes, container queries, or unsupported selectors
+      // make the author cascade unknowable without changing hover state.
+      if (!rule.specificity) return false;
+      if (!winner || stronger(rule, winner, property)) winner = rule;
+    }
+    return (
+      winner?.order === reveal.order && winner.selector === reveal.selector
+    );
+  }
   /**
    * Stylesheet rules that show an element while an ancestor is hovered, such
    * as `.row:hover .actions { visibility: visible }`. Read once per scan.
    */
   function readHoverRules(): readonly HoverRule[] {
     const rules: HoverRule[] = [];
-    const visit = (list: CSSRuleList) => {
+    const declarations: CascadeRule[] = [];
+    let order = 0;
+    let complete = true;
+    const visit = (list: CSSRuleList, safe = true) => {
       for (const rule of Array.from(list)) {
         if (rule instanceof CSSStyleRule) {
           const style = rule.style;
-          const reveals =
-            style.visibility === "visible" ||
-            (style.opacity !== "" && Number.parseFloat(style.opacity) > 0);
-          if (!reveals || !rule.selectorText.includes(":hover")) continue;
-          for (const selector of rule.selectorText.split(",")) {
-            const at = selector.indexOf(":hover");
-            if (at < 0) continue;
-            const host = selector.slice(0, at).trim();
+          const display = style.display !== "" && style.display !== "none";
+          const visibility = style.visibility === "visible";
+          const opacity =
+            style.opacity !== "" && Number.parseFloat(style.opacity) > 0;
+          const reveals = display || visibility || opacity;
+          for (const selector of selectorList(rule.selectorText)) {
             const revealed = selector.replace(/:hover/g, "").trim();
+            const declaration: CascadeRule = {
+              selector,
+              match: revealed,
+              specificity: safe ? specificity(selector) : null,
+              order: ++order,
+              style,
+            };
+            try {
+              document.querySelector(revealed);
+            } catch {
+              continue;
+            }
+            declarations.push(declaration);
+            if (
+              !safe ||
+              !declaration.specificity ||
+              !reveals ||
+              !selector.includes(":hover")
+            )
+              continue;
+            const at = selector.lastIndexOf(":hover");
+            const host = selector
+              .slice(0, at)
+              .replace(/:hover/g, "")
+              .trim();
             if (!host || host === revealed) continue;
             try {
               document.querySelector(host);
-              document.querySelector(revealed);
-              rules.push({ revealed, host });
+              rules.push({
+                ...declaration,
+                revealed,
+                host,
+                display,
+                visibility,
+                opacity,
+              });
             } catch {
               // A selector this browser cannot parse reveals nothing.
             }
           }
+        } else if (rule instanceof CSSImportRule) {
+          try {
+            if (rule.styleSheet) visit(rule.styleSheet.cssRules, safe);
+            else complete = false;
+          } catch {
+            complete = false;
+          }
         } else if ("cssRules" in rule) {
-          visit((rule as CSSGroupingRule).cssRules);
+          const name = rule.constructor.name;
+          if (
+            name === "CSSMediaRule" &&
+            !matchMedia((rule as CSSMediaRule).conditionText).matches
+          )
+            continue;
+          if (
+            name === "CSSSupportsRule" &&
+            !CSS.supports((rule as CSSSupportsRule).conditionText)
+          )
+            continue;
+          visit(
+            (rule as CSSGroupingRule).cssRules,
+            safe &&
+              ![
+                "CSSLayerBlockRule",
+                "CSSScopeRule",
+                "CSSContainerRule",
+              ].includes(name),
+          );
         }
       }
     };
@@ -960,34 +1122,85 @@ if (!window.__sedum) {
         visit(sheet.cssRules);
       } catch {
         // Cross-origin sheets cannot be read.
+        complete = false;
       }
     }
+    cascadeRules = complete ? declarations : [];
+    if (!complete) return [];
     return rules;
   }
   /**
-   * The ancestor whose hover shows a control that is laid out but hidden,
-   * such as a row's actions button; null for any other hidden control.
+   * The visible ancestor whose hover shows a control. This inspects CSS only;
+   * discovery never moves the pointer or runs page hover handlers.
    */
   function hoverHost(element: Element): Element | null {
-    if (!interactive(element) || !element.getClientRects().length) return null;
+    if (!interactive(element)) return null;
     if (element.closest("[hidden],[inert],[aria-hidden='true']")) return null;
     hoverRules ??= readHoverRules();
+    const path: Element[] = [];
     for (
       let node: Element | null = element;
       node && node !== document.body;
       node = composedParent(node)
     ) {
-      const style = getComputedStyle(node);
-      if (style.display === "none") return null;
+      path.push(node);
       // An item of a closed menu needs its control opened, not a hover.
       if (node !== element && interactive(node)) return null;
+    }
+    const plans = new Map<
+      Element,
+      { display: Set<Element>; visibility: boolean; opacity: boolean }
+    >();
+    for (const node of path) {
       for (const rule of hoverRules) {
         if (!node.matches(rule.revealed)) continue;
-        const host = composedParent(node)?.closest(rule.host);
-        if (host && visible(host)) return host;
+        let host: Element | null = node;
+        while (host && !host.matches(rule.host)) host = composedParent(host);
+        if (!host || !visible(host)) continue;
+        const plan = plans.get(host) ?? {
+          display: new Set<Element>(),
+          visibility: false,
+          opacity: false,
+        };
+        if (rule.display && hoverWins(node, "display", rule))
+          plan.display.add(node);
+        plan.visibility ||=
+          rule.visibility && hoverWins(node, "visibility", rule);
+        plan.opacity ||= rule.opacity && hoverWins(node, "opacity", rule);
+        plans.set(host, plan);
       }
     }
-    return null;
+    return (
+      Array.from(plans)
+        .filter(([host, plan]) => {
+          for (const node of path.slice(0, path.indexOf(host) + 1)) {
+            const style = getComputedStyle(node);
+            if (style.contentVisibility === "hidden") return false;
+            // Inline hiding wins over a stylesheet hover rule unless page code
+            // mutates it; discovery must not speculate about such behavior.
+            if (
+              node instanceof HTMLElement &&
+              (node.style.display === "none" ||
+                node.style.visibility === "hidden" ||
+                Number.parseFloat(node.style.opacity) === 0)
+            )
+              return false;
+            if (style.display === "none" && !plan.display.has(node))
+              return false;
+            if (
+              (style.visibility === "hidden" ||
+                style.visibility === "collapse") &&
+              !plan.visibility
+            )
+              return false;
+            if (Number.parseFloat(style.opacity) === 0 && !plan.opacity)
+              return false;
+          }
+          return true;
+        })
+        .map(([host]) => host)
+        .sort((a, b) => path.indexOf(a) - path.indexOf(b))[0] ?? null
+    );
   }
   function hoverRevealed(element: Element): boolean {
     return !visible(element) && !!hoverHost(element);
@@ -1464,12 +1677,13 @@ if (!window.__sedum) {
         }
       }
       const proxied = operation === "click" ? toggleLabel(element) : null;
+      const shownByHover =
+        operation === "click" && !visible(element) ? hoverHost(element) : null;
       if (
         !(
           visible(element) ||
           transparentToggle(element) ||
-          (operation === "click" &&
-            (ariaHiddenOnly(element) || hoverRevealed(element)))
+          (operation === "click" && (ariaHiddenOnly(element) || shownByHover))
         ) ||
         (operation === "read"
           ? !readable(element)
@@ -1488,7 +1702,9 @@ if (!window.__sedum) {
       )
         continue;
       const rawName =
-        operation === "read" ? label(element) : candidateName(element);
+        operation === "read"
+          ? label(element)
+          : candidateName(element, !!shownByHover);
       if (!rawName) continue;
       const name = boundedName(rawName);
       const ref = `${documentId}-${++sequence}`;
@@ -1891,7 +2107,8 @@ if (!window.__sedum) {
     const candidate = snapshot?.candidates.find((item) => item.ref === ref);
     if (
       !candidate ||
-      candidateName(element) !== owned.get(element)?.rawName ||
+      candidateName(element, !!hoverHost(element)) !==
+        owned.get(element)?.rawName ||
       JSON.stringify(peers(element, candidate.name).texts) !==
         JSON.stringify(candidate.peers) ||
       (expected && expected.name !== candidate.name)
@@ -1923,23 +2140,25 @@ if (!window.__sedum) {
         return { actionable: false, reason: "not_actionable" };
     }
     const hitTest = (): AimResult | null => {
-      const rect = element.getBoundingClientRect();
+      const target = shownBy && !visible(element) ? shownBy : element;
+      const rect = target.getBoundingClientRect();
       if (!rect.width || !rect.height) return null;
-      const points = expected
-        ? [[expected.point.x / rect.width, expected.point.y / rect.height]]
-        : [
-            [0.5, 0.5],
-            [0.25, 0.5],
-            [0.75, 0.5],
-            [0.5, 0.25],
-            [0.5, 0.75],
-          ];
+      const points =
+        expected && target === element && !expected.hover
+          ? [[expected.point.x / rect.width, expected.point.y / rect.height]]
+          : [
+              [0.5, 0.5],
+              [0.25, 0.5],
+              [0.75, 0.5],
+              [0.5, 0.25],
+              [0.5, 0.75],
+            ];
       for (const [fx, fy] of points) {
         const x = rect.left + rect.width * fx!;
         const y = rect.top + rect.height * fy!;
         if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
         const hit = deepElementFromPoint(x, y);
-        if (hit && deepContains(shownBy ?? element, hit)) {
+        if (hit && deepContains(target, hit)) {
           return {
             actionable: true,
             aim: {
@@ -1949,7 +2168,10 @@ if (!window.__sedum) {
               revision: current.revision,
               tag: element.tagName.toLowerCase(),
               name: candidate.name,
-              point: { x: rect.width * fx!, y: rect.height * fy! },
+              point:
+                target === element
+                  ? { x: rect.width * fx!, y: rect.height * fy! }
+                  : { x: 0, y: 0 },
               ...(shownBy ? { hover: true } : {}),
               box: {
                 x: Math.max(0, rect.left / innerWidth),
@@ -1976,6 +2198,18 @@ if (!window.__sedum) {
     if (!same(version(), current) || refElement(ref) !== element)
       return { actionable: false, reason: "stale" };
     return hitTest() ?? { actionable: false, reason: "not_actionable" };
+  }
+  function hoverElement(expected: Aim): Element | null {
+    const current = version();
+    if (!snapshot || !same(snapshot.version, current)) return null;
+    const element = refElement(expected.ref);
+    if (
+      !element ||
+      element.tagName.toLowerCase() !== expected.tag ||
+      candidateName(element, true) !== owned.get(element)?.rawName
+    )
+      return null;
+    return visible(element) ? null : hoverHost(element);
   }
   const bridge: PageBridge = {
     protocol: PAGE_PROTOCOL,
@@ -2029,6 +2263,7 @@ if (!window.__sedum) {
     readTarget,
     controlState,
     checkAim: (expected) => aim(expected.ref, expected),
+    hoverElement,
     fillElement,
     clearRefs,
     quiet: async ({ ms, timeoutMs }) => {

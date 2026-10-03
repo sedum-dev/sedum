@@ -219,7 +219,7 @@ test("optional screen", async ({ ai }) => {
     expect(output.exitCode).toBe(3);
     expect(output.stdout).toBe("");
     expect(output.stderr).toBe(
-      "`sedum validate --online` needs a configured model provider.\nFix: Set the selected provider's credentials (TYPESAFE_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN) and rerun; otherwise omit --online.\n",
+      "`sedum validate --online` needs a configured model provider.\nFix: Set the selected provider's credentials (TYPESAFE_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN/CLOUDFLARE_API_TOKEN) and rerun; otherwise omit --online.\n",
     );
     const broken = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
@@ -553,6 +553,7 @@ describe("project configuration", () => {
     }));
     vi.stubEnv("CLOUDFLARE_ACCOUNT_ID", "");
     vi.stubEnv("CLOUDFLARE_AUTH_TOKEN", "");
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", "");
     vi.stubEnv("TYPESAFE_API_KEY", "");
     const output = await runCli(["validate", "--online"], "0.0.0", {
       cwd,

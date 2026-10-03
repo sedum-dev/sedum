@@ -248,7 +248,7 @@ export async function executeDoctorCommand(
             "api_key",
             "Provider API key is missing.",
             config.providerName === "clef"
-              ? "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN."
+              ? "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN)."
               : "Set TYPESAFE_API_KEY for the configured endpoint.",
           ),
   );
@@ -266,7 +266,9 @@ export async function executeDoctorCommand(
       fail(
         "api_auth",
         "API authentication could not be checked without a key.",
-        "Set the provider API key, then rerun doctor.",
+        config.providerName === "clef"
+          ? "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN), then rerun doctor."
+          : "Set TYPESAFE_API_KEY, then rerun doctor.",
       ),
     );
   else if (!network)
@@ -311,8 +313,12 @@ export async function executeDoctorCommand(
         : result === "rejected"
           ? fail(
               "api_auth",
-              "Model provider API rejected the key.",
-              "Replace the provider API key with a valid key and rerun doctor.",
+              config.providerName === "clef"
+                ? "Cloudflare rejected the configured API token."
+                : "Model provider API rejected the key.",
+              config.providerName === "clef"
+                ? "Check CLOUDFLARE_ACCOUNT_ID, then replace CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN) with a token for that account that has Workers AI Read and Edit permissions."
+                : "Replace TYPESAFE_API_KEY with a valid key and rerun doctor.",
             )
           : result === "unreachable"
             ? fail(
@@ -323,7 +329,9 @@ export async function executeDoctorCommand(
             : fail(
                 "api_auth",
                 "The model provider could not complete the authentication probe.",
-                "Check API availability and account access, then retry.",
+                config.providerName === "clef"
+                  ? "Check Cloudflare API availability, CLOUDFLARE_ACCOUNT_ID, and Workers AI access, then retry."
+                  : "Check API availability and account access, then retry.",
               ),
     );
   }

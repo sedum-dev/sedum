@@ -341,6 +341,39 @@ describe("sedum doctor", () => {
     },
   );
 
+  it("gives provider-specific missing and rejected Clef credential guidance without leaking the token", async () => {
+    const base = await fixture();
+    const clef = {
+      ...base,
+      providerName: "clef" as const,
+      providerModel: "clef",
+      cloudflareAccountId: "0123456789abcdef0123456789abcdef",
+      apiKey: "doctor-sentinel-secret",
+    };
+    const rejected = await executeDoctorCommand(clef.projectRoot, {
+      ...probes(clef),
+      auth: async () => "rejected",
+    });
+    const auth = rejected.checks.find((check) => check.id === "api_auth");
+    expect(auth).toMatchObject({
+      status: "fail",
+      message: "Cloudflare rejected the configured API token.",
+      fix: expect.stringContaining("Workers AI Read and Edit"),
+    });
+    expect(auth?.fix).toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(auth?.fix).toContain("CLOUDFLARE_API_TOKEN");
+    expect(JSON.stringify(rejected)).not.toContain("doctor-sentinel-secret");
+    expect(JSON.stringify(rejected)).not.toContain("TYPESAFE_API_KEY");
+
+    const missing = await executeDoctorCommand(base.projectRoot, {
+      ...probes({ ...clef, apiKey: undefined }),
+    });
+    const serialized = JSON.stringify(missing);
+    expect(serialized).toContain("CLOUDFLARE_AUTH_TOKEN");
+    expect(serialized).toContain("CLOUDFLARE_API_TOKEN");
+    expect(serialized).not.toContain("TYPESAFE_API_KEY");
+  });
+
   it("keeps JSON parseable on multiple failures and reports exit 3", async () => {
     const config = await fixture();
     const result = await runCli(["doctor", "--json"], "0.0.0", {

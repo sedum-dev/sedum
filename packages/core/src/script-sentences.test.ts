@@ -261,6 +261,93 @@ describe("literal ai sentences in TypeScript tests", () => {
     expect(scan.warnings).toEqual([]);
   });
 
+  it("compares literal goal placeholders with readable object keys", () => {
+    const scan = scanScriptSentences(
+      [
+        'const user = "standard_user";',
+        'await ai.goal("Sign in as {{user}}", { username: user, extra: true });',
+        'await ai.goal("Sign in as {{user}} in {{region}}", { user, "region": choose({ primary: "south" }), extra: false });',
+      ].join("\n"),
+      file,
+    );
+    expect(scan.warnings).toEqual([
+      expect.objectContaining({
+        severity: "error",
+        code: "missing_value",
+        source: { file, line: 2, col: 15 },
+        message: "{{user}} has no value.",
+      }),
+    ]);
+  });
+
+  it("resolves reusable same-file const object values", () => {
+    const scan = scanScriptSentences(
+      [
+        'const customer = { username: "standard_user", user: profile.name };',
+        'await ai.goal("Sign in as {{user}}", customer);',
+        'await ai.goal("Open the profile for {{user}}", customer);',
+      ].join("\n"),
+      file,
+    );
+    expect(scan.warnings).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a missing key behind const indirection",
+      'const customer = { username: "standard_user" };\nawait ai.goal("Sign in as {{user}}", customer);',
+      "missing_value",
+    ],
+    [
+      "a mutated const object",
+      'const customer = { user: "standard_user" };\ncustomer.user = name;\nawait ai.goal("Sign in as {{user}}", customer);',
+      "dynamic_goal_values",
+    ],
+    [
+      "an aliased const object",
+      'const customer = { user: "standard_user" };\nconst alias = customer;\nawait ai.goal("Sign in as {{user}}", customer);',
+      "dynamic_goal_values",
+    ],
+    [
+      "a const object mutated through an escaped identifier",
+      String.raw`const customer = { user: "standard_user" };
+delete cust\u006fmer.user;
+await ai.goal("Sign in as {{user}}", customer);`,
+      "dynamic_goal_values",
+    ],
+    [
+      "a const object aliased through an escaped identifier",
+      String.raw`const customer = { user: "standard_user" };
+const alias = cust\u006fmer;
+await ai.goal("Sign in as {{user}}", customer);`,
+      "dynamic_goal_values",
+    ],
+    [
+      "a shadowed const object",
+      'const customer = { user: "standard_user" };\nfunction helper(customer: object) {}\nawait ai.goal("Sign in as {{user}}", customer);',
+      "dynamic_goal_values",
+    ],
+    [
+      "a spread entry",
+      'await ai.goal("Sign in as {{user}}", { ...customer, username: "standard_user" });',
+      "dynamic_goal_values",
+    ],
+    [
+      "a computed key",
+      'await ai.goal("Sign in as {{user}}", { [field]: "standard_user" });',
+      "dynamic_goal_values",
+    ],
+    [
+      "unsupported object syntax",
+      'await ai.goal("Sign in as {{user}}", { get user() { return "standard_user"; } });',
+      "dynamic_goal_values",
+    ],
+  ])("does not claim complete validation for %s", (_name, source, code) => {
+    expect(
+      scanScriptSentences(source, file).warnings.map((item) => item.code),
+    ).toEqual([code]);
+  });
+
   it("rejects statically provable invalid goals and values", () => {
     const scan = scanScriptSentences(
       [
