@@ -253,6 +253,41 @@ describe("automatic goal values", () => {
     expect(JSON.stringify(result)).not.toContain(commands[0]!.value.reveal());
   });
 
+  it("replans after a page revision during value selection without regenerating or dispatching the stale target", async () => {
+    const model = setup();
+    const initialCollect = vi
+      .mocked(collectCandidates)
+      .getMockImplementation()!;
+    const revised = { ...version, revision: 2 };
+    let current = version;
+    let fillCollections = 0;
+    vi.mocked(pageDigest).mockImplementation(async () => ({
+      protocol: 1,
+      version: current,
+      text: "Start",
+      complete: true,
+    }));
+    vi.mocked(pageVersion).mockImplementation(async () => current);
+    vi.mocked(collectCandidates).mockImplementation(async (...args) => {
+      const snapshot = await initialCollect(...args);
+      if (args[1] === "fill" && ++fillCollections === 2) current = revised;
+      return { ...snapshot, version: current };
+    });
+
+    const result = await runGoal(page, model, judge, {
+      ...options,
+      maxActions: 1,
+    });
+
+    expect(result).toMatchObject({ reason: "action_limit", actions: 1 });
+    expect(model.chooseGoal).toHaveBeenCalledTimes(3);
+    expect(model.chooseGoalValue).toHaveBeenCalledOnce();
+    expect(executeStep).toHaveBeenCalledOnce();
+    const dispatched = vi.mocked(executeStep).mock.calls[0]![1];
+    if (dispatched.op !== "type") throw new Error("Expected a fill");
+    expect(dispatched.target.driverTarget().version).toEqual(revised);
+  });
+
   it("stops on constraint mismatch without retrying generation", async () => {
     const model = setup();
     vi.mocked(page.evaluate).mockImplementation(async (expression) =>
@@ -565,7 +600,7 @@ describe("bounded goal runner", () => {
     expect(result.calls[0]?.totalCostUsd).toBeNull();
     expect(executeStep).not.toHaveBeenCalled();
   });
-  it("rejects changed candidate identity even if a page keeps its version", async () => {
+  it("replans a changed candidate surface instead of remapping the stale choice", async () => {
     const original = vi.mocked(collectCandidates).getMockImplementation()!;
     let clicks = 0;
     vi.mocked(collectCandidates).mockImplementation(async (...args) => {
@@ -580,9 +615,53 @@ describe("bounded goal runner", () => {
         };
       return snapshot;
     });
-    expect(await runGoal(page, planner("CLICK"), judge, options)).toMatchObject(
-      { reason: "stale_observation", actions: 0 },
+    const model = planner("CLICK");
+    expect(
+      await runGoal(page, model, judge, { ...options, maxActions: 1 }),
+    ).toMatchObject({ reason: "action_limit", actions: 1 });
+    expect(model.chooseGoal).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(model.chooseGoal).mock.calls[0]![0].targets.CLICK).toEqual(
+      expect.objectContaining({ c0: expect.stringContaining('"name":"Open"') }),
     );
+    expect(vi.mocked(model.chooseGoal).mock.calls[1]![0].targets.CLICK).toEqual(
+      expect.objectContaining({
+        c0: expect.stringContaining('"name":"Delete"'),
+      }),
+    );
+    expect(executeStep).toHaveBeenCalledOnce();
+    const dispatched = vi.mocked(executeStep).mock.calls[0]![1];
+    if (dispatched.op !== "click") throw new Error("Expected a click");
+    expect(dispatched.target.driverTarget().name).toBe("Delete");
+  });
+  it("fails with the discarded target context when every fresh surface changes", async () => {
+    const original = vi.mocked(collectCandidates).getMockImplementation()!;
+    let clicks = 0;
+    vi.mocked(collectCandidates).mockImplementation(async (...args) => {
+      const snapshot = await original(...args);
+      if (args[1] !== "click") return snapshot;
+      return {
+        ...snapshot,
+        candidates: snapshot.candidates.map((candidate) => ({
+          ...candidate,
+          name: ++clicks % 2 ? "Open" : "Delete",
+        })),
+      };
+    });
+
+    const result = await runGoal(page, planner("CLICK"), judge, options);
+
+    expect(result).toMatchObject({
+      reason: "stale_observation",
+      actions: 0,
+      detail: expect.stringContaining(
+        "the available target surface changed; the stale target was not dispatched",
+      ),
+      failure: {
+        operation: "click",
+        targetName: "Open",
+        targetRole: "button",
+      },
+    });
     expect(executeStep).not.toHaveBeenCalled();
   });
   it("does not offer clicks outside the host-authored allowlist", async () => {

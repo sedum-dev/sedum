@@ -28,7 +28,12 @@ import {
   type ClassifiedFlowStep,
 } from "./flow-classification.js";
 import { loadFlowFile } from "./flow-loader.js";
-import { runGoal, type GoalPlanner, type GoalAction } from "./goal-runner.js";
+import {
+  runGoal,
+  type GoalPlanner,
+  type GoalAction,
+  type GoalResult,
+} from "./goal-runner.js";
 import { resolveFlowModules } from "./flow-modules.js";
 import {
   ModuleBindingResolutionError,
@@ -2001,6 +2006,86 @@ export async function recordGoalAction(
   });
 }
 
+/** Capture the current safe page and selected target for a terminal goal failure. */
+export async function goalFailureArtifacts(
+  page: BrowserPage,
+  result: GoalResult,
+  report: AttemptReport,
+  id: string,
+): Promise<
+  Pick<ResultStep, "page" | "locator" | "evidence" | "targetBox"> & {
+    readonly detail?: string;
+  }
+> {
+  const privacy = report.privacy;
+  const context = result.failure;
+  const sensitive =
+    safeUrl(page.url, privacy).sensitive ||
+    (context ? safeUrl(context.version.route, privacy).sensitive : false);
+  const sameFailureVersion = (version: PageVersion) =>
+    !!context &&
+    version.document === context.version.document &&
+    version.revision === context.version.revision &&
+    version.route === context.version.route;
+  const reportedPage = sensitive
+    ? ({ status: "omitted", reason: "sensitive_page" } as const)
+    : await reportPage(page, `${id}:observation:1`, privacy, context?.version);
+  const capture = async (): Promise<ResultFrame> => {
+    if (sensitive) return { status: "omitted", reason: "sensitive_page" };
+    if (!report.evidenceEnabled)
+      return { status: "omitted", reason: "disabled" };
+    if (!page.captureFrame)
+      return { status: "unavailable", reason: "capture_unavailable" };
+    try {
+      const before = await pageVersion(page);
+      if (!sameFailureVersion(before))
+        return { status: "unavailable", reason: "stale_frame" };
+      if (safeUrl(before.route, privacy).sensitive)
+        return { status: "omitted", reason: "sensitive_page" };
+      const bytes = await page.captureFrame();
+      const after = await pageVersion(page);
+      if (!sameFailureVersion(after))
+        return { status: "unavailable", reason: "stale_frame" };
+      return await report.saveFrame(
+        report.test.currentAttempt!,
+        `${id}:evidence`,
+        bytes,
+      );
+    } catch {
+      return { status: "unavailable", reason: "capture_failed" };
+    }
+  };
+  return {
+    page: reportedPage,
+    locator:
+      reportedPage.status === "available" &&
+      context?.targetName &&
+      context.targetRole
+        ? {
+            confidence: context.confidence ?? null,
+            source: "model",
+            cache: null,
+            options: [
+              {
+                label: safeText(context.targetName, privacy, 120),
+                role: safeText(context.targetRole, privacy, 80),
+                probability: context.probability ?? 0,
+              },
+            ],
+          }
+        : null,
+    evidence: await capture(),
+    targetBox: null,
+    ...(sensitive
+      ? {
+          detail: `The goal stopped on a sensitive page; page and target context were omitted.${context?.generator ? ` The retained synthetic value came from ${context.generator}; its value remains hidden.` : ""}`,
+        }
+      : result.detail
+        ? { detail: result.detail }
+        : {}),
+  };
+}
+
 /** Run one validated attempt with setup, body, and exhaustive teardown. */
 export async function runFlow(
   file: string,
@@ -2316,15 +2401,26 @@ export async function runFlow(
         const { test, privacy } = dependencies.report;
         const attempt = test.currentAttempt!;
         const checked = goalResult.verification[0];
+        const id = `${attempt.id}:step:${attempt.stepCount + 1}`;
+        const failureArtifacts =
+          goalResult.status === "failed" && goalResult.failure
+            ? await goalFailureArtifacts(
+                activePage,
+                goalResult,
+                dependencies.report,
+                id,
+              )
+            : undefined;
+        const failureDetail = failureArtifacts?.detail ?? goalResult.detail;
         await test.addStep({
-          id: `${attempt.id}:step:${attempt.stepCount + 1}`,
+          id,
           index: attempt.stepCount + 1,
           kind: "verify",
           operation: "goal",
           phase: "steps",
           sentence: safeText(goal.text, privacy, 512),
           detail: safeText(
-            `${goalResult.actions} actions, ${goalResult.requests} requests; ${goalResult.reason}. Verify: ${goal.verify}`,
+            `${goalResult.actions} actions, ${goalResult.requests} requests; ${goalResult.reason}.${failureDetail ? ` ${failureDetail}` : ""} Verify: ${goal.verify}`,
             privacy,
             512,
           ),
@@ -2339,8 +2435,11 @@ export async function runFlow(
                 flag === "low_confidence" || flag === "contradiction",
             ) ?? [],
           elapsedMs: goalResult.elapsedMs,
-          page: { status: "omitted", reason: "goal_summary" },
-          locator: null,
+          page: failureArtifacts?.page ?? {
+            status: "omitted",
+            reason: "goal_summary",
+          },
+          locator: failureArtifacts?.locator ?? null,
           judgement: checked
             ? {
                 holds: checked.holds,
@@ -2364,15 +2463,18 @@ export async function runFlow(
               ? {
                   code: goalResult.reason,
                   message: safeText(
-                    `Goal did not pass: ${goalResult.reason}.${goalResult.detail ? ` The planner was unsure of the ${goalResult.detail}.` : ""}${goalResult.reason.endsWith("_abstention") ? " Name the page or control for that step in the goal, or split the goal into authored steps around it." : ""}`,
+                    `Goal did not pass: ${goalResult.reason}.${failureDetail ? ` ${failureDetail}` : ""}${goalResult.reason.endsWith("_abstention") ? " Name the page or control for that step in the goal, or split the goal into authored steps around it." : ""}`,
                     privacy,
                     512,
                   ),
                 }
               : null,
-          evidence: { status: "omitted", reason: "goal_summary" },
+          evidence: failureArtifacts?.evidence ?? {
+            status: "omitted",
+            reason: "goal_summary",
+          },
           replayFrame: null,
-          targetBox: null,
+          targetBox: failureArtifacts?.targetBox ?? null,
         });
       }
       if (goalResult.status === "failed")
