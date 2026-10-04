@@ -453,11 +453,10 @@ describe("canonical RunResult", () => {
     expectDiagnostic(unfinishedStep, "Completed step has no verdict");
   });
 
-  it("preserves problem linkage, ordering, and outcome diagnostics", async () => {
+  it("preserves problem linkage, ordering, and count diagnostics", async () => {
     const failed = await recordedResult("failed");
     const attempt = failed.tests[0]!.attempts[0]!;
     const problem = attempt.problems[0]!;
-    const failedStep = attempt.steps[0]!;
 
     const unexpectedPrimary = copyResult(failed);
     unexpectedPrimary.tests[0]!.attempts[0]!.problems = [];
@@ -496,6 +495,13 @@ describe("canonical RunResult", () => {
       missingProblem,
       "Executed step problem count is inconsistent",
     );
+  });
+
+  it("preserves attempt outcome diagnostics", async () => {
+    const failed = await recordedResult("failed");
+    const attempt = failed.tests[0]!.attempts[0]!;
+    const problem = attempt.problems[0]!;
+    const failedStep = attempt.steps[0]!;
 
     const operationalCompletion = copyResult(failed);
     operationalCompletion.tests[0]!.attempts[0]!.problems[0] = {

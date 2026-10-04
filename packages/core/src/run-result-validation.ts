@@ -170,22 +170,25 @@ function validateStepProblemCount(
   rejectIf(actual !== expected, "Executed step problem count is inconsistent");
 }
 
-function validateAttemptOutcome(attempt: ResultAttempt): void {
+function validateCompletedAttemptOutcome(attempt: ResultAttempt): void {
+  if (attempt.state !== "completed") return;
   const primary = attempt.problems[0];
-  if (attempt.state === "completed") {
-    rejectIf(
-      primary?.outcome === "error",
-      "Operational primary cannot complete an attempt",
-    );
-    rejectIf(
-      attempt.verdict === "failed" && primary?.outcome !== "failed",
-      "Failed attempt needs a failed primary problem",
-    );
-    rejectIf(
-      attempt.verdict === "passed" && attempt.problems.length > 0,
-      "Passed attempt has problems",
-    );
-  }
+  rejectIf(
+    primary?.outcome === "error",
+    "Operational primary cannot complete an attempt",
+  );
+  rejectIf(
+    attempt.verdict === "failed" && primary?.outcome !== "failed",
+    "Failed attempt needs a failed primary problem",
+  );
+  rejectIf(
+    attempt.verdict === "passed" && attempt.problems.length > 0,
+    "Passed attempt has problems",
+  );
+}
+
+function validateErrorAttemptOutcome(attempt: ResultAttempt): void {
+  const primary = attempt.problems[0];
   rejectIf(
     attempt.state === "error" &&
       attempt.problems.length > 0 &&
@@ -203,7 +206,8 @@ function validateAttempt(attempt: ResultAttempt, ids: ResultIds): void {
     validateProblem(problem, index, attempt, ids);
   for (const step of attempt.steps)
     validateStepProblemCount(step, attempt.problems);
-  validateAttemptOutcome(attempt);
+  validateCompletedAttemptOutcome(attempt);
+  validateErrorAttemptOutcome(attempt);
 }
 
 function validateSelectedAttempt(test: ResultTest): void {
