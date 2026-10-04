@@ -33,23 +33,49 @@ function validProbability(probability: number): boolean {
   );
 }
 
-export function evaluateModelAnswer(
+interface ProbabilitySummary {
+  readonly chosen: number;
+  readonly highest: number;
+  readonly runnerUp: number;
+}
+
+function probabilitySummary(
   answer: ModelClassification | CachedClassification,
-): ModelDecision {
-  if (!hasValidChoices(answer)) return { accepted: false, reason: "invalid" };
+): ProbabilitySummary | null {
   const values = MODEL_CHOICES.map((key) => answer.probabilities[key]);
-  if (values.some((probability) => !validProbability(probability)))
-    return { accepted: false, reason: "invalid" };
+  if (values.some((probability) => !validProbability(probability))) return null;
   const sum = values.reduce((a, b) => a + b, 0);
-  if (Math.abs(sum - 1) >= 0.02) return { accepted: false, reason: "invalid" };
-  const chosen = answer.probabilities[answer.op];
+  if (Math.abs(sum - 1) >= 0.02) return null;
   const sorted = [...values].sort((a, b) => b - a);
-  if (sorted[0]! - chosen > 1e-6) return { accepted: false, reason: "invalid" };
+  return {
+    chosen: answer.probabilities[answer.op],
+    highest: sorted[0]!,
+    runnerUp: sorted[1]!,
+  };
+}
+
+function executableDecision(
+  answer: ModelClassification | CachedClassification,
+  probabilities: ProbabilitySummary,
+): ModelDecision {
   if (answer.op === "unsupported_or_unclear")
     return { accepted: false, reason: "unsupported" };
   if (answer.op === "multiple_actions")
     return { accepted: false, reason: "multiple_actions" };
-  if (chosen < MIN_MODEL_PROBABILITY || chosen - sorted[1]! < MIN_MODEL_MARGIN)
+  if (
+    probabilities.chosen < MIN_MODEL_PROBABILITY ||
+    probabilities.chosen - probabilities.runnerUp < MIN_MODEL_MARGIN
+  )
     return { accepted: false, reason: "ambiguous" };
-  return { accepted: true, probability: chosen };
+  return { accepted: true, probability: probabilities.chosen };
+}
+
+export function evaluateModelAnswer(
+  answer: ModelClassification | CachedClassification,
+): ModelDecision {
+  if (!hasValidChoices(answer)) return { accepted: false, reason: "invalid" };
+  const probabilities = probabilitySummary(answer);
+  if (!probabilities || probabilities.highest - probabilities.chosen > 1e-6)
+    return { accepted: false, reason: "invalid" };
+  return executableDecision(answer, probabilities);
 }

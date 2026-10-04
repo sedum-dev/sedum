@@ -28,6 +28,39 @@ interface PendingGroup {
   readonly missReason: string;
 }
 
+interface IndexedStep {
+  readonly step: ClassificationInput;
+  readonly index: number;
+}
+
+interface FailureRequest {
+  readonly index: number;
+  readonly code: ClassificationDiagnosticCode;
+  readonly detail?: string;
+}
+
+interface ClassificationApplication extends IndexedStep {
+  readonly op: StepOperationKind;
+  readonly source: ClassifiedStep["classificationSource"];
+  readonly probability: number | null;
+}
+
+interface PendingCandidate extends IndexedStep {
+  readonly missReason: string;
+}
+
+interface ProviderReplyShape {
+  readonly answers: readonly ModelClassification[];
+  readonly calls: readonly ProviderCall[];
+  readonly expectedAnswers: number;
+}
+
+interface ModelGroupResult {
+  readonly group: PendingGroup;
+  readonly answer: ModelClassification;
+  readonly decision: ModelDecision;
+}
+
 const DIAGNOSTIC_MESSAGES = {
   empty: "The step is empty.",
   unsupported: "The sentence asks for an unsupported or unclear operation.",
@@ -39,57 +72,69 @@ const DIAGNOSTIC_MESSAGES = {
   cache_error: "The classification cache could not be saved.",
 } as const;
 
-function diagnosticFix(code: ClassificationDiagnosticCode): string {
-  switch (code) {
-    case "multiple_actions":
-      return "Split the actions into separate steps.";
-    case "unavailable":
-      return "Rephrase with an obvious supported verb, or classify online and commit the cache.";
-    case "provider_error":
-      return "Check provider configuration and retry.";
-    case "cache_error":
-      return "Check cache-file permissions and retry.";
-    case "invalid_operand":
-      return "Use one value, address, key, or binding in the supported form.";
-    default:
-      return "Rephrase as one supported, unambiguous sentence.";
-  }
-}
+const DEFAULT_DIAGNOSTIC_FIX =
+  "Rephrase as one supported, unambiguous sentence.";
+const DIAGNOSTIC_FIXES: Partial<Record<ClassificationDiagnosticCode, string>> =
+  {
+    multiple_actions: "Split the actions into separate steps.",
+    unavailable:
+      "Rephrase with an obvious supported verb, or classify online and commit the cache.",
+    provider_error: "Check provider configuration and retry.",
+    cache_error: "Check cache-file permissions and retry.",
+    invalid_operand:
+      "Use one value, address, key, or binding in the supported form.",
+  };
 
 function diagnostic(
   step: ClassificationInput,
-  code: ClassificationDiagnosticCode,
-  detail?: string,
+  request: FailureRequest,
 ): ClassificationDiagnostic {
   return {
     ...step,
-    code,
-    message: detail ?? DIAGNOSTIC_MESSAGES[code],
-    fix: diagnosticFix(code),
+    code: request.code,
+    message: request.detail ?? DIAGNOSTIC_MESSAGES[request.code],
+    fix: DIAGNOSTIC_FIXES[request.code] ?? DEFAULT_DIAGNOSTIC_FIX,
   };
 }
+
+const LEXICAL_OPERATIONS = {
+  type: "type",
+  enter: "type",
+  fill: "type",
+  press: "press",
+  remember: "remember",
+  goto: "goto",
+  wait: "wait",
+  scroll: "scroll",
+} as const satisfies Record<string, StepOperationKind>;
+type LexicalStart = keyof typeof LEXICAL_OPERATIONS;
 
 function lexicalOperation(sentence: string): StepOperationKind | null {
   const leading = canonicalSentence(sentence)
     .match(/^(type|enter|fill|press|remember|goto|wait|scroll)\b/iu)?.[1]
-    ?.toLowerCase();
-  if (leading === "type" || leading === "enter" || leading === "fill")
-    return "type";
-  if (
-    leading === "press" ||
-    leading === "remember" ||
-    leading === "goto" ||
-    leading === "wait" ||
-    leading === "scroll"
-  )
-    return leading;
-  return null;
+    ?.toLowerCase() as LexicalStart | undefined;
+  return leading ? LEXICAL_OPERATIONS[leading] : null;
 }
 
+function lexicalOperandError(step: ClassificationInput): string | null {
+  const operation = lexicalOperation(step.sentence);
+  if (!operation) return null;
+  if (operation === "wait" && WAIT_UNTIL.test(step.sentence)) return null;
+  return validateOperand(step.sentence, operation);
+}
+
+const MODEL_DIAGNOSTICS = {
+  invalid: "ambiguous",
+  ambiguous: "ambiguous",
+  unsupported: "unsupported",
+  multiple_actions: "multiple_actions",
+} as const satisfies Record<
+  Exclude<ModelDecision, { accepted: true }>["reason"],
+  ClassificationDiagnosticCode
+>;
+
 function modelDiagnostic(decision: Exclude<ModelDecision, { accepted: true }>) {
-  if (decision.reason === "multiple_actions") return "multiple_actions";
-  if (decision.reason === "unsupported") return "unsupported";
-  return "ambiguous";
+  return MODEL_DIAGNOSTICS[decision.reason];
 }
 
 function completeReceipt(answer: ModelClassification | undefined): boolean {
@@ -109,9 +154,10 @@ class ClassificationRun {
   private readonly misses = Object.create(null) as Record<string, number>;
   private readonly pending = new Map<string, PendingGroup>();
   private readonly calls: ProviderCall[] = [];
-  private pattern = 0;
-  private cache = 0;
-  private model = 0;
+  private readonly sourceCounts: Record<
+    ClassifiedStep["classificationSource"],
+    number
+  > = { pattern: 0, cache: 0, model: 0 };
   private providerFailed = false;
 
   constructor(
@@ -123,80 +169,75 @@ class ClassificationRun {
   }
 
   async execute(): Promise<ClassificationResult> {
-    this.input.forEach((step, index) => this.classifyInitial(step, index));
+    this.input.forEach((step, index) => this.classifyInitial({ step, index }));
     await this.resolvePending();
     return this.result();
   }
 
-  private fail(
-    index: number,
-    code: ClassificationDiagnosticCode,
-    detail?: string,
-  ): void {
-    this.failures[index] = diagnostic(this.input[index]!, code, detail);
+  private fail(request: FailureRequest): void {
+    this.failures[request.index] = diagnostic(
+      this.input[request.index]!,
+      request,
+    );
   }
 
-  private apply(
-    index: number,
-    op: StepOperationKind,
-    source: ClassifiedStep["classificationSource"],
-    probability: number | null,
-  ): void {
-    const step = this.input[index]!;
-    const operandError = validateOperand(step.sentence, op);
+  private apply(application: ClassificationApplication): void {
+    const operandError = validateOperand(
+      application.step.sentence,
+      application.op,
+    );
     if (operandError) {
-      this.fail(index, "invalid_operand", operandError);
+      this.fail({
+        index: application.index,
+        code: "invalid_operand",
+        detail: operandError,
+      });
       return;
     }
-    this.steps[index] = {
-      ...step,
-      op,
-      classificationSource: source,
-      probability,
+    this.steps[application.index] = {
+      ...application.step,
+      op: application.op,
+      classificationSource: application.source,
+      probability: application.probability,
     };
-    this.incrementSource(source);
+    this.sourceCounts[application.source]++;
   }
 
-  private incrementSource(
-    source: ClassifiedStep["classificationSource"],
-  ): void {
-    if (source === "pattern") this.pattern++;
-    else if (source === "cache") this.cache++;
-    else this.model++;
-  }
-
-  private classifyInitial(step: ClassificationInput, index: number): void {
-    const problem = preflightSentence(step.sentence);
+  private classifyInitial(item: IndexedStep): void {
+    const problem = preflightSentence(item.step.sentence);
     if (problem) {
-      this.fail(index, problem);
+      this.fail({ index: item.index, code: problem });
       return;
     }
-    const lexicalOp = lexicalOperation(step.sentence);
-    if (
-      lexicalOp &&
-      !(lexicalOp === "wait" && WAIT_UNTIL.test(step.sentence))
-    ) {
-      const operandError = validateOperand(step.sentence, lexicalOp);
-      if (operandError) {
-        this.fail(index, "invalid_operand", operandError);
-        return;
-      }
+    const operandError = lexicalOperandError(item.step);
+    if (operandError) {
+      this.fail({
+        index: item.index,
+        code: "invalid_operand",
+        detail: operandError,
+      });
+      return;
     }
-    const op = patternOperation(step.sentence);
+    const op = patternOperation(item.step.sentence);
     if (op) {
-      this.apply(index, op, "pattern", null);
+      this.apply({ ...item, op, source: "pattern", probability: null });
       return;
     }
-    this.readCache(step, index);
+    this.readCache(item);
   }
 
-  private readCache(step: ClassificationInput, index: number): void {
-    const hit = this.options.cache.get(step.sentence);
+  private readCache(item: IndexedStep): void {
+    const hit = this.options.cache.get(item.step.sentence);
     let missReason = hit.reason;
     if (hit.answer) {
       const decision = evaluateModelAnswer(hit.answer);
       if (decision.accepted) {
-        this.apply(index, hit.answer.op, "cache", decision.probability);
+        this.apply({
+          ...item,
+          op: hit.answer.op,
+          source: "cache",
+          probability: decision.probability,
+        });
         return;
       }
       this.addMiss(decision.reason);
@@ -204,25 +245,25 @@ class ClassificationRun {
     } else {
       this.addMiss(hit.reason);
     }
-    this.addPending(step.sentence, index, missReason);
+    this.addPending({ ...item, missReason });
   }
 
   private addMiss(reason: string): void {
     this.misses[reason] = (this.misses[reason] ?? 0) + 1;
   }
 
-  private addPending(
-    sentence: string,
-    index: number,
-    missReason: string,
-  ): void {
-    const key = canonicalSentence(sentence);
+  private addPending(candidate: PendingCandidate): void {
+    const key = canonicalSentence(candidate.step.sentence);
     const group = this.pending.get(key);
     if (group) {
-      group.indexes.push(index);
+      group.indexes.push(candidate.index);
       return;
     }
-    this.pending.set(key, { sentence, indexes: [index], missReason });
+    this.pending.set(key, {
+      sentence: candidate.step.sentence,
+      indexes: [candidate.index],
+      missReason: candidate.missReason,
+    });
   }
 
   private async resolvePending(): Promise<void> {
@@ -238,11 +279,11 @@ class ClassificationRun {
   private rejectOffline(groups: readonly PendingGroup[]): void {
     for (const group of groups)
       for (const index of group.indexes)
-        this.fail(
+        this.fail({
           index,
-          "unavailable",
-          `Classification is unavailable offline for this sentence (cache: ${group.missReason}).`,
-        );
+          code: "unavailable",
+          detail: `Classification is unavailable offline for this sentence (cache: ${group.missReason}).`,
+        });
   }
 
   private async classifyWithProvider(groups: readonly PendingGroup[]) {
@@ -251,7 +292,11 @@ class ClassificationRun {
         groups.map((group) => group.sentence),
         this.options.signal ? { signal: this.options.signal } : undefined,
       );
-      this.validateReply(reply.answers, reply.calls, groups.length);
+      this.validateReply({
+        answers: reply.answers,
+        calls: reply.calls,
+        expectedAnswers: groups.length,
+      });
       const decisions = reply.answers.map(evaluateModelAnswer);
       if (
         decisions.some(
@@ -261,7 +306,11 @@ class ClassificationRun {
         throw new Error("Invalid classification answer");
       this.calls.push(...reply.calls);
       groups.forEach((group, index) =>
-        this.applyModelGroup(group, reply.answers[index]!, decisions[index]!),
+        this.applyModelGroup({
+          group,
+          answer: reply.answers[index]!,
+          decision: decisions[index]!,
+        }),
       );
       await this.saveCache(groups);
     } catch (error) {
@@ -269,43 +318,36 @@ class ClassificationRun {
     }
   }
 
-  private validateReply(
-    answers: readonly ModelClassification[],
-    calls: readonly ProviderCall[],
-    expectedAnswers: number,
-  ): void {
-    if (answers.length !== expectedAnswers)
+  private validateReply(reply: ProviderReplyShape): void {
+    if (reply.answers.length !== reply.expectedAnswers)
       throw new Error("Invalid classification answer count");
     if (
-      calls.length === 0 ||
-      answers.some((answer) => !completeReceipt(answer))
+      reply.calls.length === 0 ||
+      reply.answers.some((answer) => !completeReceipt(answer))
     )
       throw new Error("Incomplete classification receipt");
   }
 
-  private applyModelGroup(
-    group: PendingGroup,
-    answer: ModelClassification,
-    decision: ModelDecision,
-  ): void {
-    if (!decision.accepted) {
-      const code = modelDiagnostic(decision);
-      for (const index of group.indexes) this.fail(index, code);
+  private applyModelGroup(result: ModelGroupResult): void {
+    if (!result.decision.accepted) {
+      const code = modelDiagnostic(result.decision);
+      for (const index of result.group.indexes) this.fail({ index, code });
       return;
     }
-    for (const index of group.indexes)
-      this.apply(
+    for (const index of result.group.indexes)
+      this.apply({
+        step: this.input[index]!,
         index,
-        answer.op as StepOperationKind,
-        "model",
-        decision.probability,
-      );
-    if (group.indexes.some((index) => this.steps[index] !== null))
-      this.options.cache.put(group.sentence, {
-        op: answer.op as StepOperationKind,
-        probabilities: answer.probabilities,
-        model: answer.model,
-        requestedModel: answer.requestedModel,
+        op: result.answer.op as StepOperationKind,
+        source: "model",
+        probability: result.decision.probability,
+      });
+    if (result.group.indexes.some((index) => this.steps[index] !== null))
+      this.options.cache.put(result.group.sentence, {
+        op: result.answer.op as StepOperationKind,
+        probabilities: result.answer.probabilities,
+        model: result.answer.model,
+        requestedModel: result.answer.requestedModel,
       });
   }
 
@@ -314,7 +356,8 @@ class ClassificationRun {
       await this.options.cache.save();
     } catch {
       for (const group of groups)
-        for (const index of group.indexes) this.fail(index, "cache_error");
+        for (const index of group.indexes)
+          this.fail({ index, code: "cache_error" });
     }
   }
 
@@ -334,7 +377,8 @@ class ClassificationRun {
       this.calls.push(unknownCostCall(error));
     }
     for (const group of groups)
-      for (const index of group.indexes) this.fail(index, "provider_error");
+      for (const index of group.indexes)
+        this.fail({ index, code: "provider_error" });
   }
 
   private result(): ClassificationResult {
@@ -350,9 +394,9 @@ class ClassificationRun {
       ),
       calls: this.calls,
       metrics: {
-        pattern: this.pattern,
-        cache: this.cache,
-        model: this.model,
+        pattern: this.sourceCounts.pattern,
+        cache: this.sourceCounts.cache,
+        model: this.sourceCounts.model,
         cacheMisses: this.misses,
         requests: this.calls.length,
         attempts: this.calls.reduce((sum, call) => sum + call.attempts, 0),

@@ -72,62 +72,85 @@ export function canonicalSentence(sentence: string): string {
   return sentence.normalize("NFC").replace(/\s+/gu, " ").trim();
 }
 
-function withoutQuotes(sentence: string): string {
-  return sentence.replace(/"[^"]*"|'[^']*'/gu, '""');
+interface SentenceSyntax {
+  readonly text: string;
+  readonly exposed: string;
 }
 
-function validClaimTail(predicate: string, tail: string): boolean {
-  switch (predicate.toLowerCase()) {
-    case "appears":
-    case "exists":
-      return tail === "";
-    case "contains":
-    case "includes":
-    case "shows":
-    case "displays":
-    case "reads":
-    case "says":
-    case "matches":
-      return CLAIM_VALUE.test(tail);
-    default:
-      return CLAIM_STATE.test(tail) || CLAIM_VALUE.test(tail);
-  }
+interface ClaimTail {
+  readonly predicate: string;
+  readonly tail: string;
+}
+
+interface SecondActionClause {
+  readonly tail: string;
+  readonly assertion: boolean;
+}
+
+const EMPTY_CLAIM_PREDICATES = new Set(["appears", "exists"]);
+const VALUE_CLAIM_PREDICATES = new Set([
+  "contains",
+  "includes",
+  "shows",
+  "displays",
+  "reads",
+  "says",
+  "matches",
+]);
+
+function analyzeSentence(sentence: string): SentenceSyntax {
+  const text = canonicalSentence(sentence);
+  return {
+    text,
+    exposed: text.replace(/"[^"]*"|'[^']*'/gu, '""'),
+  };
+}
+
+function validClaimTail(claim: ClaimTail): boolean {
+  const predicate = claim.predicate.toLowerCase();
+  if (EMPTY_CLAIM_PREDICATES.has(predicate)) return claim.tail === "";
+  if (VALUE_CLAIM_PREDICATES.has(predicate))
+    return CLAIM_VALUE.test(claim.tail);
+  return CLAIM_STATE.test(claim.tail) || CLAIM_VALUE.test(claim.tail);
 }
 
 /** Whether a sentence has a statically recognizable claim shape. */
 export function isClaimSentence(sentence: string): boolean {
-  const text = canonicalSentence(sentence);
-  if (!CLAIM_SUBJECT_WORD.test(text) && !BOUND_CLAIM_SUBJECT.test(text))
+  const syntax = analyzeSentence(sentence);
+  if (
+    !CLAIM_SUBJECT_WORD.test(syntax.text) &&
+    !BOUND_CLAIM_SUBJECT.test(syntax.text)
+  )
     return false;
-  const structural = withoutQuotes(text).replace(/\.$/u, "");
+  const structural = syntax.exposed.replace(/\.$/u, "");
   const predicate = CLAIM_PREDICATE.exec(structural);
   if (!predicate || predicate.index === 0) return false;
   const tail = structural.slice(predicate.index + predicate[0].length).trim();
-  return validClaimTail(predicate[1]!, tail);
+  return validClaimTail({ predicate: predicate[1]!, tail });
 }
 
-function hasDirectFollowUp(exposed: string): boolean {
+function hasDirectFollowUp(syntax: SentenceSyntax): boolean {
   return new RegExp(
     `(?:\\b(?:then|and)\\s+(?:(?:also|then)\\s+)?|[;,]\\s*)(?:${ACTION_VERBS})\\b`,
     "iu",
-  ).test(exposed);
+  ).test(syntax.exposed);
 }
 
-function startsSecondAction(tail: string, assertion: boolean): boolean {
+function startsSecondAction(clause: SecondActionClause): boolean {
   return (
-    ACTOR_SECOND_ACTION.test(tail) ||
-    ADVERB_SECOND_ACTION.test(tail) ||
-    GERUND_SECOND_ACTION.test(tail) ||
-    DIRECT_SECOND_ACTION.test(tail) ||
-    (!assertion && PASSIVE_INTERACTION.test(tail))
+    ACTOR_SECOND_ACTION.test(clause.tail) ||
+    ADVERB_SECOND_ACTION.test(clause.tail) ||
+    GERUND_SECOND_ACTION.test(clause.tail) ||
+    DIRECT_SECOND_ACTION.test(clause.tail) ||
+    (!clause.assertion && PASSIVE_INTERACTION.test(clause.tail))
   );
 }
 
-function hasSecondAction(exposed: string): boolean {
-  const assertion = ASSERTION_START.test(exposed);
-  for (const connector of exposed.matchAll(SECOND_ACTION_CONNECTOR)) {
-    const tail = exposed.slice(connector.index + connector[0].length);
-    if (startsSecondAction(tail, assertion)) return true;
+function hasSecondAction(syntax: SentenceSyntax): boolean {
+  const assertion = ASSERTION_START.test(syntax.exposed);
+  for (const connector of syntax.exposed.matchAll(SECOND_ACTION_CONNECTOR)) {
+    const tail = syntax.exposed.slice(connector.index + connector[0].length);
+    if (startsSecondAction({ tail, assertion })) return true;
   }
   return false;
 }
@@ -135,65 +158,90 @@ function hasSecondAction(exposed: string): boolean {
 export function preflightSentence(
   sentence: string,
 ): ClassificationDiagnosticCode | null {
-  const text = canonicalSentence(sentence);
-  if (!text) return "empty";
-  const exposed = withoutQuotes(text);
-  if (UNSUPPORTED_START.test(exposed)) return "unsupported";
-  if (hasDirectFollowUp(exposed) || hasSecondAction(exposed))
+  const syntax = analyzeSentence(sentence);
+  if (!syntax.text) return "empty";
+  if (UNSUPPORTED_START.test(syntax.exposed)) return "unsupported";
+  if (hasDirectFollowUp(syntax) || hasSecondAction(syntax))
     return "multiple_actions";
   return null;
 }
 
-function isNavigation(text: string): boolean {
+function isNavigation(syntax: SentenceSyntax): boolean {
   return (
-    HISTORY_MOVE.test(text) ||
-    /^(?:goto|go\s+to|navigate\s+to)\s+\/\S*\s*$/iu.test(text)
+    HISTORY_MOVE.test(syntax.text) ||
+    /^(?:goto|go\s+to|navigate\s+to)\s+\/\S*\s*$/iu.test(syntax.text)
   );
 }
 
-function hasMultipleSideEffectClauses(text: string): boolean {
-  if (!SIDE_EFFECT_START.test(text)) return false;
-  const exposed = withoutQuotes(text);
+function hasMultipleSideEffectClauses(syntax: SentenceSyntax): boolean {
+  if (!SIDE_EFFECT_START.test(syntax.text)) return false;
   return (
-    exposed.match(SECOND_ACTION_CONNECTOR) !== null ||
-    MULTIPLE_CLAUSE.test(exposed)
+    syntax.exposed.match(SECOND_ACTION_CONNECTOR) !== null ||
+    MULTIPLE_CLAUSE.test(syntax.exposed)
   );
 }
 
-function namedOptionPattern(text: string): boolean {
+function namedOptionPattern(syntax: SentenceSyntax): boolean {
   return /^(?:select|choose|pick)\s+(?:"[^"]+"|“[^”]+”)\s+(?:in|from)\s+\S/iu.test(
-    text,
+    syntax.text,
   );
 }
 
-function simplePatternOperation(text: string): StepOperationKind | null {
-  if (/^remember\b/iu.test(text) && BINDING.test(text)) return "remember";
-  if (CLICK_PATTERN.test(text) || namedOptionPattern(text)) return "click";
-  if (VALUE.test(text)) return "type";
-  if (PRESS_PATTERN.test(text)) return "press";
-  if (/^(?:goto|go\s+to|navigate\s+to)\s+https?:\/\/\S+/iu.test(text))
-    return "goto";
-  if (VERIFY_PATTERN.test(text)) return "verify";
-  if (MEASURE_PATTERN.test(text)) return "measure";
-  if (/^scroll\s+(?:up|down)\b/iu.test(text)) return "scroll";
-  if (WAIT_DURATION.test(text)) return "wait";
-  return null;
+interface PatternRule {
+  readonly operation: StepOperationKind;
+  matches(syntax: SentenceSyntax): boolean;
+}
+
+const SIMPLE_PATTERN_RULES: readonly PatternRule[] = [
+  {
+    operation: "remember",
+    matches: ({ text }) => /^remember\b/iu.test(text) && BINDING.test(text),
+  },
+  {
+    operation: "click",
+    matches: (syntax) =>
+      CLICK_PATTERN.test(syntax.text) || namedOptionPattern(syntax),
+  },
+  { operation: "type", matches: ({ text }) => VALUE.test(text) },
+  { operation: "press", matches: ({ text }) => PRESS_PATTERN.test(text) },
+  {
+    operation: "goto",
+    matches: ({ text }) =>
+      /^(?:goto|go\s+to|navigate\s+to)\s+https?:\/\/\S+/iu.test(text),
+  },
+  { operation: "verify", matches: ({ text }) => VERIFY_PATTERN.test(text) },
+  { operation: "measure", matches: ({ text }) => MEASURE_PATTERN.test(text) },
+  {
+    operation: "scroll",
+    matches: ({ text }) => /^scroll\s+(?:up|down)\b/iu.test(text),
+  },
+  { operation: "wait", matches: ({ text }) => WAIT_DURATION.test(text) },
+];
+
+function simplePatternOperation(
+  syntax: SentenceSyntax,
+): StepOperationKind | null {
+  return (
+    SIMPLE_PATTERN_RULES.find((rule) => rule.matches(syntax))?.operation ?? null
+  );
 }
 
 export function patternOperation(sentence: string): StepOperationKind | null {
-  const text = canonicalSentence(sentence);
-  if (preflightSentence(text)) return null;
-  if (WAIT_UNTIL.test(text)) return "verify";
-  if (isNavigation(text)) return "goto";
-  if (hasMultipleSideEffectClauses(text)) return null;
-  return simplePatternOperation(text);
+  const syntax = analyzeSentence(sentence);
+  if (preflightSentence(syntax.text)) return null;
+  if (WAIT_UNTIL.test(syntax.text)) return "verify";
+  if (isNavigation(syntax)) return "goto";
+  if (hasMultipleSideEffectClauses(syntax)) return null;
+  return simplePatternOperation(syntax);
 }
 
-function validateClick(text: string): string | null {
-  return /^\S+\s+\S/iu.test(text) ? null : "Name one page element to click.";
+function validateClick(syntax: SentenceSyntax): string | null {
+  return /^\S+\s+\S/iu.test(syntax.text)
+    ? null
+    : "Name one page element to click.";
 }
 
-function validateType(text: string): string | null {
+function validateType({ text }: SentenceSyntax): string | null {
   const quotedSpans = [...text.matchAll(/"[^"]*"/gu)].map((match) => ({
     start: match.index,
     end: match.index + match[0].length,
@@ -215,15 +263,15 @@ function validateType(text: string): string | null {
   return 'Name one value, such as {{key}} or "{{user}}@example.com", and a field.';
 }
 
-function validateGoto(text: string): string | null {
-  if (isNavigation(text)) return null;
-  const urls = text.match(HTTP_URL) ?? [];
+function validateGoto(syntax: SentenceSyntax): string | null {
+  if (isNavigation(syntax)) return null;
+  const urls = syntax.text.match(HTTP_URL) ?? [];
   return urls.length === 1
     ? null
     : "Name exactly one http(s) address or a /path on this site.";
 }
 
-function validatePress(text: string): string | null {
+function validatePress({ text }: SentenceSyntax): string | null {
   const explicit =
     /^(?:press|hit|strike)\s+(?:the\s+)?(?:"[^"]+"|[\w-]+)(?:\s+key)?\s*\.?$/iu.test(
       text,
@@ -237,13 +285,13 @@ function validatePress(text: string): string | null {
     : "Name exactly one key to press.";
 }
 
-function validateRemember(text: string): string | null {
+function validateRemember({ text }: SentenceSyntax): string | null {
   if (!BINDING.test(text)) return "End the read with as {{a_name}}.";
   const bindings = text.match(/\bas\s+\{\{/giu) ?? [];
   return bindings.length === 1 ? null : "Bind exactly one remembered value.";
 }
 
-function validateWait(text: string): string | null {
+function validateWait({ text }: SentenceSyntax): string | null {
   const durations = [...text.matchAll(DURATION_OPERAND)];
   if (durations.length !== 1)
     return "Name one duration, such as wait for 2 seconds.";
@@ -257,41 +305,38 @@ function validateWait(text: string): string | null {
     : "Use a positive wait duration of at most 30 seconds.";
 }
 
-function validateScroll(text: string): string | null {
+function validateScroll({ text }: SentenceSyntax): string | null {
   return [...text.matchAll(/\b(?:up|down)\b/giu)].length === 1
     ? null
     : "Say scroll up or scroll down.";
 }
 
-function validateCompleteSentence(text: string): string | null {
+function validateCompleteSentence({ text }: SentenceSyntax): string | null {
   return /^\S+\s+\S/iu.test(text)
     ? null
     : "Complete the sentence with one claim or action.";
 }
+
+type OperandValidator = (syntax: SentenceSyntax) => string | null;
+
+const OPERAND_VALIDATORS: Readonly<
+  Record<StepOperationKind, OperandValidator>
+> = {
+  click: validateClick,
+  type: validateType,
+  goto: validateGoto,
+  press: validatePress,
+  remember: validateRemember,
+  wait: validateWait,
+  scroll: validateScroll,
+  verify: validateCompleteSentence,
+  measure: validateCompleteSentence,
+};
 
 /** Validate the lexical operands that cannot safely be guessed by execution. */
 export function validateOperand(
   sentence: string,
   op: StepOperationKind,
 ): string | null {
-  const text = canonicalSentence(sentence);
-  switch (op) {
-    case "click":
-      return validateClick(text);
-    case "type":
-      return validateType(text);
-    case "goto":
-      return validateGoto(text);
-    case "press":
-      return validatePress(text);
-    case "remember":
-      return validateRemember(text);
-    case "wait":
-      return validateWait(text);
-    case "scroll":
-      return validateScroll(text);
-    case "verify":
-    case "measure":
-      return validateCompleteSentence(text);
-  }
+  return OPERAND_VALIDATORS[op](analyzeSentence(sentence));
 }
