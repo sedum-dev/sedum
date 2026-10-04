@@ -104,39 +104,63 @@ export async function finishRun(
   result: RunResult,
   recordCopyFailure: (diagnostic: CliDiagnostic) => Promise<RunResult>,
 ): Promise<RunFinish> {
-  let current = result;
-  let diagnostic: CliDiagnostic | null = null;
-  let copyAvailable = copy !== undefined;
-  if (copy?.includesJson) {
-    try {
-      await copy.finish(current, { reports: false });
-    } catch {
-      diagnostic = outputDiagnostic(copy.resultPath);
-      copyAvailable = false;
-      await copy.invalidate().catch(() => undefined);
-      current = await recordCopyFailure(diagnostic);
-    }
-  }
+  const copied = await finishJsonCopy(copy, result, recordCopyFailure);
   try {
-    await canonical.finish(current);
-    if (copy && copyAvailable && copy.includesJunit)
-      await copy.finish(current, { json: false });
+    await canonical.finish(copied.result);
+    await finishJunitCopy(copy, copied);
     return {
-      result: current,
-      diagnostic,
+      result: copied.result,
+      diagnostic: copied.diagnostic,
       reportsAvailable: true,
-      copyAvailable,
+      copyAvailable: copied.available,
     };
   } catch (error) {
-    if (!isReportFailure(error, canonical, copy, copyAvailable)) throw error;
+    if (!isReportFailure(error, canonical, copy, copied.available)) throw error;
     return recoverReportFailure({
       canonical,
       copy,
-      current,
+      current: copied.result,
       error,
-      copyAvailable,
+      copyAvailable: copied.available,
     });
   }
+}
+
+interface CopyResult {
+  readonly result: RunResult;
+  readonly diagnostic: CliDiagnostic | null;
+  readonly available: boolean;
+}
+
+async function finishJsonCopy(
+  copy: ProgressWriter | undefined,
+  result: RunResult,
+  recordFailure: (diagnostic: CliDiagnostic) => Promise<RunResult>,
+): Promise<CopyResult> {
+  if (!copy?.includesJson)
+    return { result, diagnostic: null, available: copy !== undefined };
+  try {
+    await copy.finish(result, { reports: false });
+    return { result, diagnostic: null, available: true };
+  } catch {
+    const diagnostic = outputDiagnostic(copy.resultPath);
+    await copy.invalidate().catch(() => undefined);
+    return {
+      result: await recordFailure(diagnostic),
+      diagnostic,
+      available: false,
+    };
+  }
+}
+
+async function finishJunitCopy(
+  copy: ProgressWriter | undefined,
+  copied: CopyResult,
+): Promise<void> {
+  if (!copy) return;
+  if (!copied.available) return;
+  if (!copy.includesJunit) return;
+  await copy.finish(copied.result, { json: false });
 }
 
 function isReportFailure(
@@ -145,11 +169,11 @@ function isReportFailure(
   copy: ProgressWriter | undefined,
   copyAvailable: boolean,
 ): error is ProgressWriterError {
-  return (
-    error instanceof ProgressWriterError &&
-    (canonical.isReport(error.path) ||
-      Boolean(copy && copyAvailable && copy.isReport(error.path)))
-  );
+  if (!(error instanceof ProgressWriterError)) return false;
+  if (canonical.isReport(error.path)) return true;
+  if (!copy) return false;
+  if (!copyAvailable) return false;
+  return copy.isReport(error.path);
 }
 
 async function recoverReportFailure(request: {
@@ -168,15 +192,7 @@ async function recoverReportFailure(request: {
   };
   const failed = terminalOutputFailure(current, failure, true);
   await canonical.removeReports();
-  if (copy && copyAvailable) {
-    try {
-      await copy.removeReports();
-      if (copy.includesJson) await copy.finish(failed, { reports: false });
-    } catch {
-      copyAvailable = false;
-      await copy.invalidate().catch(() => undefined);
-    }
-  }
+  copyAvailable = await recoverCopy(copy, copyAvailable, failed);
   await canonical.finish(failed, { reports: false });
   return {
     result: failed,
@@ -186,6 +202,23 @@ async function recoverReportFailure(request: {
   };
 }
 
+async function recoverCopy(
+  copy: ProgressWriter | undefined,
+  available: boolean,
+  result: RunResult,
+): Promise<boolean> {
+  if (!available) return false;
+  if (!copy) return false;
+  try {
+    await copy.removeReports();
+    if (copy.includesJson) await copy.finish(result, { reports: false });
+    return true;
+  } catch {
+    await copy.invalidate().catch(() => undefined);
+    return false;
+  }
+}
+
 /** The files a finished run can point to, leaving out any that failed. */
 export function finishedArtifacts(
   canonical: ProgressWriter,
@@ -193,30 +226,56 @@ export function finishedArtifacts(
   selection: ReportSelection,
   finished: RunFinish,
 ): RunArtifactPaths {
-  const junit = canonical.includesJunit
-    ? canonical
-    : copy?.includesJunit && finished.copyAvailable
-      ? copy
-      : undefined;
-  const json = copy?.includesJson
-    ? finished.copyAvailable
-      ? copy
-      : undefined
-    : canonical;
+  const junit = junitWriter(canonical, copy, finished.copyAvailable);
+  const json = jsonWriter(canonical, copy, finished.copyAvailable);
   return {
     progressPath: canonical.progressPath,
     resultPath: canonical.resultPath,
-    ...(finished.reportsAvailable
-      ? {
-          htmlPath: canonical.htmlPath,
-          ...(canonical.includeMarkdown
-            ? { markdownPath: canonical.markdownPath }
-            : {}),
-          ...(junit ? { junitPath: junit.junitPath } : {}),
-        }
-      : {}),
-    ...(selection.json && json ? { reporterPath: json.resultPath } : {}),
+    ...renderedArtifacts(canonical, junit, finished.reportsAvailable),
+    ...reporterArtifact(selection, json),
     authoritative: true,
+  };
+}
+
+function reporterArtifact(
+  selection: ReportSelection,
+  writer: ProgressWriter | undefined,
+): Pick<RunArtifactPaths, "reporterPath"> | object {
+  if (!selection.json) return {};
+  return writer ? { reporterPath: writer.resultPath } : {};
+}
+
+function junitWriter(
+  canonical: ProgressWriter,
+  copy: ProgressWriter | undefined,
+  copyAvailable: boolean,
+): ProgressWriter | undefined {
+  if (canonical.includesJunit) return canonical;
+  if (!copyAvailable) return undefined;
+  return copy?.includesJunit ? copy : undefined;
+}
+
+function jsonWriter(
+  canonical: ProgressWriter,
+  copy: ProgressWriter | undefined,
+  copyAvailable: boolean,
+): ProgressWriter | undefined {
+  if (!copy?.includesJson) return canonical;
+  return copyAvailable ? copy : undefined;
+}
+
+function renderedArtifacts(
+  canonical: ProgressWriter,
+  junit: ProgressWriter | undefined,
+  available: boolean,
+): Partial<RunArtifactPaths> {
+  if (!available) return {};
+  return {
+    htmlPath: canonical.htmlPath,
+    ...(canonical.includeMarkdown
+      ? { markdownPath: canonical.markdownPath }
+      : {}),
+    ...(junit ? { junitPath: junit.junitPath } : {}),
   };
 }
 
@@ -225,8 +284,17 @@ export function terminalOutputFailure(
   diagnostic: CliDiagnostic,
   keepExisting = false,
 ): RunResult {
-  if (keepExisting && source.error !== null && source.state !== "running")
-    return source;
+  if (keepExisting) {
+    if (source.error === null) return failedRunResult(source, diagnostic);
+    if (source.state !== "running") return source;
+  }
+  return failedRunResult(source, diagnostic);
+}
+
+function failedRunResult(
+  source: RunResult,
+  diagnostic: CliDiagnostic,
+): RunResult {
   const at = new Date().toISOString();
   return validateRunResult({
     ...source,
@@ -259,27 +327,37 @@ export async function preExecutionFailure(request: {
   readonly diagnostic: CliDiagnostic;
   readonly commit: () => void;
 }): Promise<RunCommandExecution> {
-  const {
-    root,
-    runId,
-    outputDir,
-    reporterDir,
-    selection,
-    strict,
-    diagnostic,
-    commit,
-  } = request;
+  const { root, runId, outputDir, diagnostic, commit } = request;
   const base = outputDir ?? path.join(root, ".sedum", "runs");
   const intended = path.join(base, runId);
-  let writer: ProgressWriter;
-  try {
-    writer = await ProgressWriter.create(root, runId, base, {
-      markdown: selection.markdown,
-    });
-  } catch {
+  const writer = await createPreExecutionWriter(request, base);
+  if (!writer) {
     commit();
     return unavailablePreExecutionResult(runId, intended, diagnostic);
   }
+  return finishPreExecutionFailure(request, writer, base);
+}
+
+async function createPreExecutionWriter(
+  request: Parameters<typeof preExecutionFailure>[0],
+  base: string,
+): Promise<ProgressWriter | undefined> {
+  try {
+    return await ProgressWriter.create(request.root, request.runId, base, {
+      markdown: request.selection.markdown,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+async function finishPreExecutionFailure(
+  request: Parameters<typeof preExecutionFailure>[0],
+  writer: ProgressWriter,
+  base: string,
+): Promise<RunCommandExecution> {
+  const { root, runId, reporterDir, selection, strict, diagnostic, commit } =
+    request;
   const copy = await openReportCopy({
     root,
     runId,

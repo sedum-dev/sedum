@@ -7,6 +7,8 @@ import {
 import type { BrowserKind } from "@sedum-dev/core";
 import type { RunCommandOptions } from "./run-command.js";
 
+const SUPPORTED_BROWSERS = new Set(["chrome", "chromium"]);
+
 export async function resolveRunConfig(
   invocationRoot: string,
   options: RunCommandOptions,
@@ -25,7 +27,8 @@ export async function resolveRunConfig(
 }
 
 function validateBrowser(invocationRoot: string, browser?: string): void {
-  if (!browser || browser === "chrome" || browser === "chromium") return;
+  if (!browser) return;
+  if (SUPPORTED_BROWSERS.has(browser)) return;
   throw new ProjectConfigError([
     {
       code: "invalid_browser",
@@ -40,7 +43,8 @@ function validateBrowser(invocationRoot: string, browser?: string): void {
 }
 
 function validateUrlOverride(invocationRoot: string, override?: string): void {
-  if (!override || isValidOverride(override)) return;
+  if (!override) return;
+  if (isValidOverride(override)) return;
   throw new ProjectConfigError([
     {
       code: "invalid_url_override",
@@ -82,7 +86,8 @@ function visionOverride(options: RunCommandOptions): object {
 }
 
 function validateVisionKey(config: ResolvedProjectConfig): void {
-  if (!config.vision.enabled || config.visionApiKey) return;
+  if (!config.vision.enabled) return;
+  if (config.visionApiKey) return;
   throw new ProjectConfigError([
     {
       code: "missing_vision_api_key",

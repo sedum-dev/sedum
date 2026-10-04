@@ -189,17 +189,37 @@ async function runSelectedTest(
   slot: ExecutionSlot,
   outcome: MutableOutcome,
 ): Promise<"continue" | "stop"> {
-  const { lane, ordinal } = slot;
   for (let attempt = 0; attempt <= (request.options.retries ?? 0); attempt++) {
-    if (attempt > 0) await request.recorder.testAt(ordinal)?.startAttempt(lane);
+    await startRetryAttempt(request, slot, attempt);
     const result = await executeTest(request, resources, slot);
-    if (request.reporterFailed()) throw new ReporterOutputError();
-    if (request.signal.aborted) return "stop";
-    if (result.status === "could_not_run")
-      return handleOperationalFailure(request, slot, result, outcome);
-    if (result.status === "passed" || result.retryable === false) break;
+    const directive = await attemptDirective(request, slot, result, outcome);
+    if (directive === "stop") return "stop";
+    if (directive === "complete") break;
   }
   return "continue";
+}
+
+async function startRetryAttempt(
+  request: TestExecutionRequest,
+  slot: ExecutionSlot,
+  attempt: number,
+): Promise<void> {
+  if (attempt === 0) return;
+  await request.recorder.testAt(slot.ordinal)?.startAttempt(slot.lane);
+}
+
+async function attemptDirective(
+  request: TestExecutionRequest,
+  slot: ExecutionSlot,
+  result: Awaited<ReturnType<typeof runFlow>>,
+  outcome: MutableOutcome,
+): Promise<"retry" | "complete" | "stop"> {
+  if (request.reporterFailed()) throw new ReporterOutputError();
+  if (request.signal.aborted) return "stop";
+  if (result.status === "could_not_run")
+    return handleOperationalFailure(request, slot, result, outcome);
+  if (result.status === "passed") return "complete";
+  return result.retryable === false ? "complete" : "retry";
 }
 
 async function executeTest(
@@ -268,7 +288,7 @@ async function handleOperationalFailure(
     { status: "could_not_run" }
   >,
   outcome: MutableOutcome,
-): Promise<"continue" | "stop"> {
+): Promise<"complete" | "stop"> {
   await slot.browser.recycle();
   const diagnostic = flowDiagnostic(result, request.config.providerName);
   outcome.operational ??= diagnostic;
@@ -277,5 +297,5 @@ async function handleOperationalFailure(
   await request.recorder
     .testAt(slot.ordinal)
     ?.errorTest(canonicalDiagnosticError(diagnostic));
-  return "continue";
+  return "complete";
 }
