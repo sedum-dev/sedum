@@ -189,16 +189,34 @@ interface StageRequest extends CacheIdentity {
   readonly eligible: CandidatePage;
 }
 
+type StageEntryArguments = readonly [
+  key: Uint8Array,
+  route: string,
+  operation: Operation,
+  sentence: string,
+  candidate: Candidate,
+  eligible: CandidatePage,
+];
+
+function unsafeRole(candidate: Candidate): boolean {
+  if (candidate.role === "") return false;
+  return !isSafeRole(candidate.role);
+}
+
+const CANDIDATE_BOUND_VIOLATIONS = [
+  (candidate: Candidate) => !!candidate.signals.nameTruncated,
+  (candidate: Candidate) => codePoints(candidate.name) > NAME_LIMIT,
+  unsafeRole,
+  (candidate: Candidate) => candidate.peers.length > 2,
+  (candidate: Candidate) =>
+    candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT),
+] as const;
+
 function assertCandidateBounds(candidate: Candidate): void {
-  if (candidate.signals.nameTruncated)
-    throw new RangeError("Candidate exceeds cache signal bounds");
-  if (codePoints(candidate.name) > NAME_LIMIT)
-    throw new RangeError("Candidate exceeds cache signal bounds");
-  if (candidate.role !== "" && !isSafeRole(candidate.role))
-    throw new RangeError("Candidate exceeds cache signal bounds");
-  if (candidate.peers.length > 2)
-    throw new RangeError("Candidate exceeds cache signal bounds");
-  if (candidate.peers.some((peer) => codePoints(peer) > PEER_LIMIT))
+  const exceedsBounds = CANDIDATE_BOUND_VIOLATIONS.some((violated) =>
+    violated(candidate),
+  );
+  if (exceedsBounds)
     throw new RangeError("Candidate exceeds cache signal bounds");
 }
 
@@ -311,14 +329,8 @@ function stage(request: StageRequest): CacheEntry {
   return entry;
 }
 
-export function stageEntry(
-  key: Uint8Array,
-  route: string,
-  operation: Operation,
-  sentence: string,
-  candidate: Candidate,
-  eligible: CandidatePage,
-): CacheEntry {
+export function stageEntry(...args: StageEntryArguments): CacheEntry {
+  const [key, route, operation, sentence, candidate, eligible] = args;
   return stage({
     key,
     route,
@@ -346,6 +358,17 @@ interface MatchRequest extends CacheIdentity {
   readonly complete: boolean;
   readonly runtimeDependent: boolean;
 }
+
+type MatchEntryArguments = readonly [
+  entry: CacheEntry | undefined,
+  key: Uint8Array,
+  route: string,
+  operation: Operation,
+  sentence: string,
+  candidates: readonly Candidate[],
+  complete: boolean,
+  runtimeDependent?: boolean,
+];
 
 interface RankedCandidate extends Score {
   readonly candidate: Candidate;
@@ -447,17 +470,39 @@ function rankedCandidates(request: MatchRequest): RankedCandidate[] {
     .sort((left, right) => right.score - left.score);
 }
 
+type RankedRule = readonly [
+  rejected: (
+    best: RankedCandidate,
+    runnerUp: RankedCandidate | undefined,
+  ) => boolean,
+  reason: CacheMissReason,
+];
+
+const RANKED_RULES: readonly RankedRule[] = [
+  [(best) => best.score === 0, "target_missing"],
+  [(best) => best.conflict, "strong_signal_conflict"],
+  [(best) => best.candidate.disabled, "not_actionable"],
+  [(best) => !best.identity || best.score < 8, "low_score"],
+  [
+    (best, runnerUp) =>
+      runnerUp !== undefined && best.score - runnerUp.score < 2,
+    "near_tie",
+  ],
+];
+
+function rankedMiss(
+  best: RankedCandidate,
+  runnerUp: RankedCandidate | undefined,
+): CacheMissReason | null {
+  const rule = RANKED_RULES.find(([rejected]) => rejected(best, runnerUp));
+  return rule?.[1] ?? null;
+}
+
 function rankedResult(ranked: readonly RankedCandidate[]): MatchResult {
   const best = ranked[0];
-  if (!best || best.score === 0)
-    return { hit: false, reason: "target_missing" };
-  if (best.conflict) return { hit: false, reason: "strong_signal_conflict" };
-  if (best.candidate.disabled) return { hit: false, reason: "not_actionable" };
-  if (!best.identity || best.score < 8)
-    return { hit: false, reason: "low_score" };
-  const runnerUp = ranked[1];
-  if (runnerUp && best.score - runnerUp.score < 2)
-    return { hit: false, reason: "near_tie" };
+  if (!best) return { hit: false, reason: "target_missing" };
+  const miss = rankedMiss(best, ranked[1]);
+  if (miss) return { hit: false, reason: miss };
   return { hit: true, candidate: best.candidate };
 }
 
@@ -469,16 +514,17 @@ function match(request: MatchRequest): MatchResult {
   return rankedResult(rankedCandidates(request));
 }
 
-export function matchEntry(
-  entry: CacheEntry | undefined,
-  key: Uint8Array,
-  route: string,
-  operation: Operation,
-  sentence: string,
-  candidates: readonly Candidate[],
-  complete: boolean,
-  runtimeDependent = false,
-): MatchResult {
+export function matchEntry(...args: MatchEntryArguments): MatchResult {
+  const [
+    entry,
+    key,
+    route,
+    operation,
+    sentence,
+    candidates,
+    complete,
+    runtimeDependent = false,
+  ] = args;
   return match({
     entry,
     key,

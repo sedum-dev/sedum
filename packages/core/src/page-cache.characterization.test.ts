@@ -134,6 +134,25 @@ function expectedScore(modes: CandidateModes) {
   };
 }
 
+type ExpectedRank = ReturnType<typeof expectedScore> & { readonly ref: string };
+
+function expectedBestMiss(best: ExpectedRank): MatchResult | null {
+  if (best.score === 0) return { hit: false, reason: "target_missing" };
+  if (best.conflict) return { hit: false, reason: "strong_signal_conflict" };
+  if (!best.identity || best.score < 8)
+    return { hit: false, reason: "low_score" };
+  return null;
+}
+
+function expectedNearTie(
+  best: ExpectedRank,
+  runnerUp: ExpectedRank | undefined,
+): MatchResult | null {
+  if (!runnerUp) return null;
+  if (best.score - runnerUp.score >= 2) return null;
+  return { hit: false, reason: "near_tie" };
+}
+
 function expectedMatch(
   first: CandidateModes,
   second: CandidateModes,
@@ -143,13 +162,9 @@ function expectedMatch(
     { ref: "second", ...expectedScore(second) },
   ].sort((left, right) => right.score - left.score);
   const [best, runnerUp] = ranked;
-  if (!best || best.score === 0)
-    return { hit: false, reason: "target_missing" };
-  if (best.conflict) return { hit: false, reason: "strong_signal_conflict" };
-  if (!best.identity || best.score < 8)
-    return { hit: false, reason: "low_score" };
-  if (runnerUp && best.score - runnerUp.score < 2)
-    return { hit: false, reason: "near_tie" };
+  if (!best) return { hit: false, reason: "target_missing" };
+  const miss = expectedBestMiss(best) ?? expectedNearTie(best, runnerUp);
+  if (miss) return miss;
   return {
     hit: true,
     candidate: scoredCandidate(best.ref, best.ref === "first" ? first : second),
