@@ -39,7 +39,11 @@ function validateTargets(
   targets: Readonly<Record<string, string>>,
 ): void {
   const count = Object.keys(targets).length;
-  if (!["CLICK", "TYPE"].includes(operation) || count === 0 || count > 254)
+  if (!["CLICK", "TYPE"].includes(operation))
+    throw new ProviderError("invalid-input", "Invalid goal action space");
+  if (count === 0)
+    throw new ProviderError("invalid-input", "Invalid goal action space");
+  if (count > 254)
     throw new ProviderError("invalid-input", "Invalid goal action space");
 }
 

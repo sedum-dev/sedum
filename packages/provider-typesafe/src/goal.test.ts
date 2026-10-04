@@ -33,6 +33,28 @@ function reply(operation: string, target: unknown) {
     { headers: { "content-type": "application/json" } },
   );
 }
+
+interface GoalWireRequest {
+  readonly state: Record<string, unknown>;
+  readonly questions: Record<string, { instructions: { rules: string } }>;
+}
+
+async function captureGoalRequest(
+  automaticData: boolean,
+): Promise<GoalWireRequest> {
+  const requests: GoalWireRequest[] = [];
+  const fetch = vi.fn(async (_input, init) => {
+    requests.push(JSON.parse(String(init?.body)) as GoalWireRequest);
+    return reply("DONE", null);
+  });
+  await new TypeSafeAdapter({ apiKey: "test", fetch }).chooseGoal({
+    ...state,
+    automaticData,
+  });
+  expect(fetch).toHaveBeenCalledOnce();
+  return requests[0]!;
+}
+
 describe("goal speculative heads", () => {
   it("selects a value source as one bounded choice with reuse instructions", async () => {
     const choices = {
@@ -140,46 +162,41 @@ describe("goal speculative heads", () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    [false, "TYPE chooses a field AND supplied binding together."],
-    [true, "TYPE chooses one field."],
-  ] as const)(
-    "changes only automatic-data request semantics when automaticData is %s",
-    async (automaticData, targetRule) => {
-      let request:
-        | {
-            state: Record<string, unknown>;
-            questions: Record<string, { instructions: { rules: string } }>;
-          }
-        | undefined;
-      const fetch = vi.fn(async (_input, init) => {
-        request = JSON.parse(String(init?.body));
-        return reply("DONE", null);
-      });
-      await new TypeSafeAdapter({ apiKey: "test", fetch }).chooseGoal({
-        ...state,
-        automaticData,
-      });
-      expect(request?.state).toEqual({
-        page: state.page,
-        offered_targets: state.targets,
-        recent_actions: [],
-      });
-      expect(request?.questions.click_target?.instructions.rules).toContain(
-        targetRule,
-      );
-      expect(request?.questions.operation?.instructions.rules).toContain(
-        automaticData
-          ? "Synthetic data is available without advance declarations."
-          : "Do not invent values.",
-      );
-      expect(request?.questions.operation?.instructions.rules).not.toContain(
-        automaticData
-          ? "TYPE chooses a field AND supplied binding together."
-          : "Synthetic data is available without advance declarations.",
-      );
-    },
-  );
+  it("keeps supplied-binding semantics when automatic data is disabled", async () => {
+    const request = await captureGoalRequest(false);
+    expect(request.state).toEqual({
+      page: state.page,
+      offered_targets: state.targets,
+      recent_actions: [],
+    });
+    expect(request.questions.click_target?.instructions.rules).toContain(
+      "TYPE chooses a field AND supplied binding together.",
+    );
+    expect(request.questions.operation?.instructions.rules).toContain(
+      "Do not invent values.",
+    );
+    expect(request.questions.operation?.instructions.rules).not.toContain(
+      "Synthetic data is available without advance declarations.",
+    );
+  });
+
+  it("adds only automatic-data request semantics when enabled", async () => {
+    const request = await captureGoalRequest(true);
+    expect(request.state).toEqual({
+      page: state.page,
+      offered_targets: state.targets,
+      recent_actions: [],
+    });
+    expect(request.questions.click_target?.instructions.rules).toContain(
+      "TYPE chooses one field.",
+    );
+    expect(request.questions.operation?.instructions.rules).toContain(
+      "Synthetic data is available without advance declarations.",
+    );
+    expect(request.questions.operation?.instructions.rules).not.toContain(
+      "TYPE chooses a field AND supplied binding together.",
+    );
+  });
 
   it("accepts 254 targets and rejects the adjacent cardinality boundaries", async () => {
     const targets = Object.fromEntries(

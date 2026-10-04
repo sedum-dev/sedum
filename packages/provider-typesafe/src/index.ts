@@ -73,12 +73,88 @@ export interface TypeSafeAdapterOptions {
 }
 
 function positiveDuration(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value < 1 || value > 2_147_483_647)
+  const valid = [
+    Number.isSafeInteger(value),
+    value >= 1,
+    value <= 2_147_483_647,
+  ].every(Boolean);
+  if (!valid)
     throw new ProviderError(
       "configuration",
       label + " must be a finite positive millisecond duration.",
     );
   return value;
+}
+
+function providerApiKey(options: TypeSafeAdapterOptions): string {
+  const key = options.apiKey ?? process.env.TYPESAFE_API_KEY;
+  if (typeof key !== "string")
+    throw new ProviderError(
+      "configuration",
+      "Set TYPESAFE_API_KEY to use the TypeSafe provider.",
+    );
+  const trimmed = key.trim();
+  if (!trimmed)
+    throw new ProviderError(
+      "configuration",
+      "Set TYPESAFE_API_KEY to use the TypeSafe provider.",
+    );
+  return trimmed;
+}
+
+function providerBaseUrl(options: TypeSafeAdapterOptions): URL {
+  const baseURL = options.baseURL ?? process.env.TYPESAFE_BASE_URL ?? BASE_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(baseURL);
+  } catch {
+    throw new ProviderError(
+      "configuration",
+      "Provider base URL must be an absolute HTTPS URL.",
+    );
+  }
+  const safe = [
+    parsed.protocol === "https:",
+    !parsed.username,
+    !parsed.password,
+    !parsed.search,
+    !parsed.hash,
+  ].every(Boolean);
+  if (!safe)
+    throw new ProviderError(
+      "configuration",
+      "Provider base URL must be an absolute HTTPS URL without credentials, query, or fragment.",
+    );
+  return parsed;
+}
+
+function providerModel(options: TypeSafeAdapterOptions): string {
+  const model = options.model ?? process.env.TYPESAFE_DEFAULT_MODEL ?? MODEL;
+  if (typeof model !== "string")
+    throw new ProviderError(
+      "configuration",
+      "Provider model must be a nonempty string.",
+    );
+  const trimmed = model.trim();
+  if (!trimmed)
+    throw new ProviderError(
+      "configuration",
+      "Provider model must be a nonempty string.",
+    );
+  return trimmed;
+}
+
+function validateAnswerKeys(
+  answers: Readonly<Record<string, unknown>>,
+  expected: readonly string[],
+  message: string,
+): void {
+  const keys = Object.keys(answers);
+  const matching = [
+    keys.length === expected.length,
+    keys.every((key) => expected.includes(key)),
+  ].every(Boolean);
+  if (!matching) throw new ProviderError("invalid-response", message);
 }
 
 function responseError(
@@ -111,41 +187,9 @@ export class TypeSafeAdapter
   private readonly now: () => number;
 
   constructor(options: TypeSafeAdapterOptions = {}) {
-    const key = options.apiKey ?? process.env.TYPESAFE_API_KEY;
-    if (typeof key !== "string" || key.trim().length === 0)
-      throw new ProviderError(
-        "configuration",
-        "Set TYPESAFE_API_KEY to use the TypeSafe provider.",
-      );
-    const baseURL =
-      options.baseURL ?? process.env.TYPESAFE_BASE_URL ?? BASE_URL;
-    const model = options.model ?? process.env.TYPESAFE_DEFAULT_MODEL ?? MODEL;
-    let parsedBaseURL: URL;
-    try {
-      parsedBaseURL = new URL(baseURL);
-    } catch {
-      throw new ProviderError(
-        "configuration",
-        "Provider base URL must be an absolute HTTPS URL.",
-      );
-    }
-    if (
-      parsedBaseURL.protocol !== "https:" ||
-      parsedBaseURL.username ||
-      parsedBaseURL.password ||
-      parsedBaseURL.search ||
-      parsedBaseURL.hash
-    )
-      throw new ProviderError(
-        "configuration",
-        "Provider base URL must be an absolute HTTPS URL without credentials, query, or fragment.",
-      );
-    if (typeof model !== "string" || !model.trim())
-      throw new ProviderError(
-        "configuration",
-        "Provider model must be a nonempty string.",
-      );
-    this.model = model.trim();
+    const key = providerApiKey(options);
+    const parsedBaseURL = providerBaseUrl(options);
+    this.model = providerModel(options);
     this.estimateJevCost =
       parsedBaseURL.toString().replace(/\/$/u, "") === BASE_URL;
     this.deadlineMs = positiveDuration(
@@ -164,7 +208,7 @@ export class TypeSafeAdapter
     this.random = options.random ?? Math.random;
     this.gate = options.gate ?? new ProviderGate({ now: this.now });
     this.client = new TypeSafeClient({
-      apiKey: key.trim(),
+      apiKey: key,
       baseURL: parsedBaseURL.toString().replace(/\/$/u, ""),
       defaultModel: this.model,
       logLevel: "off",
@@ -202,10 +246,8 @@ export class TypeSafeAdapter
 
   /** Value selection is a closed choice, never free-text generation. */
   async chooseGoalValue(state: GoalValueState, options?: ProviderCallOptions) {
-    if (
-      !Object.keys(state.choices).length ||
-      Object.keys(state.choices).length > 255
-    )
+    const choiceCount = Object.keys(state.choices).length;
+    if (![choiceCount > 0, choiceCount <= 255].every(Boolean))
       throw new ProviderError("invalid-input", "Invalid goal value choices");
     const request = {
       model: this.model,
@@ -352,14 +394,11 @@ export class TypeSafeAdapter
       try {
         const answers = answersOf(response);
         const keys = indexes.map((index) => `test${index}`);
-        if (
-          Object.keys(answers).length !== keys.length ||
-          Object.keys(answers).some((key) => !keys.includes(key))
-        )
-          throw new ProviderError(
-            "invalid-response",
-            "Relevance answer keys do not match the tests.",
-          );
+        validateAnswerKeys(
+          answers,
+          keys,
+          "Relevance answer keys do not match the tests.",
+        );
         for (const index of indexes)
           probabilities[index] = validateNoul(answers[`test${index}`]);
       } catch (error) {
@@ -394,15 +433,11 @@ export class TypeSafeAdapter
         calls.push(call);
         receiptRecorded = true;
         const replyAnswers = answersOf(asked.response);
-        const keys = Object.keys(replyAnswers);
-        if (
-          keys.length !== chunk.keys.length ||
-          keys.some((key) => !chunk.keys.includes(key))
-        )
-          throw new ProviderError(
-            "invalid-response",
-            "Classification answer keys do not match the questions.",
-          );
+        validateAnswerKeys(
+          replyAnswers,
+          chunk.keys,
+          "Classification answer keys do not match the questions.",
+        );
         const validated = chunk.keys.map((key) =>
           validateChoice(replyAnswers[key], MODEL_CHOICES),
         );

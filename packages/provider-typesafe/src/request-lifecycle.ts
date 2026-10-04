@@ -160,14 +160,26 @@ class RequestLifecycle {
   }
 
   private attemptBudget(): AttemptBudget {
+    const remainingMs = this.remainingActiveMs();
+    const rateLimitWaitMs = this.remainingRateLimitWaitMs();
+    return rateLimitWaitMs === undefined
+      ? { remainingMs }
+      : { remainingMs, rateLimitWaitMs };
+  }
+
+  private remainingActiveMs(): number {
     if (this.options?.signal?.aborted) throw this.canceled();
     const remainingMs = this.dependencies.deadlineMs - this.activeMs;
     if (remainingMs <= 0) throw this.canceled();
-    if (this.firstRateLimitAt === null) return { remainingMs };
-    const rateLimitWaitMs =
+    return remainingMs;
+  }
+
+  private remainingRateLimitWaitMs(): number | undefined {
+    if (this.firstRateLimitAt === null) return undefined;
+    const remaining =
       RATE_LIMIT_BUDGET_MS - (this.dependencies.now() - this.firstRateLimitAt);
-    if (rateLimitWaitMs <= 0) throw this.rateLimitExceeded();
-    return { remainingMs, rateLimitWaitMs };
+    if (remaining <= 0) throw this.rateLimitExceeded();
+    return remaining;
   }
 
   private async admit(budget: AttemptBudget) {
@@ -209,7 +221,8 @@ class RequestLifecycle {
   }
 
   private beginCooldown(error: unknown): void {
-    if (!isRateLimit(error) || this.options?.signal?.aborted) return;
+    if (!isRateLimit(error)) return;
+    if (this.options?.signal?.aborted) return;
     this.rateLimits++;
     const now = this.dependencies.now();
     const delay = cooldownDelay(
@@ -241,15 +254,31 @@ class RequestLifecycle {
   }
 
   private async prepareRetry(error: unknown): Promise<void> {
+    this.ensureRetryAllowed(error);
+    if (this.continueAfterRateLimit(error)) return;
+    await this.prepareBillableRetry(error);
+  }
+
+  private ensureRetryAllowed(error: unknown): void {
     if (this.options?.signal?.aborted) throw this.canceled();
     if (this.options?.maxAttempts === 1) throw safeError(error, this.requests);
-    if (isRateLimit(error)) {
-      this.firstRateLimitAt ??= this.dependencies.now();
-      this.afterRateLimit = true;
-      return;
-    }
+  }
+
+  private continueAfterRateLimit(error: unknown): boolean {
+    if (!isRateLimit(error)) return false;
+    this.firstRateLimitAt ??= this.dependencies.now();
+    this.afterRateLimit = true;
+    return true;
+  }
+
+  private async prepareBillableRetry(error: unknown): Promise<void> {
     this.afterRateLimit = false;
     if (!retryable(error)) throw safeError(error, this.requests);
+    this.recordFailure();
+    await this.waitBeforeRetry();
+  }
+
+  private recordFailure(): void {
     this.failures++;
     if (this.failures >= MAX_ATTEMPTS)
       throw new ProviderError(
@@ -257,7 +286,6 @@ class RequestLifecycle {
         "TypeSafe did not succeed after three attempts.",
         this.requests,
       );
-    await this.waitBeforeRetry();
   }
 
   private async waitBeforeRetry(): Promise<void> {
