@@ -78,9 +78,7 @@ function step(
   };
 }
 
-async function comprehensiveResult(): Promise<RunResult> {
-  const recorder = new RunRecorder(async () => undefined, "output-fixture");
-  await recorder.start();
+async function configureComprehensiveRun(recorder: RunRecorder): Promise<void> {
   await recorder.selectTests(3, {
     parallel: { requested: 3, lanes: 2 },
     shard: { index: 2, count: 3, globalSelectedTests: 8 },
@@ -110,7 +108,63 @@ async function comprehensiveResult(): Promise<RunResult> {
       rateLimitWaitMs: 1250,
     }),
   ]);
+}
 
+function historicalStep(): ResultStep {
+  return step("historical", 1, {
+    verdict: "failed",
+    error: { code: "no_match", message: "No match." },
+    locator: {
+      confidence: null,
+      source: "none",
+      options: [],
+      cache: null,
+      vision: {
+        outcome: "selected",
+        reason: "provider\u001b[31mmetadata",
+        elapsedMs: 2100,
+      },
+    },
+    calls: [call({ modality: "vision" })],
+  });
+}
+
+function cachedStep(): ResultStep {
+  return step("cached", 2, {
+    flags: ["low_confidence", "contradiction"],
+    locator: {
+      confidence: 0.7,
+      source: "model",
+      options: [],
+      cache: {
+        outcome: "miss",
+        reason: "outside_git",
+        fallbackCalledModel: true,
+        targetChanged: true,
+      },
+    },
+    calls: [call({ rateLimited: true, rateLimitWaitMs: 2300 })],
+  });
+}
+
+function conflictStep(): ResultStep {
+  return step("conflict", 3, {
+    locator: {
+      confidence: 0.9,
+      source: "model",
+      options: [],
+      cache: {
+        outcome: "miss",
+        reason: "conflict",
+        fallbackCalledModel: false,
+        targetChanged: false,
+      },
+      vision: { elapsedMs: 300, failure: "timeout" },
+    },
+  });
+}
+
+async function recordCheckout(recorder: RunRecorder): Promise<void> {
   const checkout = await recorder.beginTest({
     id: "checkout",
     file: "checkout.test.yaml",
@@ -118,61 +172,15 @@ async function comprehensiveResult(): Promise<RunResult> {
     ordinal: 0,
     lane: 0,
   });
-  await checkout.addStep(
-    step("historical", 1, {
-      verdict: "failed",
-      error: { code: "no_match", message: "No match." },
-      locator: {
-        confidence: null,
-        source: "none",
-        options: [],
-        cache: null,
-        vision: {
-          outcome: "selected",
-          reason: "provider\u001b[31mmetadata",
-          elapsedMs: 2100,
-        },
-      },
-      calls: [call({ modality: "vision" })],
-    }),
-  );
+  await checkout.addStep(historicalStep());
   await checkout.finishTest("failed");
   await checkout.startAttempt(1);
-  await checkout.addStep(
-    step("cached", 2, {
-      flags: ["low_confidence", "contradiction"],
-      locator: {
-        confidence: 0.7,
-        source: "model",
-        options: [],
-        cache: {
-          outcome: "miss",
-          reason: "outside_git",
-          fallbackCalledModel: true,
-          targetChanged: true,
-        },
-      },
-      calls: [call({ rateLimited: true, rateLimitWaitMs: 2300 })],
-    }),
-  );
-  await checkout.addStep(
-    step("conflict", 3, {
-      locator: {
-        confidence: 0.9,
-        source: "model",
-        options: [],
-        cache: {
-          outcome: "miss",
-          reason: "conflict",
-          fallbackCalledModel: false,
-          targetChanged: false,
-        },
-        vision: { elapsedMs: 300, failure: "timeout" },
-      },
-    }),
-  );
+  await checkout.addStep(cachedStep());
+  await checkout.addStep(conflictStep());
   await checkout.finishTest("passed");
+}
 
+async function recordErroredTest(recorder: RunRecorder): Promise<void> {
   const errored = await recorder.beginTest({
     id: "errored",
     file: "errored.test.yaml",
@@ -190,7 +198,14 @@ async function comprehensiveResult(): Promise<RunResult> {
     code: "browser_error",
     message: "Browser closed.",
   });
+}
 
+async function comprehensiveResult(): Promise<RunResult> {
+  const recorder = new RunRecorder(async () => undefined, "output-fixture");
+  await recorder.start();
+  await configureComprehensiveRun(recorder);
+  await recordCheckout(recorder);
+  await recordErroredTest(recorder);
   await recorder.finish({ code: "execution_error", message: "Run stopped." });
   return recorder.snapshot;
 }

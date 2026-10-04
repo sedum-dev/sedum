@@ -87,10 +87,17 @@ function resultCalls(value: RunResult) {
   ];
 }
 
+function reportsExecutionPlan(
+  execution: NonNullable<RunResult["execution"]>,
+): boolean {
+  if (execution.parallel.lanes > 1) return true;
+  return execution.shard !== null;
+}
+
 function executionPlanLine(value: RunResult): string | null {
   const execution = value.execution;
-  if (!execution || (execution.parallel.lanes <= 1 && !execution.shard))
-    return null;
+  if (!execution) return null;
+  if (!reportsExecutionPlan(execution)) return null;
   const shard = execution.shard
     ? `, shard ${execution.shard.index}/${execution.shard.count} of ${execution.shard.globalSelectedTests} selected`
     : "";
