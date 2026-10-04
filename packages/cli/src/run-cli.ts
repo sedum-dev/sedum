@@ -1,5 +1,5 @@
 import { withCommand } from "./invocation.js";
-import { Command, CommanderError, InvalidArgumentError } from "commander";
+import { Command, CommanderError } from "commander";
 import type { BrowserInstallResult, RunResult } from "@sedum-dev/core";
 import {
   createTerminalReporter,
@@ -8,11 +8,7 @@ import {
   type TerminalReporterName,
 } from "@sedum-dev/reporters";
 import { renderDiagnostic } from "./diagnostics.js";
-import {
-  MAX_PARALLEL,
-  parseParallel,
-  type ParallelRequest,
-} from "./run-pool.js";
+import type { ParallelRequest } from "./run-pool.js";
 import { clearLocatorCache } from "./locator-cache-store.js";
 import { listExitCode, runExitCode, validateExitCode } from "./exit-policy.js";
 import { executeListCommand } from "./list-command.js";
@@ -37,6 +33,20 @@ import {
   renderProblems,
   renderValidation,
 } from "./validate-output.js";
+import {
+  collectGlob,
+  collectLabels,
+  collectOrigin,
+  collectReporter,
+  collectValue,
+  commandHelp,
+  nonnegativeInteger,
+  nonnegativeSlow,
+  parallelValue,
+  positiveCount,
+  positiveMinutes,
+  relevanceThreshold,
+} from "./cli-arguments.js";
 
 export interface CliOutput {
   readonly stdout: string;
@@ -75,127 +85,6 @@ const plainOutput: OutputCapabilities = {
   stderrIsTTY: false,
   color: false,
 };
-
-function collectOrigin(value: string, previous: readonly string[]): string[] {
-  try {
-    return [...previous, new URL(value).origin];
-  } catch {
-    throw new InvalidArgumentError(
-      `Invalid origin ${JSON.stringify(value)}. Use an absolute URL such as https://example.com.`,
-    );
-  }
-}
-
-function collectValue(value: string, previous: readonly string[]): string[] {
-  if (!value.trim()) throw new InvalidArgumentError("Value must not be blank.");
-  return [...previous, value];
-}
-
-const REPORTERS = ["list", "steps", "terminal", "json", "markdown", "junit"];
-
-/** `--reporter` is repeatable and also takes a comma list, e.g. junit,markdown. */
-function collectReporter(value: string, previous: readonly string[]): string[] {
-  const selected = [...previous];
-  for (const item of value.split(",").map((name) => name.trim())) {
-    if (!REPORTERS.includes(item))
-      throw new InvalidArgumentError(
-        `Unknown reporter ${JSON.stringify(item)}. Use list or steps for terminal output, or terminal, json, markdown, or junit.`,
-      );
-    if (!selected.includes(item)) selected.push(item);
-  }
-  return selected;
-}
-
-function collectGlob(value: string, previous: readonly string[]): string[] {
-  if (
-    !value.trim() ||
-    value.startsWith("/") ||
-    /^[A-Za-z]:[/\\]/u.test(value) ||
-    value.split(/[/\\]/u).includes("..")
-  )
-    throw new InvalidArgumentError(
-      "Glob must be a nonempty project-relative path without '..'.",
-    );
-  return [...previous, value];
-}
-
-function collectLabels(value: string, previous: readonly string[]): string[] {
-  const labels = value.split(",").map((item) => item.trim());
-  if (labels.some((item) => !item))
-    throw new InvalidArgumentError(
-      "Labels must be nonempty comma-separated tags.",
-    );
-  return [...previous, ...labels];
-}
-
-function nonnegativeInteger(value: string): number {
-  const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 0 || number > 20)
-    throw new InvalidArgumentError("Expected an integer from 0 to 20.");
-  return number;
-}
-
-function nonnegativeSlow(value: string): number {
-  const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 0 || number > 30000)
-    throw new InvalidArgumentError("Expected milliseconds from 0 to 30000.");
-  return number;
-}
-
-function parallelValue(value: string): ParallelRequest {
-  const parsed = parseParallel(value);
-  if (parsed === null)
-    throw new InvalidArgumentError(
-      `Expected auto or an integer from 1 to ${MAX_PARALLEL}.`,
-    );
-  return parsed;
-}
-
-function positiveCount(maximum: number) {
-  return (value: string): number => {
-    const number = Number(value);
-    if (
-      !/^[1-9]\d*$/u.test(value) ||
-      !Number.isSafeInteger(number) ||
-      number > maximum
-    )
-      throw new InvalidArgumentError(
-        `Expected an integer from 1 to ${maximum}.`,
-      );
-    return number;
-  };
-}
-
-function positiveMinutes(value: string): number {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0 || number > 1440)
-    throw new InvalidArgumentError(
-      "Expected minutes greater than 0 and at most 1440.",
-    );
-  return number;
-}
-
-function relevanceThreshold(value: string): number {
-  const number = Number(value);
-  if (!value.trim() || !Number.isFinite(number) || number < 0 || number > 1)
-    throw new InvalidArgumentError("Expected a probability from 0 to 1.");
-  return number;
-}
-
-function commandHelp(command: Command, writeErr: (value: string) => void) {
-  command.outputHelp({ error: true });
-  const commandPath: string[] = [];
-  for (
-    let current: Command | null = command;
-    current;
-    current = current.parent
-  ) {
-    commandPath.unshift(current.name());
-  }
-  writeErr(
-    `Fix: run \`${commandPath.join(" ")} --help\` and provide a command.\n`,
-  );
-}
 
 /** Parse and execute explicit argv without reading or exiting the process. */
 export async function runCli(
