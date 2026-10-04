@@ -133,7 +133,12 @@ export function parseModuleSource(
   reportSchemaIssues(parsed, plain, context);
   const parameters = stringParameters(plain.parameters);
   checkDuplicateParameters(parameters, context);
-  const steps = parseSteps("steps", plain.steps, context, new Set(parameters));
+  const steps = parseSteps({
+    phase: "steps",
+    raw: plain.steps,
+    loader: context,
+    knownData: new Set(parameters),
+  });
   if (
     !parsed.success ||
     context.diagnostics.some((item) => item.severity === "error")
