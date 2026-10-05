@@ -3,7 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { assert } from "./packages.mjs";
+import { packages, assert } from "./packages.mjs";
+import { verifyPartialRelease } from "./partial-release.mjs";
 import { verifyCandidate } from "./verify-candidate.mjs";
 
 const repository = "sedum-dev/sedum";
@@ -77,10 +78,24 @@ assert(
   "Temporary publish path accepts alpha versions only",
 );
 const main = await github(`/repos/${repository}/branches/main`);
-assert(
-  main.commit.sha === manifest.sourceCommit,
-  "A newer main commit superseded this candidate",
-);
+let recovery = null;
+if (main.commit.sha !== manifest.sourceCommit) {
+  const currentVersions = Object.fromEntries(
+    await Promise.all(
+      packages.map(async ({ name, directory }) => {
+        const file = await github(
+          `/repos/${repository}/contents/${directory}/package.json?ref=${main.commit.sha}`,
+        );
+        assert(file.encoding === "base64", `Could not read current ${name}`);
+        const current = JSON.parse(
+          Buffer.from(file.content, "base64").toString("utf8"),
+        );
+        return [name, current.version];
+      }),
+    ),
+  );
+  recovery = await verifyPartialRelease(manifest, currentVersions);
+}
 
 const environment = await github(
   `/repos/${repository}/environments/npm-release`,
@@ -116,5 +131,6 @@ console.log(
     version: manifest.packages[0].version,
     candidateArtifactId: artifact.id,
     candidateArtifactDigest: artifact.digest,
+    recovery,
   }),
 );
