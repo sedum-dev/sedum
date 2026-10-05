@@ -28,14 +28,16 @@ To see a failure, change the last step to a false claim, such as `verify an erro
 ## A test
 
 ```ts
-import { test } from "sedum-cli";
+import { secret, test } from "sedum-cli";
 
 test(
   "a customer logs in",
   { url: "https://www.saucedemo.com/" },
-  async ({ ai }) => {
+  async ({ ai, env }) => {
     await ai("type standard_user in the username field");
-    await ai("type secret_sauce in the password field");
+    await ai("type {{password}} in the password field", {
+      password: secret(env.SAUCE_PASSWORD!),
+    });
     await ai("click the login button");
     await ai("verify a list of products with prices is shown");
   },
