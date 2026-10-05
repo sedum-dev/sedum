@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, test as propertyTest } from "vitest";
 import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import {
+  ClassificationBatchError,
   MODEL_CHOICES,
   MIN_MODEL_PROBABILITY,
   canonicalSentence,
@@ -96,6 +97,37 @@ describe("sentence classification", () => {
         throw new Error("Canonical sentence changed on the second pass");
     }, propertySettings);
   });
+
+  propertyTest(
+    "supported patterns retain their operation across whitespace normalization",
+    () => {
+      hegel.test((tc) => {
+        const [sentence, expected] = tc.draw(
+          gs.sampledFrom([
+            ["click the Login button", "click"],
+            ["type {{user}} in the username field", "type"],
+            ["press Enter", "press"],
+            ["goto https://example.com/login", "goto"],
+            ["verify the cart is empty", "verify"],
+            ["measure the visible product count", "measure"],
+            ["scroll down", "scroll"],
+            ["wait for 2 seconds", "wait"],
+            ["remember the total as {{total}}", "remember"],
+          ] as const),
+        );
+        const whitespace = tc.draw(
+          gs.sampledFrom([" ", "  ", "\t", "\n", " \t "] as const),
+        );
+        const padded = `${whitespace}${sentence.replaceAll(" ", whitespace)}${whitespace}`;
+        if (preflightSentence(padded) !== null)
+          throw new Error("Whitespace introduced a preflight failure");
+        if (patternOperation(padded) !== expected)
+          throw new Error("Whitespace changed the pattern operation");
+        if (validateOperand(padded, expected) !== null)
+          throw new Error("Whitespace invalidated the operation operand");
+      }, propertySettings);
+    },
+  );
 
   propertyTest(
     "high-confidence model answers pass the classification gate",
@@ -190,6 +222,53 @@ describe("sentence classification", () => {
       }, propertySettings);
     },
   );
+
+  it("keeps model validation boundaries distinct from ambiguity", () => {
+    const nearlyHighest = distribution("click", 0.5);
+    nearlyHighest.type = 0.5000005;
+    for (const key of MODEL_CHOICES)
+      if (key !== "click" && key !== "type") nearlyHighest[key] = 0;
+    expect(
+      evaluateModelAnswer({
+        op: "click",
+        probabilities: nearlyHighest,
+        model: "model",
+        requestedModel: "model",
+      }),
+    ).toEqual({ accepted: false, reason: "ambiguous" });
+
+    const notHighest = { ...nearlyHighest, click: 0.499998, type: 0.500002 };
+    expect(
+      evaluateModelAnswer({
+        op: "click",
+        probabilities: notHighest,
+        model: "model",
+        requestedModel: "model",
+      }),
+    ).toEqual({ accepted: false, reason: "invalid" });
+
+    const justInsideSumTolerance = distribution("click");
+    justInsideSumTolerance.measure += 0.019999;
+    expect(
+      evaluateModelAnswer({
+        op: "click",
+        probabilities: justInsideSumTolerance,
+        model: "model",
+        requestedModel: "model",
+      }),
+    ).toEqual({ accepted: true, probability: 0.9 });
+
+    const outsideSumTolerance = distribution("click");
+    outsideSumTolerance.measure += 0.020001;
+    expect(
+      evaluateModelAnswer({
+        op: "click",
+        probabilities: outsideSumTolerance,
+        model: "model",
+        requestedModel: "model",
+      }),
+    ).toEqual({ accepted: false, reason: "invalid" });
+  });
 
   it("classifies the labeled PoC login and checkout corpus offline", async () => {
     const corpus = JSON.parse(
@@ -455,6 +534,99 @@ describe("sentence classification", () => {
       "cache",
     ]);
     expect(warm.metrics).toMatchObject({ requests: 0, cache: 2, costUsd: 0 });
+  });
+
+  it("deduplicates canonical model requests while preserving input and diagnostic order", async () => {
+    const requested: string[][] = [];
+    const provider: ClassificationProvider = {
+      async classifyBatch(sentences) {
+        requested.push([...sentences]);
+        return {
+          answers: (["click", "unsupported_or_unclear"] as const).map((op) => ({
+            op,
+            probabilities: distribution(op),
+            model: call.model,
+            requestedModel: call.requestedModel,
+          })),
+          calls: [call],
+        };
+      },
+    };
+    const input = [
+      step("  activate   Save  ", 10),
+      step("perform magic", 11),
+      step("activate Save", 12),
+    ];
+    const result = await classifySteps(input, {
+      mode: "allow-model",
+      cache: new NoopClassificationCache(),
+      provider,
+    });
+    expect(requested).toEqual([[input[0]!.sentence, input[1]!.sentence]]);
+    expect(result.steps.map((item) => item?.source.line ?? null)).toEqual([
+      10,
+      null,
+      12,
+    ]);
+    expect(result.diagnostics.map((item) => item.source.line)).toEqual([11]);
+    expect(result.metrics).toMatchObject({
+      model: 2,
+      cacheMisses: { disabled: 3 },
+      requests: 1,
+    });
+  });
+
+  it("retains accepted steps but diagnoses every group when cache saving fails", async () => {
+    const cache = {
+      get: () => ({ answer: null, reason: "absent" }),
+      put: () => {},
+      save: async () => {
+        throw new Error("read-only cache");
+      },
+    };
+    const result = await classifySteps(
+      [step("activate Save", 20), step("activate Save", 21)],
+      {
+        mode: "allow-model",
+        cache,
+        provider: fakeProvider("click").provider,
+      },
+    );
+    expect(result.steps.map((item) => item?.source.line)).toEqual([20, 21]);
+    expect(
+      result.diagnostics.map(({ code, source }) => [code, source.line]),
+    ).toEqual([
+      ["cache_error", 20],
+      ["cache_error", 21],
+    ]);
+    expect(result.metrics).toMatchObject({ model: 2, costUsd: 0.0000042 });
+  });
+
+  it("accounts for retained receipts and failed attempts from a batch error", async () => {
+    const provider: ClassificationProvider = {
+      async classifyBatch() {
+        throw new ClassificationBatchError([call], 2, "connection");
+      },
+    };
+    const result = await classifySteps([step("activate Save")], {
+      mode: "allow-model",
+      cache: new NoopClassificationCache(),
+      provider,
+    });
+    expect(result.steps).toEqual([null]);
+    expect(result.diagnostics.map((item) => item.code)).toEqual([
+      "provider_error",
+    ]);
+    expect(result.calls).toHaveLength(2);
+    expect(result.calls[0]).toBe(call);
+    expect(result.calls[1]).toMatchObject({ attempts: 2, totalCostUsd: null });
+    expect(result.metrics).toMatchObject({
+      requests: 2,
+      attempts: 3,
+      inputTokens: 100,
+      outputTokens: 20,
+      costUsd: null,
+    });
   });
 
   it("accepts model-only paraphrases with explicit operands", async () => {
