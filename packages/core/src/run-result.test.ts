@@ -4,9 +4,11 @@ import * as gs from "@hegeldev/hegel/generators";
 import { RunRecorder } from "./run-recorder.js";
 import {
   ResultCallSchema,
+  RunResultSchema,
   resultTotals,
   runResultJsonSchema,
   validateRunResult,
+  type RunResult,
   type ResultStep,
 } from "./run-result.js";
 import { safeText, safeUrl } from "./report-privacy.js";
@@ -67,6 +69,34 @@ function step(
     replayFrame: null,
     targetBox: null,
   };
+}
+
+async function recordedResult(
+  verdict: "passed" | "failed" = "passed",
+): Promise<RunResult> {
+  const recorder = new RunRecorder(async () => {}, `run-${verdict}`);
+  await recorder.start();
+  await recorder.startTest({ id: `test-${verdict}`, file: "cart.test.yaml" });
+  await recorder.addStep(step(`step-${verdict}`, verdict));
+  await recorder.finishTest(verdict);
+  await recorder.finish();
+  return recorder.snapshot;
+}
+
+function copyResult(result: RunResult): RunResult {
+  return structuredClone(result);
+}
+
+function refreshTotals(result: RunResult): void {
+  result.totals = resultTotals(
+    result.tests,
+    result.setupCalls,
+    result.selectedTestCount ?? result.tests.length,
+  );
+}
+
+function expectDiagnostic(result: RunResult, message: string): void {
+  expect(() => validateRunResult(result)).toThrow(new Error(message));
 }
 
 describe("canonical RunResult", () => {
@@ -349,6 +379,238 @@ describe("canonical RunResult", () => {
       ),
     ).toThrow("Problem disagrees");
   });
+
+  it("preserves asymmetric run boundaries and top-level diagnostic order", async () => {
+    const valid = await recordedResult();
+    valid.execution = {
+      parallel: { requested: "auto", lanes: 1 },
+      shard: { index: 2, count: 2, globalSelectedTests: 1 },
+      providerConcurrency: 1,
+    };
+    expect(validateRunResult(valid)).toEqual(valid);
+
+    const invalidShard = copyResult(valid);
+    invalidShard.execution!.shard!.index = 3;
+    invalidShard.selectedTestCount = 0;
+    expectDiagnostic(invalidShard, "Shard index exceeds shard count");
+
+    const selected = copyResult(valid);
+    selected.selectedTestCount = 0;
+    expectDiagnostic(
+      selected,
+      "Selected test count is smaller than started tests",
+    );
+
+    const discovery = copyResult(valid);
+    discovery.discoveryProblems = [
+      { file: "bad.test.yaml", code: "invalid", message: "bad", fix: "fix" },
+    ];
+    discovery.tests[0]!.id = discovery.runId;
+    expectDiagnostic(
+      discovery,
+      "Run with discovery problems cannot complete cleanly",
+    );
+  });
+
+  it("preserves ID, lifecycle, and step diagnostic order", async () => {
+    const valid = await recordedResult();
+
+    const duplicateTest = copyResult(valid);
+    duplicateTest.tests[0]!.id = duplicateTest.runId;
+    duplicateTest.tests[0]!.verdict = null;
+    expectDiagnostic(duplicateTest, `Duplicate result ID: ${valid.runId}`);
+
+    const incompleteTest = copyResult(valid);
+    incompleteTest.tests[0]!.verdict = null;
+    expectDiagnostic(incompleteTest, "Completed test has incomplete attempts");
+
+    const incompleteAttempt = copyResult(valid);
+    incompleteAttempt.tests[0]!.attempts[0]!.finishedAt = null;
+    expectDiagnostic(
+      incompleteAttempt,
+      "Completed attempt has no verdict or finish time",
+    );
+
+    const runningStep = copyResult(valid);
+    runningStep.tests[0]!.attempts[0]!.steps[0]!.state = "running";
+    expectDiagnostic(runningStep, "Completed attempt has a running step");
+
+    const duplicateStep = copyResult(valid);
+    duplicateStep.tests[0]!.attempts[0]!.steps[0]!.id =
+      duplicateStep.tests[0]!.attempts[0]!.id;
+    duplicateStep.tests[0]!.attempts[0]!.steps[0]!.kind = "measure";
+    expectDiagnostic(
+      duplicateStep,
+      `Duplicate result ID: ${duplicateStep.tests[0]!.attempts[0]!.id}`,
+    );
+
+    const measured = copyResult(valid);
+    measured.tests[0]!.attempts[0]!.steps[0]!.kind = "measure";
+    expectDiagnostic(measured, "Measure step has a verdict");
+
+    const unfinishedStep = copyResult(valid);
+    unfinishedStep.tests[0]!.attempts[0]!.steps[0]!.verdict = null;
+    expectDiagnostic(unfinishedStep, "Completed step has no verdict");
+  });
+
+  it("preserves problem linkage, ordering, and count diagnostics", async () => {
+    const failed = await recordedResult("failed");
+    const attempt = failed.tests[0]!.attempts[0]!;
+    const problem = attempt.problems[0]!;
+
+    const unexpectedPrimary = copyResult(failed);
+    unexpectedPrimary.tests[0]!.attempts[0]!.problems = [];
+    expectDiagnostic(
+      unexpectedPrimary,
+      "Problem-free attempt has a primary problem",
+    );
+
+    const wrongPrimary = copyResult(failed);
+    wrongPrimary.tests[0]!.attempts[0]!.primaryProblemId = "other";
+    expectDiagnostic(wrongPrimary, "The first problem must be primary");
+
+    const ordinal = copyResult(failed);
+    ordinal.tests[0]!.attempts[0]!.problems[0]!.ordinal = 2;
+    expectDiagnostic(ordinal, "Problem ordinals must be consecutive");
+
+    const missingLink = copyResult(failed);
+    missingLink.tests[0]!.attempts[0]!.problems[0]!.stepId = "missing";
+    expectDiagnostic(missingLink, "Problem step link is missing");
+
+    const disagreement = copyResult(failed);
+    disagreement.tests[0]!.attempts[0]!.problems[0]!.phase = "before";
+    expectDiagnostic(disagreement, "Problem disagrees with linked step");
+
+    const boundModule = copyResult(failed);
+    boundModule.tests[0]!.attempts[0]!.problems[0] = {
+      ...problem,
+      origin: "module_binding",
+    };
+    expectDiagnostic(boundModule, "Module binding problem cannot link a step");
+
+    const missingProblem = copyResult(failed);
+    missingProblem.tests[0]!.attempts[0]!.problems = [];
+    missingProblem.tests[0]!.attempts[0]!.primaryProblemId = null;
+    expectDiagnostic(
+      missingProblem,
+      "Executed step problem count is inconsistent",
+    );
+  });
+
+  it("preserves attempt outcome diagnostics", async () => {
+    const failed = await recordedResult("failed");
+    const attempt = failed.tests[0]!.attempts[0]!;
+    const problem = attempt.problems[0]!;
+    const failedStep = attempt.steps[0]!;
+
+    const operationalCompletion = copyResult(failed);
+    operationalCompletion.tests[0]!.attempts[0]!.problems[0] = {
+      ...problem,
+      outcome: "error",
+    };
+    operationalCompletion.tests[0]!.attempts[0]!.steps[0] = {
+      ...failedStep,
+      state: "error",
+    };
+    expectDiagnostic(
+      operationalCompletion,
+      "Operational primary cannot complete an attempt",
+    );
+
+    const failedWithoutProblem = await recordedResult();
+    failedWithoutProblem.tests[0]!.attempts[0]!.verdict = "failed";
+    expectDiagnostic(
+      failedWithoutProblem,
+      "Failed attempt needs a failed primary problem",
+    );
+
+    const passedWithProblem = copyResult(failed);
+    passedWithProblem.tests[0]!.attempts[0]!.verdict = "passed";
+    expectDiagnostic(passedWithProblem, "Passed attempt has problems");
+
+    const errorWithFailedPrimary = copyResult(failed);
+    errorWithFailedPrimary.state = "error";
+    errorWithFailedPrimary.verdict = null;
+    errorWithFailedPrimary.error = { code: "run_error", message: "stopped" };
+    errorWithFailedPrimary.tests[0]!.state = "error";
+    errorWithFailedPrimary.tests[0]!.verdict = null;
+    errorWithFailedPrimary.tests[0]!.attempts[0]!.state = "error";
+    errorWithFailedPrimary.tests[0]!.attempts[0]!.verdict = null;
+    expectDiagnostic(
+      errorWithFailedPrimary,
+      "Error attempt needs an error primary problem",
+    );
+  });
+
+  it("preserves selected-attempt and aggregate diagnostics", async () => {
+    const valid = await recordedResult();
+
+    const missingSelection = copyResult(valid);
+    missingSelection.tests[0]!.selectedAttemptId = "missing";
+    expectDiagnostic(missingSelection, "Selected attempt is missing");
+
+    const verdict = copyResult(valid);
+    verdict.tests[0]!.verdict = null;
+    verdict.tests[0]!.state = "running";
+    expectDiagnostic(verdict, "Test verdict differs from selected attempt");
+
+    const flags = copyResult(valid);
+    flags.tests[0]!.flags = ["flaky"];
+    expectDiagnostic(flags, "Test flags differ from selected attempt");
+
+    const totals = copyResult(valid);
+    totals.totals.modelCalls += 1;
+    expectDiagnostic(totals, "Run totals differ from children");
+
+    const runVerdict = copyResult(valid);
+    runVerdict.verdict = "failed";
+    expectDiagnostic(runVerdict, "Run verdict differs from tests");
+
+    const runFlags = copyResult(valid);
+    runFlags.flags = ["flaky"];
+    expectDiagnostic(runFlags, "Run flags differ from tests");
+
+    const incompleteRun = copyResult(valid);
+    incompleteRun.tests[0]!.state = "interrupted";
+    expectDiagnostic(incompleteRun, "Completed run has no completed tests");
+
+    const runningFinished = copyResult(valid);
+    runningFinished.state = "running";
+    runningFinished.verdict = null;
+    expectDiagnostic(runningFinished, "Running run has finish time");
+
+    const terminalUnfinished = copyResult(valid);
+    terminalUnfinished.state = "interrupted";
+    terminalUnfinished.verdict = null;
+    terminalUnfinished.finishedAt = null;
+    expectDiagnostic(terminalUnfinished, "Terminal run has no finish time");
+  });
+
+  propertyTest(
+    "accepts shard and selected-count boundaries without changing serialization",
+    async () => {
+      const baseline = await recordedResult();
+      hegel.test((tc) => {
+        const count = tc.draw(gs.integers({ minValue: 1, maxValue: 1000 }));
+        const index = tc.draw(gs.integers({ minValue: 1, maxValue: count }));
+        const selectedTestCount = tc.draw(
+          gs.integers({ minValue: baseline.tests.length, maxValue: 1000 }),
+        );
+        const candidate = copyResult(baseline);
+        candidate.selectedTestCount = selectedTestCount;
+        candidate.execution = {
+          parallel: { requested: "auto", lanes: 1 },
+          shard: { index, count, globalSelectedTests: selectedTestCount },
+          providerConcurrency: 1,
+        };
+        refreshTotals(candidate);
+        const validated = JSON.stringify(validateRunResult(candidate));
+        const parsed = JSON.stringify(RunResultSchema.parse(candidate));
+        if (validated !== parsed)
+          throw new Error("Validation changed serialized output");
+      }, propertySettings);
+    },
+  );
 });
 
 describe("report privacy", () => {
