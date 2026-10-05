@@ -37,7 +37,10 @@ jobs:
         run: pnpm build
       - name: Dry-run npm package set
         if: matrix.os == 'ubuntu-latest' && matrix.node == 24
-        run: node scripts/release/candidate.mjs --dry-run && node scripts/release/smoke-candidate.mjs release-candidate
+        run: |
+          node --test scripts/release/*.test.mjs
+          node scripts/release/candidate.mjs --dry-run
+          node scripts/release/smoke-candidate.mjs release-candidate
       - name: Lint
         run: pnpm lint
       - name: Typecheck

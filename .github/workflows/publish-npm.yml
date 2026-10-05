@@ -49,8 +49,6 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.preflight.outputs.source_commit }}
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -60,6 +58,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
         run: node scripts/release/verify-alpha-candidate.mjs
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.source_commit }}
       - name: Download approved candidate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
