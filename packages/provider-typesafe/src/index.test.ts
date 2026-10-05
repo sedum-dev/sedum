@@ -216,8 +216,60 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
     });
     const result = await adapter.choose("Buy", offered);
     expect(transport.calls).toHaveLength(3);
-    expect(result.call).toMatchObject({ attempts: 3, totalCostUsd: null });
+    expect(result.call).toMatchObject({
+      attempts: 3,
+      rateLimited: true,
+      totalCostUsd: null,
+    });
     expect(result.call.successfulResponseCostUsd).toBeCloseTo(0.0000042);
+  });
+
+  it.each([
+    [401, "authentication", "TypeSafe authentication failed."],
+    [403, "authentication", "TypeSafe authentication failed."],
+    [
+      402,
+      "configuration",
+      "The TypeSafe account has no available API credits.",
+    ],
+    [400, "invalid-input", "TypeSafe rejected the provider request."],
+    [499, "invalid-input", "TypeSafe rejected the provider request."],
+    [500, "connection", "TypeSafe could not complete the request."],
+    [528, "connection", "TypeSafe could not complete the request."],
+    [530, "connection", "TypeSafe could not complete the request."],
+  ] as const)(
+    "converts HTTP %i to the stable %s provider error",
+    async (status, code, message) => {
+      const transport = fake([json({ detail: "SECRET-ERROR-BODY" }, status)]);
+      await expect(
+        new TypeSafeAdapter({
+          apiKey: "test-key",
+          fetch: transport.fetch,
+        }).choose("Buy", offered),
+      ).rejects.toMatchObject({ code, message, attempts: 1 });
+      expect(transport.calls).toHaveLength(1);
+    },
+  );
+
+  it("maps every ordinary 4xx status to invalid-input without leaking its body", async () => {
+    const exceptionalStatuses = new Set([401, 402, 403, 429]);
+    for (let status = 400; status < 500; status++) {
+      if (exceptionalStatuses.has(status)) continue;
+      const transport = fake([json({ detail: `secret-${status}` }, status)]);
+      const error = await new TypeSafeAdapter({
+        apiKey: "test-key",
+        fetch: transport.fetch,
+      })
+        .choose("Buy", offered)
+        .catch((caught: unknown) => caught);
+      expect(error).toMatchObject({
+        code: "invalid-input",
+        message: "TypeSafe rejected the provider request.",
+        attempts: 1,
+      });
+      expect(JSON.stringify(error)).not.toContain(`secret-${status}`);
+      expect(transport.calls).toHaveLength(1);
+    }
   });
 
   it("retries a connection failure and exhausts after three calls", async () => {

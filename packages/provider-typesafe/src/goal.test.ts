@@ -33,6 +33,28 @@ function reply(operation: string, target: unknown) {
     { headers: { "content-type": "application/json" } },
   );
 }
+
+interface GoalWireRequest {
+  readonly state: Record<string, unknown>;
+  readonly questions: Record<string, { instructions: { rules: string } }>;
+}
+
+async function captureGoalRequest(
+  automaticData: boolean,
+): Promise<GoalWireRequest> {
+  const requests: GoalWireRequest[] = [];
+  const fetch = vi.fn(async (_input, init) => {
+    requests.push(JSON.parse(String(init?.body)) as GoalWireRequest);
+    return reply("DONE", null);
+  });
+  await new TypeSafeAdapter({ apiKey: "test", fetch }).chooseGoal({
+    ...state,
+    automaticData,
+  });
+  expect(fetch).toHaveBeenCalledOnce();
+  return requests[0]!;
+}
+
 describe("goal speculative heads", () => {
   it("selects a value source as one bounded choice with reuse instructions", async () => {
     const choices = {
@@ -139,6 +161,95 @@ describe("goal speculative heads", () => {
     });
     expect(fetch).toHaveBeenCalledOnce();
   });
+
+  it("keeps supplied-binding semantics when automatic data is disabled", async () => {
+    const request = await captureGoalRequest(false);
+    expect(request.state).toEqual({
+      page: state.page,
+      offered_targets: state.targets,
+      recent_actions: [],
+    });
+    expect(request.questions.click_target?.instructions.rules).toContain(
+      "TYPE chooses a field AND supplied binding together.",
+    );
+    expect(request.questions.operation?.instructions.rules).toContain(
+      "Do not invent values.",
+    );
+    expect(request.questions.operation?.instructions.rules).not.toContain(
+      "Synthetic data is available without advance declarations.",
+    );
+  });
+
+  it("adds only automatic-data request semantics when enabled", async () => {
+    const request = await captureGoalRequest(true);
+    expect(request.state).toEqual({
+      page: state.page,
+      offered_targets: state.targets,
+      recent_actions: [],
+    });
+    expect(request.questions.click_target?.instructions.rules).toContain(
+      "TYPE chooses one field.",
+    );
+    expect(request.questions.operation?.instructions.rules).toContain(
+      "Synthetic data is available without advance declarations.",
+    );
+    expect(request.questions.operation?.instructions.rules).not.toContain(
+      "TYPE chooses a field AND supplied binding together.",
+    );
+  });
+
+  it("accepts 254 targets and rejects the adjacent cardinality boundaries", async () => {
+    const targets = Object.fromEntries(
+      Array.from({ length: 254 }, (_, index) => [
+        `c${index}`,
+        `Choice ${index}`,
+      ]),
+    );
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            model: "jev-test",
+            usage: { input_tokens: 100, output_tokens: 0 },
+            answers: {
+              operation: answer("DONE", ["CLICK", "DONE", "BLOCKED"]),
+              click_target: answer("c0", Object.keys(targets)),
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const adapter = new TypeSafeAdapter({ apiKey: "test", fetch });
+    await expect(
+      adapter.chooseGoal({ ...state, targets: { CLICK: targets } }),
+    ).resolves.toMatchObject({ operation: { choice: "DONE" } });
+    for (const invalidTargets of [{}, { ...targets, c254: "Choice 254" }])
+      await expect(
+        adapter.chooseGoal({
+          ...state,
+          targets: { CLICK: invalidTargets },
+        }),
+      ).rejects.toMatchObject({
+        code: "invalid-input",
+        message: "Invalid goal action space",
+      });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("rejects unsupported operation heads before making a request", async () => {
+    const fetch = vi.fn(async () => reply("DONE", null));
+    await expect(
+      new TypeSafeAdapter({ apiKey: "test", fetch }).chooseGoal({
+        ...state,
+        targets: { SELECT: { s0: "Plant type" } },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid-input",
+      message: "Invalid goal action space",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("sends every head once but ignores the malformed unused head", async () => {
     const fetch = vi.fn(async (_input, init) => {
       const body = JSON.parse(String(init?.body));
