@@ -1,6 +1,24 @@
 {
   "name": "sedum-cli",
   "version": "0.1.0-alpha.9",
+  "description": "Plain-English browser tests on Playwright. Write steps as sentences, keep TypeScript, and run the suite on every pull request.",
+  "keywords": [
+    "playwright",
+    "e2e",
+    "end-to-end",
+    "testing",
+    "browser-testing",
+    "ai",
+    "llm",
+    "typescript",
+    "test-runner",
+    "plain-english"
+  ],
+  "license": "MIT",
+  "homepage": "https://sedum.dev",
+  "bugs": {
+    "url": "https://github.com/sedum-dev/sedum/issues"
+  },
   "repository": "https://github.com/sedum-dev/sedum",
   "publishConfig": {
     "access": "public"

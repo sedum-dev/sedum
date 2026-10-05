@@ -9,7 +9,7 @@ Write browser tests in plain English, keep the full power of TypeScript, and
 run the whole suite on every pull request for dollars a month instead of
 thousands.
 
-<!-- demo: 15 s GIF of `sedum run --headed` passing, then a false claim failing -->
+![Sedum running a plain-English login test in a real browser: it passes with 0.98 confidence for under a cent](docs/assets/demo.gif)
 
 ```ts
 // tests/checkout.test.ts
