@@ -55,19 +55,14 @@ export function scanImportBindings(source: string): readonly ImportBinding[] {
 
 function bindingsAt(tokens: readonly Token[], index: number): ImportBinding[] {
   const names: { local: string; imported: string }[] = [];
-  let cursor = index + 1;
-  const first = tokens[cursor];
-  if (first?.kind === "ident" && first.value === "type") cursor++;
-  const defaultImport = tokens[cursor];
-  if (defaultImport?.kind === "ident" && defaultImport.value !== "from") {
-    names.push({ local: defaultImport.value, imported: "default" });
-    cursor++;
-    if (tokens[cursor]?.value === ",") cursor++;
-  }
-  if (tokens[cursor]?.value === "{")
-    cursor = readNamedImports(tokens, cursor, names);
-  const from = tokens[cursor];
-  const specifier = tokens[cursor + 1];
+  const afterType = skipTypeKeyword(tokens, index + 1);
+  const cursor = readDefaultImport(tokens, afterType, names);
+  const afterNames =
+    tokens[cursor]?.value === "{"
+      ? readNamedImports(tokens, cursor, names)
+      : cursor;
+  const from = tokens[afterNames];
+  const specifier = tokens[afterNames + 1];
   if (
     from?.kind !== "ident" ||
     from.value !== "from" ||
@@ -78,6 +73,25 @@ function bindingsAt(tokens: readonly Token[], index: number): ImportBinding[] {
   return names.map((name) => ({ ...name, specifier: specifier.value }));
 }
 
+function skipTypeKeyword(tokens: readonly Token[], cursor: number): number {
+  const token = tokens[cursor];
+  return token?.kind === "ident" && token.value === "type"
+    ? cursor + 1
+    : cursor;
+}
+
+function readDefaultImport(
+  tokens: readonly Token[],
+  cursor: number,
+  names: { local: string; imported: string }[],
+): number {
+  const token = tokens[cursor];
+  if (token?.kind !== "ident" || token.value === "from") return cursor;
+  names.push({ local: token.value, imported: "default" });
+  const next = cursor + 1;
+  return tokens[next]?.value === "," ? next + 1 : next;
+}
+
 function readNamedImports(
   tokens: readonly Token[],
   open: number,
@@ -86,16 +100,26 @@ function readNamedImports(
   let cursor = open + 1;
   while (cursor < tokens.length && tokens[cursor]?.value !== "}") {
     const name = tokens[cursor];
-    if (name?.kind === "ident" && name.value !== "type") {
-      const local = tokens[cursor + 2];
-      if (tokens[cursor + 1]?.value === "as" && local?.kind === "ident") {
-        names.push({ local: local.value, imported: name.value });
-        cursor += 3;
-        continue;
-      }
-      names.push({ local: name.value, imported: name.value });
+    if (name?.kind !== "ident" || name.value === "type") {
+      cursor++;
+      continue;
     }
-    cursor++;
+    cursor = readNamedImport(tokens, cursor, name.value, names);
   }
+  return cursor + 1;
+}
+
+function readNamedImport(
+  tokens: readonly Token[],
+  cursor: number,
+  imported: string,
+  names: { local: string; imported: string }[],
+): number {
+  const local = tokens[cursor + 2];
+  if (tokens[cursor + 1]?.value === "as" && local?.kind === "ident") {
+    names.push({ local: local.value, imported });
+    return cursor + 3;
+  }
+  names.push({ local: imported, imported });
   return cursor + 1;
 }
