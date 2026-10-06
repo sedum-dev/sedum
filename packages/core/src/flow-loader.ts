@@ -1,9 +1,9 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
-import { parseFlowSource } from "./flow-parser.js";
-import { parseModuleSource } from "./module-parser.js";
+import { parseFlowSource } from "./flow-loader/flow-parser.js";
+import { parseModuleSource } from "./flow-loader/module-parser.js";
 import { walkSuiteFiles } from "./project-discovery.js";
-import { addDiagnostic, compareDiagnostics } from "./flow-loader-context.js";
+import { addDiagnostic, compareDiagnostics } from "./flow-loader/context.js";
 import type {
   FlowDefinition,
   FlowDiagnostic,

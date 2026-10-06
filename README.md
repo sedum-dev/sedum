@@ -1,6 +1,8 @@
 # Sedum
 
 [![CI](https://github.com/sedum-dev/sedum/actions/workflows/ci.yml/badge.svg)](https://github.com/sedum-dev/sedum/actions/workflows/ci.yml)
+[![CodeScene Hotspot Code Health](https://codescene.io/projects/85416/status-badges/hotspot-code-health)](https://codescene.io/projects/85416)
+[![CodeScene Average Code Health](https://codescene.io/projects/85416/status-badges/average-code-health)](https://codescene.io/projects/85416)
 [![npm](https://img.shields.io/npm/v/sedum-cli.svg)](https://www.npmjs.com/package/sedum-cli)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)

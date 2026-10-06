@@ -2,10 +2,10 @@ import type { BrowserPage } from "./browser-driver.js";
 import type { FlowSource } from "./flow-types.js";
 import type { GoalAction } from "./goal-runner.js";
 import { captureStableGoalFrame } from "./goal-reporting-capture.js";
-import type { AttemptReport } from "./flow-runner-contracts.js";
+import type { AttemptReport } from "./flow-runner/contracts.js";
 import { reportPage, safeSource, safeText, safeUrl } from "./report-privacy.js";
 import type { ResultFrame, ResultStep } from "./run-result.js";
-import { resultCall } from "./flow-runner-support.js";
+import { resultCall } from "./flow-runner/support.js";
 
 export interface GoalActionReportRequest {
   readonly page: BrowserPage;

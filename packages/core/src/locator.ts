@@ -6,27 +6,27 @@ import {
   type ProviderCall,
   type Resolver,
 } from "./provider.js";
-import { LocatorError } from "./locator-error.js";
-import { ItemVerifier } from "./locator-item-verifier.js";
-import { LiveTargetValidator } from "./locator-live-validator.js";
-import { VisionFallback } from "./locator-vision-fallback.js";
-import { eliminateCandidates } from "./locator-elimination.js";
+import { LocatorError } from "./locator/error.js";
+import { ItemVerifier } from "./locator/item-verifier.js";
+import { LiveTargetValidator } from "./locator/live-validator.js";
+import { VisionFallback } from "./locator/vision-fallback.js";
+import { eliminateCandidates } from "./locator/elimination.js";
 import {
   LocatorLifecycle,
   prepareLocator,
   validLocatorInput,
-} from "./locator-setup.js";
+} from "./locator/setup.js";
 import {
   RuntimeSelection,
   type SelectionState,
-} from "./locator-runtime-selection.js";
+} from "./locator/runtime-selection.js";
 import type {
   LocatorCacheDiagnostic,
   LocatorDiagnostic,
   LocatorFailure,
   LocatorOptions,
   LocatorResult,
-} from "./locator-types.js";
+} from "./locator/types.js";
 export type {
   LocatorCacheDiagnostic,
   LocatorCacheSeed,
@@ -36,7 +36,7 @@ export type {
   LocatorOptions,
   LocatorResult,
   RepeatedMemberPolicy,
-} from "./locator-types.js";
+} from "./locator/types.js";
 
 /** Resolve a sentence to one fresh page target. No browser action occurs here. */
 export async function resolveTarget(
