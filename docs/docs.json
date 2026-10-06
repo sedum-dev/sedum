@@ -55,5 +55,17 @@
   "favicon": {
     "light": "/docs/images/sedum-mintlify.svg",
     "dark": "/docs/images/sedum-mintlify.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "href": "https://sedum.dev",
+        "label": "Website"
+      }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/sedum-dev/sedum"
+    }
   }
 }
