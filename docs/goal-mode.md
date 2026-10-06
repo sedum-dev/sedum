@@ -1,4 +1,6 @@
-# Goal-based tests
+---
+title: "Goal-based tests"
+---
 
 TypeScript and YAML deliberately use different completion contracts.
 

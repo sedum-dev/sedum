@@ -1,0 +1,43 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Sedum",
+  "colors": {
+    "primary": "#1D5B3E"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": [
+          "index",
+          "plain-english-tests",
+          "typescript-tests",
+          "format",
+          "goal-mode"
+        ]
+      },
+      {
+        "group": "Use Sedum",
+        "pages": ["configuration", "cli", "ci"]
+      },
+      {
+        "group": "How it works",
+        "pages": [
+          "probabilistic-testing",
+          "assertion-engine",
+          "classification",
+          "locator-cache"
+        ]
+      },
+      {
+        "group": "Providers",
+        "pages": ["provider-typesafe", "provider-clef"]
+      },
+      {
+        "group": "Reference",
+        "pages": ["run-result", "releasing"]
+      }
+    ]
+  }
+}

@@ -1,4 +1,6 @@
-# CLI commands
+---
+title: "CLI commands"
+---
 
 ## `sedum init`
 

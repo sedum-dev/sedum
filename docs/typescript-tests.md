@@ -1,4 +1,6 @@
-# TypeScript tests
+---
+title: "TypeScript tests"
+---
 
 A `*.test.ts` file holds one or more tests. Each test is an async function:
 plain-English steps run through `ai`, and anything else is ordinary

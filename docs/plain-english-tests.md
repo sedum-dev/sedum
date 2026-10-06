@@ -1,4 +1,6 @@
-# Plain-English browser tests
+---
+title: "Plain-English browser tests"
+---
 
 This page explains the basics: what an end-to-end test is, why they are hard to
 keep working, and what changes when you write them in plain English and let a
@@ -104,4 +106,4 @@ what makes it practical to run the whole suite on every pull request. And
 instead of a plain yes or no, Jev returns probabilities, so Sedum can tell you
 how sure each check is. See [probabilistic testing](probabilistic-testing.md).
 
-To try it, follow [Get started](../README.md#get-started) in the README.
+To try it, follow [Get started](https://github.com/sedum-dev/sedum#get-started) in the README.

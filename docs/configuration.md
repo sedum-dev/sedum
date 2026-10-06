@@ -1,4 +1,6 @@
-# Project configuration
+---
+title: "Project configuration"
+---
 
 Sedum looks for the nearest `sedum.config.yaml` in the current directory or
 one of its parents. The folder containing that file is the project root. If no

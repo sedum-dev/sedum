@@ -1,4 +1,6 @@
-# YAML test format
+---
+title: "YAML test format"
+---
 
 Tests can be written in TypeScript or YAML. [TypeScript tests](typescript-tests.md)
 are the default and can run code between steps; this page describes YAML
@@ -57,7 +59,7 @@ Module paths are relative to the file containing the `use` entry. Canonical targ
 
 Navigation precedes `before`. A failed `before` skips `steps`; `after` still runs after an ordinary setup or body pass or failure while the page remains usable. Teardown continues through later entries after one fails. The first failure remains primary, and later teardown failures are retained separately. A teardown failure fails an otherwise passing attempt. External cancellation or a lost browser cannot guarantee cleanup.
 
-The [local fixture flows](../fixtures/README.md) show two tests sharing one UI login module. Signing in through an API or a saved session is not supported yet; use a UI login module.
+The [local fixture flows](https://github.com/sedum-dev/sedum/tree/main/fixtures) show two tests sharing one UI login module. Signing in through an API or a saved session is not supported yet; use a UI login module.
 
 `data` values can be strings, numbers, booleans, or null. Quote a value when its written characters matter, such as a postcode with a leading zero. `$VAR` and `${VAR}` read environment variables when that test runs; `$$` writes a literal dollar. They are not resolved while tests are discovered or checked for format errors. An unset variable therefore affects only a selected run. Environment-derived values are treated as secrets in displays and model requests.
 

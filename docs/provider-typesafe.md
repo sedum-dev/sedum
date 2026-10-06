@@ -1,4 +1,6 @@
-# TypeSafe provider
+---
+title: "TypeSafe provider"
+---
 
 ## What Sedum sends, in short
 

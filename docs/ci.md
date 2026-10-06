@@ -1,4 +1,6 @@
-# Running in CI
+---
+title: "Running in CI"
+---
 
 A CI job fails when `sedum run` exits non-zero, on any CI system. Exits are
 `0` for a pass (a flagged pass included), `1` for a failed test, `2` for a

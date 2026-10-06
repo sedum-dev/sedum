@@ -1,4 +1,6 @@
-# Local locator cache
+---
+title: "Local locator cache"
+---
 
 Sedum can remember how it found a browser control. On a later run, it checks
 that recipe against the current page. A unique, actionable match skips the

@@ -1,4 +1,6 @@
-# RunResult v1 and live progress
+---
+title: "RunResult v1 and live progress"
+---
 
 YAML goal tests populate optional `tests[].goal` with complete, secret-redacted
 `text` and `verify` strings after data resolution, before browser execution.

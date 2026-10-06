@@ -1,4 +1,6 @@
-# Assertion engine
+---
+title: "Assertion engine"
+---
 
 `@sedum-dev/core` exports `verify(page, judge, claim, options?)` and `measure(page, judge, claim, options?)`. Both read one settled, complete page digest and send the claim to `Judge.holds` once. The Judge returns `holds` and `contradicted` probabilities from one provider request.
 

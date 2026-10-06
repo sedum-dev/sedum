@@ -1,4 +1,6 @@
-# Docs
+---
+title: "Sedum documentation"
+---
 
 These pages describe how to write, configure, and run Sedum tests.
 

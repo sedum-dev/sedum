@@ -1,4 +1,6 @@
-# Probabilistic testing
+---
+title: "Probabilistic testing"
+---
 
 > **Probabilistic testing** means every check a model makes returns how likely
 > it is to hold, and the verdict comes from comparing that probability with a

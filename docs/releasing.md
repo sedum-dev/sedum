@@ -1,4 +1,6 @@
-# Releasing Sedum
+---
+title: "Releasing Sedum"
+---
 
 The four npm packages share one version: `sedum-cli`, `@sedum-dev/core`, `@sedum-dev/provider-typesafe`, and `@sedum-dev/reporters`. Changesets is in `alpha` prerelease mode. The first version PR should therefore be `0.1.0-alpha.0`; public npm releases use the `latest` tag, so the README's plain `npm install -D sedum-cli` installs the newest alpha. Move them to a prerelease tag once a stable release exists.
 

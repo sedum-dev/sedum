@@ -1,4 +1,6 @@
-# Clef provider
+---
+title: "Clef provider"
+---
 
 Cloudflare Clef is an opt-in text decision provider. TypeSafe with
 `jev-latest` remains Sedum's default. Select Clef in `sedum.config.yaml`:
@@ -40,7 +42,7 @@ endpoints are not supported.
 
 5. Add `provider: { name: clef, model: clef }` to `sedum.config.yaml`. Use
    `model: clef-flash` to select Flash. A TypeSafe API key is not required when
-   Clef is selected. New to Sedum? Follow the [quickstart](../README.md#quickstart)
+   Clef is selected. New to Sedum? Follow the [quickstart](https://github.com/sedum-dev/sedum#quickstart)
    to install the CLI, initialize a project, and install its browser, then use
    these Cloudflare credentials instead of `TYPESAFE_API_KEY`.
 6. From that project's root, check the setup and run its tests:

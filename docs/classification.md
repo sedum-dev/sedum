@@ -1,4 +1,6 @@
-# Step classification
+---
+title: "Step classification"
+---
 
 Each YAML string step becomes one operation before the browser runs it. The classifier accepts `click`, `type`, `press`, `goto`, `verify`, `measure`, `scroll`, `wait`, and `remember ... as {{name}}`. A `use:` module entry is not a sentence; it is resolved as a module call rather than classified. Classification chooses the operation only; the locator, executor, and assertion engine do their own work.
 
