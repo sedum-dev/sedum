@@ -1,5 +1,5 @@
 import type { BrowserPage } from "./browser-driver.js";
-import type { AttemptReport } from "./flow-runner-contracts.js";
+import type { AttemptReport } from "./flow-runner/contracts.js";
 import type { FlowSource } from "./flow-types.js";
 import type { GoalAction } from "./goal-runner.js";
 import { recordGoalActionRequest } from "./goal-action-reporting.js";

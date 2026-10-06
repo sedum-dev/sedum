@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { validateRunResultInvariants } from "./run-result-validation.js";
+import { validateRunResultInvariants } from "./run-result/validation.js";
 
-export { resultTotals } from "./run-result-validation.js";
+export { resultTotals } from "./run-result/validation.js";
 
 const probability = z.number().finite().min(0).max(1);
 const nonnegative = z.number().finite().nonnegative();

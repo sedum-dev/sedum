@@ -4,12 +4,12 @@ import type { ParallelRequest } from "./run-pool.js";
 import type { RunFilters } from "./run-selection.js";
 import type { ShardSpec } from "./run-shard.js";
 import type { CliDiagnostic } from "./diagnostics.js";
-import { executeRunCommandImplementation } from "./run-command-implementation.js";
+import { executeRunCommandImplementation } from "./run-command/implementation.js";
 
 export {
   verifyGraceMs,
   strayRejectionDiagnostic,
-} from "./run-command-support.js";
+} from "./run-command/support.js";
 
 export interface RunCommandOptions {
   /**

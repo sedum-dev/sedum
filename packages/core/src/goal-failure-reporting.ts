@@ -1,7 +1,7 @@
 import type { BrowserPage } from "./browser-driver.js";
 import type { GoalResult } from "./goal-runner.js";
 import { captureStableGoalFrame } from "./goal-reporting-capture.js";
-import type { AttemptReport } from "./flow-runner-contracts.js";
+import type { AttemptReport } from "./flow-runner/contracts.js";
 import { reportPage, safeText, safeUrl } from "./report-privacy.js";
 import type { ResultStep } from "./run-result.js";
 
