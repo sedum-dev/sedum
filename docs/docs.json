@@ -51,5 +51,9 @@
       "light": "#F6F4ED",
       "dark": "#0F1613"
     }
+  },
+  "favicon": {
+    "light": "/docs/images/sedum-mintlify.svg",
+    "dark": "/docs/images/sedum-mintlify.svg"
   }
 }

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 40 40">
+  <title>Sedum</title>
+  <rect width="40" height="40" fill="#1D5B3E"/>
+  <g transform="translate(4 4)">
+    <g fill="#F6F4ED">
+      <ellipse cx="16" cy="9.2" rx="3.6" ry="6.1"/>
+      <ellipse cx="16" cy="9.2" rx="3.6" ry="6.1" transform="rotate(72 16 16)"/>
+      <ellipse cx="16" cy="9.2" rx="3.6" ry="6.1" transform="rotate(144 16 16)"/>
+      <ellipse cx="16" cy="9.2" rx="3.6" ry="6.1" transform="rotate(216 16 16)"/>
+      <ellipse cx="16" cy="9.2" rx="3.6" ry="6.1" transform="rotate(288 16 16)"/>
+    </g>
+    <circle cx="16" cy="16" r="2.9" fill="#C24328"/>
+  </g>
+</svg>
