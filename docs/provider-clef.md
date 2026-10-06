@@ -80,10 +80,31 @@ visible text/candidate fields, not cookies, raw HTML, hidden text, or editable
 field values. Allowed visible text is not sanitized and can contain customer
 data.
 
-`run --affected` is broader: it sends the tracked Git diff plus complete test
-and referenced module source. Environment variables are not expanded, but
-literal secrets and private source are sent as written. Review the source
-before opting in; `--sensitive-origin` does not protect these inputs.
+`run --affected` is broader: it sends the retained committed
+`merge-base(base, pinned HEAD)..pinned HEAD` diff plus complete candidate test
+and referenced module source. Dirty tracked state is refused even when ignored.
+Additive `affected.ignore` and repeatable `--affected-ignore` filter repository-root
+paths before patch reads, without preventing forced changed-test/module selection.
+Environment variables are not expanded, but committed secrets, test literals,
+and private source are sent as written. Glob exclusions are not redaction or a
+privacy guarantee. Review the source before opting in; `--sensitive-origin`
+does not protect these inputs.
+
+Lossless chunks prefer files, hunks, lines, then Unicode code points, retaining
+deletions and repeating file/hunk metadata. Complete test/module sources are not
+truncated. Serialized UTF-8 ceilings are 28,000 bytes for a diff plus one
+question, 56,000 bytes per batch, and **64 questions per Clef request**. The
+16 MiB retained patch guard is a provisional local memory limit; the ceiling
+of 256 planned provider requests is a provisional cost guard. Requests are all
+preflighted before the first call, including complete source fit checks.
+Any chunk failure is fatal, with no partial selection or automatic full-suite
+fallback. Every non-forced candidate is scored against every chunk; the maximum
+score is a heuristic, not a calibrated whole-PR probability. The default cutoff
+is 0.3. Chunking adds calls, tokens, latency, receipts, and possible costs,
+reported separately from execution. See [Git-diff selection](cli.md#experimental-git-diff-selection)
+for clean-checkout commands and ignore semantics. Live accuracy is unverified;
+spending on an accuracy experiment requires separate approval. Keep full-suite
+CI rather than making this experimental selector a mandatory gate.
 
 Clef is text-only in this release. Selecting it does not enable image upload.
 Existing vision fallback remains an independent, explicit OpenRouter opt-in

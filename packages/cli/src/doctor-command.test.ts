@@ -36,6 +36,7 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     testDirectory: path.join(root, "tests"),
     include: ["**/*.test.yaml"],
     exclude: [],
+    affected: { ignore: [] },
     browser: "chrome",
     viewport: { width: 1280, height: 900 },
     thresholds: { minP: 0.75, band: 0.15, contradictionCutoff: 0.5 },

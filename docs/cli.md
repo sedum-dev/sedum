@@ -74,18 +74,21 @@ Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` f
 ### Experimental Git-diff selection
 
 ```sh
-# Preview probabilities and selection as JSON; calls the text provider but starts no browser.
-sedum run --affected --selection-only
+# In a clean CI checkout with sufficient history, explicitly fetch the base.
+git fetch origin main:refs/remotes/origin/main
+# Preview scores and selection as JSON; billable, but starts no browser.
+sedum run --affected --base origin/main --selection-only
 
 # Score the suite, then run selected tests with the normal runner.
-sedum run --affected
+sedum run --affected --base origin/main
 sedum run --affected --base origin/main --threshold 0.05 --parallel 4
 ```
 
-This opt-in proof of concept sends the **tracked Git diff and complete test/module
+This opt-in experimental feature sends the **retained committed Git diff and complete test/module
 sources** to the configured text provider. Review those files for secrets
 before using it. Environment placeholders are not expanded for selection, but
-literal secrets in source or the diff are not redacted. It uses the same
+committed secrets and test literals in source or the diff are not sanitized.
+Glob exclusions are not redaction or a privacy guarantee. It uses the same
 provider configuration and credentials as the runner. For Clef those are
 `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` (or its
 `CLOUDFLARE_API_TOKEN` alias); for TypeSafe, they are the `TYPESAFE_*` settings.
@@ -93,18 +96,52 @@ Selection makes additional billable calls.
 
 The default base is the first available ref in this order: local `main`,
 `origin/main`, local `master`, `origin/master`. `--base` accepts another ref.
-The comparison starts at its merge base with `HEAD` and ends at the current
-working tree, including committed branch work, staged changes, and tracked
-unstaged changes across the Git repository. No fetch happens automatically.
-Untracked, non-ignored files cause an error: stage intended files or ignore
-unrelated files first. Shallow clones need enough history to find a merge base.
+Base and `HEAD` are resolved once to immutable commits. The comparison is
+`merge-base(base, pinned HEAD)..pinned HEAD`: committed branch work only, not
+`base..HEAD` or the working tree. No fetch or merge happens automatically.
+Any staged or unstaged tracked change anywhere in the repository, including
+submodule dirtiness, is refused even if an affected-ignore pattern matches it.
+Commit intended changes before selection. Tracked entries with `assume-unchanged`
+or `skip-worktree` flags are also refused, even when clean or ignored, because
+those flags can hide local edits from Git status. Clear them deliberately with
+`git update-index --no-assume-unchanged --no-skip-worktree -- <path>`, or run
+without `--affected`; Sedum never changes the index for you. Sparse checkouts
+with `skip-worktree` entries are therefore not supported for affected selection.
+Nonignored untracked files are also
+refused; commit intended files or ignore unrelated files. Shallow clones need
+enough history to find a merge base. Sources are checked against the pinned
+revision, and HEAD and cleanliness are rechecked before provider dispatch to
+detect ordinary concurrent edits; this is not an atomic snapshot guarantee.
+
+`affected.ignore` and repeatable `--affected-ignore <glob>` combine additively.
+The default list is empty: docs, config, and lockfiles are not automatically
+excluded. These are repository-root-relative POSIX globs, including dotfiles;
+`**` crosses directories and a trailing `/` matches all descendants. `*.lock`
+matches root lockfiles; `**/*.lock` also matches nested ones. Empty or invalid
+patterns, and `--affected-ignore` without `--affected`, are errors. Paths are
+filtered **before retained patches are read**, not merely before scoring.
+
+For an umbrella PR, deliberately exclude generated fixtures and documentation
+only after considering their runtime dependencies:
+
+```sh
+# Same clean CI checkout and explicitly fetched origin/main as above.
+sedum run --affected --base origin/main --selection-only \
+  --affected-ignore 'docs/' --affected-ignore 'fixtures/generated/'
+```
+
+The full unfiltered committed changed-path set still forces changed tests and
+tests using changed modules to run, even when those paths are ignored. Ignoring
+`.env` or `**/.env*` is a deliberate exclusion, not secret scanning: other
+retained patches and complete candidate sources can still contain secrets.
 
 Each discovered test becomes one independent binary question: could the
 changed code affect behavior exercised by this test? Its question contains the
-YAML source and all referenced module sources; the diff is shared state. Normal
+complete source and all referenced module sources; the diff is shared state. Normal
 path/name/tag filters apply before relevance selection.
-Large suites are batched without truncating inputs. Changed test files and tests
-using changed modules are always selected, even when their model probability is 0.
+TypeScript selection remains file-level, not individual-test selection.
+Large suites are batched without truncating inputs. Forced tests receive score
+1 and reason `test-or-module-changed`; their sources need not be sent for scoring.
 
 `--affected` rejects `--shard-count` greater than 1 with exit 3 before any
 provider call, including with `--selection-only`. Independent relevance decisions
@@ -112,42 +149,67 @@ in different shards could leave tests unexecuted. Remove the shard options or
 run without `--affected`. A single shard (`--shard-index 1 --shard-count 1`)
 and parallel execution with `--parallel` remain supported.
 
-The provisional default keeps probabilities **≥ 0.1**. This favors running
-uncertain tests over skipping them; it is not an empirically calibrated cutoff.
+The provisional default keeps scores **≥ 0.3**. This is a selection heuristic,
+not an empirically calibrated cutoff; use a lower threshold to favor recall.
 `--threshold` accepts 0–1, with 0 keeping every candidate for a nonempty diff.
 A Noul near 0 means likely unrelated, near 1 means likely relevant, and near
-0.5 means uncertain. It is not a probability that the test will fail.
+0.5 means uncertain. Each non-forced candidate is scored against every diff
+chunk, even after an earlier score crosses the cutoff. The final score is the
+maximum chunk score, with the threshold applied once. This heuristic is not a
+calibrated whole-PR relevance probability or a probability that the test will fail.
+
+Higher cutoffs trade recall for fewer selected files and can skip relevant tests.
+For example, **0.4 is a tuning option, not a calibrated global recommendation**.
+Evaluate any threshold against representative changes before relying on it;
+the default is 0.3. Pass `--threshold 0.1` to use the previous default.
 
 The normal command prints each probability and RUN/SKIP decision to stderr.
 `--selection-only` instead writes JSON to stdout, including the base, merge-base
-commit, threshold, per-test decisions, and provider receipts with model versions,
+commit, pinned `head`, `changedFiles`, `ignoredFiles`, threshold, per-test decisions,
+score/chunk metadata, and all provider receipts with model versions,
 token usage, and cost estimates. These selection costs are separate from the
 runner's execution cost totals. Save preview output outside the repository or
 under an ignored directory to avoid introducing an untracked file.
 
-No diff means no API call and no test execution. An empty relevance selection
+No diff means no API call and no test execution. When all paths are ignored,
+there is no provider call; forced tests still run, otherwise nothing runs.
+An empty relevance selection
 also executes nothing; both exit 0 with explicit output and create no run result.
-Invalid tests/modules, Git errors, binary/submodule changes, oversized inputs,
+Invalid tests/modules, Git errors, retained binary/submodule changes, oversized inputs,
 or provider failures stop selection with exit 3, never silently becoming a
-successful empty selection. The current conservative input limits are 28,000
-serialized UTF-8 bytes for a diff plus one question and 56,000 per batch.
-Run without `--affected` when these limits are exceeded. The run deadline starts
+successful empty selection. Ignored binary/submodule changes need no patches.
+The total retained UTF-8 patch ceiling is **16 MiB**, a provisional local memory
+guard, not a provider context limit; exceeding it stops before provider creation.
+
+Lossless chunks prefer complete files, then hunks, then lines; oversized lines
+split at Unicode code points without breaking surrogate pairs. Each piece
+carries file/hunk metadata and continuation markers. Deletions and patch payload
+are preserved, with only explicit context repeated. Serialized requests include
+all JSON escaping, instructions, metadata, and complete test/module sources:
+the ceilings are **28,000 UTF-8 bytes** for a diff plus one question and **56,000
+bytes** per batch. Clef also limits each request to **64 questions**.
+All requests are preflighted before transmission. A complete test/module input
+that cannot fit, or more than **256 planned provider requests**, fails before
+the first call. The latter is a provisional cost guard, not a spending budget.
+Chunking adds calls, tokens, receipts, latency, and potential cost. A failure in
+any chunk is fatal: no partial selection succeeds and no runner starts.
+Run without `--affected` if limits are exceeded; Sedum never automatically falls
+back to the full suite or silently truncates input. The run deadline starts
 after selection; Ctrl-C can cancel selection itself.
 
-**Keep full-suite CI.** Jev can miss indirect dependencies, lacks unchanged
+**Keep full-suite CI; affected selection is not a mandatory CI gate.** Models can miss indirect dependencies, lack unchanged
 application source, and can be influenced by adversarial source text. Before
 tuning the cutoff, compare selected tests against full runs on representative
 changes and measure missed failing tests as well as tests avoided. Pin a model
 version when collecting comparable results.
 
-An opt-in smoke evaluation builds a disposable Git repository and scores cart,
-profile, and documentation changes against two synthetic tests. It checks ideal
-selection, so false positives also fail the evaluation; this is not a calibrated
-benchmark. Run it with a configured API key (three billable requests):
-
-```sh
-SEDUM_TYPESAFE_LIVE=1 pnpm exec vitest run packages/cli/src/affected-selection.test.ts -t 'live Jev'
-```
+Deterministic synthetic fixtures and recorded responses verify mechanics, not
+live accuracy or calibration. Accuracy of this hardening remains unverified;
+no live accuracy spending is authorized by the plan. A live paired experiment
+requires separate spend approval and representative labeled, sanitized data.
+Compare old/new prompts and single/chunked scoring on inputs that fit both,
+recording recall, extra selected files, chunk-count sensitivity, calls, tokens,
+cost, latency, and model version before treating selection as a gate.
 
 Design references: TypeSafe's [Noul documentation](https://docs.typesafe.ai/primitives/noul),
 [model limits](https://docs.typesafe.ai/models), and

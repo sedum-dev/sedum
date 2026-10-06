@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
-import { readFile, realpath } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 import {
   isScriptTestFile,
   loadFlowFile,
@@ -17,115 +15,16 @@ import {
   type RelevanceTest,
 } from "./provider-factory.js";
 
-const exec = promisify(execFile);
-export class AffectedSelectionError extends Error {}
+import {
+  AffectedSelectionError,
+  assertAffectedSnapshot,
+  readBranchDiff,
+  readCommittedSource,
+} from "./affected-git.js";
+export { AffectedSelectionError, readBranchDiff } from "./affected-git.js";
 export type RelevanceProviderFactory = (
   config: ResolvedProjectConfig,
 ) => RelevanceProvider | Promise<RelevanceProvider>;
-
-/** No shell, fetch, checkout, or index mutation. Compare the merge base to the working tree. */
-export async function readBranchDiff(
-  cwd: string,
-  base?: string,
-  signal?: AbortSignal,
-) {
-  const git = async (...args: string[]) =>
-    (
-      await exec("git", args, {
-        cwd,
-        maxBuffer: 2 * 1024 * 1024,
-        ...(signal ? { signal } : {}),
-      })
-    ).stdout;
-  try {
-    const root = (await git("rev-parse", "--show-toplevel")).trim();
-    let reference = base;
-    if (!reference) {
-      for (const candidate of [
-        "refs/heads/main",
-        "refs/remotes/origin/main",
-        "refs/heads/master",
-        "refs/remotes/origin/master",
-      ]) {
-        try {
-          await git(
-            "rev-parse",
-            "--verify",
-            "--end-of-options",
-            `${candidate}^{commit}`,
-          );
-          reference = candidate;
-          break;
-        } catch {
-          signal?.throwIfAborted();
-        }
-      }
-    }
-    if (!reference)
-      throw new AffectedSelectionError(
-        "No main or master ref found. Fetch the base branch or pass --base <ref>.",
-      );
-    const commit = (
-      await git(
-        "rev-parse",
-        "--verify",
-        "--end-of-options",
-        `${reference}^{commit}`,
-      )
-    ).trim();
-    const mergeBase = (await git("merge-base", commit, "HEAD")).trim();
-    if (
-      (await git("ls-files", "--others", "--exclude-standard", "--", ":/"))
-        .length
-    )
-      throw new AffectedSelectionError(
-        "Untracked files are not represented in git diff. Stage intended files or ignore unrelated files before using --affected.",
-      );
-    const diff = await git(
-      "diff",
-      "--no-ext-diff",
-      "--no-textconv",
-      "--no-color",
-      "--no-renames",
-      "--no-relative",
-      "--ignore-submodules=none",
-      "--submodule=short",
-      mergeBase,
-      "--",
-      ":/",
-    );
-    if (
-      /^Binary files .* differ$/mu.test(diff) ||
-      /^[+ -]Subproject commit /mu.test(diff)
-    )
-      throw new AffectedSelectionError(
-        "Binary or submodule changes cannot be scored reliably. Run the full suite without --affected.",
-      );
-    const changed = (
-      await git(
-        "diff",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--name-only",
-        "--no-renames",
-        "--no-relative",
-        "--ignore-submodules=none",
-        "-z",
-        mergeBase,
-        "--",
-        ":/",
-      )
-    )
-      .split("\0")
-      .filter(Boolean);
-    return { root, base: reference, mergeBase, diff, changed };
-  } catch (error) {
-    if (error instanceof AffectedSelectionError) throw error;
-    throw new AffectedSelectionError(
-      "Could not read a complete Git diff. Check the base ref and merge-base history (fetch deeper for shallow clones), or run without --affected.",
-    );
-  }
-}
 
 export async function selectAffectedTests(options: {
   cwd: string;
@@ -133,6 +32,7 @@ export async function selectAffectedTests(options: {
   filters: RunFilters;
   threshold: number;
   base?: string;
+  ignore?: readonly string[];
   environment?: string;
   signal?: AbortSignal;
   createProvider?: RelevanceProviderFactory;
@@ -141,6 +41,19 @@ export async function selectAffectedTests(options: {
     ...(options.environment ? { environment: options.environment } : {}),
   });
   const canonicalProjectRoot = await realpath(config.projectRoot);
+  const branch = await readBranchDiff(
+    config.projectRoot,
+    options.base,
+    options.signal,
+    [...config.affected.ignore, ...(options.ignore ?? [])],
+  );
+  const snapshot = {
+    root: branch.root,
+    head: branch.head,
+    signal: options.signal,
+  };
+  const source = async (file: string) =>
+    readCommittedSource(snapshot, await realpath(file));
   const selection = await discoverRunTests(
     config,
     options.paths,
@@ -154,11 +67,6 @@ export async function selectAffectedTests(options: {
     throw new AffectedSelectionError(
       "Test discovery is empty or invalid. Run sedum validate and fix discovery before using --affected.",
     );
-  const branch = await readBranchDiff(
-    config.projectRoot,
-    options.base,
-    options.signal,
-  );
   const changed = new Set(
     branch.changed.map((file) => path.resolve(branch.root, file)),
   );
@@ -177,7 +85,7 @@ export async function selectAffectedTests(options: {
       forced.push(changed.has(await realpath(file)));
       tests.push({
         file: test.file,
-        source: await readFile(file, "utf8"),
+        source: await source(file),
         modules: [],
       });
       continue;
@@ -200,32 +108,35 @@ export async function selectAffectedTests(options: {
     forced.push(files.some((source) => changed.has(source)));
     tests.push({
       file: test.file,
-      source: await readFile(file, "utf8"),
+      source: await source(file),
       modules: await Promise.all(
         resolved.moduleFiles.map(async (module) => ({
           file: path
             .relative(canonicalProjectRoot, module)
             .split(path.sep)
             .join("/"),
-          source: await readFile(module, "utf8"),
+          source: await source(module),
         })),
       ),
     });
   }
   options.signal?.throwIfAborted();
+  await assertAffectedSnapshot(snapshot);
+  const candidates = tests.filter((_, index) => !forced[index]);
   let scores: Awaited<ReturnType<RelevanceProvider["scoreRelevance"]>>;
   try {
-    scores = branch.diff
-      ? await (
-          options.createProvider
-            ? await options.createProvider(config)
-            : await createCliProvider(config)
-        ).scoreRelevance(
-          branch.diff,
-          tests,
-          options.signal ? { signal: options.signal } : undefined,
-        )
-      : { probabilities: tests.map(() => 0), calls: [] };
+    scores =
+      branch.diff && candidates.length
+        ? await (
+            options.createProvider
+              ? await options.createProvider(config)
+              : await createCliProvider(config)
+          ).scoreRelevance(
+            branch.diff,
+            candidates,
+            options.signal ? { signal: options.signal } : undefined,
+          )
+        : { probabilities: candidates.map(() => 0), calls: [], chunkCount: 0 };
   } catch (error) {
     if (
       error instanceof ProviderError &&
@@ -238,22 +149,33 @@ export async function selectAffectedTests(options: {
     }
     throw error;
   }
+  let candidateIndex = 0;
+  const probabilities = tests.map((_, index) =>
+    forced[index] ? 1 : scores.probabilities[candidateIndex++]!,
+  );
   return {
     base: branch.base,
+    head: branch.head,
     mergeBase: branch.mergeBase,
+    changedFiles: branch.changed,
+    ignoredFiles: branch.ignoredFiles,
+    chunkCount: scores.chunkCount ?? (scores.calls.length ? 1 : 0),
+    aggregation: "max" as const,
     threshold: options.threshold,
     calls: scores.calls,
     tests: tests.map((test, index) => ({
       file: test.file,
-      probability: scores.probabilities[index]!,
+      probability: probabilities[index]!,
       selected:
-        branch.diff !== "" &&
-        (forced[index] || scores.probabilities[index]! >= options.threshold),
+        forced[index] ||
+        (branch.diff !== "" && probabilities[index]! >= options.threshold),
       reason: forced[index]
         ? "test-or-module-changed"
         : branch.diff
           ? "model"
-          : "no-diff",
+          : branch.ignoredFiles.length
+            ? "all-ignored"
+            : "no-diff",
     })),
   };
 }

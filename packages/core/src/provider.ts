@@ -84,6 +84,8 @@ export interface RelevanceProvider {
   ): Promise<{
     readonly probabilities: readonly number[];
     readonly calls: readonly ProviderCall[];
+    /** Max over complete diff chunks, not a calibrated whole-PR probability. */
+    readonly chunkCount?: number;
   }>;
 }
 

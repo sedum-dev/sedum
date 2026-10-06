@@ -522,9 +522,10 @@ export class ClefAdapter
     tests: Parameters<RelevanceProvider["scoreRelevance"]>[1],
     options?: ProviderCallOptions,
   ) {
-    const probabilities: number[] = [];
+    const chunks = buildRelevanceRequests(diff, tests, this.model);
+    const probabilities: number[] = tests.map(() => 0);
     const calls: ReturnType<typeof validateCall>[] = [];
-    for (const chunk of buildRelevanceRequests(diff, tests, this.model)) {
+    for (const chunk of chunks) {
       const got = await this.ask(chunk.request, options);
       const call = this.complete(got.response, got.meta);
       calls.push(call);
@@ -540,12 +541,19 @@ export class ClefAdapter
             "Relevance answer keys do not match the tests.",
           );
         for (const i of chunk.indexes)
-          probabilities[i] = validateNoul(a[`test${i}`]);
+          probabilities[i] = Math.max(
+            probabilities[i]!,
+            validateNoul(a[`test${i}`]),
+          );
       } catch (error) {
         throw responseError(error, call);
       }
     }
-    return { probabilities, calls };
+    return {
+      probabilities,
+      calls,
+      chunkCount: new Set(chunks.map((chunk) => chunk.chunkIndex)).size,
+    };
   }
   async classifyBatch(
     sentences: readonly string[],

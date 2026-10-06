@@ -34,6 +34,7 @@ import {
   renderValidation,
 } from "./validate-output.js";
 import {
+  collectAffectedGlob,
   collectGlob,
   collectLabels,
   collectOrigin,
@@ -187,8 +188,14 @@ export async function runCli(
     )
     .option("--base <ref>", "base ref for --affected (default main or master)")
     .option(
+      "--affected-ignore <glob>",
+      "exclude matching repository-relative diff paths (repeatable)",
+      collectAffectedGlob,
+      [],
+    )
+    .option(
       "--threshold <probability>",
-      "minimum relevance probability for --affected (default 0.1)",
+      "minimum relevance probability for --affected (default 0.3)",
       relevanceThreshold,
     )
     .option(
@@ -305,6 +312,7 @@ export async function runCli(
         paths: string[],
         options: {
           affected: boolean;
+          affectedIgnore: string[];
           base?: string;
           threshold?: number;
           selectionOnly: boolean;
@@ -370,11 +378,12 @@ export async function runCli(
         if (
           !options.affected &&
           (options.base !== undefined ||
+            options.affectedIgnore.length > 0 ||
             options.threshold !== undefined ||
             options.selectionOnly)
         ) {
           writeErr(
-            "--base, --threshold, and --selection-only require --affected.\n",
+            "--base, --threshold, --affected-ignore, and --selection-only require --affected.\n",
           );
           exitCode = 3;
           return;
@@ -384,7 +393,7 @@ export async function runCli(
             await import("./affected-selection.js");
           const { ProviderError } = await import("@sedum-dev/core");
           writeErr(
-            "Experimental selection sends the tracked Git diff and test/module sources to the configured provider. Full CI is still recommended.\n",
+            "Experimental selection sends the committed Git diff and complete test/module sources to the configured provider. Tracked local edits are refused. Full CI is still recommended.\n",
           );
           try {
             const selection = await selectAffectedTests({
@@ -397,7 +406,8 @@ export async function runCli(
                 names: options.name,
                 ids: options.id,
               },
-              threshold: options.threshold ?? 0.1,
+              threshold: options.threshold ?? 0.3,
+              ignore: options.affectedIgnore,
               ...(options.base !== undefined ? { base: options.base } : {}),
               ...(options.env ? { environment: options.env } : {}),
               ...(runtime.signal ? { signal: runtime.signal } : {}),

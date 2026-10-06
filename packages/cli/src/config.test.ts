@@ -23,6 +23,31 @@ afterEach(async () => {
 });
 
 describe("project configuration", () => {
+  it("validates and freezes default-empty affected ignores", async () => {
+    const root = await temporaryRoot();
+    expect((await loadProjectConfig(root, {})).affected.ignore).toEqual([]);
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      'affected:\n  ignore: ["docs/", "**/*.lock", ".env"]\n',
+    );
+    const config = await loadProjectConfig(root, {});
+    expect(config.affected.ignore).toEqual(["docs/", "**/*.lock", ".env"]);
+    expect(Object.isFrozen(config.affected.ignore)).toBe(true);
+    for (const yaml of [
+      "affected: []",
+      "affected: { unknown: [] }",
+      "affected: { ignore: nope }",
+      'affected: { ignore: [" "] }',
+      'affected: { ignore: ["[broken"] }',
+      'affected: { ignore: ["../outside"] }',
+    ]) {
+      await writeFile(path.join(root, "sedum.config.yaml"), yaml);
+      await expect(loadProjectConfig(root, {})).rejects.toBeInstanceOf(
+        ProjectConfigError,
+      );
+    }
+  });
+
   it("uses documented defaults without a config and freezes the result", async () => {
     const root = await temporaryRoot();
     const config = await loadProjectConfig(root, {});

@@ -189,8 +189,22 @@ describe("Clef request limits", () => {
     expect(
       buildRelevanceRequests("diff", large, "clef").map((c) => c.indexes),
     ).toEqual([[0, 1], [2]]);
-    expect(() =>
-      buildRelevanceRequests("x".repeat(28000), tests, "clef"),
-    ).toThrow(/not truncated/);
+    const longDiff = "x".repeat(28000);
+    const split = buildRelevanceRequests(longDiff, tests, "clef");
+    expect(
+      new Set(split.map((chunk) => chunk.chunkIndex)).size,
+    ).toBeGreaterThan(1);
+    const retained = split.filter((chunk) => chunk.indexes.includes(0));
+    expect(
+      retained
+        .map((chunk) => (chunk.request.state as { diff: string }).diff)
+        .join("")
+        .split("[sedum line continuation]\n")
+        .join(""),
+    ).toBe(longDiff);
+    for (const chunk of split)
+      expect(
+        Buffer.byteLength(JSON.stringify(chunk.request)),
+      ).toBeLessThanOrEqual(56_000);
   });
 });

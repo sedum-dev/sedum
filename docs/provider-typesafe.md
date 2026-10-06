@@ -11,12 +11,28 @@ environment are replaced by placeholders. Other visible page text is sent as
 it is. Use `--sensitive-origin <url>` to keep a page's details and screenshots
 out of saved results.
 
-**Exception: experimental `run --affected`.** Test selection sends the tracked
-Git diff, test YAML, and referenced module YAML as source text. It does not
-expand environment variables, but literal secrets in those files or the diff
-are sent as-is. `--sensitive-origin` protects browser evidence, not these source
-inputs. Review source before opting in. See [Git-diff selection](cli.md#experimental-git-diff-selection)
-for selection probabilities, input limits, and separate selection costs.
+**Exception: experimental `run --affected`.** Test selection sends the retained
+committed `merge-base(base, pinned HEAD)..pinned HEAD` diff and complete candidate
+test/module sources. Dirty tracked state is refused even when ignored.
+`affected.ignore` plus repeatable `--affected-ignore` filters repository-relative
+paths before patch reads, but changed tests/module dependents are still forced.
+Environment variables are not expanded; committed secrets and test literals
+are transmitted as-is. Exclusions are not redaction or a privacy guarantee.
+`--sensitive-origin` protects browser evidence, not these source inputs.
+
+Lossless diff chunks prefer files, hunks, lines, then Unicode code points, with
+repeated file/hunk metadata; full test/module sources are never truncated.
+Serialized UTF-8 limits are 28,000 bytes for a diff plus one question and 56,000
+per batch. A 16 MiB retained patch guard and preflight ceiling of 256 planned
+requests fail closed, as does a complete candidate source that cannot fit.
+Every non-forced candidate is scored against every chunk; its maximum score is
+an experimental heuristic, not calibrated whole-PR probability. The default
+cutoff is 0.3. All call receipts are retained; chunking adds billable calls,
+tokens, and latency, separate from runner costs. Any chunk failure stops selection.
+Review source before opting in. See [Git-diff selection](cli.md#experimental-git-diff-selection)
+for clean-checkout commands, ignore semantics, and limits. Live accuracy remains
+unverified; evaluation spending needs separate approval, and this is not a
+mandatory CI gate.
 
 In a terminal, Sedum shows token use and cost after each run. A
 [local locator cache](locator-cache.md) skips repeat lookups during

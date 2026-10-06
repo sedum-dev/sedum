@@ -103,3 +103,58 @@ it("batches by byte budget without dropping or truncating tests and preflights a
   ).rejects.toThrow("not truncated");
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it("scores every diff chunk, takes max rather than last/noisy-OR, and records every call", async () => {
+  const diff = Array.from(
+    { length: 3 },
+    (_, i) =>
+      `diff --git a/ui${i}.ts b/ui${i}.ts\n@@ -1 +1 @@\n+${"x".repeat(9000)}\n`,
+  ).join("");
+  const source = [
+    { file: "large.test.ts", source: "x".repeat(15_500), modules: [] },
+  ];
+  const chunks = buildRelevanceRequests(diff, source, "jev-latest");
+  expect(chunks).toHaveLength(3);
+  const values = [0.12, 0.77, 0.31];
+  const fetch = vi.fn(
+    async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(JSON.parse(String(init?.body))).toEqual(
+        chunks[fetch.mock.calls.length - 1]!.request,
+      );
+      return new Response(
+        JSON.stringify({
+          model: "jev-1.13.0",
+          usage: { input_tokens: 123, output_tokens: 0 },
+          answers: {
+            test0: { type: "noul", noul: values[fetch.mock.calls.length - 1] },
+          },
+        }),
+        { headers: { "content-type": "application/json" } },
+      );
+    },
+  );
+  const provider = new TypeSafeAdapter({ apiKey: "test-key", fetch });
+  const got = await provider.scoreRelevance(diff, source);
+  expect(got).toMatchObject({ probabilities: [0.77], chunkCount: 3 });
+  expect(got.calls).toHaveLength(3);
+  expect(fetch).toHaveBeenCalledTimes(3);
+  fetch.mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          model: "jev-1.13.0",
+          usage: { input_tokens: 1, output_tokens: 0 },
+          answers:
+            fetch.mock.calls.length % 2
+              ? { test0: { type: "noul", noul: 0.77 } }
+              : {},
+        }),
+        { headers: { "content-type": "application/json" } },
+      ),
+  );
+  fetch.mockClear();
+  await expect(provider.scoreRelevance(diff, source)).rejects.toMatchObject({
+    code: "invalid-response",
+  });
+  expect(fetch).toHaveBeenCalledTimes(2);
+});

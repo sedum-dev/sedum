@@ -13,6 +13,9 @@ tests:
   include: ["**/*.test.ts", "**/*.test.yaml"]
   exclude: []
 
+affected:
+  ignore: []
+
 browser: chrome
 viewport: { width: 1280, height: 900 }
 thresholds:
@@ -113,6 +116,41 @@ The `thresholds` settings control assertion verdicts. Locator and step
 classification safety gates are deliberately not configurable. An explicit
 JSON reporter writes to `reporterDir/<run-id>/result.json`; canonical progress
 and result artifacts are always written under `outputDir/<run-id>/`.
+
+## Experimental affected selection
+
+`affected.ignore` is an optional string array, empty by default. With
+`sedum run --affected`, it combines **additively** with each repeatable
+`--affected-ignore <glob>`; command-line entries do not replace config entries.
+Unlike test discovery globs, these patterns are relative to the **Git repository
+root**, even when the Sedum project is a subdirectory. Use POSIX `/` separators.
+Dotfiles are included, `**` crosses directories, and a trailing `/` matches all
+descendants. `*.lock` matches root lockfiles; `**/*.lock` also matches nested
+ones. Empty or invalid patterns are rejected, as is `--affected-ignore` without
+`--affected`. There are no automatic docs, config, or lockfile exclusions.
+
+```yaml
+# Deliberate examples, not recommended universal exclusions or secret redaction.
+affected:
+  ignore: ["docs/", "fixtures/generated/", ".env", "**/.env*"]
+```
+
+Filtering happens before patch reads. Changed tests and tests using changed
+modules remain forced selections within the filtered candidate set, even when
+their changed paths match an ignore. Full candidate test/module sources and
+committed secrets in retained inputs still leave the machine; glob exclusions
+are not a privacy guarantee. Dirty tracked state is refused even if ignored.
+
+Selection uses committed `merge-base(base, pinned HEAD)..pinned HEAD`, not local
+edits. Use a clean CI checkout, explicitly fetch `origin/main`, and pass
+`--base origin/main`; Sedum never fetches or merges automatically. The default
+selection cutoff is `--threshold 0.3`, separate from assertion `thresholds`.
+Chunk scores aggregate by maximum, not calibrated whole-PR probability.
+The 16 MiB retained patch and 256 planned request guards fail closed, alongside
+28,000-byte single-question and 56,000-byte batch limits (64 questions for Clef).
+See [Git-diff selection](cli.md#experimental-git-diff-selection) for lossless
+chunking, costs, receipts, and the unverified accuracy caveat. Keep full-suite
+CI; this experimental feature is not a mandatory gate.
 
 ## Vision fallback (opt-in)
 
