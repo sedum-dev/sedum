@@ -16,6 +16,7 @@ export * from "./cache-store.js";
 export * from "./step-executor.js";
 export * from "./provider.js";
 export * from "./provider-gate.js";
+export * from "./relevance.js";
 export * from "./vision.js";
 export * from "./locator.js";
 export * from "./flow-types.js";

@@ -4,6 +4,7 @@ import { parseEnv } from "node:util";
 import { minimatch } from "minimatch";
 import { isMap, LineCounter, parseDocument, visit, type Node } from "yaml";
 import type { BrowserKind, VerifyPolicy } from "@sedum-dev/core";
+import { validAffectedGlob } from "./affected-paths.js";
 
 export const CONFIG_FILE = "sedum.config.yaml";
 
@@ -45,6 +46,7 @@ export interface ResolvedProjectConfig {
   readonly testDirectory: string;
   readonly include: readonly string[];
   readonly exclude: readonly string[];
+  readonly affected: { readonly ignore: readonly string[] };
   readonly browser: BrowserKind;
   readonly viewport: { readonly width: number; readonly height: number };
   readonly thresholds: Required<VerifyPolicy>;
@@ -72,6 +74,7 @@ interface RawEnvironment {
 
 interface RawConfig extends RawEnvironment {
   readonly tests?: unknown;
+  readonly affected?: unknown;
   readonly browser?: unknown;
   readonly viewport?: unknown;
   readonly thresholds?: unknown;
@@ -109,6 +112,7 @@ export const DEFAULT_PROVIDER_MODEL = "jev-latest";
 const allowed = {
   root: new Set([
     "tests",
+    "affected",
     "browser",
     "viewport",
     "thresholds",
@@ -122,6 +126,7 @@ const allowed = {
     "provider",
   ]),
   tests: new Set(["directory", "include", "exclude"]),
+  affected: new Set(["ignore"]),
   viewport: new Set(["width", "height"]),
   thresholds: new Set(["verify", "lowConfidenceBand", "contradiction"]),
   environment: new Set(["baseUrl", "variables"]),
@@ -485,6 +490,8 @@ async function findConfig(
 function freeze(config: ResolvedProjectConfig): ResolvedProjectConfig {
   Object.freeze(config.include);
   Object.freeze(config.exclude);
+  Object.freeze(config.affected.ignore);
+  Object.freeze(config.affected);
   Object.freeze(config.viewport);
   Object.freeze(config.thresholds);
   Object.freeze(config.vision);
@@ -599,6 +606,7 @@ export async function loadProjectConfig(
     );
     const maps = [
       ["tests", allowed.tests],
+      ["affected", allowed.affected],
       ["viewport", allowed.viewport],
       ["thresholds", allowed.thresholds],
       ["vision", allowed.vision],
@@ -641,6 +649,7 @@ export async function loadProjectConfig(
       "Use `tests: { directory: tests }`.",
     );
   for (const [key, value] of [
+    ["affected", raw.affected],
     ["viewport", raw.viewport],
     ["thresholds", raw.thresholds],
     ["environments", raw.environments],
@@ -659,6 +668,27 @@ export async function loadProjectConfig(
         `Write \`${key}: {}\` and add its documented child keys.`,
       );
   const viewport = object(raw.viewport) ? raw.viewport : {};
+  const affected = object(raw.affected) ? raw.affected : {};
+  const affectedIgnore = stringList(
+    affected.ignore,
+    [],
+    "affected.ignore",
+    diagnostics,
+    file,
+    counter,
+    node("affected.ignore"),
+  );
+  if (affectedIgnore.some((glob) => !validAffectedGlob(glob)))
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("affected.ignore"),
+      "affected.ignore",
+      "invalid_affected_glob",
+      "Affected ignores must be valid repository-relative POSIX globs.",
+      "Use patterns such as `docs/` or `**/*.lock`.",
+    );
   const thresholds = object(raw.thresholds) ? raw.thresholds : {};
   const environments = object(raw.environments) ? raw.environments : {};
   const vision = object(raw.vision) ? raw.vision : {};
@@ -1083,6 +1113,7 @@ export async function loadProjectConfig(
     testDirectory,
     include,
     exclude,
+    affected: { ignore: affectedIgnore },
     browser,
     viewport: { width, height },
     thresholds: { minP: verify, band, contradictionCutoff },

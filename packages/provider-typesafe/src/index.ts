@@ -380,7 +380,7 @@ export class TypeSafeAdapter
     options?: ProviderCallOptions,
   ) {
     const chunks = buildRelevanceRequests(diff, tests, this.model);
-    const probabilities: number[] = [];
+    const probabilities: number[] = tests.map(() => 0);
     const calls: ReturnType<typeof validateCall>[] = [];
     for (const { request, indexes } of chunks) {
       const { response, meta } = await this.ask(request, options);
@@ -400,12 +400,19 @@ export class TypeSafeAdapter
           "Relevance answer keys do not match the tests.",
         );
         for (const index of indexes)
-          probabilities[index] = validateNoul(answers[`test${index}`]);
+          probabilities[index] = Math.max(
+            probabilities[index]!,
+            validateNoul(answers[`test${index}`]),
+          );
       } catch (error) {
         throw responseError(error, call.attempts, call);
       }
     }
-    return { probabilities, calls };
+    return {
+      probabilities,
+      calls,
+      chunkCount: new Set(chunks.map((chunk) => chunk.chunkIndex)).size,
+    };
   }
 
   async classifyBatch(

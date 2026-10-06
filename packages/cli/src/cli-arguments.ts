@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from "commander";
+import { validAffectedGlob } from "./affected-paths.js";
 import {
   MAX_PARALLEL,
   parseParallel,
@@ -169,6 +170,14 @@ export const collectValue = collector(new ValueCollector());
 /** `--reporter` is repeatable and also takes a comma list, e.g. junit,markdown. */
 export const collectReporter = collector(new ReporterCollector());
 export const collectGlob = collector(new GlobCollector());
+export function collectAffectedGlob(
+  value: string,
+  previous: readonly string[],
+): string[] {
+  if (!validAffectedGlob(value))
+    invalid("Affected ignore must be a valid repository-relative POSIX glob.");
+  return [...previous, value];
+}
 export const collectLabels = collector(new LabelCollector());
 
 export const nonnegativeInteger = rangedNumber({
