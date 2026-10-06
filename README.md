@@ -4,6 +4,7 @@
 [![CodeScene Hotspot Code Health](https://codescene.io/projects/85416/status-badges/hotspot-code-health)](https://codescene.io/projects/85416)
 [![CodeScene Average Code Health](https://codescene.io/projects/85416/status-badges/average-code-health)](https://codescene.io/projects/85416)
 [![npm](https://img.shields.io/npm/v/sedum-cli.svg)](https://www.npmjs.com/package/sedum-cli)
+[![Documentation](https://img.shields.io/badge/docs-docs.sedum.dev-1D5B3E.svg)](https://docs.sedum.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange.svg)
 
@@ -92,11 +93,11 @@ npx sedum run tests/example.test.ts --headed
 For a compatible provider, set `TYPESAFE_BASE_URL` to its API root and
 `TYPESAFE_API_KEY` to that provider's key. Set `TYPESAFE_DEFAULT_MODEL` if its
 model name differs from the default. See
-[provider configuration](docs/configuration.md).
+[provider configuration](https://docs.sedum.dev/configuration).
 
 To use Cloudflare Workers AI instead, select `provider: {name: clef, model:
 clef}` (or `clef-flash`) and set `CLOUDFLARE_ACCOUNT_ID` and
-`CLOUDFLARE_AUTH_TOKEN`. See [Clef provider](docs/provider-clef.md).
+`CLOUDFLARE_AUTH_TOKEN`. See [Clef provider](https://docs.sedum.dev/provider-clef).
 
 The example signs in to a demo shop. To see a failure, change its last step to
 a false claim, such as `verify an error message says the password is incorrect`,
@@ -104,7 +105,7 @@ and run it again: it fails with exit code 1. If anything is missing,
 `npx sedum doctor` says what and how to fix it.
 
 New to AI browser tests? Read
-[plain-English browser tests](docs/plain-english-tests.md) first.
+[plain-English browser tests](https://docs.sedum.dev/plain-english-tests) first.
 
 ## Why Sedum
 
@@ -135,7 +136,7 @@ How it compares with other ways to test in a browser:
 
 - **Probabilities, not guesses.** Every claim is scored against a threshold you
   set, and checked for contradicting evidence. A marginal pass is flagged, not
-  silently green. See [probabilistic testing](docs/probabilistic-testing.md).
+  silently green. See [probabilistic testing](https://docs.sedum.dev/probabilistic-testing).
 - **No black box.** Prompts, scoring, and caching are in this repo. You can see
   exactly what goes to the model and what comes back.
 
@@ -173,7 +174,7 @@ Write `{{name}}` in a sentence and pass the value separately, so the sentence
 stays the same on every run and can be checked before a run. Wrap passwords
 and tokens in `secret()`: they are typed, but never sent to the model or shown
 in reports. A file can hold several tests, and each gets a fresh browser
-context. See [TypeScript tests](docs/typescript-tests.md) for the full API, and
+context. See [TypeScript tests](https://docs.sedum.dev/typescript-tests) for the full API, and
 [examples/saucedemo](examples/saucedemo) for a small suite that uses faker,
 skips the login form with a cookie, and checks app state behind the UI.
 
@@ -197,27 +198,27 @@ steps:
 
 `$VAR` reads an environment variable and is treated as a secret. Put shared
 steps in a `*.module.yaml` file and call it with `use:`. See the
-[YAML format](docs/format.md).
+[YAML format](https://docs.sedum.dev/format).
 
 ## Learn more
 
-- [TypeScript tests](docs/typescript-tests.md): `test()`, `ai`, values and
+- [TypeScript tests](https://docs.sedum.dev/typescript-tests): `test()`, `ai`, values and
   secrets, groups, `extract`, Playwright between steps, and results.
-- [YAML format](docs/format.md): data, secrets, modules, `before` and `after`
+- [YAML format](https://docs.sedum.dev/format): data, secrets, modules, `before` and `after`
   steps, ids, and tags.
-- [CLI commands](docs/cli.md): filters, parallel runs and sharding, retries,
+- [CLI commands](https://docs.sedum.dev/cli): filters, parallel runs and sharding, retries,
   timeouts, reporters, and exit codes.
-- [Running in CI](docs/ci.md): GitHub Actions, GitLab, and Jenkins, with JUnit
+- [Running in CI](https://docs.sedum.dev/ci): GitHub Actions, GitLab, and Jenkins, with JUnit
   and job summaries.
-- [Project configuration](docs/configuration.md): `sedum.config.yaml`,
+- [Project configuration](https://docs.sedum.dev/configuration): `sedum.config.yaml`,
   environments, thresholds, and `.env`.
-- [Probabilistic testing](docs/probabilistic-testing.md): how scores become
+- [Probabilistic testing](https://docs.sedum.dev/probabilistic-testing): how scores become
   verdicts, flags, and exit codes.
-- [Provider privacy](docs/provider-typesafe.md): what bounded data is sent to
+- [Provider privacy](https://docs.sedum.dev/provider-typesafe): what bounded data is sent to
   the default provider, and what is excluded.
-- [Clef provider](docs/provider-clef.md): Cloudflare setup, models, pricing,
+- [Clef provider](https://docs.sedum.dev/provider-clef): Cloudflare setup, models, pricing,
   privacy, and current text-only scope.
-- [All documentation](docs/README.md)
+- [All documentation](https://docs.sedum.dev/)
 
 ## Coming next
 
@@ -242,7 +243,7 @@ verify: the confirmation page shows an order number
 
 Goal tests are YAML only for now. Use `goal` and a required `verify` claim instead of `steps`. Supply typing values
 through `data`; `before` and `after` hooks remain available. Run and validate the
-file with the same CLI commands as authored-step tests. See [goal mode](docs/goal-mode.md)
+file with the same CLI commands as authored-step tests. See [goal mode](https://docs.sedum.dev/goal-mode)
 for budgets, reporting, supported operations and recorded limitations.
 
 ## Contributing
