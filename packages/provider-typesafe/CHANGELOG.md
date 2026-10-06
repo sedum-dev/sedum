@@ -1,5 +1,11 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.10
+
+### Patch Changes
+
+- @sedum-dev/core@0.1.0-alpha.10
+
 ## 0.1.0-alpha.9
 
 ### Patch Changes
