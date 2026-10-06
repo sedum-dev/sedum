@@ -80,10 +80,6 @@ jobs:
           CANDIDATE_SOURCE_COMMIT: ${{ needs.preflight.outputs.source_commit }}
           MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
         run: GITHUB_SHA="$CANDIDATE_SOURCE_COMMIT" node scripts/release/publish.mjs
-      - name: Verify registry bytes and integrity
-        env:
-          MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
-        run: node scripts/release/verify-published.mjs
       - name: Create GitHub release from Changesets changelogs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

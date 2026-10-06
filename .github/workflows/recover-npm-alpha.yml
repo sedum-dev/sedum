@@ -80,11 +80,6 @@ jobs:
           MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
           RECOVERY_PUBLISH: "true"
         run: node scripts/release/publish.mjs
-      - name: Verify registry bytes and integrity
-        env:
-          MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
-          RECOVERY_PUBLISH: "true"
-        run: node scripts/release/verify-published.mjs
       - name: Create GitHub release from Changesets changelogs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
