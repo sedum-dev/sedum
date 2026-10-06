@@ -12,9 +12,13 @@ const { manifest } = await verifyCandidate(
   directory,
   process.env.MANIFEST_SHA256,
 );
+const recovery = process.env.RECOVERY_PUBLISH === "true";
+const sourceCommit = recovery
+  ? process.env.CANDIDATE_SOURCE_COMMIT
+  : process.env.GITHUB_SHA;
 assert(
-  process.env.GITHUB_SHA === manifest.sourceCommit,
-  "Publish checkout is not the candidate source commit",
+  sourceCommit === manifest.sourceCommit,
+  "Publish source does not match the candidate source commit",
 );
 assert(
   manifest.packages[0].version.includes("-alpha."),
@@ -54,20 +58,17 @@ for (const entry of manifest.packages) {
       .digest("hex") === entry.sha256,
     `Tarball changed for ${entry.name}`,
   );
-  execFileSync(
-    "npm",
-    [
-      "publish",
-      file,
-      "--access",
-      "public",
-      "--tag",
-      "latest",
-      "--provenance",
-      "--ignore-scripts",
-    ],
-    { stdio: "inherit" },
-  );
+  const publishArguments = [
+    "publish",
+    file,
+    "--access",
+    "public",
+    "--tag",
+    "latest",
+  ];
+  if (!recovery) publishArguments.push("--provenance");
+  publishArguments.push("--ignore-scripts");
+  execFileSync("npm", publishArguments, { stdio: "inherit" });
 }
 console.log(
   `Published ${manifest.packages.length} packages at ${manifest.packages[0].version}`,

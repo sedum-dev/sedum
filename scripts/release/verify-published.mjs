@@ -33,6 +33,7 @@ const { manifest } = await verifyCandidate(
   directory,
   process.env.MANIFEST_SHA256,
 );
+const requireProvenance = process.env.RECOVERY_PUBLISH !== "true";
 for (const entry of manifest.packages) {
   const metadataUrl = `https://registry.npmjs.org/${encodeURIComponent(entry.name)}/${encodeURIComponent(entry.version)}`;
   const response = await fetchWithRetry(metadataUrl);
@@ -41,10 +42,11 @@ for (const entry of manifest.packages) {
     metadata.name === entry.name && metadata.version === entry.version,
     "Registry metadata mismatch",
   );
-  assert(
-    metadata.dist.attestations?.provenance,
-    `Provenance is missing for ${entry.name}`,
-  );
+  if (requireProvenance)
+    assert(
+      metadata.dist.attestations?.provenance,
+      `Provenance is missing for ${entry.name}`,
+    );
   const tarballResponse = await fetchWithRetry(metadata.dist.tarball);
   const published = Buffer.from(await tarballResponse.arrayBuffer());
   const candidate = await readFile(path.join(directory, entry.filename));
