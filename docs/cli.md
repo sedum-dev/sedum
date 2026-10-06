@@ -158,10 +158,10 @@ chunk, even after an earlier score crosses the cutoff. The final score is the
 maximum chunk score, with the threshold applied once. This heuristic is not a
 calibrated whole-PR relevance probability or a probability that the test will fail.
 
-A [field report](https://gist.github.com/devnacho/b86ba7cb3cb3ad9e7ebc96f1fb79d33e)
-tried 0.3/0.4 to reduce noise but also missed AI-chat cases. **0.4 is that
-report's tuning example, not a global recommendation**: higher cutoffs trade
-recall for fewer selected files. The default stays 0.1.
+Higher cutoffs trade recall for fewer selected files and can skip relevant tests.
+For example, **0.4 is a tuning option, not a calibrated global recommendation**.
+Evaluate any threshold against representative changes before relying on it;
+the default stays 0.1.
 
 The normal command prints each probability and RUN/SKIP decision to stderr.
 `--selection-only` instead writes JSON to stdout, including the base, merge-base
