@@ -5,35 +5,36 @@ export function scanLocalImports(source: string): readonly string[] {
   const tokens = tokenize(source);
   const found = new Set<string>();
   tokens.forEach((token, index) => {
-    const next = tokens[index + 1];
-    const after = tokens[index + 2];
-    const specifier = importSpecifier(token, next, after);
-    if (
-      specifier?.kind === "string" &&
-      !specifier.dynamic &&
-      /^\.\.?\//u.test(specifier.value)
-    )
-      found.add(specifier.value);
+    const specifier = importSpecifier(tokens, token, index);
+    if (isLocalStaticString(specifier)) found.add(specifier.value);
   });
   return [...found];
 }
 
 function importSpecifier(
+  tokens: readonly Token[],
   token: Token,
-  next: Token | undefined,
-  after: Token | undefined,
+  index: number,
 ): Token | undefined {
-  if (token.kind === "ident" && token.value === "from") return next;
-  if (token.kind === "ident" && token.value === "import")
-    return next?.kind === "punct" && next.value === "(" ? after : next;
-  if (
-    token.kind === "ident" &&
-    token.value === "require" &&
-    next?.kind === "punct" &&
-    next.value === "("
-  )
-    return after;
-  return undefined;
+  if (token.kind !== "ident") return undefined;
+  const next = tokens[index + 1];
+  switch (token.value) {
+    case "from":
+      return next;
+    case "import":
+      return next?.value === "(" ? tokens[index + 2] : next;
+    case "require":
+      return next?.value === "(" ? tokens[index + 2] : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function isLocalStaticString(
+  token: Token | undefined,
+): token is Token & { readonly kind: "string" } {
+  if (token?.kind !== "string" || token.dynamic) return false;
+  return /^\.\.?\//u.test(token.value);
 }
 
 export interface ImportBinding {
@@ -42,60 +43,93 @@ export interface ImportBinding {
   readonly specifier: string;
 }
 
+interface ImportName {
+  readonly local: string;
+  readonly imported: string;
+}
+
 /** Named and default imports from one token stream. */
 export function scanImportBindings(source: string): readonly ImportBinding[] {
   const tokens = tokenize(source);
-  const bindings: ImportBinding[] = [];
-  tokens.forEach((token, index) => {
-    if (token.kind !== "ident" || token.value !== "import") return;
-    bindings.push(...bindingsAt(tokens, index));
-  });
-  return bindings;
+  return tokens.flatMap((token, index) =>
+    token.kind === "ident" && token.value === "import"
+      ? new ImportReader(tokens, index + 1).read()
+      : [],
+  );
 }
 
-function bindingsAt(tokens: readonly Token[], index: number): ImportBinding[] {
-  const names: { local: string; imported: string }[] = [];
-  let cursor = index + 1;
-  const first = tokens[cursor];
-  if (first?.kind === "ident" && first.value === "type") cursor++;
-  const defaultImport = tokens[cursor];
-  if (defaultImport?.kind === "ident" && defaultImport.value !== "from") {
-    names.push({ local: defaultImport.value, imported: "default" });
-    cursor++;
-    if (tokens[cursor]?.value === ",") cursor++;
+class ImportReader {
+  private readonly names: ImportName[] = [];
+  private cursor: number;
+
+  constructor(
+    private readonly tokens: readonly Token[],
+    start: number,
+  ) {
+    this.cursor = start;
   }
-  if (tokens[cursor]?.value === "{")
-    cursor = readNamedImports(tokens, cursor, names);
-  const from = tokens[cursor];
-  const specifier = tokens[cursor + 1];
-  if (
-    from?.kind !== "ident" ||
-    from.value !== "from" ||
-    specifier?.kind !== "string" ||
-    specifier.dynamic
-  )
-    return [];
-  return names.map((name) => ({ ...name, specifier: specifier.value }));
-}
 
-function readNamedImports(
-  tokens: readonly Token[],
-  open: number,
-  names: { local: string; imported: string }[],
-): number {
-  let cursor = open + 1;
-  while (cursor < tokens.length && tokens[cursor]?.value !== "}") {
-    const name = tokens[cursor];
-    if (name?.kind === "ident" && name.value !== "type") {
-      const local = tokens[cursor + 2];
-      if (tokens[cursor + 1]?.value === "as" && local?.kind === "ident") {
-        names.push({ local: local.value, imported: name.value });
-        cursor += 3;
-        continue;
-      }
-      names.push({ local: name.value, imported: name.value });
+  read(): ImportBinding[] {
+    this.skipTypeKeyword();
+    this.readDefault();
+    this.readNamed();
+    return this.bindNames();
+  }
+
+  private skipTypeKeyword(): void {
+    if (this.currentIdentifier() === "type") this.cursor++;
+  }
+
+  private readDefault(): void {
+    const name = this.currentIdentifier();
+    if (!name || name === "from") return;
+    this.names.push({ local: name, imported: "default" });
+    this.cursor++;
+    if (this.currentValue() === ",") this.cursor++;
+  }
+
+  private readNamed(): void {
+    if (this.currentValue() !== "{") return;
+    this.cursor++;
+    while (this.cursor < this.tokens.length && this.currentValue() !== "}")
+      this.readNamedEntry();
+    this.cursor++;
+  }
+
+  private readNamedEntry(): void {
+    const imported = this.currentIdentifier();
+    if (!imported || imported === "type") {
+      this.cursor++;
+      return;
     }
-    cursor++;
+    const local = this.identifierAt(this.cursor + 2);
+    if (this.tokens[this.cursor + 1]?.value === "as" && local) {
+      this.names.push({ local, imported });
+      this.cursor += 3;
+      return;
+    }
+    this.names.push({ local: imported, imported });
+    this.cursor++;
   }
-  return cursor + 1;
+
+  private bindNames(): ImportBinding[] {
+    const from = this.currentIdentifier();
+    const specifier = this.tokens[this.cursor + 1];
+    if (from !== "from" || specifier?.kind !== "string" || specifier.dynamic)
+      return [];
+    return this.names.map((name) => ({ ...name, specifier: specifier.value }));
+  }
+
+  private currentValue(): string | undefined {
+    return this.tokens[this.cursor]?.value;
+  }
+
+  private currentIdentifier(): string | undefined {
+    return this.identifierAt(this.cursor);
+  }
+
+  private identifierAt(index: number): string | undefined {
+    const token = this.tokens[index];
+    return token?.kind === "ident" ? token.value : undefined;
+  }
 }
