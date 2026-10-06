@@ -67,5 +67,9 @@
       "type": "github",
       "href": "https://github.com/sedum-dev/sedum"
     }
+  },
+  "logo": {
+    "light": "/docs/images/sedum-logo-light.svg",
+    "dark": "/docs/images/sedum-logo-dark.svg"
   }
 }
