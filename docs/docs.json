@@ -39,5 +39,9 @@
         "pages": ["run-result", "releasing"]
       }
     ]
+  },
+  "description": "Sedum is a documentation suite for writing, configuring, and running browser end-to-end tests using plain-English/AI-assisted steps combined with TypeScript or YAML formats. It covers probabilistic test scoring, project configuration, CLI commands, CI integration, run results, an assertion engine, step classification, locator caching, and AI providers (TypeSafe, Clef) that power the natural-language test steps.",
+  "icons": {
+    "library": "fontawesome"
   }
 }
