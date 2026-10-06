@@ -1,5 +1,12 @@
 # @sedum-dev/reporters
 
+## 0.1.0-alpha.11
+
+### Patch Changes
+
+- Updated dependencies [2252c19]
+  - @sedum-dev/core@0.1.0-alpha.11
+
 ## 0.1.0-alpha.10
 
 ### Patch Changes
