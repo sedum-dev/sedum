@@ -1,6 +1,6 @@
 {
   "name": "@sedum-dev/provider-typesafe",
-  "version": "0.1.0-alpha.9",
+  "version": "0.1.0-alpha.10",
   "repository": "https://github.com/sedum-dev/sedum",
   "publishConfig": {
     "access": "public"

@@ -31,6 +31,7 @@
     "junit-reporter",
     "locator-accuracy-experiments",
     "native-select-options",
+    "npm-package-readme",
     "npx-hints",
     "parallel-runs-and-sharding",
     "placeholder-caption-hint",

@@ -1,5 +1,15 @@
 # sedum-cli
 
+## 0.1.0-alpha.10
+
+### Patch Changes
+
+- 3d3a585: Add a package README, description, keywords, license, and homepage so the npm page explains what Sedum is and how to try it.
+  - @sedum-dev/core@0.1.0-alpha.10
+  - @sedum-dev/reporters@0.1.0-alpha.10
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.10
+  - @sedum-dev/provider-clef@0.1.0-alpha.10
+
 ## 0.1.0-alpha.9
 
 ### Patch Changes
