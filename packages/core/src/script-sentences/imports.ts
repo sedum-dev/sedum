@@ -23,17 +23,25 @@ function importSpecifier(
   next: Token | undefined,
   after: Token | undefined,
 ): Token | undefined {
-  if (token.kind === "ident" && token.value === "from") return next;
-  if (token.kind === "ident" && token.value === "import")
-    return next?.kind === "punct" && next.value === "(" ? after : next;
-  if (
-    token.kind === "ident" &&
-    token.value === "require" &&
-    next?.kind === "punct" &&
-    next.value === "("
-  )
-    return after;
+  if (isIdentifier(token, "from")) return next;
+  if (isIdentifier(token, "import")) return importArgument(next, after);
+  if (isIdentifier(token, "require") && isPunct(next, "(")) return after;
   return undefined;
+}
+
+function importArgument(
+  next: Token | undefined,
+  after: Token | undefined,
+): Token | undefined {
+  return isPunct(next, "(") ? after : next;
+}
+
+function isIdentifier(token: Token | undefined, value: string): boolean {
+  return token?.kind === "ident" && token.value === value;
+}
+
+function isPunct(token: Token | undefined, value: string): boolean {
+  return token?.kind === "punct" && token.value === value;
 }
 
 export interface ImportBinding {
