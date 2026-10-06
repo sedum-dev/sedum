@@ -14,5 +14,6 @@ Score retained diffs with lossless, preflighted file/hunk/line/Unicode chunks in
 both providers, preserve complete candidate test/module sources, and aggregate
 relevance with the maximum score across chunks. Enforce explicit retained-diff
 and request-count guards, preserve all receipts, and fail on incomplete scoring.
-Keep the default threshold at 0.1 and selection experimental; live relevance
-accuracy remains unverified.
+Raise the default threshold from 0.1 to 0.3; pass `--threshold 0.1` to retain the
+previous cutoff. Selection remains experimental and live relevance accuracy
+remains unverified.

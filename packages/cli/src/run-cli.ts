@@ -195,7 +195,7 @@ export async function runCli(
     )
     .option(
       "--threshold <probability>",
-      "minimum relevance probability for --affected (default 0.1)",
+      "minimum relevance probability for --affected (default 0.3)",
       relevanceThreshold,
     )
     .option(
@@ -406,7 +406,7 @@ export async function runCli(
                 names: options.name,
                 ids: options.id,
               },
-              threshold: options.threshold ?? 0.1,
+              threshold: options.threshold ?? 0.3,
               ignore: options.affectedIgnore,
               ...(options.base !== undefined ? { base: options.base } : {}),
               ...(options.env ? { environment: options.env } : {}),

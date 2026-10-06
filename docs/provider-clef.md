@@ -100,7 +100,7 @@ preflighted before the first call, including complete source fit checks.
 Any chunk failure is fatal, with no partial selection or automatic full-suite
 fallback. Every non-forced candidate is scored against every chunk; the maximum
 score is a heuristic, not a calibrated whole-PR probability. The default cutoff
-remains 0.1. Chunking adds calls, tokens, latency, receipts, and possible costs,
+is 0.3. Chunking adds calls, tokens, latency, receipts, and possible costs,
 reported separately from execution. See [Git-diff selection](cli.md#experimental-git-diff-selection)
 for clean-checkout commands and ignore semantics. Live accuracy is unverified;
 spending on an accuracy experiment requires separate approval. Keep full-suite

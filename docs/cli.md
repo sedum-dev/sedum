@@ -149,8 +149,8 @@ in different shards could leave tests unexecuted. Remove the shard options or
 run without `--affected`. A single shard (`--shard-index 1 --shard-count 1`)
 and parallel execution with `--parallel` remain supported.
 
-The provisional default keeps scores **≥ 0.1**. This favors running
-uncertain tests over skipping them; it is not an empirically calibrated cutoff.
+The provisional default keeps scores **≥ 0.3**. This is a selection heuristic,
+not an empirically calibrated cutoff; use a lower threshold to favor recall.
 `--threshold` accepts 0–1, with 0 keeping every candidate for a nonempty diff.
 A Noul near 0 means likely unrelated, near 1 means likely relevant, and near
 0.5 means uncertain. Each non-forced candidate is scored against every diff
@@ -161,7 +161,7 @@ calibrated whole-PR relevance probability or a probability that the test will fa
 Higher cutoffs trade recall for fewer selected files and can skip relevant tests.
 For example, **0.4 is a tuning option, not a calibrated global recommendation**.
 Evaluate any threshold against representative changes before relying on it;
-the default stays 0.1.
+the default is 0.3. Pass `--threshold 0.1` to use the previous default.
 
 The normal command prints each probability and RUN/SKIP decision to stderr.
 `--selection-only` instead writes JSON to stdout, including the base, merge-base

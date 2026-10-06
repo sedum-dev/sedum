@@ -27,7 +27,7 @@ per batch. A 16 MiB retained patch guard and preflight ceiling of 256 planned
 requests fail closed, as does a complete candidate source that cannot fit.
 Every non-forced candidate is scored against every chunk; its maximum score is
 an experimental heuristic, not calibrated whole-PR probability. The default
-cutoff remains 0.1. All call receipts are retained; chunking adds billable calls,
+cutoff is 0.3. All call receipts are retained; chunking adds billable calls,
 tokens, and latency, separate from runner costs. Any chunk failure stops selection.
 Review source before opting in. See [Git-diff selection](cli.md#experimental-git-diff-selection)
 for clean-checkout commands, ignore semantics, and limits. Live accuracy remains

@@ -144,7 +144,7 @@ are not a privacy guarantee. Dirty tracked state is refused even if ignored.
 Selection uses committed `merge-base(base, pinned HEAD)..pinned HEAD`, not local
 edits. Use a clean CI checkout, explicitly fetch `origin/main`, and pass
 `--base origin/main`; Sedum never fetches or merges automatically. The default
-selection cutoff remains `--threshold 0.1`, separate from assertion `thresholds`.
+selection cutoff is `--threshold 0.3`, separate from assertion `thresholds`.
 Chunk scores aggregate by maximum, not calibrated whole-PR probability.
 The 16 MiB retained patch and 256 planned request guards fail closed, alongside
 28,000-byte single-question and 56,000-byte batch limits (64 questions for Clef).

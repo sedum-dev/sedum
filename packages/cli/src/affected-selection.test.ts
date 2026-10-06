@@ -434,7 +434,7 @@ it("previews JSON, passes only selected paths to the runner, and preserves failu
     cwd: root,
     executeRun,
     createRelevanceProvider: () => ({
-      scoreRelevance: async () => ({ probabilities: [0.7, 0], calls: [] }),
+      scoreRelevance: async () => ({ probabilities: [0.3, 0.299], calls: [] }),
     }),
   };
   const preview = await runCli(
@@ -443,6 +443,7 @@ it("previews JSON, passes only selected paths to the runner, and preserves failu
     runtime,
   );
   expect(preview.exitCode).toBe(0);
+  expect(JSON.parse(preview.stdout).threshold).toBe(0.3);
   expect(
     JSON.parse(preview.stdout).tests.map(
       (test: { selected: boolean }) => test.selected,
@@ -473,6 +474,30 @@ it("previews JSON, passes only selected paths to the runner, and preserves failu
       parallel: 2,
     }),
   );
+});
+
+it("honors an explicit affected threshold instead of the default", async () => {
+  await fixture();
+  await write("app.ts", "changed\n");
+  commit();
+  const preview = await runCli(
+    ["run", "--affected", "--selection-only", "--threshold", "0.1"],
+    "test",
+    {
+      cwd: root,
+      createRelevanceProvider: () => ({
+        scoreRelevance: async () => ({
+          probabilities: [0.1, 0.099],
+          calls: [],
+        }),
+      }),
+    },
+  );
+  expect(preview.exitCode).toBe(0);
+  expect(JSON.parse(preview.stdout)).toMatchObject({
+    threshold: 0.1,
+    tests: [{ selected: true }, { selected: false }],
+  });
 });
 
 it.each([false, true])(
@@ -662,7 +687,8 @@ it("handles literal strange filenames, deleted paths, ignored untracked paths an
     "-leading.ts",
     "[pattern].ts",
     "space name.ts",
-    "line\nbreak.ts",
+    // Windows rejects control characters in filenames; retain the other cases there.
+    ...(process.platform === "win32" ? [] : ["line\nbreak.ts"]),
   ];
   for (const [i, name] of names.entries()) await write(name, `unique-${i}\n`);
   await rm(path.join(root, "app.ts"));
