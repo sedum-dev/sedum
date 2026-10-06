@@ -76,11 +76,16 @@ class ImportReader {
   }
 
   private bindNames(): ImportBinding[] {
-    const from = this.currentIdentifier();
-    const specifier = this.tokens[this.cursor + 1];
-    if (from !== "from" || specifier?.kind !== "string" || specifier.dynamic)
-      return [];
-    return this.names.map((name) => ({ ...name, specifier: specifier.value }));
+    const specifier = this.staticSpecifier();
+    if (specifier === undefined) return [];
+    return this.names.map((name) => ({ ...name, specifier }));
+  }
+
+  private staticSpecifier(): string | undefined {
+    if (this.currentIdentifier() !== "from") return undefined;
+    const token = this.tokens[this.cursor + 1];
+    if (token?.kind !== "string") return undefined;
+    return token.dynamic ? undefined : token.value;
   }
 
   private currentValue(): string | undefined {

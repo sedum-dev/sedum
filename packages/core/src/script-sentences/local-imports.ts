@@ -1,5 +1,16 @@
 import { tokenize, type Token } from "./scanner.js";
 
+type SpecifierReader = (
+  tokens: readonly Token[],
+  index: number,
+) => Token | undefined;
+
+const SPECIFIER_READERS: Readonly<Record<string, SpecifierReader>> = {
+  from: (tokens, index) => tokens[index + 1],
+  import: (tokens, index) => callArgument(tokens, index) ?? tokens[index + 1],
+  require: callArgument,
+};
+
 /** Relative module specifiers referenced by static and dynamic imports. */
 export function scanLocalImports(source: string): readonly string[] {
   const tokens = tokenize(source);
@@ -17,17 +28,14 @@ function importSpecifier(
   index: number,
 ): Token | undefined {
   if (token.kind !== "ident") return undefined;
-  const next = tokens[index + 1];
-  switch (token.value) {
-    case "from":
-      return next;
-    case "import":
-      return next?.value === "(" ? tokens[index + 2] : next;
-    case "require":
-      return next?.value === "(" ? tokens[index + 2] : undefined;
-    default:
-      return undefined;
-  }
+  return SPECIFIER_READERS[token.value]?.(tokens, index);
+}
+
+function callArgument(
+  tokens: readonly Token[],
+  index: number,
+): Token | undefined {
+  return tokens[index + 1]?.value === "(" ? tokens[index + 2] : undefined;
 }
 
 function isLocalStaticString(
