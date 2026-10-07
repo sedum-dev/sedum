@@ -89,7 +89,8 @@ it("supports master, remote main, and explicit refs, and refuses invalid refs an
   );
   await write("new.ts", "new code");
   await expect(readBranchDiff(root)).rejects.toThrow("Untracked");
-});
+  // Five snapshot reads spawn many Git processes; Windows CI needs more than 5s.
+}, 30_000);
 
 it("refuses binary and submodule changes rather than scoring incomplete text", async () => {
   await fixture();
