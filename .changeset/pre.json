@@ -10,6 +10,7 @@
     "@sedum-dev/provider-clef": "0.1.0-alpha.7"
   },
   "changesets": [
+    "affected-monorepo-hardening",
     "agent-markdown-report",
     "ai-holds",
     "cache-not-cacheable",
