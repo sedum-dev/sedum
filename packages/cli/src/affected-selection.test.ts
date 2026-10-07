@@ -17,6 +17,9 @@ import { assertAffectedSnapshot, readCommittedSource } from "./affected-git.js";
 import { loadProjectConfig } from "./config.js";
 import { discoverRunTests } from "./run-selection.js";
 
+// Real Git processes and large filesystem fixtures need an integration-test budget.
+vi.setConfig({ testTimeout: 30_000 });
+
 let root: string;
 const git = (...args: string[]) =>
   execFileSync("git", args, {
@@ -89,8 +92,7 @@ it("supports master, remote main, and explicit refs, and refuses invalid refs an
   );
   await write("new.ts", "new code");
   await expect(readBranchDiff(root)).rejects.toThrow("Untracked");
-  // Five snapshot reads spawn many Git processes; Windows CI needs more than 5s.
-}, 30_000);
+});
 
 it("refuses binary and submodule changes rather than scoring incomplete text", async () => {
   await fixture();
@@ -721,7 +723,7 @@ it("streams retained patches above 2 MiB and refuses the total 16 MiB ceiling", 
   await write("huge.ts", "x\n".repeat(6_000_000));
   commit();
   await expect(readBranchDiff(root)).rejects.toThrow("16 MiB guard");
-}, 20_000);
+});
 
 it("keeps a sanitized 79-test/14-file umbrella suite and large excluded fixtures selectable", async () => {
   await fixture();
