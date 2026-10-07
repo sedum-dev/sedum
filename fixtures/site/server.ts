@@ -10,6 +10,11 @@ function page(title: string, body: string, script = ""): string {
 }
 
 const pages: Record<string, string> = {
+  "/single-submit": page(
+    "Singleton submit fixture",
+    `<h1>Submit page</h1><p id="status">Ready</p><button id="once">Submit once</button><p id="result"></p>`,
+    `window.actionCount=0;document.querySelector('#once').addEventListener('click',()=>{window.actionCount++;document.querySelector('#result').textContent='Saved'})`,
+  ),
   "/synthetic-profile": page(
     "Synthetic profile fixture",
     `<h1>Create a test profile</h1><form><label>First name <input name="first" required autocomplete="given-name"></label><label>Account email <input name="email" type="email" size="48" required></label><label>Confirm account email <input name="confirm" type="email" size="48" required></label><label>Sample biography <textarea name="bio" cols="48" rows="3" style="vertical-align:top" required></textarea></label><button>Continue to recipient</button></form><p role="status" id="message"></p>`,
