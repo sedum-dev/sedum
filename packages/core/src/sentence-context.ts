@@ -138,14 +138,9 @@ function sameControl(left: Candidate, right: Candidate): boolean {
 }
 
 /** Every residual sentence clue occurs in the candidate's own first peer. */
-function fullContextMatch(
-  sentence: string,
-  candidate: Candidate,
-  candidates: readonly Candidate[],
-): boolean {
+function holdsClues(candidate: Candidate, clues: readonly string[]): boolean {
   const peer = candidate.peers[0];
   if (!peer || isWeakPeer(peer)) return false;
-  const clues = contextClues(sentence, candidate, candidates);
   const context = new Set(words(peer));
   return clues.length > 0 && clues.every((clue) => context.has(clue));
 }
@@ -153,7 +148,8 @@ function fullContextMatch(
 /** A repeated HTML button whose item context is bounded rather than complete
  * may still be told apart: its ID is unique in the complete set, its first
  * peer holds every residual clue, and no other control with the same name and
- * role satisfies those clues, whatever its ID or state. */
+ * role satisfies those clues, whatever its ID or state. Controls with the same
+ * name and role leave the same residual clues, so they are computed once. */
 export function boundedContextCandidate(
   candidate: Candidate,
   candidates: readonly Candidate[],
@@ -161,12 +157,11 @@ export function boundedContextCandidate(
 ): boolean {
   const id = candidate.signals.id;
   if (candidate.tag !== "button" || !id) return false;
-  if (!fullContextMatch(sentence, candidate, candidates)) return false;
+  const clues = contextClues(sentence, candidate, candidates);
+  if (!holdsClues(candidate, clues)) return false;
   const sameId = candidates.filter((other) => other.signals.id === id);
   const sameContext = candidates.filter(
-    (other) =>
-      sameControl(other, candidate) &&
-      fullContextMatch(sentence, other, candidates),
+    (other) => sameControl(other, candidate) && holdsClues(other, clues),
   );
   return sameId.length === 1 && sameContext.length === 1;
 }

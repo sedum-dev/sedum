@@ -3,3 +3,6 @@ dist
 coverage
 .turbo
 pnpm-lock.yaml
+
+# Byte-identical benchmark fixture; evals/sentence-cache/benchmark.mjs checks its SHA-256.
+evals/sentence-cache/fixture/
