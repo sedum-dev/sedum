@@ -1,0 +1,10 @@
+baseUrl: https://www.saucedemo.com
+tests:
+  directory: tests
+browser: chromium
+viewport: { width: 1280, height: 900 }
+provider:
+  name: typesafe
+  model: jev-1.13.0
+outputDir: .sedum/runs
+reporterDir: .sedum/reports
