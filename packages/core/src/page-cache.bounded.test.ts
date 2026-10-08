@@ -158,6 +158,16 @@ describe("bounded-context sentence recipes", () => {
     expect(() => stage(sentence, backpack, all)).toThrow(refusal);
   });
 
+  it("does not count a same-named control of another role as a duplicate", () => {
+    const link = product("cart-link", "Sauce Labs Backpack", {
+      tag: "a",
+      role: "link",
+    });
+    expect(stage(sentence, backpack, [backpack, link]).boundedContext).toBe(
+      true,
+    );
+  });
+
   it("misses a new same-context duplicate even when the original ID outscores it", () => {
     const entry = stage(sentence, backpack, catalog);
     for (const duplicate of [

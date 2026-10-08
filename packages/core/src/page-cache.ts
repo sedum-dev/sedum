@@ -145,8 +145,9 @@ function hasTargetContext(
   sentence: string,
   candidate: Candidate,
   candidates: readonly Candidate[],
+  context: string,
 ): boolean {
-  const contextWords = new Set(words(candidate.peers[0] ?? ""));
+  const contextWords = new Set(words(context));
   return contextClues(sentence, candidate, candidates).some((word) =>
     contextWords.has(word),
   );
@@ -217,7 +218,7 @@ function contextualCandidate(request: StageRequest): boolean {
   if (!candidate.signals.contextComplete) return false;
   const peer = candidate.peers[0];
   if (!peer || isWeakPeer(peer)) return false;
-  return hasTargetContext(sentence, candidate, eligible.candidates);
+  return hasTargetContext(sentence, candidate, eligible.candidates, peer);
 }
 
 function hasStableSignal(candidate: Candidate): boolean {
