@@ -11,7 +11,7 @@ import {
 } from "./page-protocol.js";
 
 export const CACHE_FORMAT = 1;
-export const MATCHER_VERSION = 1;
+export const MATCHER_VERSION = 2;
 export type CacheMissReason =
   | "absent"
   /** The target has no signal that can safely find it again, such as an input button. */
@@ -41,6 +41,8 @@ export interface CacheEntry {
   readonly editable: boolean;
   readonly disabled: boolean;
   readonly path: string;
+  /** Incomplete item context admitted only with unique ID and full sentence clues. */
+  readonly boundedContext?: boolean;
   readonly digests: {
     readonly hook?: string;
     readonly id?: string;
@@ -93,6 +95,9 @@ const ENTRY_VALIDATORS = [
   (item: Record<string, unknown>) => typeof item.inputType === "string",
   (item: Record<string, unknown>) => typeof item.editable === "boolean",
   (item: Record<string, unknown>) => typeof item.disabled === "boolean",
+  (item: Record<string, unknown>) =>
+    item.boundedContext === undefined ||
+    typeof item.boundedContext === "boolean",
   (item: Record<string, unknown>) => validDigests(item.digests),
 ] as const;
 
@@ -160,6 +165,8 @@ function contextClues(sentence: string, label: string): string[] {
     "field",
     "input",
     "box",
+    "button",
+    "link",
   ]);
   return words(sentence.replace(/\{\{[^{}]+\}\}/gu, " ")).filter(
     (word) =>
@@ -251,15 +258,47 @@ function hasStableSignal(candidate: Candidate): boolean {
   return !!candidate.signals.name && !!candidate.name;
 }
 
+function fullContextMatch(sentence: string, candidate: Candidate): boolean {
+  const peer = candidate.peers[0];
+  if (!peer || isWeakPeer(peer)) return false;
+  const clues = contextClues(sentence, candidate.name);
+  const context = new Set(words(peer));
+  return clues.length > 0 && clues.every((clue) => context.has(clue));
+}
+
+function boundedContextCandidate(
+  candidate: Candidate,
+  candidates: readonly Candidate[],
+  sentence: string,
+): boolean {
+  if (candidate.tag !== "button" || !candidate.signals.id) return false;
+  if (!fullContextMatch(sentence, candidate)) return false;
+  const sameId = candidates.filter(
+    (other) => other.signals.id === candidate.signals.id,
+  );
+  const sameContext = candidates.filter(
+    (other) =>
+      other.name === candidate.name &&
+      other.role === candidate.role &&
+      fullContextMatch(sentence, other),
+  );
+  return sameId.length === 1 && sameContext.length === 1;
+}
+
+function unqualifiedIdentity(request: StageRequest): boolean {
+  return (
+    !repeatedCandidate(request.candidate, request.eligible) &&
+    contextClues(request.sentence, request.candidate.name).length === 0 &&
+    hasStableSignal(request.candidate)
+  );
+}
+
 function assertDistinguishable(request: StageRequest): void {
   const { candidate, eligible, sentence } = request;
   if (contextualCandidate(request)) return;
-  if (repeatedCandidate(candidate, eligible))
-    throw new Error("candidate_not_distinguishable");
-  if (contextClues(sentence, candidate.name).length > 0)
-    throw new Error("candidate_not_distinguishable");
-  if (!hasStableSignal(candidate))
-    throw new Error("candidate_not_distinguishable");
+  if (boundedContextCandidate(candidate, eligible.candidates, sentence)) return;
+  if (unqualifiedIdentity(request)) return;
+  throw new Error("candidate_not_distinguishable");
 }
 
 function digestField(
@@ -283,6 +322,10 @@ function createEntry(request: StageRequest): CacheEntry {
     editable: candidate.editable,
     disabled: candidate.disabled,
     path: signals.path,
+    ...(!contextualCandidate(request) &&
+    boundedContextCandidate(candidate, request.eligible.candidates, sentence)
+      ? { boundedContext: true }
+      : {}),
     digests: {
       ...digestField("hook", signals.hook, key),
       ...digestField("id", signals.id, key),
@@ -511,7 +554,15 @@ function match(request: MatchRequest): MatchResult {
   if (miss) return { hit: false, reason: miss };
   if (!request.complete)
     return { hit: false, reason: "candidate_set_incomplete" };
-  return rankedResult(rankedCandidates(request));
+  const result = rankedResult(rankedCandidates(request));
+  if (!result.hit || !request.entry?.boundedContext) return result;
+  return boundedContextCandidate(
+    result.candidate,
+    request.candidates,
+    request.sentence,
+  )
+    ? result
+    : { hit: false, reason: "near_tie" };
 }
 
 export function matchEntry(...args: MatchEntryArguments): MatchResult {
