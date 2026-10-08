@@ -304,7 +304,6 @@ export async function executeStep(
           aimed.aim.revision !== before.revision
         )
           throw new StepExecutionError(op, "stale", phase);
-        const timeoutMs = remaining(8_000, phase);
         if (options.beforeAction) {
           await active(
             options.beforeAction(aimed.aim.box ?? null, target.version),
@@ -314,6 +313,7 @@ export async function executeStep(
         }
         if (options.signal?.aborted)
           throw new StepExecutionError(op, "canceled", phase);
+        const timeoutMs = remaining(8_000, phase);
         phase = "post_dispatch";
         const result = await active(
           page.clickRef(aimed.aim, {

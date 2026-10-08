@@ -343,6 +343,38 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(once.steps[0]?.error?.code).toBe("no_match");
     }, 30_000);
 
+    it("waits through a near-tie with no match without clicking the old screen", async () => {
+      let first = true;
+      const outcome = await run(
+        "/late",
+        ["click the Continue button"],
+        4_000,
+        undefined,
+        {
+          choose: async (sentence, offered) => {
+            if (!first) return choose(sentence, offered);
+            first = false;
+            const old = offered.options.find(
+              (option) => option.kind === "candidate",
+            );
+            if (!old || old.kind !== "candidate")
+              throw new Error("Missing old screen");
+            return {
+              selection: { kind: "candidate", id: old.candidate.id },
+              probabilities: { [old.candidate.id]: 0.51, none: 0.49 },
+              confidence: null,
+              call,
+            };
+          },
+        },
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+      expect(outcome.resolver.mock.calls.length).toBeGreaterThan(1);
+      expect(outcome.steps[0]!.calls.length).toBe(
+        outcome.resolver.mock.calls.length,
+      );
+    }, 30_000);
+
     it("checks a control's state on the control", async () => {
       const outcome = await run(
         "/form",

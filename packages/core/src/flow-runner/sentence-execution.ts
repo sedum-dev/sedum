@@ -4,6 +4,11 @@ import { LocatorCacheConflict } from "../cache-store.js";
 import type { ClassifiedFlowSentence } from "../flow-classification.js";
 import { executeAssertion } from "./assertions.js";
 import {
+  pendingTarget,
+  performWithRecovery,
+  refreshAfterQuiet,
+} from "./action-recovery.js";
+import {
   opaqueMatches,
   redactOpaqueText,
   resolveTypeOperand,
@@ -623,7 +628,7 @@ export async function executeSentence(
           .trim()
       : step.text;
   let visionAttempted = false;
-  const locate = () =>
+  const locate = (signal = dependencies.signal, timeoutMs?: number) =>
     resolveTarget(page, dependencies.provider, {
       // Disabling transmission or exhausting the request budget must not
       // restore permissive repeated-member picks.
@@ -650,7 +655,8 @@ export async function executeSentence(
         ? { cache: dependencies.locatorCache }
         : {}),
       projectText: (text) => redactOpaqueText(text, opaqueEntries),
-      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      ...(signal ? { signal } : {}),
+      ...(timeoutMs === undefined ? {} : { timeoutMs }),
     });
   let resolved: LocatorResult;
   try {
@@ -700,8 +706,7 @@ export async function executeSentence(
   // appear while the page is still changing. Locate again after each change,
   // within the same grace a verify gets; a page that stays put costs nothing.
   const missing = (result: LocatorResult) =>
-    result.kind !== "resolved" &&
-    (result.reason === "none" || result.reason === "no_candidates");
+    !visionAttempted && pendingTarget(result);
   const actionGraceMs = dependencies.verifyGraceMs ?? 0;
   if (missing(resolved) && actionGraceMs > 0) {
     const deadline = performance.now() + actionGraceMs;
@@ -821,8 +826,9 @@ export async function executeSentence(
     : undefined;
   let replayFrame: ResultFrame | undefined;
   let targetBox: ResultStep["targetBox"] = null;
-  const performAction = () =>
+  const performAction = (timeoutMs: number) =>
     executeStep(page, command, {
+      timeoutMs,
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       ...(report?.replay
         ? {
@@ -845,44 +851,52 @@ export async function executeSentence(
         : {}),
     });
   try {
-    try {
-      await performAction();
-    } catch (error) {
-      if (
-        !(error instanceof StepExecutionError) ||
-        error.code !== "stale" ||
-        !error.retryable ||
-        visionAttempted
-      )
-        throw error;
-      // The first attempt provably did not dispatch input. Re-observe and
-      // resolve against the current page once; never replay an uncertain act.
-      const priorCalls = resolved.calls;
-      replayFrame = undefined;
-      targetBox = null;
-      const quiet = await quietPage(page, 80, 4_000).catch(() => ({
-        quiet: false,
-      }));
-      if (!quiet.quiet) throw error;
-      const retried = await locate();
-      if (retried.kind !== "resolved") {
-        resolved = { ...resolved, calls: [...priorCalls, ...retried.calls] };
-        throw error;
-      }
-      resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
-      command = commandFor(resolved.target);
-      locatedPage = report
-        ? await reportPage(
-            page,
-            `${stepId}:observation:2`,
-            report.privacy,
-            resolved.target.driverTarget().version,
+    let observation = 1;
+    await performWithRecovery({
+      op: step.op,
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      perform: performAction,
+      allowed: () => !visionAttempted,
+      refresh: async (remainingMs, signal) => {
+        const priorCalls = resolved.calls;
+        replayFrame = undefined;
+        targetBox = null;
+        const retried = await refreshAfterQuiet(
+          page,
+          remainingMs,
+          signal,
+          locate,
+        );
+        if (!retried) return false;
+        if (retried.kind !== "resolved") {
+          resolved = { ...resolved, calls: [...priorCalls, ...retried.calls] };
+          if (
+            ![
+              "stale",
+              "none",
+              "no_candidates",
+              "ambiguous",
+              "timeout",
+            ].includes(retried.reason)
           )
-        : undefined;
-      replayFrame = undefined;
-      targetBox = null;
-      await performAction();
-    }
+            throw new Error("The target could not be resolved.");
+          return false;
+        }
+        resolved = { ...retried, calls: [...priorCalls, ...retried.calls] };
+        command = commandFor(resolved.target);
+        locatedPage = report
+          ? await reportPage(
+              page,
+              `${stepId}:observation:${++observation}`,
+              report.privacy,
+              resolved.target.driverTarget().version,
+            )
+          : undefined;
+        replayFrame = undefined;
+        targetBox = null;
+        return true;
+      },
+    });
     let recordedLocator = resolved;
     if (resolved.cacheSeed && dependencies.locatorCache?.key) {
       const seed = resolved.cacheSeed;

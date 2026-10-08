@@ -220,6 +220,23 @@ describe("step executor", () => {
     expect(events).toEqual(["frame", "click"]);
   });
 
+  it("does not dispatch when replay capture consumes the action budget", async () => {
+    const { page, clickRef } = fakePage();
+    await expect(
+      executeStep(
+        page,
+        { op: "click", target: clickTargetRef },
+        {
+          timeoutMs: 10,
+          beforeAction: async () => {
+            await new Promise((resolve) => setTimeout(resolve, 30));
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: "timeout", phase: "pre_dispatch" });
+    expect(clickRef).not.toHaveBeenCalled();
+  });
+
   it("captures a type target box after aim and before fill", async () => {
     const fixture = fakePage();
     const box = { x: 0.1, y: 0.2, width: 0.4, height: 0.05 };

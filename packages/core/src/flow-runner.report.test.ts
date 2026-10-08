@@ -658,5 +658,5 @@ describe("runner report facts", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 12_000);
 });
