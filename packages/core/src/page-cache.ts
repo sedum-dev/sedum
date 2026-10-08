@@ -11,7 +11,7 @@ import {
 } from "./page-protocol.js";
 
 export const CACHE_FORMAT = 1;
-export const MATCHER_VERSION = 4;
+export const MATCHER_VERSION = 5;
 export type CacheMissReason =
   | "absent"
   /** The target has no signal that can safely find it again, such as an input button. */
@@ -29,6 +29,8 @@ export type CacheMissReason =
   | "strong_signal_conflict"
   | "low_score"
   | "near_tie"
+  /** Another current control may also satisfy the sentence's target description. */
+  | "context_not_unique"
   | "candidate_set_incomplete"
   | "not_actionable";
 export interface CacheEntry {
@@ -150,6 +152,25 @@ function controlNoun(
   if (tokens[index] !== role || name.length === 0) return false;
   if (index < name.length) return false;
   return tokens.slice(index - name.length, index).join(" ") === name.join(" ");
+}
+function contestedControlNoun(
+  sentence: string,
+  candidate: Candidate,
+  candidates: readonly Candidate[],
+): boolean {
+  const name = words(candidate.name);
+  if (name.includes(candidate.role)) return false;
+  const tokens = words(sentence.replace(/\{\{[^{}]+\}\}/gu, " "));
+  if (
+    !tokens.some((_, index) => controlNoun(tokens, index, name, candidate.role))
+  )
+    return false;
+  return candidates.some(
+    (other) =>
+      other.ref !== candidate.ref &&
+      other.role === candidate.role &&
+      words(other.name).includes(candidate.role),
+  );
 }
 function contextClues(sentence: string, label: string, role: string): string[] {
   const labelWords = new Set(words(label));
@@ -580,20 +601,31 @@ function rankedResult(ranked: readonly RankedCandidate[]): MatchResult {
   return { hit: true, candidate: best.candidate };
 }
 
-function match(request: MatchRequest): MatchResult {
-  const miss = entryMiss(request);
-  if (miss) return { hit: false, reason: miss };
-  if (!request.complete)
-    return { hit: false, reason: "candidate_set_incomplete" };
-  const result = rankedResult(rankedCandidates(request));
-  if (!result.hit || !request.entry?.boundedContext) return result;
+function contextResult(
+  request: MatchRequest,
+  result: MatchResult,
+): MatchResult {
+  if (!result.hit) return result;
+  if (
+    contestedControlNoun(request.sentence, result.candidate, request.candidates)
+  )
+    return { hit: false, reason: "context_not_unique" };
+  if (!request.entry?.boundedContext) return result;
   return boundedContextCandidate(
     result.candidate,
     request.candidates,
     request.sentence,
   )
     ? result
-    : { hit: false, reason: "near_tie" };
+    : { hit: false, reason: "context_not_unique" };
+}
+
+function match(request: MatchRequest): MatchResult {
+  const miss = entryMiss(request);
+  if (miss) return { hit: false, reason: miss };
+  if (!request.complete)
+    return { hit: false, reason: "candidate_set_incomplete" };
+  return contextResult(request, rankedResult(rankedCandidates(request)));
 }
 
 export function matchEntry(...args: MatchEntryArguments): MatchResult {

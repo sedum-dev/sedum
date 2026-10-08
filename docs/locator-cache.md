@@ -13,6 +13,11 @@ an assertion verdict or automatic target healing.
 The words `button` and `link` are treated as control grammar only immediately
 after the full displayed label and when they agree with the control's role.
 They remain meaningful context elsewhere, such as a product called “Button Camera.”
+If another control of the same role has that noun in its name, Sedum refuses
+the recipe and rechecks this condition on every warm match. For example, a new
+“Checkout button” beside cached “Checkout” causes a `context_not_unique` miss.
+This is conservative: even “Help button” prevents dropping `button` as grammar.
+An exact target label that already includes the noun remains eligible.
 
 Some buttons in long cards or rows can be cached even when their entire item
 text exceeds the context bound. This requires a unique ID, an untruncated,
@@ -23,6 +28,9 @@ recipes repeat the uniqueness checks on every hit and retain keyed digests of
 their peers. Reordering controls does not select by position. Container labels
 alone cannot supply missing clues: their bounded observation may omit relevant
 ancestors or long labels, so these cases remain model-driven.
+
+The older complete-context path does not recheck same-context duplicates on
+warm matches. The bounded-context checks above do not close that existing gap.
 
 A hit validates the target, **not the backend effect of clicking it**. Recipes
 are stored after successful action execution, not after later assertions.

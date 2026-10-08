@@ -112,6 +112,54 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         await context.close();
       }
     }
+    it("invalidates a warm grammar recipe before clicking when an exact-name competitor appears", async () => {
+      const text = "click the Checkout button";
+      const markup =
+        '<button id="checkout" onclick="window.clicked=true">Checkout</button>';
+      const cold = await fresh();
+      let entry: CacheEntry;
+      try {
+        await cold.page.evaluate(
+          `document.querySelector('#app').innerHTML=${JSON.stringify(markup)}`,
+        );
+        const candidates = await liveCandidates(cold.page, "click");
+        entry = stageEntry(
+          key,
+          cold.page.url,
+          "click",
+          text,
+          candidates.candidates[0]!,
+          candidates,
+        );
+      } finally {
+        await cold.context.close();
+      }
+      const { context, page } = await fresh();
+      try {
+        await page.evaluate(
+          `document.querySelector('#app').innerHTML=${JSON.stringify(markup + '<button id="exact">Checkout button</button>')}`,
+        );
+        const cache = memory(entry);
+        const invalidate = vi.spyOn(cache, "invalidate");
+        const model = resolver();
+        const result = await resolveTarget(page, model, {
+          operation: "click",
+          sentence: text,
+          cache,
+        });
+        expect(result.cache).toMatchObject({
+          outcome: "miss",
+          reason: "context_not_unique",
+          fallbackCalledModel: true,
+        });
+        expect(model.choose).toHaveBeenCalledOnce();
+        expect(invalidate).toHaveBeenCalledOnce();
+        expect(result.kind).toBe("unresolved");
+        expect(await page.evaluate("window.clicked || false")).toBe(false);
+      } finally {
+        await context.close();
+      }
+    });
     it("relocates in a fresh context and clicks exactly once without model confidence", async () => {
       const cache = memory(await record());
       const { context, page } = await fresh();

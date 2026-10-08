@@ -300,10 +300,10 @@ describe("bounded sentence context recipes", () => {
     ).toThrow("candidate_not_distinguishable");
   });
 
-  it("invalidates section-assisted experimental matcher entries", () => {
+  it.each([3, 4])("invalidates earlier matcher %s entries", (matcher) => {
     expect(
       matchEntry(
-        { ...stage(), matcher: 3 },
+        { ...stage(), matcher },
         key,
         route,
         "click",
@@ -312,5 +312,116 @@ describe("bounded sentence context recipes", () => {
         true,
       ),
     ).toEqual({ hit: false, reason: "matcher_mismatch" });
+  });
+});
+
+describe("contested control nouns", () => {
+  it.each(["button", "link"])(
+    "rejects competing %s names at admission and on warm matches",
+    (role) => {
+      const target = {
+        ...product("checkout", ""),
+        name: "Final Checkout",
+        role,
+        tag: role === "link" ? "a" : "button",
+        peers: [],
+      };
+      const text = `click the Final Checkout ${role}`;
+      const entry = stageEntry(
+        key,
+        route,
+        "click",
+        text,
+        target,
+        page([target]),
+      );
+      for (const disabled of [false, true]) {
+        const competitor = {
+          ...target,
+          ref: "competitor",
+          name: `Final Checkout ${role}`,
+          disabled,
+          signals: { id: "competitor", path: "body:0/button:1" },
+        };
+        const all = [target, competitor];
+        expect(() =>
+          stageEntry(key, route, "click", text, target, page(all)),
+        ).toThrow("candidate_not_distinguishable");
+        expect(matchEntry(entry, key, route, "click", text, all, true)).toEqual(
+          { hit: false, reason: "context_not_unique" },
+        );
+      }
+      const exact = {
+        ...target,
+        ref: "exact",
+        name: `Final Checkout ${role}`,
+        signals: { id: "exact", path: "body:0/button:1" },
+      };
+      const exactEntry = stageEntry(
+        key,
+        route,
+        "click",
+        text,
+        exact,
+        page([target, exact]),
+      );
+      expect(
+        matchEntry(
+          exactEntry,
+          key,
+          route,
+          "click",
+          text,
+          [target, exact],
+          true,
+        ),
+      ).toEqual({ hit: true, candidate: exact });
+    },
+  );
+
+  it.each([false, true])(
+    "checks contextual recipes with complete=%s",
+    (contextComplete) => {
+      const target = {
+        ...backpack,
+        signals: { ...backpack.signals, contextComplete },
+      };
+      const entry = stageEntry(
+        key,
+        route,
+        "click",
+        sentence,
+        target,
+        page([target]),
+      );
+      expect(entry.boundedContext === true).toBe(!contextComplete);
+      const help = { ...product("help", ""), name: "Help BUTTON" };
+      expect(
+        matchEntry(entry, key, route, "click", sentence, [target, help], true),
+      ).toEqual({ hit: false, reason: "context_not_unique" });
+      expect(
+        matchEntry(
+          entry,
+          key,
+          route,
+          "click",
+          sentence,
+          [target, { ...help, role: "link", tag: "a" }],
+          true,
+        ),
+      ).toEqual({ hit: true, candidate: target });
+    },
+  );
+
+  it("keeps noun-free sentences cacheable beside noun-bearing controls", () => {
+    const target = { ...product("checkout", ""), name: "Checkout", peers: [] };
+    const other = { ...product("other", ""), name: "Help button", peers: [] };
+    const text = "click Checkout";
+    const all = [target, other];
+    const entry = stageEntry(key, route, "click", text, target, page(all));
+    expect(matchEntry(entry, key, route, "click", text, all, true)).toEqual({
+      hit: true,
+      candidate: target,
+    });
   });
 });
