@@ -1,5 +1,12 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.12
+
+### Patch Changes
+
+- 175e84c: Improve sentence locator caching with role-aware target grammar and bounded product-context admission. Reject ambiguous or incomplete contextual evidence, repeat contextual uniqueness checks on hits, and invalidate older locator recipes with matcher5. Competing same-role control names prevent treating button/link as grammar at admission and on warm matches, with a context_not_unique miss. Current input bindings and live assertions are unchanged.
+- be6d287: Wait for temporarily disabled, hidden, or covered click targets instead of failing immediately. Safe pre-dispatch refusals and stale-target re-resolution share an eight-second action budget after initial resolution; actions that may already have started are never replayed. Report the last refusal and elapsed wait on expiry. Near-ties with no match can re-resolve after page changes within the existing target-wait grace without weakening selection thresholds.
+
 ## 0.1.0-alpha.11
 
 ### Minor Changes
