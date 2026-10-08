@@ -9,9 +9,14 @@ import {
   type CandidatePage,
   type Operation,
 } from "./page-protocol.js";
+import {
+  contestedControlNoun,
+  contextClues,
+  words,
+} from "./sentence-context.js";
 
 export const CACHE_FORMAT = 1;
-export const MATCHER_VERSION = 1;
+export const MATCHER_VERSION = 2;
 export type CacheMissReason =
   | "absent"
   /** The target has no signal that can safely find it again, such as an input button. */
@@ -29,6 +34,8 @@ export type CacheMissReason =
   | "strong_signal_conflict"
   | "low_score"
   | "near_tie"
+  /** Another current control also fits the sentence's description of the target. */
+  | "context_not_unique"
   | "candidate_set_incomplete"
   | "not_actionable";
 export interface CacheEntry {
@@ -128,53 +135,15 @@ export function pageKey(
     ]),
   );
 }
-function words(value: string): string[] {
-  return (
-    normalizeSignal(value)
-      .toLowerCase()
-      .match(/\p{L}[\p{L}\p{N}]*/gu) ?? []
-  );
-}
-function contextClues(sentence: string, label: string): string[] {
-  const labelWords = new Set(words(label));
-  const commands = new Set([
-    "add",
-    "buy",
-    "click",
-    "press",
-    "select",
-    "choose",
-    "open",
-    "tap",
-    "cart",
-    "item",
-    "product",
-    "the",
-    "and",
-    "with",
-    "for",
-    "type",
-    "fill",
-    "enter",
-    "write",
-    "field",
-    "input",
-    "box",
-  ]);
-  return words(sentence.replace(/\{\{[^{}]+\}\}/gu, " ")).filter(
-    (word) =>
-      Array.from(word).length >= 3 &&
-      !labelWords.has(word) &&
-      !commands.has(word),
-  );
-}
 function hasTargetContext(
   sentence: string,
-  label: string,
-  context: string,
+  candidate: Candidate,
+  candidates: readonly Candidate[],
 ): boolean {
-  const contextWords = new Set(words(context));
-  return contextClues(sentence, label).some((word) => contextWords.has(word));
+  const contextWords = new Set(words(candidate.peers[0] ?? ""));
+  return contextClues(sentence, candidate, candidates).some((word) =>
+    contextWords.has(word),
+  );
 }
 
 interface CacheIdentity {
@@ -238,11 +207,11 @@ function repeatedCandidate(
 }
 
 function contextualCandidate(request: StageRequest): boolean {
-  const { candidate, sentence } = request;
+  const { candidate, eligible, sentence } = request;
   if (!candidate.signals.contextComplete) return false;
   const peer = candidate.peers[0];
   if (!peer || isWeakPeer(peer)) return false;
-  return hasTargetContext(sentence, candidate.name, peer);
+  return hasTargetContext(sentence, candidate, eligible.candidates);
 }
 
 function hasStableSignal(candidate: Candidate): boolean {
@@ -256,7 +225,7 @@ function assertDistinguishable(request: StageRequest): void {
   if (contextualCandidate(request)) return;
   if (repeatedCandidate(candidate, eligible))
     throw new Error("candidate_not_distinguishable");
-  if (contextClues(sentence, candidate.name).length > 0)
+  if (contextClues(sentence, candidate, eligible.candidates).length > 0)
     throw new Error("candidate_not_distinguishable");
   if (!hasStableSignal(candidate))
     throw new Error("candidate_not_distinguishable");
@@ -506,12 +475,26 @@ function rankedResult(ranked: readonly RankedCandidate[]): MatchResult {
   return { hit: true, candidate: best.candidate };
 }
 
+function contextResult(
+  request: MatchRequest,
+  result: MatchResult,
+): MatchResult {
+  if (!result.hit) return result;
+  return contestedControlNoun(
+    request.sentence,
+    result.candidate,
+    request.candidates,
+  )
+    ? { hit: false, reason: "context_not_unique" }
+    : result;
+}
+
 function match(request: MatchRequest): MatchResult {
   const miss = entryMiss(request);
   if (miss) return { hit: false, reason: miss };
   if (!request.complete)
     return { hit: false, reason: "candidate_set_incomplete" };
-  return rankedResult(rankedCandidates(request));
+  return contextResult(request, rankedResult(rankedCandidates(request)));
 }
 
 export function matchEntry(...args: MatchEntryArguments): MatchResult {

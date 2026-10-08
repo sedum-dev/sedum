@@ -73,3 +73,27 @@ safely find it again, for example an `<input type="submit">` button whose
 name is its runtime value, so that step always uses the model. A run outside a
 Git checkout reports `bypassed (outside_git)` and prints a hint to run
 `git init`.
+
+## Which steps are cached
+
+Sedum stores a recipe only after the action succeeds, and only when safe
+signals can tell the target apart from every other current control. Words in
+the sentence beyond the target's own label are treated as context that the
+target must satisfy. A role noun next to the label is grammar, not context:
+`click the Checkout button` and `click the Docs link` can be cached like
+`click Checkout`. The noun stays context when it does not match the chosen
+control's role, when it is not beside the label (`click Add to cart for the
+Red Button`), or when another control of the same role has the noun in its
+name, such as a second button called `Checkout button`. If such a control
+appears after a recipe was saved, the next run reports
+`miss (context_not_unique)`, removes the recipe, and uses the model.
+
+## What a hit proves
+
+A hit means the current page has exactly one control that matches the saved
+recipe. It does not prove that clicking the control still has the same
+effect. A button can keep its label, ID, and surroundings while its handler or
+the server behind it changes. Sedum still runs every assertion after a cached
+action, so a changed outcome fails the test, but only after the action has
+happened. Keep assertions for outcomes that matter, especially after actions
+that cannot be undone.
