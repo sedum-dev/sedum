@@ -8,6 +8,28 @@ locator model call. An absent, changed, ambiguous, or invalid recipe is a cache
 miss; Sedum uses the normal resolver and reports the reason. A cache miss is not
 an assertion verdict or automatic target healing.
 
+## Repeated controls and sentence context
+
+The words `button` and `link` are treated as control grammar only immediately
+after the full displayed label and when they agree with the control's role.
+They remain meaningful context elsewhere, such as a product called “Button Camera.”
+
+Some buttons in long cards or rows can be cached even when their entire item
+text exceeds the context bound. This requires a unique ID, an untruncated,
+nonweak first peer, and every remaining sentence clue in that peer.
+Exactly one same-name/role control must satisfy that context;
+unknown or potentially truncated competitor context prevents admission. Those
+recipes repeat the uniqueness checks on every hit and retain keyed digests of
+their peers. Reordering controls does not select by position. Container labels
+alone cannot supply missing clues: their bounded observation may omit relevant
+ancestors or long labels, so these cases remain model-driven.
+
+A hit validates the target, **not the backend effect of clicking it**. Recipes
+are stored after successful action execution, not after later assertions.
+Assertions still run live, and a hit reports null model confidence rather than
+reusing a historical probability. Input buttons whose labels derive from their
+runtime values remain excluded. Changed matching rules invalidate older recipes.
+
 ## When it runs
 
 The local cache is enabled by default when `sedum run` starts inside a Git

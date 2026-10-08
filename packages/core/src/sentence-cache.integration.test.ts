@@ -14,7 +14,7 @@ import type { ResolverCandidates } from "./provider.js";
 const key = new Uint8Array(32).fill(23);
 const sentence = "click the Add to cart button for Sauce Labs Backpack";
 function card(id: string, name: string) {
-  return `<div><div><a href="#"><div>${name}</div></a><div>${"Description ".repeat(12)}</div><div>$ 10<button id="${id}" onclick="window.clicked=(window.clicked||0)+1">Add to cart</button></div></div></div>`;
+  return `<div><div><a href="#"><div>${name}</div></a><div>${"Description ".repeat(12)}</div><div>$ 10<button id="${id}" onclick="window.selected=this.id;window.clicked=(window.clicked||0)+1">Add to cart</button></div></div></div>`;
 }
 const html =
   card("backpack", "Sauce Labs Backpack") + card("onesie", "Sauce Labs Onesie");
@@ -131,6 +131,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         if (result.kind !== "resolved") throw new Error("Expected hit");
         await executeStep(page, { op: "click", target: result.target });
         expect(await page.evaluate("window.clicked")).toBe(1);
+        expect(await page.evaluate("window.selected")).toBe("backpack");
       } finally {
         await context.close();
       }
@@ -146,6 +147,10 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       [
         "context shifted",
         "document.querySelector('#app a div').textContent='Sauce Labs Onesie'",
+      ],
+      [
+        "case-variant duplicate",
+        `document.querySelector('#app').insertAdjacentHTML('beforeend', ${JSON.stringify(card("duplicate", "Sauce Labs Backpack").replace(">Add to cart</button>", ">ADD TO CART</button>"))})`,
       ],
     ])("%s falls back without clicking", async (_name, mutation) => {
       const cache = memory(await record());
@@ -190,6 +195,124 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
           retryable: true,
         });
         expect(await page.evaluate("window.clicked || 0")).toBe(0);
+      } finally {
+        await context.close();
+      }
+    });
+
+    it.each(["article", "li", "tr"])(
+      "keeps lossy named scope model-driven in %s",
+      async (tag) => {
+        const control = (id: string) =>
+          `<button id="${id}" onclick="window.selected=this.id">Approve</button>`;
+        const content = (id: string) =>
+          `<p>Alice</p><p>${"Long description ".repeat(12)}</p>${control(id)}`;
+        const item = (id: string) =>
+          tag === "tr"
+            ? `<table><tr><td>${content(id)}</td></tr></table>`
+            : `<${tag}>${content(id)}</${tag}>`;
+        const pending = `<section aria-label="Pending">${item("pending-alice")}</section>`;
+        const archived = `<section aria-label="Archived">${item("archived-alice")}</section>`;
+        const text = "click the Approve button for Alice in Pending";
+        const { context: coldContext, page: cold } = await fresh();
+        try {
+          await cold.evaluate(
+            `document.querySelector('#app').innerHTML=${JSON.stringify(archived + pending)}`,
+          );
+          const candidates = await liveCandidates(cold, "click");
+          const target = candidates.candidates.find(
+            (candidate) => candidate.signals.id === "pending-alice",
+          )!;
+          expect(target.signals.section).toContain("Pending");
+          expect(() =>
+            stageEntry(key, cold.url, "click", text, target, candidates),
+          ).toThrow("candidate_not_distinguishable");
+        } finally {
+          await coldContext.close();
+        }
+        const { context, page } = await fresh();
+        try {
+          await page.evaluate(
+            `document.querySelector('#app').innerHTML=${JSON.stringify(pending + archived)}`,
+          );
+          const model = resolver();
+          const miss = await resolveTarget(page, model, {
+            operation: "click",
+            sentence: text,
+            cache: memory(),
+          });
+          expect(miss.cache?.outcome).toBe("miss");
+          expect(model.choose).toHaveBeenCalled();
+          expect(miss.kind).toBe("unresolved");
+          expect(await page.evaluate("window.selected || null")).toBe(null);
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    it.each(["deep", "overlong"])(
+      "does not prove scope uniqueness from %s scanner omissions (ADV-001)",
+      async (kind) => {
+        const item = (id: string) =>
+          `<article><p>Alice</p><p>${"Description ".repeat(12)}</p><button id="${id}">Approve</button></article>`;
+        let competitor = item("other");
+        if (kind === "deep")
+          for (let index = 0; index < 6; index++)
+            competitor = `<section aria-label="box${index}">${competitor}</section>`;
+        const name =
+          kind === "overlong" ? `Pending ${"x".repeat(60)}` : "Pending";
+        const markup = `<section aria-label="Pending">${item("target")}</section><section aria-label="${name}">${competitor}</section>`;
+        const { context, page } = await fresh();
+        try {
+          await page.evaluate(
+            `document.querySelector('#app').innerHTML=${JSON.stringify(markup)}`,
+          );
+          const candidates = await liveCandidates(page, "click");
+          const target = candidates.candidates.find(
+            (candidate) => candidate.signals.id === "target",
+          )!;
+          const other = candidates.candidates.find(
+            (candidate) => candidate.signals.id === "other",
+          )!;
+          expect(target.signals.section).toContain("Pending");
+          expect(other.signals.section ?? "").not.toContain("Pending");
+          expect(() =>
+            stageEntry(
+              key,
+              page.url,
+              "click",
+              "click the Approve button for Alice in Pending",
+              target,
+              candidates,
+            ),
+          ).toThrow("candidate_not_distinguishable");
+        } finally {
+          await context.close();
+        }
+      },
+    );
+
+    it("does not confuse target identity with a changed handler's effect", async () => {
+      const cache = memory(await record());
+      const { context, page } = await fresh();
+      try {
+        await page.evaluate(
+          "document.querySelector('#backpack').onclick=()=>{window.selected='onesie'}",
+        );
+        const model = resolver();
+        const result = await resolveTarget(page, model, {
+          operation: "click",
+          sentence,
+          cache,
+        });
+        if (result.kind !== "resolved")
+          throw new Error("Expected identity hit");
+        expect(model.choose).not.toHaveBeenCalled();
+        await executeStep(page, { op: "click", target: result.target });
+        expect(await page.evaluate("window.selected === 'backpack'")).toBe(
+          false,
+        );
       } finally {
         await context.close();
       }
