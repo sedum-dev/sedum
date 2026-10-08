@@ -57,8 +57,8 @@ const docs = control("Docs", "docs", {
 const checkoutButton = control("Checkout button", "checkout-promo");
 
 describe("control nouns in sentence recipes", () => {
-  it("uses matcher version 2 for the warm control-noun guard", () => {
-    expect(MATCHER_VERSION).toBe(2);
+  it("uses a matcher version that includes the warm context guards", () => {
+    expect(MATCHER_VERSION).toBe(3);
   });
 
   it.each([

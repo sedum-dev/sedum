@@ -88,6 +88,18 @@ name, such as a second button called `Checkout button`. If such a control
 appears after a recipe was saved, the next run reports
 `miss (context_not_unique)`, removes the recipe, and uses the model.
 
+Repeated buttons such as `Add to cart` are cached by their item context. When
+the item's text is short enough to keep whole, one matching context word is
+enough. When it is longer, Sedum caches the step only if the button is an HTML
+`<button>` with an ID that is unique on the page, the item's title contains
+every context word in the sentence (`click Add to cart for Sauce Labs
+Backpack`, not just `Sauce Labs`), and no other button with the same name has
+a title that does. Each later run checks this again on the current page; a new
+card with the same title, even with a different ID or disabled, gives
+`miss (context_not_unique)`. Moving or reordering cards does not cause a miss.
+Rows of a native `<table>` carry no item context today, so their repeated
+buttons are not cached.
+
 ## What a hit proves
 
 A hit means the current page has exactly one control that matches the saved

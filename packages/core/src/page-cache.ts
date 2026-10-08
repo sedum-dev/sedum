@@ -10,13 +10,14 @@ import {
   type Operation,
 } from "./page-protocol.js";
 import {
+  boundedContextCandidate,
   contestedControlNoun,
   contextClues,
   words,
 } from "./sentence-context.js";
 
 export const CACHE_FORMAT = 1;
-export const MATCHER_VERSION = 2;
+export const MATCHER_VERSION = 3;
 export type CacheMissReason =
   | "absent"
   /** The target has no signal that can safely find it again, such as an input button. */
@@ -48,6 +49,8 @@ export interface CacheEntry {
   readonly editable: boolean;
   readonly disabled: boolean;
   readonly path: string;
+  /** Admitted by a unique ID and its own full item context; rechecked on every match. */
+  readonly boundedContext?: boolean;
   readonly digests: {
     readonly hook?: string;
     readonly id?: string;
@@ -100,6 +103,9 @@ const ENTRY_VALIDATORS = [
   (item: Record<string, unknown>) => typeof item.inputType === "string",
   (item: Record<string, unknown>) => typeof item.editable === "boolean",
   (item: Record<string, unknown>) => typeof item.disabled === "boolean",
+  (item: Record<string, unknown>) =>
+    item.boundedContext === undefined ||
+    typeof item.boundedContext === "boolean",
   (item: Record<string, unknown>) => validDigests(item.digests),
 ] as const;
 
@@ -220,15 +226,25 @@ function hasStableSignal(candidate: Candidate): boolean {
   return !!candidate.signals.name && !!candidate.name;
 }
 
-function assertDistinguishable(request: StageRequest): void {
+function unqualifiedIdentity(request: StageRequest): boolean {
   const { candidate, eligible, sentence } = request;
-  if (contextualCandidate(request)) return;
-  if (repeatedCandidate(candidate, eligible))
-    throw new Error("candidate_not_distinguishable");
+  if (repeatedCandidate(candidate, eligible)) return false;
   if (contextClues(sentence, candidate, eligible.candidates).length > 0)
-    throw new Error("candidate_not_distinguishable");
-  if (!hasStableSignal(candidate))
-    throw new Error("candidate_not_distinguishable");
+    return false;
+  return hasStableSignal(candidate);
+}
+
+function boundedAdmission(request: StageRequest): boolean {
+  if (contextualCandidate(request)) return false;
+  const { candidate, eligible, sentence } = request;
+  return boundedContextCandidate(candidate, eligible.candidates, sentence);
+}
+
+function assertDistinguishable(request: StageRequest): void {
+  if (contextualCandidate(request)) return;
+  if (boundedAdmission(request)) return;
+  if (unqualifiedIdentity(request)) return;
+  throw new Error("candidate_not_distinguishable");
 }
 
 function digestField(
@@ -252,6 +268,7 @@ function createEntry(request: StageRequest): CacheEntry {
     editable: candidate.editable,
     disabled: candidate.disabled,
     path: signals.path,
+    ...(boundedAdmission(request) ? { boundedContext: true } : {}),
     digests: {
       ...digestField("hook", signals.hook, key),
       ...digestField("id", signals.id, key),
@@ -475,18 +492,21 @@ function rankedResult(ranked: readonly RankedCandidate[]): MatchResult {
   return { hit: true, candidate: best.candidate };
 }
 
+function contextUnique(request: MatchRequest, candidate: Candidate): boolean {
+  const { candidates, entry, sentence } = request;
+  if (contestedControlNoun(sentence, candidate, candidates)) return false;
+  if (!entry?.boundedContext) return true;
+  return boundedContextCandidate(candidate, candidates, sentence);
+}
+
 function contextResult(
   request: MatchRequest,
   result: MatchResult,
 ): MatchResult {
   if (!result.hit) return result;
-  return contestedControlNoun(
-    request.sentence,
-    result.candidate,
-    request.candidates,
-  )
-    ? { hit: false, reason: "context_not_unique" }
-    : result;
+  return contextUnique(request, result.candidate)
+    ? result
+    : { hit: false, reason: "context_not_unique" };
 }
 
 function match(request: MatchRequest): MatchResult {

@@ -1,4 +1,4 @@
-import type { Candidate } from "./page-protocol.js";
+import { isWeakPeer, type Candidate } from "./page-protocol.js";
 
 type Control = Pick<Candidate, "ref" | "name" | "role">;
 
@@ -127,4 +127,46 @@ export function contestedControlNoun(
   const tokens = sentenceWords(sentence);
   const index = roleNounIndex(tokens, control);
   return index >= 0 && claimedByAnother(tokens[index]!, control, candidates);
+}
+
+function sameControl(left: Candidate, right: Candidate): boolean {
+  if (left.role !== right.role) return false;
+  return (
+    left.name.trim().toLocaleLowerCase() ===
+    right.name.trim().toLocaleLowerCase()
+  );
+}
+
+/** Every residual sentence clue occurs in the candidate's own first peer. */
+function fullContextMatch(
+  sentence: string,
+  candidate: Candidate,
+  candidates: readonly Candidate[],
+): boolean {
+  const peer = candidate.peers[0];
+  if (!peer || isWeakPeer(peer)) return false;
+  const clues = contextClues(sentence, candidate, candidates);
+  const context = new Set(words(peer));
+  return clues.length > 0 && clues.every((clue) => context.has(clue));
+}
+
+/** A repeated HTML button whose item context is bounded rather than complete
+ * may still be told apart: its ID is unique in the complete set, its first
+ * peer holds every residual clue, and no other control with the same name and
+ * role satisfies those clues, whatever its ID or state. */
+export function boundedContextCandidate(
+  candidate: Candidate,
+  candidates: readonly Candidate[],
+  sentence: string,
+): boolean {
+  const id = candidate.signals.id;
+  if (candidate.tag !== "button" || !id) return false;
+  if (!fullContextMatch(sentence, candidate, candidates)) return false;
+  const sameId = candidates.filter((other) => other.signals.id === id);
+  const sameContext = candidates.filter(
+    (other) =>
+      sameControl(other, candidate) &&
+      fullContextMatch(sentence, other, candidates),
+  );
+  return sameId.length === 1 && sameContext.length === 1;
 }
