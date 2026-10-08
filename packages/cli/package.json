@@ -1,6 +1,6 @@
 {
   "name": "sedum-cli",
-  "version": "0.1.0-alpha.11",
+  "version": "0.1.0-alpha.12",
   "description": "Plain-English browser tests on Playwright. Write steps as sentences, keep TypeScript, and run the suite on every pull request.",
   "keywords": [
     "playwright",
