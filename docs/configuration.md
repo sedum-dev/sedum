@@ -88,6 +88,20 @@ to TypeSafe and the model to `jev-latest`; the API key is read from
 Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
 from `sedum.config.yaml`.
 
+For **Vercel AI Gateway**, keep `provider.name: typesafe` and use:
+
+```dotenv
+TYPESAFE_BASE_URL=https://ai-gateway.vercel.sh/typesafe
+TYPESAFE_DEFAULT_MODEL=typesafe-ai/jev
+TYPESAFE_API_KEY=your_vercel_ai_gateway_key
+```
+
+An explicit `provider.model` overrides the environment model. Use the gateway's
+model ID, not the direct `jev-latest` alias. The key must belong to the gateway;
+Sedum does not automatically read `AI_GATEWAY_API_KEY`. See
+[gateway setup and supported decision models](provider-typesafe.md#vercel-ai-gateway)
+for SDK usage, billing, and compatibility requirements.
+
 To use Cloudflare Workers AI Clef for text decisions, configure one of the two
 supported models:
 

@@ -77,6 +77,136 @@ afterEach(() => {
 });
 
 describe("TypeSafeAdapter wire and lifecycle", () => {
+  it.each(["typesafe-ai/jev", "other/decision-model"])(
+    "routes %s through Vercel with gateway credentials and reported costs",
+    async (model) => {
+      const requests: Request[] = [];
+      const replies = [choiceReply, judgeReply];
+      const adapter = new TypeSafeAdapter({
+        apiKey: "gateway-key",
+        baseURL: "https://ai-gateway.vercel.sh/typesafe",
+        model,
+        fetch: async (input, init) => {
+          requests.push(new Request(input, init));
+          return json({
+            ...replies.shift(),
+            model,
+            provider_metadata: { gateway: { cost: "0.00001155" } },
+          });
+        },
+      });
+      const selected = await adapter.choose("Buy", offered);
+      const judged = await adapter.holds("Bought", {
+        complete: true,
+        text: "Bought",
+      });
+      expect(selected.selection).toEqual({ kind: "candidate", id: "a" });
+      expect(selected.probabilities).toEqual({ a: 0.8, none: 0.2 });
+      expect(judged).toMatchObject({ holds: 0.9, contradicted: 0.8 });
+      for (const call of [selected.call, judged.call]) {
+        expect(call).toMatchObject({
+          requestedModel: model,
+          model,
+          rate: null,
+          successfulResponseCostUsd: 0.00001155,
+          totalCostUsd: 0.00001155,
+        });
+      }
+      expect(requests).toHaveLength(2);
+      for (const request of requests) {
+        expect(request.url).toBe(
+          "https://ai-gateway.vercel.sh/typesafe/v1/systemone",
+        );
+        expect(request.headers.get("authorization")).toBe("Bearer gateway-key");
+        expect(await request.json()).toMatchObject({ model });
+      }
+    },
+  );
+
+  it.each([
+    [undefined, null],
+    [null, null],
+    ["", null],
+    [" ", null],
+    ["invalid", null],
+    ["Infinity", null],
+    ["-1", null],
+    ["0x10", null],
+    ["0b10", null],
+    ["1e2", null],
+    [{}, null],
+    ["0", 0],
+    ["0.00001155", 0.00001155],
+  ])(
+    "handles optional gateway cost %j without inventing a rate",
+    async (cost, expected) => {
+      const transport = fake([
+        json({}, 529),
+        json({
+          ...choiceReply,
+          provider_metadata: { gateway: { cost } },
+        }),
+      ]);
+      const adapter = new TypeSafeAdapter({
+        apiKey: "gateway-key",
+        baseURL: "https://ai-gateway.vercel.sh/typesafe",
+        model: "typesafe-ai/jev",
+        fetch: transport.fetch,
+        backoffInitialMs: 1,
+      });
+      const selected = await adapter.choose("Buy", offered);
+      expect(selected.call).toMatchObject({
+        attempts: 2,
+        rate: null,
+        successfulResponseCostUsd: expected,
+        totalCostUsd: null,
+      });
+    },
+  );
+
+  it("keeps direct Jev pricing when gateway metadata is also present", async () => {
+    const transport = fake([
+      json({
+        ...choiceReply,
+        provider_metadata: { gateway: { cost: "16" } },
+      }),
+    ]);
+    const adapter = new TypeSafeAdapter({
+      apiKey: "direct-key",
+      baseURL: "https://api.typesafe.ai",
+      model: "jev-latest",
+      fetch: transport.fetch,
+    });
+    const selected = await adapter.choose("Buy", offered);
+    expect(selected.call.successfulResponseCostUsd).toBeCloseTo(0.0000042, 10);
+    expect(selected.call.rate).not.toBeNull();
+  });
+
+  it("rejects gateway choices without probabilities", async () => {
+    const transport = fake([
+      json({
+        ...choiceReply,
+        answers: {
+          target: {
+            type: "choice",
+            choice: "a",
+            probabilities: {},
+            confidence: 0,
+          },
+        },
+      }),
+    ]);
+    const adapter = new TypeSafeAdapter({
+      apiKey: "gateway-key",
+      baseURL: "https://ai-gateway.vercel.sh/typesafe",
+      model: "typesafe-ai/jev",
+      fetch: transport.fetch,
+    });
+    await expect(adapter.choose("Buy", offered)).rejects.toMatchObject({
+      code: "invalid-response",
+    });
+  });
+
   it("uses an explicit compatible base URL and model", async () => {
     const transport = fake([json(choiceReply)]);
     const adapter = new TypeSafeAdapter({

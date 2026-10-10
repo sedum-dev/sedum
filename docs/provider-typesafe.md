@@ -57,6 +57,73 @@ the TypeSafe SDK's `/v1/systemone` wire contract; an OpenAI-compatible chat API
 is not sufficient. The configured model is included in provider receipts and
 is used to separate classification cache entries.
 
+## Vercel AI Gateway
+
+Use Vercel's [TypeSafe-compatible API](https://vercel.com/docs/ai-gateway/sdks-and-apis/typesafe)
+with the existing `typesafe` provider. In the project-root `.env`, set:
+
+```dotenv
+TYPESAFE_BASE_URL=https://ai-gateway.vercel.sh/typesafe
+TYPESAFE_DEFAULT_MODEL=typesafe-ai/jev
+TYPESAFE_API_KEY=your_vercel_ai_gateway_key
+```
+
+The key is a **Vercel AI Gateway key**, not a direct TypeSafe key. If your CI
+already supplies `AI_GATEWAY_API_KEY`, map it explicitly before running Sedum:
+
+```sh
+export TYPESAFE_API_KEY="${AI_GATEWAY_API_KEY:?Set AI_GATEWAY_API_KEY}"
+export TYPESAFE_BASE_URL=https://ai-gateway.vercel.sh/typesafe
+export TYPESAFE_DEFAULT_MODEL=typesafe-ai/jev
+npx sedum validate
+npx sedum run
+```
+
+Plain `validate` is offline; `run`, `doctor`, and `validate --online` can make
+billable requests. Sedum does not automatically read `AI_GATEWAY_API_KEY` or
+switch endpoints when a gateway key is present. Set all three values together
+so credentials go to the intended service. Do not commit keys.
+
+Keep `provider.name: typesafe` (the default). If `provider.model` is set in
+`sedum.config.yaml`, it overrides `TYPESAFE_DEFAULT_MODEL`; remove it or set it
+to `typesafe-ai/jev`. Sedum calls `/typesafe/v1/systemone`, not the gateway's
+Chat Completions or `/v1/evaluate` endpoint.
+
+For programmatic use:
+
+```typescript
+import { TypeSafeAdapter } from "@sedum-dev/provider-typesafe";
+
+const apiKey = process.env.AI_GATEWAY_API_KEY?.trim();
+if (!apiKey) throw new Error("Set AI_GATEWAY_API_KEY before using Vercel.");
+
+const provider = new TypeSafeAdapter({
+  apiKey,
+  baseURL: "https://ai-gateway.vercel.sh/typesafe",
+  model: "typesafe-ai/jev",
+});
+```
+
+Other [decision models](https://vercel.com/ai-gateway/models?modality=decision)
+can use the same adapter with their gateway model ID, provided they support
+the System One `choice` and `noul` contract. Model IDs are passed through,
+not restricted to Jev. Other gateways work the same way if they expose that
+contract. This does not route the direct Cloudflare `clef` provider through
+Vercel or imply that Vercel offers Clef.
+
+Sedum requires probabilities for every offered choice. Language-model
+fallbacks returning `probabilities: {}` and `confidence: 0` are rejected;
+Sedum cannot apply its confidence thresholds to missing probabilities.
+
+Gateway receipts retain the requested and returned model IDs and token usage.
+When the service supplies Vercel-style `provider_metadata.gateway.cost`, Sedum
+records that USD amount, including zero, without applying direct Jev pricing.
+Missing or invalid cost metadata leaves cost unknown. After a potentially
+billable retry, the successful response cost is retained but total cost stays
+unknown. Receipt provider identity remains `typesafe`, identifying the adapter.
+
+## Request and response handling
+
 The Resolver sends a sentence and bounded page candidate descriptions: opaque run-local ID, tag, role, accessible name, up to two peer excerpts, and editable/disabled flags. The Judge sends a claim and a bounded page digest. Allowed text is sent **as-is** to TypeSafe. It may contain customer or secret-looking content; the adapter does not sanitize it. The request builder does not copy URL, title, selectors, raw DOM, hidden text, cookies, or editable field values from observation objects. Callers must supply a digest produced by the bounded page extraction protocol.
 
 The adapter returns probabilities for every offered option, two independent Judge scores, reported token usage, and an estimated cost for the successful response. Its rate is checked into the source with a dated link. After retries, total cost is unknown because a failed attempt may have consumed tokens without reporting usage.

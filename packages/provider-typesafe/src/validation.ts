@@ -116,6 +116,22 @@ export interface CallMeta {
   readonly queueWaitMs?: number;
 }
 
+/** Optional gateway billing metadata is not part of the decision contract. */
+function gatewayCost(reply: Record<string, unknown>): number | null {
+  try {
+    const gateway = record(record(reply.provider_metadata).gateway);
+    if (
+      typeof gateway.cost !== "string" ||
+      !/^\d+(?:\.\d+)?$/u.test(gateway.cost)
+    )
+      return null;
+    const cost = Number(gateway.cost);
+    return Number.isFinite(cost) && cost >= 0 ? cost : null;
+  } catch {
+    return null;
+  }
+}
+
 export function validateCall(
   response: unknown,
   metaOrAttempts: CallMeta | number,
@@ -142,7 +158,7 @@ export function validateCall(
   const rate = estimateJevCost && /^jev(?:-|$)/.test(reply.model) ? RATE : null;
   const cost =
     rate === null
-      ? null
+      ? gatewayCost(reply)
       : (tokens.inputTokens * rate.inputUsdPerMillion +
           tokens.outputTokens * rate.outputUsdPerMillion) /
         1_000_000;
