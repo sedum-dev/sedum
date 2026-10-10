@@ -7,15 +7,6 @@ YAML goal tests populate optional `tests[].goal` with complete, secret-redacted
 HTML reports display these above the replay and steps. Authored-step tests omit
 this field. Existing result files without it remain supported.
 
-TypeScript `ai.goal` is represented on its aggregate action step by optional
-`step.goal` metadata. Its `completion` is `"planner"`, with the redacted goal
-`text`, `actions`, `requests`, completion `reason`, and optional `dataSeed`.
-This explicitly means accepted planner `DONE`, not independent verification.
-It carries no Judge scores and must not be displayed as “verified.” A goal-only
-TypeScript test can therefore pass with planner completion; any subsequent
-`ai("verify ...")` or failed code assertion is a separate step and determines
-the test outcome normally.
-
 YAML goal tests publish an action step after each dispatched click or type, then an
 aggregate step (`kind: verify`, `operation: goal`) when the bounded loop ends.
 Action steps use data-binding names instead of typed values and include target
@@ -28,10 +19,7 @@ omits page metadata, screenshots and replay frames. Goal failures are not
 automatically restarted by `--retries`.
 
 That required, independent, unflagged verification policy applies to YAML goal
-tests and the exported `runGoal` API. It is unchanged by TypeScript
-`ai.goal`'s planner-completion contract. For TypeScript, entering a goal also
-disables automatic whole-test retries for every later failure in that attempt,
-including a successful goal followed by failed verification or cleanup.
+tests and the exported `runGoal` API.
 
 `@sedum-dev/core/run-result.schema.json` is the Draft 2020-12 schema generated from the same Zod definition used to validate every published snapshot. The schema ID is `https://sedum.dev/schemas/run-result/v1`. The v1 schema may still change incompatibly before its first published release. After v1 is published, incompatible changes require a new major schema version. Consumers should reject unknown major versions.
 
