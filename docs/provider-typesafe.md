@@ -57,6 +57,26 @@ the TypeSafe SDK's `/v1/systemone` wire contract; an OpenAI-compatible chat API
 is not sufficient. The configured model is included in provider receipts and
 is used to separate classification cache entries.
 
+For OpenRouter, the CLI accepts `provider: { name: openrouter, model: typesafe/jev-1.13 }`
+with `OPENROUTER_API_KEY` (or `OPEN_ROUTER_API_KEY`); see
+[gateway configuration](configuration.md#openrouter-decision-models). Programmatic
+callers use the same adapter with an explicit key and endpoint:
+
+```ts
+const provider = new TypeSafeAdapter({
+  apiKey: process.env.OPENROUTER_API_KEY ?? "",
+  baseURL: "https://openrouter.ai/api",
+  model: "typesafe/jev-1.13", // or cloudflare/clef-flash
+});
+```
+
+The SDK appends `/v1/systemone`. Use a gateway key, not a direct TypeSafe key.
+Gateway receipts use reported `usage.cost` when present, otherwise unknown
+cost. No direct Jev rate is applied, and retries (including 429s) make the total
+unknown. OpenRouter calls are identified as `openrouter`, regardless of the
+upstream model author. The gateway and its upstream provider receive the
+same bounded inputs described here; review both services' data policies.
+
 The Resolver sends a sentence and bounded page candidate descriptions: opaque run-local ID, tag, role, accessible name, up to two peer excerpts, and editable/disabled flags. The Judge sends a claim and a bounded page digest. Allowed text is sent **as-is** to TypeSafe. It may contain customer or secret-looking content; the adapter does not sanitize it. The request builder does not copy URL, title, selectors, raw DOM, hidden text, cookies, or editable field values from observation objects. Callers must supply a digest produced by the bounded page extraction protocol.
 
 The adapter returns probabilities for every offered option, two independent Judge scores, reported token usage, and an estimated cost for the successful response. Its rate is checked into the source with a dated link. After retries, total cost is unknown because a failed attempt may have consumed tokens without reporting usage.

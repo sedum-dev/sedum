@@ -14,7 +14,11 @@ import {
   ProjectConfigError,
   type ConfigDiagnostic,
 } from "./config.js";
-import { configDiagnostic, type CliDiagnostic } from "./diagnostics.js";
+import {
+  configDiagnostic,
+  type CliDiagnostic,
+  type ProviderName,
+} from "./diagnostics.js";
 import { loadProjectContext } from "./project-context.js";
 import { createCliProvider } from "./provider-factory.js";
 
@@ -25,7 +29,7 @@ export type ClassificationProviderFactory = (options: {
   readonly apiKey?: string;
   readonly baseURL: string;
   readonly model: string;
-  readonly providerName?: "typesafe" | "clef";
+  readonly providerName?: ProviderName;
   readonly accountId?: string;
 }) => ClassificationProvider | Promise<ClassificationProvider>;
 
@@ -65,7 +69,7 @@ function emptyProjectProblem(
 const missingKey: CliDiagnostic = {
   code: "missing_key",
   message: "`sedum validate --online` needs a configured model provider.",
-  fix: "Set the selected provider's credentials (TYPESAFE_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN/CLOUDFLARE_API_TOKEN) and rerun; otherwise omit --online.",
+  fix: "Set the selected provider's credentials (TYPESAFE_API_KEY, OPENROUTER_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN/CLOUDFLARE_API_TOKEN) and rerun; otherwise omit --online.",
 };
 
 async function onlineProvider(
@@ -82,7 +86,7 @@ async function onlineProvider(
         ...(config.apiKey ? { apiKey: config.apiKey } : {}),
         baseURL: config.providerBaseUrl,
         model: config.providerModel,
-        ...(config.providerName === "clef"
+        ...(config.providerName !== "typesafe"
           ? {
               providerName: config.providerName,
               ...(config.cloudflareAccountId

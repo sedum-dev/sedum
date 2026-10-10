@@ -305,7 +305,7 @@ export async function runCli(
     )
     .addHelpText(
       "after",
-      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and set TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible provider).\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n",
+      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and configure the selected provider's credentials. TypeSafe uses TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible gateway); OpenRouter uses OPENROUTER_API_KEY; Clef uses CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN.\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n",
     )
     .action(
       async (

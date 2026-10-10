@@ -88,6 +88,43 @@ to TypeSafe and the model to `jev-latest`; the API key is read from
 Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
 from `sedum.config.yaml`.
 
+### OpenRouter decision models
+
+To route Jev or another compatible System One model through OpenRouter:
+
+```yaml
+provider:
+  name: openrouter
+  model: typesafe/jev-1.13 # default; also accepts cloudflare/clef or cloudflare/clef-flash
+```
+
+Set `OPENROUTER_API_KEY` in your shell or project-root `.env`. The existing
+`OPEN_ROUTER_API_KEY` spelling is also accepted. Process values override `.env`
+across both names; within one source, `OPENROUTER_API_KEY` wins. Neither name
+may appear in config variables, and neither is forwarded to test variables.
+The same key can serve the opt-in vision fallback, but selecting OpenRouter
+does not enable vision.
+
+Sedum uses OpenRouter's [TypeSafe-compatible System One endpoint](https://openrouter.ai/docs/guides/community/typesafe-sdk)
+at `https://openrouter.ai/api/v1/systemone`, not chat completions. Fully qualified
+model IDs are passed unchanged. Other decision models must support Sedum's
+Choice and Noul questions and response distributions; appearing in the
+[decision rankings](https://openrouter.ai/rankings/decisions) is not a guarantee
+of equivalent accuracy or limits. Direct Cloudflare Clef remains a separate provider.
+
+This selection ignores `TYPESAFE_*` settings, including credentials. It applies
+to runs, goal planning, online validation, and affected-test selection. Cached
+classifications are separated by provider and requested model. `sedum doctor`
+sends a small, potentially billable request to the selected model.
+
+Receipts identify `openrouter` and retain the returned model, token usage, and
+`usage.cost`. Missing cost is unknown, not zero; direct Jev rates are never
+applied to gateway calls. After any gateway retry, total cost remains unknown.
+Other gateways can use the `TYPESAFE_BASE_URL` configuration above if they
+implement the same System One protocol; a chat-only gateway is insufficient.
+
+### Direct Cloudflare Clef
+
 To use Cloudflare Workers AI Clef for text decisions, configure one of the two
 supported models:
 

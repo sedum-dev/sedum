@@ -77,6 +77,90 @@ afterEach(() => {
 });
 
 describe("TypeSafeAdapter wire and lifecycle", () => {
+  it.each(["typesafe/jev-1.13", "cloudflare/clef-flash"])(
+    "uses OpenRouter System One for %s and preserves reported cost",
+    async (model) => {
+      const fetch: Fetch = async (input, init) => {
+        expect(String(input)).toBe("https://openrouter.ai/api/v1/systemone");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer gateway-key",
+        );
+        expect(JSON.parse(String(init?.body)).model).toBe(model);
+        return json({
+          ...choiceReply,
+          model,
+          provider: "Upstream provider",
+          usage: { input_tokens: 100, output_tokens: 7, cost: 0.000031 },
+        });
+      };
+      const result = await new TypeSafeAdapter({
+        apiKey: "gateway-key",
+        baseURL: "https://openrouter.ai/api",
+        model,
+        fetch,
+      }).choose("Buy", offered);
+      expect(result.selection).toEqual({ kind: "candidate", id: "a" });
+      expect(result.call).toMatchObject({
+        provider: "openrouter",
+        model,
+        requestedModel: model,
+        usage: { inputTokens: 100, outputTokens: 7 },
+        rate: null,
+        successfulResponseCostUsd: 0.000031,
+        totalCostUsd: 0.000031,
+      });
+    },
+  );
+
+  it("keeps gateway retry totals unknown, including after a 429", async () => {
+    const transport = fake([
+      json({ error: "rate" }, 429),
+      json({ ...judgeReply, usage: { ...judgeReply.usage, cost: 0.000017 } }),
+    ]);
+    const result = await new TypeSafeAdapter({
+      apiKey: "gateway-key",
+      baseURL: "https://openrouter.ai/api",
+      model: "cloudflare/clef",
+      fetch: transport.fetch,
+      backoffInitialMs: 1,
+      random: () => 0,
+    }).holds("Bought", { complete: true, text: "Bought" });
+    expect(result).toMatchObject({
+      holds: 0.9,
+      contradicted: 0.8,
+      call: {
+        provider: "openrouter",
+        attempts: 2,
+        rateLimited: true,
+        rate: null,
+        successfulResponseCostUsd: 0.000017,
+        totalCostUsd: null,
+      },
+    });
+  });
+
+  it.each([0, undefined, null, -1, "0.1"])(
+    "validates gateway usage.cost = %s without guessing a direct Jev rate",
+    async (cost) => {
+      const transport = fake([
+        json({ ...judgeReply, usage: { ...judgeReply.usage, cost } }),
+      ]);
+      const result = new TypeSafeAdapter({
+        apiKey: "gateway-key",
+        baseURL: "https://openrouter.ai/api",
+        fetch: transport.fetch,
+      }).holds("Bought", { complete: true, text: "Bought" });
+      if (cost === -1 || typeof cost === "string")
+        await expect(result).rejects.toMatchObject({
+          code: "invalid-response",
+        });
+      else
+        await expect(result).resolves.toMatchObject({
+          call: { rate: null, totalCostUsd: cost ?? null },
+        });
+    },
+  );
+
   it("uses an explicit compatible base URL and model", async () => {
     const transport = fake([json(choiceReply)]);
     const adapter = new TypeSafeAdapter({
@@ -225,18 +309,18 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
   });
 
   it.each([
-    [401, "authentication", "TypeSafe authentication failed."],
-    [403, "authentication", "TypeSafe authentication failed."],
+    [401, "authentication", "Model provider authentication failed."],
+    [403, "authentication", "Model provider authentication failed."],
     [
       402,
       "configuration",
-      "The TypeSafe account has no available API credits.",
+      "The model provider account has no available API credits.",
     ],
-    [400, "invalid-input", "TypeSafe rejected the provider request."],
-    [499, "invalid-input", "TypeSafe rejected the provider request."],
-    [500, "connection", "TypeSafe could not complete the request."],
-    [528, "connection", "TypeSafe could not complete the request."],
-    [530, "connection", "TypeSafe could not complete the request."],
+    [400, "invalid-input", "The model provider rejected the request."],
+    [499, "invalid-input", "The model provider rejected the request."],
+    [500, "connection", "The model provider could not complete the request."],
+    [528, "connection", "The model provider could not complete the request."],
+    [530, "connection", "The model provider could not complete the request."],
   ] as const)(
     "converts HTTP %i to the stable %s provider error",
     async (status, code, message) => {
@@ -264,7 +348,7 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
         .catch((caught: unknown) => caught);
       expect(error).toMatchObject({
         code: "invalid-input",
-        message: "TypeSafe rejected the provider request.",
+        message: "The model provider rejected the request.",
         attempts: 1,
       });
       expect(JSON.stringify(error)).not.toContain(`secret-${status}`);
@@ -329,7 +413,7 @@ describe("TypeSafeAdapter wire and lifecycle", () => {
       ),
     ).rejects.toMatchObject({
       code: "configuration",
-      message: "The TypeSafe account has no available API credits.",
+      message: "The model provider account has no available API credits.",
       attempts: 1,
     });
     const bad = fake([
