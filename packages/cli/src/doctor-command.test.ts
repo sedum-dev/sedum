@@ -256,6 +256,60 @@ describe("sedum doctor", () => {
     expect(JSON.stringify(result)).not.toContain("SECRET-KEY");
   });
 
+  it.each([200, 401])(
+    "probes the selected OpenRouter model and gives gateway-specific guidance (HTTP %i)",
+    async (status) => {
+      const config = {
+        ...(await fixture()),
+        providerName: "openrouter" as const,
+        providerBaseUrl: "https://openrouter.ai/api",
+        providerModel: "cloudflare/clef-flash",
+        apiKey: "gateway-token",
+      };
+      const fetch = vi.fn(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          expect(String(input)).toBe("https://openrouter.ai/api/v1/systemone");
+          expect(JSON.parse(String(init?.body)).model).toBe(
+            "cloudflare/clef-flash",
+          );
+          expect(new Headers(init?.headers).get("authorization")).toBe(
+            "Bearer gateway-token",
+          );
+          return Response.json(
+            status === 200
+              ? {
+                  model: "cloudflare/clef-flash",
+                  answers: {
+                    ready: {
+                      type: "choice",
+                      choice: "ready",
+                      probabilities: { ready: 0.9, other: 0.1 },
+                    },
+                  },
+                  usage: { input_tokens: 20, output_tokens: 2, cost: 0.00001 },
+                }
+              : { error: "private error body" },
+            { status },
+          );
+        },
+      );
+      vi.stubGlobal("fetch", fetch);
+      const result = await executeDoctorCommand(config.projectRoot, {
+        loadConfig: async () => config,
+        browser: () => true,
+        network: async () => true,
+        output: async () => undefined,
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const auth = result.checks.find((check) => check.id === "api_auth");
+      expect(auth?.status).toBe(status === 200 ? "pass" : "fail");
+      if (status === 401) expect(auth?.fix).toContain("OPENROUTER_API_KEY");
+      expect(JSON.stringify(result)).not.toMatch(
+        /TYPESAFE_API_KEY|gateway-token|private error body/,
+      );
+    },
+  );
+
   it("uses Cloudflare's fixed route and validates one billed Clef inference", async () => {
     const base = await fixture();
     const config = {

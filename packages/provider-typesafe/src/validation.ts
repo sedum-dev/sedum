@@ -107,9 +107,10 @@ export function validateNoul(response: unknown): number {
 
 /** How a logical call reached its reply, as recorded by the adapter. */
 export interface CallMeta {
+  readonly provider?: string;
   /** HTTP requests sent, including rate-limited ones. */
   readonly attempts: number;
-  /** Requests that could have been billed; a 429 is not. */
+  /** Requests that could have been billed, according to the service contract. */
   readonly billableAttempts?: number;
   readonly rateLimited?: boolean;
   readonly rateLimitWaitMs?: number;
@@ -142,12 +143,12 @@ export function validateCall(
   const rate = estimateJevCost && /^jev(?:-|$)/.test(reply.model) ? RATE : null;
   const cost =
     rate === null
-      ? null
+      ? reportedCost(usage.cost)
       : (tokens.inputTokens * rate.inputUsdPerMillion +
           tokens.outputTokens * rate.outputUsdPerMillion) /
         1_000_000;
   return {
-    provider: "typesafe",
+    provider: meta.provider ?? "typesafe",
     requestedModel,
     model: reply.model,
     attempts,
@@ -161,6 +162,17 @@ export function validateCall(
       : {}),
     ...(meta.queueWaitMs ? { queueWaitMs: Math.round(meta.queueWaitMs) } : {}),
   };
+}
+
+function reportedCost(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  const cost = typeof value === "number" ? value : NaN;
+  if (!Number.isFinite(cost) || cost < 0)
+    throw new ProviderError(
+      "invalid-response",
+      "The provider returned invalid usage cost.",
+    );
+  return cost;
 }
 
 export function answersOf(response: unknown): Record<string, unknown> {

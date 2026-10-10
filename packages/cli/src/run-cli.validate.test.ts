@@ -1,12 +1,18 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { MODEL_CHOICES, ProviderError } from "@sedum-dev/core";
+import {
+  FileClassificationCache,
+  MODEL_CHOICES,
+  ProviderError,
+} from "@sedum-dev/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCli } from "./run-cli.js";
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   for (const root of roots.splice(0))
     await rm(root, { recursive: true, force: true });
 });
@@ -219,7 +225,7 @@ test("optional screen", async ({ ai }) => {
     expect(output.exitCode).toBe(3);
     expect(output.stdout).toBe("");
     expect(output.stderr).toBe(
-      "`sedum validate --online` needs a configured model provider.\nFix: Set the selected provider's credentials (TYPESAFE_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN/CLOUDFLARE_API_TOKEN) and rerun; otherwise omit --online.\n",
+      "`sedum validate --online` needs a configured model provider.\nFix: Set the selected provider's credentials (TYPESAFE_API_KEY, OPENROUTER_API_KEY, or CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN/CLOUDFLARE_API_TOKEN) and rerun; otherwise omit --online.\n",
     );
     const broken = await runCli(["validate", "--online"], "0.0.0", {
       cwd,
@@ -528,6 +534,72 @@ describe("project configuration", () => {
       model: "gateway-jev",
     });
     expect(output.stdout + output.stderr).not.toContain("gateway-key");
+  });
+
+  it("validates through the OpenRouter SDK wire and replays only its own cache offline", async () => {
+    const sentence = "tidy up the shopping list";
+    const model = "cloudflare/clef-flash";
+    const cwd = await project({
+      "gateway.test.yaml": `url: https://example.test\nsteps:\n  - ${sentence}\n`,
+      "sedum.config.yaml": `tests: { directory: . }\nprovider: { name: openrouter, model: ${model} }\n`,
+      ".env": "OPENROUTER_API_KEY=gateway-key\n",
+    });
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    vi.stubEnv("OPEN_ROUTER_API_KEY", "");
+    vi.stubEnv("TYPESAFE_API_KEY", "must-not-send");
+    const fetch = vi.fn(async (input, init) => {
+      expect(String(input)).toBe("https://openrouter.ai/api/v1/systemone");
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        "Bearer gateway-key",
+      );
+      const body = JSON.parse(String(init?.body));
+      expect(body.model).toBe(model);
+      return Response.json({
+        model,
+        answers: Object.fromEntries(
+          Object.keys(body.questions).map((key) => [
+            key,
+            { type: "choice", choice: "click", probabilities },
+          ]),
+        ),
+        usage: { input_tokens: 123, output_tokens: 4, cost: 0.000019 },
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const online = await runCli(["validate", "--online"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+    });
+    expect(online.exitCode, online.stdout + online.stderr).toBe(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const cachePath = path.join(cwd, ".sedum", "classifications.json");
+    expect(
+      (await FileClassificationCache.load(cachePath, model, "openrouter")).get(
+        sentence,
+      ).answer?.op,
+    ).toBe("click");
+    expect(
+      (await FileClassificationCache.load(cachePath, model, "typesafe")).get(
+        sentence,
+      ),
+    ).toMatchObject({ answer: null, reason: "absent" });
+    const offline = await runCli(["validate"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+    });
+    expect(offline.exitCode, offline.stdout + offline.stderr).toBe(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(online.stdout + online.stderr).not.toMatch(
+      /gateway-key|must-not-send/,
+    );
+    await rm(path.join(cwd, ".env"));
+    const missingKey = await runCli(["validate", "--online"], "0.0.0", {
+      cwd,
+      capabilities: plain,
+    });
+    expect(missingKey.exitCode).toBe(3);
+    expect(missingKey.stderr).toContain("OPENROUTER_API_KEY");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("routes Clef online validation with only its selected credentials", async () => {

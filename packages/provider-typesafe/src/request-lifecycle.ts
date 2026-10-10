@@ -69,24 +69,24 @@ function apiError(error: APIError, attempts: number): ProviderError {
   if (error.status === 401 || error.status === 403)
     return new ProviderError(
       "authentication",
-      "TypeSafe authentication failed.",
+      "Model provider authentication failed.",
       attempts,
     );
   if (error.status === 402)
     return new ProviderError(
       "configuration",
-      "The TypeSafe account has no available API credits.",
+      "The model provider account has no available API credits.",
       attempts,
     );
   if (error.status >= 400 && error.status < 500)
     return new ProviderError(
       "invalid-input",
-      "TypeSafe rejected the provider request.",
+      "The model provider rejected the request.",
       attempts,
     );
   return new ProviderError(
     "connection",
-    "TypeSafe could not complete the request.",
+    "The model provider could not complete the request.",
     attempts,
   );
 }
@@ -97,18 +97,18 @@ function safeError(error: unknown, attempts: number): ProviderError {
   if (error instanceof APITimeoutError)
     return new ProviderError(
       "timeout",
-      "TypeSafe request timed out.",
+      "Model provider request timed out.",
       attempts,
     );
   if (error instanceof APIUserAbortError)
     return new ProviderError(
       "timeout",
-      "TypeSafe request was canceled.",
+      "Model provider request was canceled.",
       attempts,
     );
   return new ProviderError(
     "connection",
-    "TypeSafe connection failed.",
+    "Model provider connection failed.",
     attempts,
   );
 }
@@ -154,7 +154,7 @@ class RequestLifecycle {
   private rateLimitExceeded(): ProviderError {
     return new ProviderError(
       "rate-limited",
-      "TypeSafe kept rate limiting requests for five minutes.",
+      "The model provider kept rate limiting requests for five minutes.",
       this.requests,
     );
   }
@@ -283,7 +283,7 @@ class RequestLifecycle {
     if (this.failures >= MAX_ATTEMPTS)
       throw new ProviderError(
         "retry-exhausted",
-        "TypeSafe did not succeed after three attempts.",
+        "The model provider did not succeed after three attempts.",
         this.requests,
       );
   }

@@ -54,7 +54,7 @@ export interface ResolvedProjectConfig {
   readonly reporterDir: string;
   readonly baseUrl: string | null;
   readonly variables: Readonly<Record<string, string | undefined>>;
-  readonly providerName: "typesafe" | "clef";
+  readonly providerName: "typesafe" | "clef" | "openrouter";
   readonly apiKey: string | undefined;
   readonly cloudflareAccountId: string | undefined;
   readonly providerBaseUrl: string;
@@ -244,11 +244,14 @@ function scalarVariables(
   const result: Record<string, string> = {};
   for (const [name, item] of Object.entries(value)) {
     if (
-      name === "TYPESAFE_API_KEY" ||
-      name === "OPEN_ROUTER_API_KEY" ||
-      name === "CLOUDFLARE_ACCOUNT_ID" ||
-      name === "CLOUDFLARE_AUTH_TOKEN" ||
-      name === "CLOUDFLARE_API_TOKEN"
+      [
+        "TYPESAFE_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPEN_ROUTER_API_KEY",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_AUTH_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+      ].includes(name)
     ) {
       diagnostic(
         diagnostics,
@@ -909,10 +912,12 @@ export async function loadProjectConfig(
   };
   const providerNameValue = provider.name ?? "typesafe";
   const providerName =
-    providerNameValue === "typesafe" || providerNameValue === "clef"
+    providerNameValue === "typesafe" ||
+    providerNameValue === "clef" ||
+    providerNameValue === "openrouter"
       ? providerNameValue
       : "typesafe";
-  if (providerNameValue !== "typesafe" && providerNameValue !== "clef")
+  if (providerName !== providerNameValue)
     diagnostic(
       diagnostics,
       file,
@@ -920,7 +925,7 @@ export async function loadProjectConfig(
       node("provider.name"),
       "provider.name",
       "invalid_config_provider",
-      "Configuration key `provider.name` must be `typesafe` or `clef`.",
+      "Configuration key `provider.name` must be `typesafe`, `clef`, or `openrouter`.",
       "Choose one of the supported provider names.",
     );
   const configuredModel = provider.model;
@@ -950,7 +955,10 @@ export async function loadProjectConfig(
     baseUrl: providerValue("TYPESAFE_BASE_URL"),
     model: providerValue("TYPESAFE_DEFAULT_MODEL"),
   };
-  let providerBaseUrl = DEFAULT_PROVIDER_BASE_URL;
+  let providerBaseUrl =
+    providerName === "openrouter"
+      ? "https://openrouter.ai/api"
+      : DEFAULT_PROVIDER_BASE_URL;
   if (providerName === "typesafe" && customProvider.baseUrl) {
     try {
       const parsed = new URL(customProvider.baseUrl);
@@ -983,12 +991,24 @@ export async function loadProjectConfig(
         : "clef"
       : typeof configuredModel === "string" && configuredModel.trim()
         ? configuredModel.trim()
-        : (customProvider.model ?? DEFAULT_PROVIDER_MODEL);
+        : providerName === "openrouter"
+          ? "typesafe/jev-1.13"
+          : (customProvider.model ?? DEFAULT_PROVIDER_MODEL);
+  const openRouterKeyFrom = (
+    environment: Readonly<Record<string, string | undefined>>,
+  ): string | undefined =>
+    environment.OPENROUTER_API_KEY?.trim() ||
+    environment.OPEN_ROUTER_API_KEY?.trim() ||
+    undefined;
+  const openRouterKey =
+    openRouterKeyFrom(hostEnvironment) ?? openRouterKeyFrom(fileEnvironment);
   const apiKey =
     providerName === "clef"
       ? (cloudflareTokenFrom(hostEnvironment) ??
         cloudflareTokenFrom(fileEnvironment))
-      : providerValue("TYPESAFE_API_KEY");
+      : providerName === "openrouter"
+        ? openRouterKey
+        : providerValue("TYPESAFE_API_KEY");
   const cloudflareAccountId =
     providerName === "clef"
       ? providerValue("CLOUDFLARE_ACCOUNT_ID")
@@ -1008,7 +1028,8 @@ export async function loadProjectConfig(
         "CLOUDFLARE_ACCOUNT_ID must be exactly 32 hexadecimal characters.",
       fix: "Copy the account ID from the Cloudflare dashboard.",
     });
-  const visionApiKey = providerValue("OPEN_ROUTER_API_KEY");
+  const visionApiKey = openRouterKey;
+  variables["OPENROUTER_API_KEY"] = undefined;
   // Credentials configure integrations; they are not test variables and must
   // not be forwarded through the flow environment.
   variables.OPEN_ROUTER_API_KEY = undefined;

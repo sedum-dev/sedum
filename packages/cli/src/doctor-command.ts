@@ -16,6 +16,7 @@ import {
   loadProjectConfig,
   type ResolvedProjectConfig,
 } from "./config.js";
+import { providerDiagnostic } from "./diagnostics.js";
 
 const CLOUDFLARE_API = "https://api.cloudflare.com";
 
@@ -247,9 +248,7 @@ export async function executeDoctorCommand(
         : fail(
             "api_key",
             "Provider API key is missing.",
-            config.providerName === "clef"
-              ? "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN)."
-              : "Set TYPESAFE_API_KEY for the configured endpoint.",
+            providerDiagnostic(config.providerName, "configuration").fix,
           ),
   );
 
@@ -266,9 +265,7 @@ export async function executeDoctorCommand(
       fail(
         "api_auth",
         "API authentication could not be checked without a key.",
-        config.providerName === "clef"
-          ? "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN), then rerun doctor."
-          : "Set TYPESAFE_API_KEY, then rerun doctor.",
+        providerDiagnostic(config.providerName, "configuration").fix,
       ),
     );
   else if (!network)
@@ -313,12 +310,8 @@ export async function executeDoctorCommand(
         : result === "rejected"
           ? fail(
               "api_auth",
-              config.providerName === "clef"
-                ? "Cloudflare rejected the configured API token."
-                : "Model provider API rejected the key.",
-              config.providerName === "clef"
-                ? "Check CLOUDFLARE_ACCOUNT_ID, then replace CLOUDFLARE_AUTH_TOKEN (or CLOUDFLARE_API_TOKEN) with a token for that account that has Workers AI Read and Edit permissions."
-                : "Replace TYPESAFE_API_KEY with a valid key and rerun doctor.",
+              providerDiagnostic(config.providerName, "authentication").message,
+              providerDiagnostic(config.providerName, "authentication").fix,
             )
           : result === "unreachable"
             ? fail(
