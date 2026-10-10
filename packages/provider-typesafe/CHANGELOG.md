@@ -1,5 +1,19 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.13
+
+### Minor Changes
+
+- b30fb95: Support OpenRouter as a decision provider for Jev and other compatible System One
+  models, with isolated credentials, provider-specific diagnostics and classification
+  caches. Preserve reported gateway costs without applying direct Jev pricing or
+  assuming gateway retries are unbilled. Other System One-compatible gateways remain
+  available through the existing custom endpoint configuration.
+
+### Patch Changes
+
+- @sedum-dev/core@0.1.0-alpha.13
+
 ## 0.1.0-alpha.12
 
 ### Patch Changes
