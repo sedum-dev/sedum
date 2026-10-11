@@ -16,7 +16,8 @@
           "plain-english-tests",
           "typescript-tests",
           "format",
-          "goal-mode"
+          "goal-mode",
+          "explore-mode"
         ]
       },
       {

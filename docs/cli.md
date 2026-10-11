@@ -280,6 +280,13 @@ Frames are stored per attempt as `evidence/<attempt-key>/<frame>.jpg` inside the
 
 The HTML report includes light and dark themes, failure and flagged-flow filters, per-assertion scores and decision lines, all retry attempts, and a receipt from the recorded model calls. A missing cost is shown as unknown rather than zero. `--replay` captures step frames and embeds them in `report.html`; without it the report contains no frame bytes. Captured frames can contain private page pixels, so use `--sensitive-origin` or omit replay on sensitive pages. Frames show the visible page, while assertion grades come from the recorded judgement and judged page excerpt. The file contains its own styles, fonts, scripts, and optional frames and makes no network requests.
 
+## `sedum explore` (proof of concept)
+
+`sedum explore <url>` explores a site by a seeded random walk guided by Jev,
+and reports console errors, page exceptions and HTTP 5xx responses. Use
+`--steps`, `--seed`, `--mode guided|heuristic|random`, `--replay <trace>` and
+`--shrink`. See [Exploration mode](explore-mode.md).
+
 ## `sedum validate`
 
 `sedum validate [paths...]` checks tests and modules without opening a browser, without a model key, and without spending tokens. That makes it cheap enough for a pre-commit hook and for every CI run.

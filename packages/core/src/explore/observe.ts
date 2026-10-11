@@ -1,0 +1,165 @@
+import type { BrowserPage } from "../browser-driver.js";
+import { collectCandidates, pageDigest, quietPage } from "../page-bridge.js";
+import type { Candidate, Operation, PageVersion } from "../page-protocol.js";
+import { hashText } from "./random.js";
+import type { TargetIdentity } from "./types.js";
+
+/** One settled page state with its action space. */
+export interface Observation {
+  readonly url: string;
+  /** Path and query; the origin is fixed for a run. */
+  readonly route: string;
+  readonly title: string;
+  readonly text: string;
+  readonly version: PageVersion;
+  readonly clicks: readonly Candidate[];
+  readonly fills: readonly Candidate[];
+  /** Route plus visible text: the identity of a page state. */
+  readonly state: string;
+}
+
+const MAX_PAGES = 4;
+
+function sameVersion(a: PageVersion, b: PageVersion): boolean {
+  return (
+    a.document === b.document &&
+    a.revision === b.revision &&
+    a.route === b.route
+  );
+}
+
+/** Every candidate for one operation, following the scanner's pages. */
+export async function allCandidates(
+  page: BrowserPage,
+  operation: Operation,
+): Promise<{ version: PageVersion; candidates: Candidate[] } | null> {
+  const first = await collectCandidates(page, operation);
+  const candidates = [...first.candidates];
+  let next = first.next;
+  for (let index = 1; next !== null && index < MAX_PAGES; index++) {
+    const more = await collectCandidates(page, operation, next, first.version);
+    if (!sameVersion(more.version, first.version)) return null;
+    candidates.push(...more.candidates);
+    next = more.next;
+  }
+  return { version: first.version, candidates };
+}
+
+export function routeOf(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname + parsed.search;
+  } catch {
+    return url;
+  }
+}
+
+/** The same-origin path of a link, or null when it leaves the origin. */
+export function sameOriginHref(
+  href: string | undefined,
+  base: string,
+): string | null | undefined {
+  if (!href) return undefined;
+  try {
+    const target = new URL(href, base);
+    if (!/^https?:$/u.test(target.protocol)) return null;
+    return target.origin === new URL(base).origin
+      ? target.pathname + target.search
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function onOrigin(url: string, origin: string): boolean {
+  try {
+    return new URL(url).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+async function title(page: BrowserPage): Promise<string> {
+  return page.title ? await page.title().catch(() => "") : "";
+}
+
+async function observeOnce(page: BrowserPage): Promise<Observation | null> {
+  const digest = await pageDigest(page);
+  const clicks = await allCandidates(page, "click");
+  const fills = await allCandidates(page, "fill");
+  if (!clicks || !fills) return null;
+  if (
+    !sameVersion(digest.version, clicks.version) ||
+    !sameVersion(digest.version, fills.version)
+  )
+    return null;
+  const route = routeOf(page.url);
+  return {
+    url: page.url,
+    route,
+    title: await title(page),
+    text: digest.text,
+    version: digest.version,
+    clicks: clicks.candidates.filter((c) => !c.disabled && !c.editable),
+    fills: fills.candidates.filter((c) => !c.disabled && c.editable),
+    state: hashText(`${route}\n${digest.text}`),
+  };
+}
+
+/** Observe a settled page; retries while the page is still changing. */
+export async function observe(page: BrowserPage): Promise<Observation> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const observation = await observeOnce(page).catch(() => null);
+    if (observation) return observation;
+    await settle(page);
+  }
+  throw new Error("The page did not hold still long enough to observe.");
+}
+
+/** Wait for DOM quiet, after Bombadil's quiescence and Sedum's settling. */
+export async function settle(page: BrowserPage): Promise<void> {
+  await page
+    .settle({ state: "domcontentloaded", timeoutMs: 4_000 })
+    .catch(() => undefined);
+  await quietPage(page, 100, 1_500).catch(() => undefined);
+}
+
+function sameGroup(a: Candidate, b: Candidate): boolean {
+  return a.role === b.role && a.name === b.name && a.location === b.location;
+}
+
+/** Identity that survives a new observation or a fresh replay. */
+export function identityOf(
+  candidates: readonly Candidate[],
+  candidate: Candidate,
+  base: string,
+): TargetIdentity {
+  const group = candidates.filter((c) => sameGroup(c, candidate));
+  const href = sameOriginHref(candidate.signals.href, base);
+  return {
+    role: candidate.role,
+    name: candidate.name,
+    ...(candidate.location ? { location: candidate.location } : {}),
+    ...(candidate.peers[0] ? { peer: candidate.peers[0] } : {}),
+    ...(href ? { href } : {}),
+    ...(candidate.editable ? { inputType: candidate.inputType } : {}),
+    occurrence: group.indexOf(candidate),
+  };
+}
+
+/** Find a candidate by identity, or null when the page diverged. */
+export function findByIdentity(
+  candidates: readonly Candidate[],
+  identity: TargetIdentity,
+): Candidate | null {
+  const named = candidates.filter(
+    (c) => c.role === identity.role && c.name === identity.name,
+  );
+  const group = named.filter((c) => c.location === identity.location);
+  const byPeer = identity.peer
+    ? group.filter((c) => c.peers[0] === identity.peer)
+    : [];
+  if (byPeer.length === 1) return byPeer[0]!;
+  // A moved but unique target still matches; anything else has diverged.
+  return group[identity.occurrence] ?? (named.length === 1 ? named[0]! : null);
+}

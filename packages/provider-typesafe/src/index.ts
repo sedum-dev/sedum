@@ -21,6 +21,9 @@ import type {
 } from "@sedum-dev/core";
 import {
   MODEL_CHOICES,
+  type ExplorationAdvisor,
+  type ExploreAdvice,
+  type ExploreAdviceRequest,
   type GoalState,
   type GoalDecision,
   type GoalValueState,
@@ -44,6 +47,10 @@ export type { RelevanceTest } from "./relevance.js";
 import { ProviderGate } from "./gate.js";
 import { askProvider } from "./request-lifecycle.js";
 import { buildGoalRequest, validateGoalDecision } from "./goal-request.js";
+import {
+  buildExploreRequest,
+  validateExploreAdvice,
+} from "./explore-request.js";
 
 const BASE_URL = "https://api.typesafe.ai";
 const DEFAULT_DEADLINE_MS = 30_000;
@@ -174,7 +181,12 @@ function responseError(
 
 /** One reusable, Node-side adapter supplies both task-specific core interfaces. */
 export class TypeSafeAdapter
-  implements Resolver, Judge, ClassificationProvider, RelevanceProvider
+  implements
+    Resolver,
+    Judge,
+    ClassificationProvider,
+    RelevanceProvider,
+    ExplorationAdvisor
 {
   private readonly client: TypeSafeClient;
   private readonly model: string;
@@ -293,6 +305,21 @@ export class TypeSafeAdapter
         ),
         call,
       };
+    } catch (error) {
+      throw responseError(error, call.attempts, call);
+    }
+  }
+
+  /** Exploration fan-out: page kind plus per-target safety and destination. */
+  async assess(
+    input: ExploreAdviceRequest,
+    options?: ProviderCallOptions,
+  ): Promise<ExploreAdvice> {
+    const { request, targetIds } = buildExploreRequest(input, this.model);
+    const { response, meta } = await this.ask(request, options);
+    const call = validateCall(response, meta, this.model, this.estimateJevCost);
+    try {
+      return { ...validateExploreAdvice(input, targetIds, response), call };
     } catch (error) {
       throw responseError(error, call.attempts, call);
     }
