@@ -1,5 +1,6 @@
 import type { BrowserPage } from "../browser-driver.js";
 import { goalGenerators } from "../goal-data.js";
+import type { Aim } from "../page-protocol.js";
 import type { ProviderCall } from "../provider.js";
 import { actionTree, runAction, type Leaf } from "./actions.js";
 import { Coverage, guide } from "./guidance.js";
@@ -44,6 +45,15 @@ export interface ExploreOptions {
    */
   readonly measureKinds?: boolean;
   readonly onStep?: (entry: TraceEntry) => void | Promise<void>;
+  /**
+   * Diagnostic capture, such as a screenshot, after a click or fill target is
+   * aimed and before it is dispatched. `box` is the target as fractions (0-1) of the viewport.
+   */
+  readonly beforeAction?: (
+    step: number,
+    action: ExploreAction,
+    box: Aim["box"] | null,
+  ) => Promise<void>;
   readonly signal?: AbortSignal;
 }
 
@@ -274,7 +284,13 @@ class Explorer {
     const started = performance.now();
     let error: string | undefined;
     try {
-      await runAction(this.page, action);
+      const before = this.options.beforeAction;
+      await runAction(
+        this.page,
+        action,
+        undefined,
+        before ? (box) => before(step, action, box) : undefined,
+      );
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
       await settle(this.page);

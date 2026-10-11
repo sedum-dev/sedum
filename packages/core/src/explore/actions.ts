@@ -1,5 +1,5 @@
 import type { BrowserPage } from "../browser-driver.js";
-import type { Candidate } from "../page-protocol.js";
+import type { Aim, Candidate } from "../page-protocol.js";
 import {
   executeStep,
   ResolvedStepTarget,
@@ -191,6 +191,9 @@ async function command(
   return build(action);
 }
 
+/** Diagnostic capture after aiming a click or fill, before dispatch. */
+export type BeforeAction = (box: Aim["box"] | null) => Promise<void>;
+
 /**
  * Run one recorded action and wait for the page to settle. Replays use the
  * same path, so every kind, including reload, can be reproduced.
@@ -199,8 +202,12 @@ export async function runAction(
   page: BrowserPage,
   action: ExploreAction,
   target?: ResolvedStepTarget,
+  beforeAction?: BeforeAction,
 ): Promise<void> {
   const step = await command(page, action, target);
-  await executeStep(page, step, { timeoutMs: 10_000 });
+  await executeStep(page, step, {
+    timeoutMs: 10_000,
+    ...(beforeAction ? { beforeAction: (box) => beforeAction(box) } : {}),
+  });
   await settle(page);
 }

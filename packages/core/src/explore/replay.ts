@@ -67,6 +67,11 @@ export interface ShrinkOptions {
   /** A new, isolated page per replay, so state never leaks between tries. */
   readonly freshPage: () => Promise<FreshPage>;
   readonly maxReplays?: number;
+  /** Called after each replay with the candidate list and whether it failed. */
+  readonly onTry?: (
+    actions: readonly ExploreAction[],
+    failed: boolean,
+  ) => void | Promise<void>;
 }
 
 export interface ShrinkResult {
@@ -109,7 +114,11 @@ export async function shrink(options: ShrinkOptions): Promise<ShrinkResult> {
     const fresh = await options.freshPage();
     try {
       const result = await replay(fresh.page, options.startUrl, actions);
-      return result.events.some((e) => e.signature === options.signature);
+      const failed = result.events.some(
+        (e) => e.signature === options.signature,
+      );
+      await options.onTry?.(actions, failed);
+      return failed;
     } finally {
       await fresh.close();
     }
