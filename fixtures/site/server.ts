@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import { detectorResponse } from "./detector-pages.js";
 
 export interface FixtureSite {
   readonly baseUrl: string;
@@ -71,6 +72,16 @@ function timedPage(route: string, delay: number): string {
 export async function startFixtureSite(): Promise<FixtureSite> {
   const server: Server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://fixture.local");
+    const detector = detectorResponse(url.pathname);
+    if (detector) {
+      response.writeHead(detector.status, {
+        "content-type": detector.contentType,
+        "cache-control": "no-store",
+        ...(detector.location ? { location: detector.location } : {}),
+      });
+      response.end(detector.body);
+      return;
+    }
     const requestedDelay = Number(url.searchParams.get("delay") ?? 250);
     const delay = Number.isInteger(requestedDelay)
       ? Math.max(0, Math.min(requestedDelay, 2_000))

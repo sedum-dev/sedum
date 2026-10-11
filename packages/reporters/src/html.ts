@@ -11,6 +11,7 @@ import {
   usageLines,
   visionSummary,
   decisionLines,
+  detectionTexts,
   duration,
   score,
   selectedAttempt,
@@ -128,6 +129,32 @@ function bar(step: ResultStep): string {
   );
 }
 
+function observationsHtml(step: ResultStep): string {
+  if (!step.observations.length) return "";
+  return (
+    "<div><b>observations</b> " +
+    step.observations
+      .map((o) =>
+        esc(
+          "#" +
+            o.ordinal +
+            " " +
+            o.outcome +
+            (o.reason ? " (" + o.reason + ")" : "") +
+            (o.timeoutReason ? " timeout: " + o.timeoutReason : ""),
+        ),
+      )
+      .join(" · ") +
+    "</div>"
+  );
+}
+
+function detectionsHtml(step: ResultStep): string {
+  return detectionTexts(step)
+    .map((text) => '<div class="error">' + esc(text) + "</div>")
+    .join("");
+}
+
 function stepDetails(step: ResultStep): string {
   const judgement = step.judgement;
   const locator = step.locator;
@@ -186,22 +213,7 @@ function stepDetails(step: ResultStep): string {
         : "none recorded") +
       "</div>"
     : "";
-  const observations = step.observations.length
-    ? "<div><b>observations</b> " +
-      step.observations
-        .map((o) =>
-          esc(
-            "#" +
-              o.ordinal +
-              " " +
-              o.outcome +
-              (o.reason ? " (" + o.reason + ")" : "") +
-              (o.timeoutReason ? " timeout: " + o.timeoutReason : ""),
-          ),
-        )
-        .join(" · ") +
-      "</div>"
-    : "";
+  const observations = observationsHtml(step);
   const error = step.error
     ? '<div class="error"><b>' +
       esc(step.error.code) +
@@ -230,6 +242,7 @@ function stepDetails(step: ResultStep): string {
     duration(step.elapsedMs) +
     "</div>" +
     page +
+    detectionsHtml(step) +
     scores +
     choices +
     (visionSummary(step)

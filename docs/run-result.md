@@ -53,9 +53,12 @@ writable. Each update replaces the file atomically with a complete, validated
 `RunResult`; pollers can parse it at any point. `result.json` is written from
 the terminal snapshot. A setup or execution error has `state: "error"`, a typed
 `error`, and `verdict: null`; already completed tests and steps remain. Zero
-executed tests are never a pass. A passed step with `low_confidence` or
-`contradiction` stays passed; `--strict` may change the exit status and JUnit
-mapping, not the canonical verdict.
+executed tests are never a pass. A passed step with `low_confidence`,
+`contradiction`, or `suspected_bug` stays passed; `--strict` may change the exit
+status and JUnit mapping, not the canonical verdict. A `suspected_bug` step lists
+its bug-detector findings in `detections`: the check, its source (`browser`,
+`text`, or `model`), a message, and, where known, the URL, HTTP status, model
+probability, and severity from 0 to 3. Detector calls have purpose `detector`.
 
 SIGINT and SIGTERM received while a run is active request cancellation. The CLI waits for the current operation to unwind, then writes `state: "interrupted"`, `verdict: null`, and a terminal `result.json` before exiting with the conventional signal exit code. Once the terminal outcome is committed, late signals are ignored while its final files are written so the process exit and persisted state cannot disagree. An interrupted provider request may have incurred unreported usage; its call is retained with unknown cost, so a receipt never presents that attempt as free.
 

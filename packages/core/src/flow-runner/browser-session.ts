@@ -1,4 +1,9 @@
-import type { BrowserPage, BrowserSession } from "../browser-driver.js";
+import type {
+  BrowserContextOptions,
+  BrowserPage,
+  BrowserSession,
+} from "../browser-driver.js";
+import type { AttemptDependencies } from "./contracts.js";
 import type { PreparedFlow } from "./orchestration-context.js";
 import { closeQuietly } from "./support.js";
 import { RuntimeUrl, executeStep } from "../step-executor.js";
@@ -25,6 +30,18 @@ function launchOptions(prepared: PreparedFlow) {
   };
 }
 
+/** Context options shared by flow and script tests. */
+export function contextOptions(
+  dependencies: Pick<AttemptDependencies, "viewport" | "detector">,
+): BrowserContextOptions {
+  return {
+    ...(dependencies.viewport === undefined
+      ? {}
+      : { viewport: dependencies.viewport }),
+    ...(dependencies.detector ? { collectSignals: true } : {}),
+  };
+}
+
 async function openBrowser(
   prepared: PreparedFlow,
   resources: BrowserResources,
@@ -34,9 +51,7 @@ async function openBrowser(
     launchOptions(prepared),
   );
   resources.context = await resources.session.newContext(
-    dependencies.viewport === undefined
-      ? {}
-      : { viewport: dependencies.viewport },
+    contextOptions(dependencies),
   );
   const page = await resources.context.newPage();
   resources.page = page;

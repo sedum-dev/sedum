@@ -217,6 +217,19 @@ Design references: TypeSafe's [Noul documentation](https://docs.typesafe.ai/prim
 [model limits](https://docs.typesafe.ai/models), and
 [known failure modes](https://docs.typesafe.ai/model-jaggedness/jev-1.13).
 
+### Experimental bug detector
+
+`--detect browser|semantic` flags steps whose page looks broken, without authored claims. Findings are `suspected_bug` flags with `detections` on the step that left the page in that state; they never fail a step, and `--strict` exits 2 for them as for any flag.
+
+- `browser` drains, per step, console errors, uncaught exceptions, unhandled promise rejections (a rejection that gains a handler later is dropped), and 4xx/5xx or failed responses for every request, including fetch, XHR, and images. It also scans each new page state for exact leaks: `undefined`, `NaN`, `[object Object]`, `Invalid Date`, `{{template}}`, and `${template}`. No model calls.
+- `semantic` adds one System One call per new page state, cached run-wide by a hash of the path, title, and visible text. It asks four independent Nouls (an error is shown, the page is stuck loading, a section is empty, a value is broken) and a four-level severity Score. A loading answer counts only if the page stays unchanged for 3 seconds. An exact leak is kept only when the model agrees a value is broken, because documentation pages print `undefined` on purpose. Each call is about 1,000 input tokens (about $0.00004 at the checked-in Jev rate).
+
+`--detect-allow <rule>` (repeatable) ignores known noise: `check:substring` or `check:re:regex`, where `check:` is optional. `/favicon.ico` misses and `ResizeObserver loop` errors are allowed by default. Thresholds come from the fixture evaluation in `scripts/detector-eval.ts`; Jev probabilities are not calibrated, so rerun it before changing them.
+
+```sh
+sedum run tests --detect semantic --detect-allow 'http_error:/api/session'
+```
+
 ### Parallel runs and sharding
 
 `--parallel <n|auto>` runs selected tests in up to `n` lanes at once (1 to 64). `auto` uses half the logical CPU cores, as Playwright Test does. The default is `1`, so behavior and provider cost only change when you ask. Each lane keeps one browser. Every attempt gets a fresh browser context, and a lane restarts its browser after a browser or operational error. A lane runs a test's retries before it takes the next test. The result lists tests in selection order, whatever order they finish in, and records each attempt's `lane`.

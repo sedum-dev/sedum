@@ -7,9 +7,15 @@ const probability = z.number().finite().min(0).max(1);
 const nonnegative = z.number().finite().nonnegative();
 const count = z.number().int().nonnegative();
 const verdict = z.enum(["passed", "failed"]);
-const stepFlag = z.enum(["low_confidence", "contradiction"]);
+/** `suspected_bug`: the bug detector found a likely defect; it never fails a step. */
+const stepFlag = z.enum(["low_confidence", "contradiction", "suspected_bug"]);
 /** Attempts, tests and runs add `flaky`: a pass that needed a retry. */
-const flag = z.enum(["low_confidence", "contradiction", "flaky"]);
+const flag = z.enum([
+  "low_confidence",
+  "contradiction",
+  "suspected_bug",
+  "flaky",
+]);
 const state = z.enum(["running", "completed", "interrupted", "error"]);
 
 export const ResultSourceSchema = z.strictObject({
@@ -52,7 +58,13 @@ export const ResultFrameSchema = z.discriminatedUnion("status", [
 export const ResultCallSchema = z.strictObject({
   provider: z.string().trim().min(1).max(120).optional(),
   modality: z.literal("vision").optional(),
-  purpose: z.enum(["classification", "locator", "judge", "planner"]),
+  purpose: z.enum([
+    "classification",
+    "locator",
+    "judge",
+    "planner",
+    "detector",
+  ]),
   requestedModel: z.string().max(120),
   model: z.string().max(120),
   attempts: count,
@@ -131,6 +143,26 @@ export const ResultJudgementSchema = z.strictObject({
   contradictionCutoff: probability.nullable(),
   judgedExcerpt: z.string().max(1512).nullable(),
 });
+export const ResultDetectionSchema = z.strictObject({
+  check: z.enum([
+    "console_error",
+    "uncaught_exception",
+    "unhandled_rejection",
+    "http_error",
+    "error_message",
+    "stuck_loading",
+    "empty_content",
+    "broken_value",
+  ]),
+  /** browser: a deterministic signal; text: an exact string; model: Jev. */
+  source: z.enum(["browser", "text", "model"]),
+  message: z.string().max(512),
+  url: z.string().max(512).optional(),
+  status: z.number().int().min(0).max(599).optional(),
+  probability: probability.optional(),
+  /** Expected severity from 0 (works) to 3 (blocking). */
+  severity: z.number().finite().min(0).max(3).optional(),
+});
 export const ResultStepSchema = z.strictObject({
   id: z.string().min(1),
   index: z.number().int().positive(),
@@ -156,6 +188,8 @@ export const ResultStepSchema = z.strictObject({
   state,
   verdict: verdict.nullable(),
   flags: z.array(stepFlag),
+  /** Bug-detector findings for the page state this step produced. */
+  detections: z.array(ResultDetectionSchema).max(50).optional(),
   elapsedMs: nonnegative,
   page: ResultPageSchema,
   locator: ResultLocatorSchema.nullable(),
@@ -286,6 +320,7 @@ export type ResultTest = z.infer<typeof ResultTestSchema>;
 export type ResultAttempt = z.infer<typeof ResultAttemptSchema>;
 export type ResultProblem = z.infer<typeof ResultProblemSchema>;
 export type ResultCall = z.infer<typeof ResultCallSchema>;
+export type ResultDetection = z.infer<typeof ResultDetectionSchema>;
 export type ResultPage = z.infer<typeof ResultPageSchema>;
 export type ResultFrame = z.infer<typeof ResultFrameSchema>;
 export type ResultExecution = z.infer<typeof ResultExecutionSchema>;

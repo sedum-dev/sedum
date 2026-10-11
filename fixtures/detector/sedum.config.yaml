@@ -1,0 +1,6 @@
+tests:
+  directory: .
+  include: ["**/*.test.yaml"]
+browser: chromium
+outputDir: .sedum/runs
+reporterDir: .sedum/reports

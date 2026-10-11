@@ -105,6 +105,52 @@ export function validateNoul(response: unknown): number {
   return probability(answer.noul);
 }
 
+function levelKeys(levels: number): string[] {
+  return Array.from({ length: levels }, (_, level) => String(level));
+}
+
+/** The expected score and per-level probabilities, keyed "0" upward. */
+function scoreParts(answer: Record<string, unknown>, levels: number) {
+  const values = answer.type === "score" ? record(answer.probabilities) : {};
+  const shaped = [
+    answer.type === "score",
+    typeof answer.score === "number" && Number.isFinite(answer.score),
+    Object.keys(values).length === levels,
+    levelKeys(levels).every((key) => Object.hasOwn(values, key)),
+  ].every(Boolean);
+  if (!shaped)
+    throw new ProviderError(
+      "invalid-response",
+      "The provider returned an invalid Score answer.",
+    );
+  return {
+    score: answer.score as number,
+    probabilities: levelKeys(levels).map((key) => probability(values[key])),
+  };
+}
+
+/** A Score answer over `levels` ordered rubric levels, numbered from 0. */
+export function validateScore(response: unknown, levels: number) {
+  const answer = record(response);
+  const { score, probabilities } = scoreParts(answer, levels);
+  const sum = probabilities.reduce((total, item) => total + item, 0);
+  const coherent = [
+    Math.abs(sum - 1) < SUM_TOLERANCE,
+    score >= 0,
+    score <= levels - 1 + SUM_TOLERANCE,
+  ].every(Boolean);
+  if (!coherent)
+    throw new ProviderError(
+      "invalid-response",
+      "The provider Score distribution is incoherent.",
+    );
+  return {
+    score: Math.min(score, levels - 1),
+    confidence: probability(answer.confidence),
+    probabilities,
+  };
+}
+
 /** How a logical call reached its reply, as recorded by the adapter. */
 export interface CallMeta {
   readonly provider?: string;

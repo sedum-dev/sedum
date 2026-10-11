@@ -43,6 +43,7 @@ async function samples(): Promise<RunResult[]> {
     await fixtures.clean(),
     await fixtures.mixed(),
     await fixtures.flagged("both"),
+    await fixtures.suspectedBug(),
     await fixtures.retriesExhausted(),
     await fixtures.operationalError(),
     await fixtures.interrupted(),

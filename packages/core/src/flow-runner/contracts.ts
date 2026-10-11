@@ -8,6 +8,7 @@ import type { CacheStore } from "../cache-store.js";
 import type { GoalPlanner } from "../goal-runner.js";
 import type { RejectionRouter } from "../script-rejections.js";
 import type { VisionResolver } from "../vision.js";
+import type { BugDetector } from "../detector/detector.js";
 import type { FlowSource } from "../flow-types.js";
 import type { Judge, Resolver } from "../provider.js";
 import type { ReportPrivacy } from "../report-privacy.js";
@@ -42,6 +43,8 @@ export interface FlowRunnerDependencies {
     Judge &
     Partial<GoalPlanner>;
   readonly visionResolver?: VisionResolver;
+  /** Flags pages that look broken; findings never fail a step. */
+  readonly detector?: BugDetector;
   readonly classificationCache: ClassificationCache;
   readonly locatorCache?: CacheStore;
   readonly env: Readonly<Record<string, string | undefined>>;

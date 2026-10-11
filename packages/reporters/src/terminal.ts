@@ -2,6 +2,7 @@ import type { RunResult } from "@sedum-dev/core";
 import path from "node:path";
 import type { ReporterEvent } from "./lifecycle.js";
 import {
+  detectionTexts,
   needsAttention,
   rerunArgs,
   selectedAttempt,
@@ -126,6 +127,7 @@ function attention(result: RunResult, context: ReporterContext): string {
             `      ${option.label}${option.role ? ` (${option.role})` : ""}: ${option.probability}`,
           );
       }
+      lines.push(...detectionTexts(step).map((text) => `    ${text}`));
       if (step.page.status === "available")
         lines.push(`    page ${step.page.url} "${step.page.title}"`);
       else lines.push(`    page ${step.page.status}: ${step.page.reason}`);

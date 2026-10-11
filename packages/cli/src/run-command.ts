@@ -47,6 +47,10 @@ export interface RunCommandOptions {
   readonly replay: boolean;
   readonly evidence: boolean;
   readonly sensitiveOrigins: readonly string[];
+  /** `--detect`: flag pages that look broken; findings never fail a step. */
+  readonly detect?: "off" | "browser" | "semantic";
+  /** `--detect-allow`: rules for known noise, added to the defaults. */
+  readonly detectAllow?: readonly string[];
   readonly locatorCacheDisabled?: boolean;
   readonly locatorCacheCi?: boolean;
   readonly signal?: AbortSignal;

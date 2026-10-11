@@ -1,0 +1,6 @@
+# Clean control: placing the order works and nothing should be flagged.
+description: Place an order
+url: __BASE_URL__/detector/clean-order-placed
+steps:
+  - click the Place order button
+  - verify an order confirmation is shown

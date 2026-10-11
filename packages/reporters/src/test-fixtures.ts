@@ -391,6 +391,40 @@ export const fixtures = {
         attempts: [[step(cart, 1, "passed"), step(cart, 2, flag)]],
       },
     ]),
+  /** A passing test whose action step the bug detector flagged. */
+  suspectedBug: () =>
+    record("run-suspected-bug", [
+      {
+        file: cart,
+        description: "Cart saves the coupon",
+        attempts: [
+          [
+            step(cart, 1, "passed", {
+              kind: "action",
+              flags: ["suspected_bug"],
+              detections: [
+                {
+                  check: "http_error",
+                  source: "browser",
+                  message:
+                    "POST https://shop.test/api/coupon returned 500 Internal Server Error",
+                  url: "https://shop.test/api/coupon",
+                  status: 500,
+                },
+                {
+                  check: "error_message",
+                  source: "model",
+                  message: "Page appears to show an error to the user",
+                  probability: 0.98,
+                  severity: 2.9,
+                },
+              ],
+            }),
+            step(cart, 2, "passed"),
+          ],
+        ],
+      },
+    ]),
   failedVerify: () =>
     record("run-failed-verify", [
       {
