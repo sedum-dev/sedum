@@ -5,7 +5,12 @@ import type { ProviderCall, Resolver } from "../provider.js";
 import type { ResolvedStepTarget } from "../step-executor.js";
 import { allCandidates, findByIdentity } from "./observe.js";
 import { replay, type ReplayResult } from "./replay.js";
-import type { ExploreAction, ExploreFailure, TargetIdentity } from "./types.js";
+import type {
+  ExploreAction,
+  ExploreFailure,
+  OracleOptions,
+  TargetIdentity,
+} from "./types.js";
 
 export interface EmittedStep {
   readonly sentence: string;
@@ -196,6 +201,7 @@ interface EmitOptions {
   readonly actions: readonly ExploreAction[];
   readonly failure: ExploreFailure;
   readonly originalLength: number;
+  readonly oracles?: OracleOptions;
 }
 
 const NO_ORACLE_NOTE =
@@ -255,6 +261,7 @@ export async function emitTest(
   const trip = new SentenceTrip(page, resolver);
   const sentences = new Map<number, number>();
   const result = await replay(page, options.startUrl, options.actions, {
+    ...(options.oracles ? { oracles: options.oracles } : {}),
     target: async (index, action) => {
       if (action.kind !== "click" && action.kind !== "type") return undefined;
       sentences.set(index, trip.steps.length);

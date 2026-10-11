@@ -1,5 +1,5 @@
 import type { BrowserPage } from "../browser-driver.js";
-import type { OracleEvent } from "./types.js";
+import type { OracleEvent, OracleOptions } from "./types.js";
 
 interface ConsoleMessage {
   type(): string;
@@ -9,7 +9,18 @@ interface ConsoleMessage {
 interface Response {
   status(): number;
   url(): string;
+  text(): Promise<string>;
   request(): { method(): string };
+}
+
+const NOT_REJECTIONS = new Set([401, 403, 404]);
+
+/** API paths name records by slug or id; keep one signature per endpoint. */
+export function endpoint(pathname: string): string {
+  return pathname
+    .split("/")
+    .map((part) => (/\d|-/u.test(part) && part.length > 8 ? ":id" : part))
+    .join("/");
 }
 
 /**
@@ -19,11 +30,13 @@ interface Response {
  */
 export class Oracles {
   #events: OracleEvent[] = [];
+  #pending: Promise<void>[] = [];
   readonly #detach: () => void;
 
   constructor(
     page: BrowserPage,
     private readonly origin: string,
+    private readonly options: OracleOptions = {},
   ) {
     const native = page.playwright?.();
     if (!native) throw new Error("Exploration needs a Playwright page.");
@@ -56,13 +69,38 @@ export class Oracles {
   }
 
   #response(response: Response): void {
-    if (response.status() < 500) return;
     const url = new URL(response.url());
-    if (url.origin === this.origin)
-      this.#push(
-        "http",
-        `HTTP ${response.status()} ${response.request().method()} ${url.pathname}`,
+    const watched =
+      url.origin === this.origin ||
+      (this.options.watchOrigins ?? []).includes(url.origin);
+    if (!watched) return;
+    const status = response.status();
+    const method = response.request().method();
+    const where = `${url.origin === this.origin ? "" : url.host}${url.pathname}`;
+    if (status >= 500) this.#push("http", `HTTP ${status} ${method} ${where}`);
+    else if (this.#rejection(status, method))
+      this.#pending.push(
+        response
+          .text()
+          .catch(() => "")
+          .then((body) =>
+            this.#push(
+              "rejected",
+              `HTTP ${status} ${method} ${endpoint(where)}: ${body.slice(0, 160)}`,
+            ),
+          ),
       );
+  }
+
+  #rejection(status: number, method: string): boolean {
+    return (
+      this.options.rejectedSubmits === true &&
+      status >= 400 &&
+      status < 500 &&
+      !NOT_REJECTIONS.has(status) &&
+      method !== "GET" &&
+      method !== "HEAD"
+    );
   }
 
   #push(kind: OracleEvent["kind"], message: string): void {
@@ -74,7 +112,9 @@ export class Oracles {
     });
   }
 
-  drain(): OracleEvent[] {
+  /** Events so far, after any response bodies still being read. */
+  async drain(): Promise<OracleEvent[]> {
+    await Promise.all(this.#pending.splice(0));
     const events = this.#events;
     this.#events = [];
     return events;

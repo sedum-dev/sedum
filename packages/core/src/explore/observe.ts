@@ -121,7 +121,56 @@ export async function settle(page: BrowserPage): Promise<void> {
   await page
     .settle({ state: "domcontentloaded", timeoutMs: 4_000 })
     .catch(() => undefined);
+  // Single-page apps fetch route code and data after the DOM goes quiet.
+  await networkQuiet(page);
   await quietPage(page, 100, 1_500).catch(() => undefined);
+}
+
+interface InFlight {
+  count: number;
+  lastChange: number;
+}
+
+const inFlight = new WeakMap<object, InFlight>();
+
+/** Count the page's pending requests, attaching listeners on first use. */
+function trackRequests(page: BrowserPage): InFlight | undefined {
+  const native = page.playwright?.().page;
+  if (!native) return undefined;
+  let state = inFlight.get(native);
+  if (state) return state;
+  const tracked: InFlight = { count: 0, lastChange: performance.now() };
+  const change = (delta: number) => {
+    tracked.count = Math.max(0, tracked.count + delta);
+    tracked.lastChange = performance.now();
+  };
+  native.on("request", () => change(1));
+  native.on("requestfinished", () => change(-1));
+  native.on("requestfailed", () => change(-1));
+  inFlight.set(native, tracked);
+  state = tracked;
+  return state;
+}
+
+/**
+ * Wait until no request has been pending for `quietMs`. Best effort: pages
+ * that poll or stream never go quiet, so this gives up after `timeoutMs`.
+ */
+async function networkQuiet(
+  page: BrowserPage,
+  quietMs = 300,
+  timeoutMs = 3_000,
+): Promise<void> {
+  const state = trackRequests(page);
+  if (!state) return;
+  const deadline = performance.now() + timeoutMs;
+  // Give a just-dispatched action a moment to start its requests.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  while (performance.now() < deadline) {
+    const idleFor = performance.now() - state.lastChange;
+    if (state.count === 0 && idleFor >= quietMs) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }
 
 function sameGroup(a: Candidate, b: Candidate): boolean {

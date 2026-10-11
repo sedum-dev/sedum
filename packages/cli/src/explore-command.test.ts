@@ -1,6 +1,11 @@
 import { InvalidArgumentError } from "commander";
 import { describe, expect, it } from "vitest";
-import { exploreMode, seedValue, startUrl } from "./explore-command.js";
+import {
+  exploreMode,
+  seedValue,
+  startUrl,
+  watchOrigin,
+} from "./explore-command.js";
 import { runCli } from "./run-cli.js";
 
 describe("explore arguments", () => {
@@ -9,6 +14,16 @@ describe("explore arguments", () => {
     expect(seedValue("2147483647")).toBe(2147483647);
     expect(exploreMode("random")).toBe("random");
     expect(startUrl("https://example.test/a")).toBe("https://example.test/a");
+  });
+
+  it("collects watched origins", () => {
+    expect(watchOrigin("https://api.example.test/v1")).toEqual([
+      "https://api.example.test",
+    ]);
+    expect(watchOrigin("https://b.test", ["https://a.test"])).toEqual([
+      "https://a.test",
+      "https://b.test",
+    ]);
   });
 
   it("rejects malformed values", () => {

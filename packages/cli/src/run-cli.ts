@@ -25,6 +25,7 @@ import {
   exploreMode,
   seedValue,
   startUrl,
+  watchOrigin,
   type ExploreFlags,
 } from "./explore-command.js";
 import {
@@ -640,6 +641,17 @@ export async function runCli(
     .option(
       "--allow-destructive",
       "act on targets Jev judges destructive",
+      false,
+    )
+    .option(
+      "--watch-origin <origin>",
+      "also report HTTP 5xx from this origin, such as an API host (repeatable)",
+      watchOrigin,
+      [],
+    )
+    .option(
+      "--rejected-submits",
+      "also report a 4xx answer to a form submission: the UI let you send something the server refuses",
       false,
     )
     .option("--headed", "show the browser", false)

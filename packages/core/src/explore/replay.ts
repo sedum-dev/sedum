@@ -3,7 +3,7 @@ import type { ResolvedStepTarget } from "../step-executor.js";
 import { ActionDivergence, runAction } from "./actions.js";
 import { settle } from "./observe.js";
 import { Oracles } from "./oracles.js";
-import type { ExploreAction, OracleEvent } from "./types.js";
+import type { ExploreAction, OracleEvent, OracleOptions } from "./types.js";
 
 export interface ReplayResult {
   readonly events: readonly OracleEvent[];
@@ -14,6 +14,8 @@ export interface ReplayResult {
 }
 
 export interface ReplayHooks {
+  /** More origins to watch, and whether rejected submissions count. */
+  readonly oracles?: OracleOptions;
   /** Resolve a click or type target another way, such as by sentence. */
   readonly target?: (
     index: number,
@@ -30,7 +32,7 @@ export async function replay(
 ): Promise<ReplayResult> {
   await page.goto(startUrl);
   await settle(page);
-  const oracles = new Oracles(page, new URL(startUrl).origin);
+  const oracles = new Oracles(page, new URL(startUrl).origin, hooks.oracles);
   const events: OracleEvent[] = [];
   const urls: string[] = [];
   try {
@@ -40,14 +42,14 @@ export async function replay(
       } catch (error) {
         if (error instanceof ActionDivergence)
           return {
-            events: [...events, ...oracles.drain()],
+            events: [...events, ...(await oracles.drain())],
             divergedAt: index,
             urls,
           };
         await settle(page);
       }
       urls.push(page.url);
-      events.push(...oracles.drain());
+      events.push(...(await oracles.drain()));
     }
     return { events, urls };
   } finally {
@@ -67,6 +69,7 @@ export interface ShrinkOptions {
   /** A new, isolated page per replay, so state never leaks between tries. */
   readonly freshPage: () => Promise<FreshPage>;
   readonly maxReplays?: number;
+  readonly oracles?: OracleOptions;
   /** Called after each replay with the candidate list and whether it failed. */
   readonly onTry?: (
     actions: readonly ExploreAction[],
@@ -113,7 +116,9 @@ export async function shrink(options: ShrinkOptions): Promise<ShrinkResult> {
     replays++;
     const fresh = await options.freshPage();
     try {
-      const result = await replay(fresh.page, options.startUrl, actions);
+      const result = await replay(fresh.page, options.startUrl, actions, {
+        ...(options.oracles ? { oracles: options.oracles } : {}),
+      });
       const failed = result.events.some(
         (e) => e.signature === options.signature,
       );

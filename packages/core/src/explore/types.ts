@@ -46,8 +46,20 @@ export type ExploreAction =
 
 export type ExploreActionKind = ExploreAction["kind"];
 
+/** What the oracles watch beyond the start origin's defaults. */
+export interface OracleOptions {
+  /** More origins whose responses count, such as a separate API host. */
+  readonly watchOrigins?: readonly string[];
+  /**
+   * Also report a 4xx answer to a submission (any method but GET or HEAD;
+   * 401, 403 and 404 excluded): the UI let the user send something the
+   * server refuses. Opt-in, since some apps rely on server-side validation.
+   */
+  readonly rejectedSubmits?: boolean;
+}
+
 export interface OracleEvent {
-  readonly kind: "console" | "pageerror" | "http";
+  readonly kind: "console" | "pageerror" | "http" | "rejected";
   readonly message: string;
   /** Normalized message: the identity of a distinct failure. */
   readonly signature: string;

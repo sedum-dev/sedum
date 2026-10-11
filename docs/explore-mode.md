@@ -66,6 +66,22 @@ guarantee.
 keyword list, coverage from untried destinations, and values from Faker by
 input type. It exists as an ablation. `--mode random` is the blind walk.
 
+## Oracles
+
+The walk always reports console errors, uncaught page exceptions and HTTP 5xx
+responses from the start origin. Two options widen that:
+
+- `--watch-origin <origin>` also watches another origin, such as a separate
+  API host. Repeat it for more origins.
+- `--rejected-submits` also reports a 4xx answer to a submission (any method
+  except GET or HEAD; 401, 403 and 404 are excluded). Such an answer means the
+  UI let the user send something the server refuses. It is opt-in because some
+  apps rely on server-side validation on purpose.
+
+After each action, the walk waits for the DOM to go quiet and for no request
+to have been in flight for 300 ms (at most 3 s). Single-page apps fetch route
+code and data after the DOM settles.
+
 ## Reproduce, replay and shrink
 
 - `--seed` makes the choices of a random or heuristic walk repeat exactly.

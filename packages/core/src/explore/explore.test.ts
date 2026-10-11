@@ -6,7 +6,7 @@ import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
 import { looksDestructive } from "./kinds.js";
 import { findByIdentity, identityOf, sameOriginHref } from "./observe.js";
-import { signature } from "./oracles.js";
+import { endpoint, signature } from "./oracles.js";
 import { hashText, pickWeighted, SeededRandom } from "./random.js";
 import { DEFAULT_TUNING, type ExploreAdvice } from "./types.js";
 import type { Candidate } from "../page-protocol.js";
@@ -286,6 +286,13 @@ describe("emitted sentences", () => {
 });
 
 describe("oracle signatures", () => {
+  it("names an endpoint once, whatever record it was for", () => {
+    expect(endpoint("/api/articles/how-to-learn-js-2/comments")).toBe(
+      "/api/articles/:id/comments",
+    );
+    expect(endpoint("/api/articles")).toBe("/api/articles");
+  });
+
   it("ignores numbers, origins and stacks", () => {
     const origin = "http://127.0.0.1:4519";
     expect(signature(`HTTP 500 GET ${origin}/api/7`, origin)).toBe(

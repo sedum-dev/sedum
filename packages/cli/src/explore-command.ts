@@ -8,6 +8,7 @@ import type {
   ExploreFailure,
   ExploreMode,
   ExploreResult,
+  OracleOptions,
   ProviderCall,
   TraceEntry,
 } from "@sedum-dev/core";
@@ -21,6 +22,10 @@ export interface ExploreCommandOptions {
   readonly shrink: boolean;
   readonly headed: boolean;
   readonly allowDestructive: boolean;
+  /** More origins whose HTTP 5xx responses count, such as an API host. */
+  readonly watchOrigins?: readonly string[];
+  /** Report 4xx answers to submissions (see OracleOptions). */
+  readonly rejectedSubmits?: boolean;
   readonly signal?: AbortSignal;
   readonly write: (text: string) => void;
 }
@@ -50,6 +55,27 @@ export function seedValue(value: string): number {
   if (!(seed <= 0x7fffffff))
     throw new InvalidArgumentError("Expected an integer from 0 to 2147483647.");
   return seed;
+}
+
+function watched(options: ExploreCommandOptions): {
+  oracles?: OracleOptions;
+} {
+  const origins = options.watchOrigins ?? [];
+  if (!origins.length && !options.rejectedSubmits) return {};
+  return {
+    oracles: {
+      ...(origins.length ? { watchOrigins: origins } : {}),
+      ...(options.rejectedSubmits ? { rejectedSubmits: true } : {}),
+    },
+  };
+}
+
+/** Collect `--watch-origin` values as normalized origins. */
+export function watchOrigin(
+  value: string,
+  previous: readonly string[] = [],
+): string[] {
+  return [...previous, new URL(startUrl(value)).origin];
 }
 
 export function startUrl(value: string): string {
@@ -123,6 +149,7 @@ async function shrinkFailures(
       actions: prefix,
       signature: failure.signature,
       freshPage,
+      ...watched(options),
     });
     if (!shrunk.reproduced) {
       options.write(`  ${failure.signature}: did not reproduce on replay\n`);
@@ -135,6 +162,7 @@ async function shrinkFailures(
         actions: shrunk.actions,
         failure,
         originalLength: prefix.length,
+        ...watched(options),
       });
       calls.push(...emitted.calls);
       const file = path.join(directory, `failure-${index + 1}.test.yaml`);
@@ -209,6 +237,7 @@ export async function executeExploreCommand(
       mode: options.mode,
       ...(guide ? { advisor: guide } : {}),
       ...(options.allowDestructive ? { tuning: { skipDestructive: 2 } } : {}),
+      ...watched(options),
       ...(options.signal ? { signal: options.signal } : {}),
       onStep: async (entry) => {
         lines.push(JSON.stringify(entry));
@@ -274,6 +303,8 @@ export interface ExploreFlags {
   readonly shrink: boolean;
   readonly replay?: string;
   readonly allowDestructive: boolean;
+  readonly watchOrigin: readonly string[];
+  readonly rejectedSubmits: boolean;
   readonly headed: boolean;
 }
 
@@ -294,6 +325,8 @@ function run(url: string, flags: ExploreFlags, io: ExploreIo): Promise<number> {
     shrink: flags.shrink,
     headed: flags.headed,
     allowDestructive: flags.allowDestructive,
+    watchOrigins: flags.watchOrigin,
+    rejectedSubmits: flags.rejectedSubmits,
     ...(io.signal ? { signal: io.signal } : {}),
     write: io.write,
   });

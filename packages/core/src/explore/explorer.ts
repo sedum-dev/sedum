@@ -27,6 +27,7 @@ import {
   type ExploreTuning,
   type InputSource,
   type OracleEvent,
+  type OracleOptions,
   type TargetIdentity,
   type TraceEntry,
 } from "./types.js";
@@ -45,6 +46,8 @@ export interface ExploreOptions {
    */
   readonly measureKinds?: boolean;
   readonly onStep?: (entry: TraceEntry) => void | Promise<void>;
+  /** More origins to watch, and whether rejected submissions count. */
+  readonly oracles?: OracleOptions;
   /**
    * Diagnostic capture, such as a screenshot, after a click or fill target is
    * aimed and before it is dispatched. `box` is the target as fractions (0-1) of the viewport.
@@ -193,7 +196,7 @@ class Explorer {
     const steps = clampSteps(this.options.steps);
     await this.page.goto(this.options.startUrl);
     await settle(this.page);
-    this.#oracles = new Oracles(this.page, this.#origin);
+    this.#oracles = new Oracles(this.page, this.#origin, this.options.oracles);
     try {
       for (let step = 0; step < steps && !this.options.signal?.aborted; step++)
         await this.#step(step).catch((error: unknown) =>
@@ -304,7 +307,7 @@ class Explorer {
       why,
       outcome: error ? "failed" : "acted",
       ...(error ? { error } : {}),
-      events: this.#oracles!.drain(),
+      events: await this.#oracles!.drain(),
       elapsedMs: Math.round(performance.now() - started),
     });
     await this.#enforceBoundary(step);
@@ -328,7 +331,7 @@ class Explorer {
       action,
       why: { options: 1, probability: 1 },
       outcome: "forced",
-      events: this.#oracles!.drain(),
+      events: await this.#oracles!.drain(),
       elapsedMs: 0,
     });
   }
@@ -348,7 +351,7 @@ class Explorer {
       why: { options: 1, probability: 1 },
       outcome: "forced",
       error: `reopened the start page: ${error instanceof Error ? error.message.slice(0, 160) : String(error)}`,
-      events: this.#oracles!.drain(),
+      events: await this.#oracles!.drain(),
       elapsedMs: 0,
     });
   }
