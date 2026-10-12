@@ -384,6 +384,8 @@ export class FormFlow {
   ): Promise<ExploreAction[] | null> {
     if (active.unlocks >= MAX_UNLOCKS || this.#stack.length >= MAX_DEPTH)
       return null;
+    // A search form never waits for a sub-form; its button is busy instead.
+    if ((await this.#purpose(observation)) === "search") return null;
     active.unlocks++;
     const targets = observation.clicks
       .filter((c) => c.name && !c.disabled && this.deps.safe(c))
@@ -708,7 +710,8 @@ function noButton(
 }
 
 /** Buttons that move a wizard on, up to its last page ("See plan"). */
-const CONTINUE = /continue|next|finish|done|complete|^see\b/iu;
+const CONTINUE =
+  /^(save (&|and) )?(continue|next|finish|done|complete|see)\b.{0,24}$/iu;
 
 /** The submit of the fields' form, else the page's Continue button. */
 function submitName(
