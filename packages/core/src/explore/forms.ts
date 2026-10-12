@@ -8,6 +8,8 @@ import type { SeededRandom } from "./random.js";
 export interface FieldInfo {
   readonly ref: string;
   readonly empty: boolean;
+  /** Holds only a zero the app put there by default, such as a balance of 0. */
+  readonly zero?: boolean;
   readonly invalid: boolean;
   readonly required: boolean;
   readonly type: string;
@@ -35,12 +37,20 @@ export async function inspectFields(
     .catch(() => []);
 }
 
+/** A radio group with nothing chosen yet: its title and option labels. */
+export interface ChoiceGroup {
+  readonly title: string;
+  readonly options: readonly string[];
+}
+
 /**
- * Radio groups in a form with nothing chosen yet, by the label of their
- * first option, such as "Does the client have a partner?" → "Yes".
+ * Radio groups with nothing chosen yet, native or ARIA (`role=radio`), such
+ * as "Does the client have a partner?" with "Yes" and "No".
  */
-export async function unansweredChoices(page: BrowserPage): Promise<string[]> {
-  return page.evaluate<string[]>(`(${UNANSWERED})()`).catch(() => []);
+export async function unansweredChoices(
+  page: BrowserPage,
+): Promise<ChoiceGroup[]> {
+  return page.evaluate<ChoiceGroup[]>(`(${UNANSWERED})()`).catch(() => []);
 }
 
 // Page scripts are plain JavaScript strings, like Sedum's other page code,
@@ -74,6 +84,7 @@ const INSPECT = String.raw`(refs, afterSubmit) => {
     const out = {
       ref,
       empty: !value,
+      zero: /^[£$€]?\s*0+([.,]0+)?$/.test(String(value).trim()),
       invalid: attr("aria-invalid") === "true" ||
         (!!value && typeof field.checkValidity === "function" && !field.checkValidity()) ||
         (afterSubmit && errorNear(field)),
@@ -93,17 +104,36 @@ const INSPECT = String.raw`(refs, afterSubmit) => {
 }`;
 
 const UNANSWERED = String.raw`() => {
+  const text = (e) => ((e && (e.innerText || e.textContent)) || "").replace(/\s+/g, " ").trim();
+  const visible = (e) => { const b = e.getBoundingClientRect(); return b.width > 0 || b.height > 0; };
   const groups = new Map();
+  const add = (key, entry) => groups.set(key, [...(groups.get(key) || []), entry]);
   for (const radio of document.querySelectorAll("input[type=radio]")) {
-    if (!radio.name || radio.disabled) continue;
-    const box = radio.getBoundingClientRect();
-    if (!box.width && !box.height && !radio.labels?.length) continue;
-    const list = groups.get(radio.name) || [];
-    list.push(radio);
-    groups.set(radio.name, list);
+    if (!radio.name || radio.disabled || (!visible(radio) && !radio.labels?.length)) continue;
+    const label = (radio.labels && radio.labels[0] && text(radio.labels[0])) || radio.getAttribute("aria-label") || radio.value || "";
+    add("input:" + radio.name, { label, checked: radio.checked, box: radio.closest("fieldset") || radio.parentElement?.parentElement });
   }
-  const labelOf = (r) => ((r.labels && r.labels[0] && r.labels[0].textContent) || r.getAttribute("aria-label") || r.value || "").replace(/\s+/g, " ").trim();
-  return [...groups.values()].filter((list) => !list.some((r) => r.checked)).map((list) => labelOf(list[0])).filter(Boolean);
+  // Custom radios: grouped by their radiogroup, else by their wrappers' parent.
+  for (const radio of document.querySelectorAll("[role=radio]")) {
+    if (radio.getAttribute("aria-disabled") === "true" || !visible(radio)) continue;
+    const box = radio.closest("[role=radiogroup]") || radio.parentElement?.parentElement || radio.parentElement;
+    add(box, { label: radio.getAttribute("aria-label") || text(radio), checked: radio.getAttribute("aria-checked") === "true", box });
+  }
+  // A group's title: its legend or aria-label, else the short text before it.
+  const textBefore = (box) => {
+    let prev = box.previousElementSibling;
+    while (prev && !text(prev)) prev = prev.previousElementSibling;
+    return prev && text(prev).length <= 80 ? text(prev) : "";
+  };
+  const titleOf = (box) => {
+    if (!box || !box.querySelector) return "";
+    const legend = box.querySelector("legend");
+    return (legend && text(legend)) || box.getAttribute("aria-label") || textBefore(box);
+  };
+  return [...groups.values()]
+    .filter((list) => !list.some((r) => r.checked))
+    .map((list) => ({ title: titleOf(list[0].box), options: list.map((r) => r.label).filter(Boolean).slice(0, 40) }))
+    .filter((group) => group.options.length);
 }`;
 
 /** A dropdown nobody has chosen in yet, in the form being completed. */
@@ -149,6 +179,17 @@ export async function formLines(
 const ERROR_LINE =
   /required|invalid|must|should|please|incorrect|not valid|error|too (long|short)|at least|at most|missing/iu;
 
+const SUCCESS_LINE = /success|saved|created|added|updated|thank/iu;
+
+/** Whether a submit added a success message, such as "Saved successfully". */
+export function newSuccess(
+  before: readonly string[],
+  after: readonly string[],
+): boolean {
+  const seen = new Set(before);
+  return after.some((line) => !seen.has(line) && SUCCESS_LINE.test(line));
+}
+
 /** Error lines a submit added to the form, such as a summary box. */
 export function newErrorLines(
   before: readonly string[],
@@ -162,7 +203,7 @@ export function newErrorLines(
 
 /** Placeholder text of a dropdown nobody has chosen in yet. */
 export const PLACEHOLDER =
-  /^(select|choose|pick|please (select|choose))\b(?! all\b| file\b)|^(--|—|-)+|^…$|^\.\.\.$/iu;
+  /^(select|choose|pick|search for|please (select|choose))\b(?! all\b| file\b)|^(--|—|-)+|^…$|^\.\.\.$/iu;
 
 // The form around some fields: their own form, an open dialog, or the
 // nearest ancestor that also holds a save-like button.

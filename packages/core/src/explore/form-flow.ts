@@ -8,6 +8,7 @@ import {
   formLines,
   inspectFields,
   newErrorLines,
+  newSuccess,
   PLACEHOLDER,
   unansweredChoices,
   unansweredDropdowns,
@@ -44,6 +45,14 @@ export interface FormJudge {
     submit: string,
     targets: readonly string[],
   ): Promise<number | null>;
+  /**
+   * A submit did nothing visible; for each field that holds a default zero,
+   * whether it needs a real value.
+   */
+  needsValue(
+    observation: Observation,
+    labels: readonly string[],
+  ): Promise<readonly boolean[]>;
   /** For each error line, the index of the label it is about, or null. */
   errorLabels(
     observation: Observation,
@@ -78,7 +87,7 @@ const TARGET_LIMIT = 60;
 
 interface Active {
   route: string;
-  fields: string;
+  fields: readonly string[];
   attempts: number;
   pages: number;
   /** Custom dropdowns still to open this attempt. */
@@ -147,15 +156,13 @@ export class FormFlow {
   /** Whether this page offers a form worth completing. */
   async offers(observation: Observation): Promise<boolean> {
     const fields = await inspectFields(this.deps.page, observation.fills);
-    if (!fieldsToFill(fields, false).length) return false;
-    return this.#allowed(observation, fields);
+    return this.#worthStarting(observation, fields);
   }
 
   /** Plan a first attempt on this page, or null when there is nothing to do. */
   async start(observation: Observation): Promise<ExploreAction[] | null> {
     const fields = await inspectFields(this.deps.page, observation.fills);
-    if (!fieldsToFill(fields, false).length) return null;
-    if (!(await this.#allowed(observation, fields))) return null;
+    if (!(await this.#worthStarting(observation, fields))) return null;
     this.#stack = [];
     this.#active = this.#fresh(observation, 1);
     return this.#finish(await this.#attempt(observation, fields, []));
@@ -212,18 +219,29 @@ export class FormFlow {
     };
   }
 
-  async #allowed(
+  /**
+   * Never a settings form. A form Jev says creates something is completed
+   * even when the app pre-filled it (a new plan copies the client's
+   * details); otherwise one mostly filled in already edits a record.
+   */
+  async #worthStarting(
     observation: Observation,
     fields: readonly FieldInfo[],
   ): Promise<boolean> {
-    if (editsExistingRecord(fields)) return false;
-    return this.#notSettings(observation);
+    const purpose = await this.#purpose(observation);
+    if (purpose === "settings") return false;
+    const empty = fieldsToFill(fields, false).length > 0;
+    if (purpose === "create") return empty || continues(observation, fields);
+    return empty && !editsExistingRecord(fields);
+  }
+
+  #purpose(observation: Observation): Promise<FormPurpose | undefined> {
+    const labels = observation.fills.map((c) => c.name);
+    return this.deps.judge.purpose(observation, labels);
   }
 
   async #notSettings(observation: Observation): Promise<boolean> {
-    const labels = observation.fills.map((c) => c.name);
-    const purpose = await this.deps.judge.purpose(observation, labels);
-    return purpose !== "settings";
+    return (await this.#purpose(observation)) !== "settings";
   }
 
   /**
@@ -319,8 +337,8 @@ export class FormFlow {
     ];
     const options = dropdown.options ?? [];
     if (!input || !options.length) return null;
-    const want =
-      options[await this.#optionIndex(observation, dropdown, options)]!;
+    const label = dropdown.label || dropdown.shown;
+    const want = options[await this.#optionIndex(observation, label, options)]!;
     const opened = { dropdown, before: shown(observation), want };
     return {
       opened,
@@ -423,7 +441,8 @@ export class FormFlow {
     const typed = want ? matching(options, want) : undefined;
     if (typed) return [click(observation, typed)];
     const names = options.map((c) => c.name);
-    const chosen = await this.#optionIndex(observation, dropdown, names);
+    const label = dropdown.label || dropdown.shown;
+    const chosen = await this.#optionIndex(observation, label, names);
     return [click(observation, options[chosen]!)];
   }
 
@@ -439,7 +458,11 @@ export class FormFlow {
         ? this.#usable(observation, dropdown)
         : undefined;
       if (!candidate) continue;
-      const index = await this.#optionIndex(observation, dropdown, options);
+      const index = await this.#optionIndex(
+        observation,
+        dropdown.label || dropdown.shown,
+        options,
+      );
       actions.push({
         ...click(observation, candidate),
         option: options[index]!,
@@ -457,10 +480,9 @@ export class FormFlow {
   /** Jev's pick in guided mode, else a random option. */
   async #optionIndex(
     observation: Observation,
-    dropdown: Dropdown,
+    label: string,
     options: readonly string[],
   ): Promise<number> {
-    const label = dropdown.label || dropdown.shown;
     const judged = await this.deps.judge.option(observation, label, options);
     return judged ?? this.deps.tools.random.int(0, options.length - 1);
   }
@@ -475,7 +497,7 @@ export class FormFlow {
   ): Promise<ExploreAction[] | null> {
     const samePage =
       observation.route === active.route &&
-      fieldKey(observation) === active.fields;
+      sameFields(fieldKey(observation), active.fields);
     const fields = await inspectFields(
       this.deps.page,
       observation.fills,
@@ -485,11 +507,11 @@ export class FormFlow {
     if (!samePage)
       return active.nested ? null : this.#nextPage(observation, fields);
     if (active.attempts >= MAX_ATTEMPTS) return null;
-    const lines = newErrorLines(
-      active.baseline ?? [],
-      await formLines(this.deps.page, observation.fills),
-    );
-    const fixes = await this.#fixes(observation, fields, lines);
+    const after = await formLines(this.deps.page, observation.fills);
+    const lines = newErrorLines(active.baseline ?? [], after);
+    const fixes = lines.length
+      ? await this.#fixes(observation, fields, lines)
+      : await this.#silent(observation, fields, active, after);
     // Nothing flagged: the submit went through, or the page says nothing.
     if (!fixes.length && !lines.length) return null;
     this.#active = {
@@ -501,15 +523,35 @@ export class FormFlow {
     return this.#attempt(observation, fields, fixes);
   }
 
+  /**
+   * The submit did nothing visible and said nothing: fields marked invalid,
+   * else default zeros Jev says need a real value. A success message means
+   * the submit went through.
+   */
+  async #silent(
+    observation: Observation,
+    fields: readonly FieldInfo[],
+    active: Active,
+    after: readonly string[],
+  ): Promise<Fill[]> {
+    const invalid = await this.#fixes(observation, fields, []);
+    if (invalid.length || newSuccess(active.baseline ?? [], after))
+      return invalid;
+    const zeros = fields.filter((f) => f.zero);
+    if (!zeros.length) return [];
+    const labels = zeros.map((f) => labelOf(observation, f));
+    const needed = await this.deps.judge.needsValue(observation, labels);
+    const error = "The form did not submit while this held a default 0";
+    return zeros.filter((_, i) => needed[i]).map((field) => ({ field, error }));
+  }
+
   /** Fields to fill again: those flagged invalid, and those errors name. */
   async #fixes(
     observation: Observation,
     fields: readonly FieldInfo[],
     lines: readonly string[],
   ): Promise<Fill[]> {
-    const labels = fields.map(
-      (f) => observation.fills.find((c) => c.ref === f.ref)?.name ?? "",
-    );
+    const labels = fields.map((f) => labelOf(observation, f));
     const named = lines.length
       ? await this.deps.judge.errorLabels(observation, lines, labels)
       : [];
@@ -549,7 +591,9 @@ export class FormFlow {
     const candidate = observation.fills.find((c) => c.ref === field.ref);
     if (!candidate) return null;
     const target = identityOf(observation.fills, candidate, observation.url);
-    const value = await this.#value(observation, target, fill);
+    // A field named after its value ("0") is described by its hints instead.
+    const described = { ...target, name: labelOf(observation, field) };
+    const value = await this.#value(observation, described, fill);
     if (value === null) return null;
     return {
       kind: "type",
@@ -577,21 +621,31 @@ export class FormFlow {
     if (formatted?.generator === "format.password") return null;
     if (formatted?.value)
       return { generator: formatted.generator, text: formatted.value };
+    // A default zero the form refused stays a number, such as a fee.
+    if (field.zero)
+      return {
+        generator: "format.number",
+        text: String(this.deps.tools.random.int(1, 100)),
+      };
     const generator =
       (await this.deps.chooseGenerator(target, observation, error)) ??
       "faker.lorem.words";
     return { generator, text: this.deps.generate(generator, field) };
   }
 
-  /** Answer radio groups nobody answered, with their first option. */
+  /** Answer radio groups nobody answered, with an option Jev picks. */
   async #choices(observation: Observation): Promise<ExploreAction[]> {
-    const labels = await unansweredChoices(this.deps.page);
-    return labels.flatMap((label) => {
-      const candidate = observation.clicks.find(
-        (c) => c.role === "radio" && c.name === label && this.deps.safe(c),
-      );
-      return candidate ? [click(observation, candidate)] : [];
-    });
+    const actions: ExploreAction[] = [];
+    const radios = observation.clicks.filter(
+      (c) => c.role === "radio" && this.deps.safe(c),
+    );
+    for (const group of await unansweredChoices(this.deps.page)) {
+      const label = group.title || group.options[0]!;
+      const index = await this.#optionIndex(observation, label, group.options);
+      const candidate = matching(radios, group.options[index]!);
+      if (candidate) actions.push(click(observation, candidate));
+    }
+    return actions;
   }
 
   /**
@@ -634,6 +688,12 @@ function matching(
   );
 }
 
+/** The field's name, or its hints when the name is only a value ("0"). */
+function labelOf(observation: Observation, field: FieldInfo): string {
+  const name = observation.fills.find((c) => c.ref === field.ref)?.name ?? "";
+  return /\p{L}/u.test(name) ? name : field.hints || name;
+}
+
 /** No enabled submit: one that waits (disabled), Enter in a form, or none. */
 function noButton(
   observation: Observation,
@@ -647,7 +707,8 @@ function noButton(
     : { kind: "none" };
 }
 
-const CONTINUE = /continue|next/iu;
+/** Buttons that move a wizard on, up to its last page ("See plan"). */
+const CONTINUE = /continue|next|finish|done|complete|^see\b/iu;
 
 /** The submit of the fields' form, else the page's Continue button. */
 function submitName(
@@ -693,7 +754,18 @@ function shown(observation: Observation): Set<string> {
   return new Set(observation.clicks.map((c) => targetSignature(c)));
 }
 
-/** The set of fields on a page: a new set means a new page of a wizard. */
-function fieldKey(observation: Observation): string {
-  return observation.fills.map((c) => `${c.role}|${c.name}`).join(";");
+/** The fields on a page: a new set means a new page of a wizard. */
+function fieldKey(observation: Observation): string[] {
+  return observation.fills.map((c) => `${c.role}|${c.name}`);
+}
+
+/**
+ * The same fields, though a name may lose its placeholder once filled in
+ * ("Account name Enter account name" becomes "Account name").
+ */
+function sameFields(a: readonly string[], b: readonly string[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((key, i) => key.startsWith(b[i]!) || b[i]!.startsWith(key))
+  );
 }

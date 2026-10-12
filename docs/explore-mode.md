@@ -79,9 +79,10 @@ as a closed choice:
    amounts, reference codes, and first and last names. Jev picks a
    generator, Faker or one of these formats, for the rest. Passwords are
    never filled.
-3. Answer each radio group that has no choice yet.
+3. Answer each radio group that has no choice yet, native or ARIA
+   (`role="radio"`), with an option Jev picks.
 4. Answer each dropdown that still shows a placeholder ("Select a wrapper
-   type", "Choose…"), with an option Jev picks:
+   type", "Choose…", "Search for a portfolio"), with an option Jev picks:
    - a native `<select>` is chosen in one click that names the option;
    - a custom dropdown is opened, and the targets that appear are its
      options, whatever their markup;
@@ -97,10 +98,12 @@ as a closed choice:
    is required"), are filled again, up to 3 attempts. Code matches an error
    line to a field by its label; Jev maps the lines code cannot. A refill
    uses the format the error states ("must be 6 digits"), else the field's
-   format, else a generator Jev picks knowing the error.
+   format, else a generator Jev picks knowing the error. A submit that does
+   nothing visible and says nothing is retried too: Jev says which fields
+   holding a default 0 (a balance, but not a fee) need a real value.
 7. If a new set of fields appears, treat it as the next page of a wizard (at
    most 6 pages). A page the app filled in with defaults is still submitted
-   when its button continues ("Save & Continue").
+   when its button continues ("Save & Continue", "Finish", "See plan").
 8. If the submit (or the page's Continue button) is disabled, Jev picks the
    target that must be used first, such as "Add an account". The macro
    uses it and completes the sub-form that appears as a form of its own,
@@ -108,11 +111,12 @@ as a closed choice:
    sub-forms, nested at most two deep. Heuristic mode picks the first "Add",
    "New" or "Create" target.
 
-The macro leaves two kinds of form alone. Jev judges what a form does
-(creates something, fills in one record, changes settings, searches), and a
-form that changes settings for the whole account, firm or team is skipped.
-A form that is mostly filled in already edits an existing record and is
-skipped too. The walk can still type into either one field at a time.
+Jev judges what a form does: creates something, fills in one record,
+changes settings, or searches. A form that changes settings for the whole
+account, firm or team is skipped. A form that creates something is
+completed even when the app pre-filled it (a new plan copies the client's
+details). Any other form that is mostly filled in already edits an existing
+record and is skipped. The walk can still type into either one field at a time.
 
 These questions go through one closed-choice call, `decide`, that asks
 several questions about one form or dropdown at once. Answers are cached

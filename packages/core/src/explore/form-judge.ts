@@ -58,6 +58,7 @@ export const RULE_JUDGE: FormJudge = {
     const index = targets.findIndex((name) => ADD.test(name));
     return Promise.resolve(index < 0 ? null : index);
   },
+  needsValue: (_observation, labels) => Promise.resolve(labels.map(() => true)),
   errorLabels: (_observation, lines, labels) =>
     Promise.resolve(lines.map((line) => labelInLine(line, labels))),
 };
@@ -122,7 +123,7 @@ export class JevJudge implements FormJudge {
         {
           option: {
             question:
-              "Which option would a realistic user choose in the dropdown `subject.dropdown` to fill in this form validly?",
+              "Which option would a realistic user choose for `subject.dropdown` (a dropdown or a group of choices) to fill in this form validly?",
             rules:
               "Choose a real option, never a heading, a placeholder or an action such as adding a new option.",
             choices,
@@ -162,6 +163,29 @@ export class JevJudge implements FormJudge {
         return RULE_JUDGE.prerequisite(observation, submit, targets);
       return answer.startsWith("t") ? Number(answer.slice(1)) : null;
     });
+  }
+
+  async needsValue(
+    observation: Observation,
+    labels: readonly string[],
+  ): Promise<readonly boolean[]> {
+    const questions: ExploreDecisionRequest["questions"] = Object.fromEntries(
+      labels.map((_, index) => [
+        `field${index}`,
+        {
+          question: `The form did not submit and showed no error. The field \`subject.field${index}\` holds 0. Does it need a real value for the form to be accepted?`,
+          rules:
+            "A balance, amount or quantity the item cannot have at zero needs a value; an optional fee, rate or count of zero does not.",
+          choices: { yes: "Needs a real value", no: "Zero is acceptable" },
+        },
+      ]),
+    );
+    const subject = Object.fromEntries(
+      labels.map((label, index) => [`field${index}`, label || "(no label)"]),
+    );
+    const answers = await this.#decide(observation, subject, questions);
+    if (!answers) return RULE_JUDGE.needsValue(observation, labels);
+    return labels.map((_, index) => answers[`field${index}`] === "yes");
   }
 
   async errorLabels(
