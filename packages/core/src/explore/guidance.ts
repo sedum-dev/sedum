@@ -1,4 +1,5 @@
-import type { Leaf } from "./actions.js";
+import { targetSignature, type Leaf } from "./actions.js";
+import type { Candidate } from "../page-protocol.js";
 import { looksDestructive, novelty } from "./kinds.js";
 import { normalize } from "./random.js";
 import type {
@@ -11,6 +12,7 @@ import type {
 /** What the walk has learned about page kinds and where actions lead. */
 export class Coverage {
   readonly visits = new Map<string, number>();
+  readonly #failures = new Map<string, number>();
   readonly #observed = new Map<string, string>();
   readonly #tried = new Map<string, number>();
 
@@ -22,6 +24,17 @@ export class Coverage {
   learn(destination: string, kind: string | undefined): void {
     this.#tried.set(destination, (this.#tried.get(destination) ?? 0) + 1);
     if (kind) this.#observed.set(destination, kind);
+  }
+
+  /** A target (by signature) that could not be acted on, such as a hidden menu item. */
+  fail(candidate: Candidate): void {
+    const signature = targetSignature(candidate);
+    this.#failures.set(signature, (this.#failures.get(signature) ?? 0) + 1);
+  }
+
+  /** Each earlier failure of a target halves its weight. */
+  reliability(candidate: Candidate): number {
+    return 0.5 ** (this.#failures.get(targetSignature(candidate)) ?? 0);
   }
 
   tried(destination: string): number {
@@ -207,7 +220,10 @@ export function guide(input: GuidanceInput): Guided {
     }
     safeBase.push(leaf.base);
     const safety = (1 - (destructive ?? 0)) ** 2;
-    return leaf.base * safety * coverage.factor;
+    const reliable = leaf.candidate
+      ? input.coverage.reliability(leaf.candidate)
+      : 1;
+    return leaf.base * safety * coverage.factor * reliable;
   });
   const epsilon = input.tuning.epsilon;
   const blind = normalize(safeBase);

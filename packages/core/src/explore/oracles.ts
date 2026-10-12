@@ -12,6 +12,7 @@ interface Response {
   text(): Promise<string>;
   request(): {
     method(): string;
+    postData(): string | null;
     isNavigationRequest(): boolean;
     frame(): unknown;
   };
@@ -26,6 +27,34 @@ export function endpoint(pathname: string): string {
     .split("/")
     .map((part) => (/\d|-/u.test(part) && part.length > 8 ? ":id" : part))
     .join("/");
+}
+
+/**
+ * For a GraphQL endpoint: null when every operation is a query (a read),
+ * else the mutation names. "" for any other request, which counts as a write.
+ */
+export function graphqlMutation(url: URL, body: string | null): string | null {
+  if (!url.pathname.endsWith("graphql") || !body) return "";
+  const operations = parseJson(body);
+  const list = (Array.isArray(operations) ? operations : [operations]) as {
+    query?: unknown;
+    operationName?: unknown;
+  }[];
+  const mutations = list.filter(
+    (op) => typeof op?.query === "string" && /^\s*mutation\b/u.test(op.query),
+  );
+  if (operations !== undefined && !mutations.length) return null;
+  return mutations
+    .map((op) => String(op.operationName ?? "mutation"))
+    .join(",");
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -127,12 +156,15 @@ export class Oracles {
   #write(response: Response, url: URL): void {
     const method = response.request().method();
     const status = response.status();
-    if (!READS.has(method) && status < 400)
-      this.#writes.push({
-        method,
-        endpoint: endpoint(this.#where(url)),
-        status,
-      });
+    if (READS.has(method) || status >= 400) return;
+    const mutation = graphqlMutation(url, response.request().postData());
+    if (mutation === null) return;
+    const where = endpoint(this.#where(url));
+    this.#writes.push({
+      method,
+      endpoint: mutation ? `${where} ${mutation}` : where,
+      status,
+    });
   }
 
   #rejection(response: Response): boolean {

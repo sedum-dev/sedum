@@ -290,6 +290,13 @@ class Explorer {
     });
     this.#lastKind = action.kind;
     this.#pendingDestination = this.#plan ? undefined : leaf.destination;
+    this.#learnFailure(leaf);
+  }
+
+  /** A target that could not be acted on loses weight everywhere it appears. */
+  #learnFailure(leaf: Leaf): void {
+    if (leaf.candidate && this.#trace.at(-1)?.outcome === "failed")
+      this.#coverage.fail(leaf.candidate);
   }
 
   async #act(

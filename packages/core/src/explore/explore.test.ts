@@ -6,7 +6,7 @@ import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
 import { looksDestructive } from "./kinds.js";
 import { findByIdentity, identityOf, sameOriginHref } from "./observe.js";
-import { endpoint, signature } from "./oracles.js";
+import { endpoint, graphqlMutation, signature } from "./oracles.js";
 import { hashText, pickWeighted, SeededRandom } from "./random.js";
 import { DEFAULT_TUNING, type ExploreAdvice } from "./types.js";
 import type { Candidate } from "../page-protocol.js";
@@ -336,6 +336,35 @@ describe("emitted sentences", () => {
         true,
       ),
     ).toEqual(['the "Search" field']);
+  });
+});
+
+describe("write log", () => {
+  it("counts GraphQL mutations, not queries", () => {
+    const url = new URL("https://app.test/practice/graphql");
+    expect(
+      graphqlMutation(url, JSON.stringify({ query: "query Clients { a }" })),
+    ).toBeNull();
+    expect(
+      graphqlMutation(
+        url,
+        JSON.stringify([
+          { query: "mutation MarkRead { a }", operationName: "MarkRead" },
+        ]),
+      ),
+    ).toBe("MarkRead");
+    expect(graphqlMutation(new URL("https://app.test/api/users"), "{}")).toBe(
+      "",
+    );
+  });
+
+  it("halves a target's weight after each failure", () => {
+    const coverage = new Coverage();
+    const view = candidate("View");
+    coverage.fail(view);
+    coverage.fail(view);
+    expect(coverage.reliability(view)).toBe(0.25);
+    expect(coverage.reliability(candidate("Edit"))).toBe(1);
   });
 });
 
