@@ -89,8 +89,10 @@ export interface ChoiceWhy {
   readonly novelty?: number;
   /** The kind the action is expected to lead to, observed or predicted. */
   readonly expectedKind?: string;
-  /** Part of a planned form fill, not a fresh pick. */
+  /** Part of a planned form fill or return path, not a fresh pick. */
   readonly planned?: boolean;
+  /** Part of a return to an archived frontier page. */
+  readonly restore?: boolean;
   /** Destructive candidates removed from this state's action set. */
   readonly skipped?: readonly string[];
 }
@@ -181,6 +183,8 @@ export interface ExploreTuning {
    * when Jev disagrees. For real accounts, where a miss is costly.
    */
   readonly strictSafety: boolean;
+  /** Return to rarely visited, archived pages when nothing new turns up. */
+  readonly archive: boolean;
 }
 
 export const DEFAULT_TUNING: ExploreTuning = {
@@ -191,4 +195,5 @@ export const DEFAULT_TUNING: ExploreTuning = {
   predictTargets: true,
   swarm: false,
   strictSafety: false,
+  archive: true,
 };

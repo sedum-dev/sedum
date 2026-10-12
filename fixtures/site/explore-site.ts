@@ -192,8 +192,71 @@ function account(stats: ExploreStats): string {
     });
   return page({
     title: "Your account",
-    body: `<h1>Your account</h1><p>Signed in as trail@example.com</p><ul><li><a href="/explore/account/preferences">Preferences</a></li><li><a href="/explore/account/reports">Reports</a></li><li><a href="/explore/account/addresses">Saved addresses</a></li></ul><h2>Danger zone</h2>${destructiveButton({ endpoint: "revoke-keys", label: "Revoke all API keys", done: "All API keys revoked" })}${destructiveButton({ endpoint: "delete-account", label: "Delete account", done: "Account deleted" })}<h2>Fresh start</h2><p>Clears your orders, addresses and preferences.</p>${destructiveButton({ endpoint: "wipe-account", label: "Start over with an empty account", done: "Your account is empty" })}`,
+    body: `<h1>Your account</h1><p>Signed in as trail@example.com</p><ul><li><a href="/explore/account/preferences">Preferences</a></li><li><a href="/explore/account/reports">Reports</a></li><li><a href="/explore/account/addresses">Saved addresses</a></li><li><a href="/explore/account/plan/new">Create financial plan</a></li></ul><h2>Danger zone</h2>${destructiveButton({ endpoint: "revoke-keys", label: "Revoke all API keys", done: "All API keys revoked" })}${destructiveButton({ endpoint: "delete-account", label: "Delete account", done: "Account deleted" })}<h2>Fresh start</h2><p>Clears your orders, addresses and preferences.</p>${destructiveButton({ endpoint: "wipe-account", label: "Start over with an empty account", done: "Your account is empty" })}`,
     script: DESTRUCTIVE_SCRIPT,
+  });
+}
+
+// A two-page wizard like a real planning app: date parts, a UK postcode and
+// a required yes/no question on page 1, numeric ranges on page 2. Errors show
+// next to fields; nothing is submitted until both pages are valid.
+const PLAN_STEP_ONE = `
+const form = document.querySelector('form');
+const UK = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
+const between = (low, high) => (v) => Number(v) >= low && Number(v) <= high;
+const RULES = [
+  ['first', (v) => String(v || '').trim().length > 1, 'First name is required'],
+  ['day', between(1, 31), 'Day is required'],
+  ['month', between(1, 12), 'Month is required'],
+  ['year', between(1900, 2008), 'Year should be between 1900 and 2008'],
+  ['postcode', (v) => UK.test(String(v || '').trim()), 'Postcode should be a valid UK postal code'],
+  ['partner', (v) => !!v, 'Please answer'],
+];
+const show = (name, message) => {
+  document.querySelector('[data-error="' + name + '"]').textContent = message;
+  form.elements[name]?.setAttribute?.('aria-invalid', String(!!message));
+};
+form.onsubmit = (event) => {
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(form));
+  const failed = RULES.filter(([name, good]) => !good(values[name]));
+  RULES.forEach(([name, , message]) => show(name, failed.some((f) => f[0] === name) ? message : ''));
+  if (!failed.length) location.href = '/explore/account/plan/new?step=2';
+};`;
+
+const PLAN_STEP_TWO = `
+const form = document.querySelector('form');
+form.onsubmit = (event) => { event.preventDefault();
+  const v = Object.fromEntries(new FormData(form));
+  const age = Number(v.age), monthly = Number(v.monthly);
+  const error = document.querySelector('#error');
+  if (!(age >= 55 && age <= 75)) { error.textContent = 'Retirement age must be between 55 and 75'; form.elements.age.setAttribute('aria-invalid', 'true'); return; }
+  if (!(monthly >= 0 && monthly <= 10000)) { error.textContent = 'Monthly contribution must be 0 to 10000'; form.elements.monthly.setAttribute('aria-invalid', 'true'); return; }
+  location.href = '/explore/account/plan/created';
+};`;
+
+const PLAN_CREATED = `
+// Planted bug: the projection divides by a contribution period that is never set.
+const years = undefined;
+if (Number.isNaN(1000 / years)) console.error('Plan projection failed: contribution period is undefined');
+document.querySelector('#projection').textContent = 'Projected pot: £' + (1000 / years);`;
+
+function planPage(url: URL): string {
+  if (url.searchParams.get("step") === "2")
+    return page({
+      title: "New financial plan · step 2",
+      body: `<h1>New financial plan</h1><p>Step 2 of 2: contributions</p><form novalidate><label>Retirement age <input name="age" type="number" min="55" max="75" required></label><label>Monthly contribution (£) <input name="monthly" type="number" min="0" max="10000" required></label><p id="error" role="alert"></p><button type="submit">Create plan</button></form>`,
+      script: PLAN_STEP_TWO,
+    });
+  return page({
+    title: "New financial plan · step 1",
+    body: `<h1>New financial plan</h1><p>Step 1 of 2: about the client</p><form novalidate>
+<label>First name <input name="first" required></label><span data-error="first"></span>
+<fieldset><legend>Date of birth</legend><label>DD <input name="day" placeholder="DD" maxlength="2" required></label><label>MM <input name="month" placeholder="MM" maxlength="2" required></label><label>YYYY <input name="year" placeholder="YYYY" maxlength="4" required></label><span data-error="day"></span><span data-error="month"></span><span data-error="year"></span></fieldset>
+<label>Postcode <input name="postcode" required></label><span data-error="postcode"></span>
+<fieldset><legend>Does the client have a partner?</legend><label><input type="radio" name="partner" value="yes"> Yes</label><label><input type="radio" name="partner" value="no"> No</label></fieldset><span data-error="partner"></span>
+<button type="submit">Save &amp; Continue</button></form>`,
+    script: PLAN_STEP_ONE,
   });
 }
 
@@ -226,6 +289,12 @@ const STATIC_PAGES: Record<string, () => string> = {
       title: "Preferences",
       body: `<h1>Preferences</h1><label><input type="checkbox" id="deals"> Email me deals</label><label><input type="checkbox" id="advanced"> Show advanced settings</label><p><a id="admin" href="/explore/admin" hidden>Admin console</a></p><button id="save">Save preferences</button><p id="status" role="status"></p>`,
       script: PREFERENCES_SCRIPT,
+    }),
+  "/explore/account/plan/created": () =>
+    page({
+      title: "Plan created",
+      body: `<h1>Your plan is ready</h1><p id="projection"></p>`,
+      script: PLAN_CREATED,
     }),
   "/explore/account/reports": () =>
     page({
@@ -332,12 +401,18 @@ function accountPage(
   return subPage && stats.accountDeleted ? account(stats) : undefined;
 }
 
-function dynamicPage(url: URL, stats: ExploreStats): string | undefined {
-  if (url.pathname === "/explore/catalog")
-    return catalog(
+/** Pages that read the query string. */
+const QUERY_PAGES: Readonly<Record<string, (url: URL) => string>> = {
+  "/explore/catalog": (url) =>
+    catalog(
       Math.min(2, Math.max(1, Number(url.searchParams.get("page")) || 1)),
-    );
+    ),
+  "/explore/account/plan/new": planPage,
+};
+
+function dynamicPage(url: URL, stats: ExploreStats): string | undefined {
   return (
+    QUERY_PAGES[url.pathname]?.(url) ??
     itemPage(url.pathname) ??
     accountPage(url.pathname, stats) ??
     STATIC_PAGES[url.pathname]?.()
@@ -348,6 +423,7 @@ function dynamicPage(url: URL, stats: ExploreStats): string | undefined {
 const BUG_PAGES: Readonly<Record<string, string>> = {
   "/explore/newsletter/welcome": "welcome-nan",
   "/explore/admin": "admin-metrics",
+  "/explore/account/plan/created": "plan-projection",
 };
 
 /** Serve one /explore request. Returns false when the path is not ours. */

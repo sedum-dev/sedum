@@ -1,19 +1,16 @@
 import type { BrowserPage } from "../browser-driver.js";
 import { goalGenerators } from "../goal-data.js";
-import type { Aim } from "../page-protocol.js";
+import type { Aim, Candidate } from "../page-protocol.js";
 import type { ProviderCall } from "../provider.js";
 import { actionTree, runAction, SiteChrome, type Leaf } from "./actions.js";
 import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
-import { PAGE_KINDS } from "./kinds.js";
-import {
-  identityOf,
-  observe,
-  onOrigin,
-  settle,
-  type Observation,
-} from "./observe.js";
+import { looksDestructive, PAGE_KINDS } from "./kinds.js";
+import { observe, onOrigin, settle, type Observation } from "./observe.js";
 import { Oracles } from "./oracles.js";
+import { Archive, routeTemplate } from "./archive.js";
+import { FormFlow } from "./form-flow.js";
+import { formatTools } from "./forms.js";
 import { pickWeighted, SeededRandom } from "./random.js";
 import {
   DEFAULT_TUNING,
@@ -77,6 +74,9 @@ export interface ExploreResult {
   readonly skippedDestructive: readonly string[];
   /** Successful writes per "METHOD endpoint", for a side-effect audit. */
   readonly writes: Readonly<Record<string, number>>;
+  /** Returns to a frontier page, and distinct kinds of page archived. */
+  readonly restores: number;
+  readonly archived: number;
   /** Why the walk stopped before its step budget, if it did. */
   readonly stopReason?: string;
   /** Calls that steered the walk. */
@@ -174,6 +174,33 @@ function adviceTargets(observation: Observation): {
   return { ids, targets };
 }
 
+interface Plan {
+  readonly kind: "form" | "restore";
+  /** A form plan is dropped when the page moves to another route. */
+  readonly route: string;
+  readonly destination?: string;
+  readonly actions: ExploreAction[];
+}
+
+function formPlan(observation: Observation, actions: ExploreAction[]): Plan {
+  return {
+    kind: "form",
+    route: observation.route,
+    destination: `${observation.route} form`,
+    actions,
+  };
+}
+
+/** A form plan stops when the page moves to another route. */
+function leftForm(plan: Plan, observation: Observation): boolean {
+  return plan.kind === "form" && plan.route !== observation.route;
+}
+
+/** An archive cell: a kind of page at a route, ids folded. */
+function cellKey(observation: Observation, info: StateInfo): string {
+  return `${routeTemplate(observation.route)}|${info.kind ?? ""}`;
+}
+
 /** One exploration run on one page. */
 class Explorer {
   readonly #random: SeededRandom;
@@ -200,9 +227,12 @@ class Explorer {
   readonly #advisorErrors: string[] = [];
   #oracles: Oracles | undefined;
   #lastKind: ExploreActionKind | undefined;
-  #plan:
-    | { route: string; destination: string; actions: ExploreAction[] }
-    | undefined;
+  #plan: Plan | undefined;
+  readonly #form: FormFlow;
+  readonly #archive = new Archive();
+  #episode: ExploreAction[] = [];
+  #episodeClean = true;
+  #restores = 0;
   #pendingDestination: string | undefined;
 
   constructor(
@@ -216,6 +246,16 @@ class Explorer {
       ? swarmExclusions(this.#random)
       : new Set();
     this.#origin = new URL(options.startUrl).origin;
+    this.#form = new FormFlow({
+      page,
+      tools: formatTools(this.#random),
+      chooseGenerator: (target, observation) =>
+        this.options.mode === "guided"
+          ? this.#fieldGenerator(target, observation)
+          : Promise.resolve(this.#heuristic(target)),
+      generate: (generator) => this.#generators.generate(generator),
+      safe: (candidate) => this.#safe(candidate),
+    });
     if (options.mode === "guided" && !options.advisor)
       throw new TypeError("Guided exploration needs an advisor");
   }
@@ -246,8 +286,43 @@ class Explorer {
     if (this.#pendingDestination)
       this.#coverage.learn(this.#pendingDestination, info.kind);
     if (info.kind) this.#coverage.visit(info.kind);
+    const cell = cellKey(observation, info);
+    this.#archive.visit(cell, this.#episode, this.#episodeClean);
+    await this.#refreshPlan(observation, cell);
     if (!(await this.#continuePlan(step, observation, info)))
-      await this.#choose(step, observation, info);
+      await this.#choose(step, observation, info, cell);
+  }
+
+  /** Continue a form across attempts and pages, or return to a frontier. */
+  async #refreshPlan(observation: Observation, cell: string): Promise<void> {
+    if (this.#plan) return;
+    if (this.#form.active) {
+      const actions = await this.#form.next(observation);
+      if (actions) {
+        this.#plan = formPlan(observation, actions);
+        return;
+      }
+    }
+    if (!this.#archiveOn() || !this.#archive.due()) return;
+    const target = this.#archive.pick(this.#random, cell);
+    if (!target) return;
+    this.#restores++;
+    const home: ExploreAction = { kind: "goto", url: this.options.startUrl };
+    this.#plan = {
+      kind: "restore",
+      route: "",
+      actions: [home, ...target.path],
+    };
+  }
+
+  #archiveOn(): boolean {
+    return this.#tuning.archive && this.options.mode !== "random";
+  }
+
+  /** Never click a target judged destructive, or named so under strict safety. */
+  #safe(candidate: Candidate): boolean {
+    if (this.#coverage.dangerous(candidate)) return false;
+    return !(this.#tuning.strictSafety && looksDestructive(candidate.name));
   }
 
   #stepTimeoutMs(): number {
@@ -264,18 +339,28 @@ class Explorer {
     observation: Observation,
     info: StateInfo,
   ): Promise<boolean> {
-    const destination = this.#plan?.destination;
+    const plan = this.#plan;
+    const destination = plan?.destination;
     const planned = this.#planned(observation);
     if (!planned) return false;
+    const restore = plan?.kind === "restore";
     await this.#act(step, observation, info, planned, {
       options: 1,
       probability: 1,
       planned: true,
+      ...(restore ? { restore } : {}),
     });
+    this.#dropDivergedReturn(restore);
     this.#lastKind = planned.kind;
     // Learn where the whole form fill led once its last action ran.
     this.#pendingDestination = this.#plan ? undefined : destination;
     return true;
+  }
+
+  /** A return path that no longer replays is abandoned. */
+  #dropDivergedReturn(restore: boolean): void {
+    if (restore && this.#trace.at(-1)?.outcome === "failed")
+      this.#plan = undefined;
   }
 
   /** Pick a fresh action from the weighted, guided tree and run it. */
@@ -283,10 +368,11 @@ class Explorer {
     step: number,
     observation: Observation,
     info: StateInfo,
+    cell: string,
   ): Promise<void> {
     const formPage = this.#formPage(observation, info);
     const leaves = actionTree({
-      formPage,
+      formPage: formPage && (await this.#form.offers(observation)),
       observation,
       canGoBack: await this.#canGoBack(),
       ...(this.#lastKind ? { lastKind: this.#lastKind } : {}),
@@ -294,6 +380,7 @@ class Explorer {
       excluded: this.#excluded,
       globalTargets: this.#chrome.targets,
     });
+    this.#archive.untried(cell, this.#untried(leaves));
     const steering = this.options.mode === "guided" && info.advice;
     const guided = guide({
       mode: this.options.mode,
@@ -316,6 +403,12 @@ class Explorer {
     this.#lastKind = action.kind;
     this.#pendingDestination = this.#plan ? undefined : leaf.destination;
     this.#learnFailure(leaf);
+  }
+
+  #untried(leaves: readonly Leaf[]): number {
+    return leaves.filter(
+      (l) => l.kind === "click" && !this.#coverage.tried(l.destination!),
+    ).length;
   }
 
   #lastRefused(): boolean {
@@ -433,8 +526,20 @@ class Explorer {
       this.#writes.set(key, (this.#writes.get(key) ?? 0) + 1);
     }
     this.#trace.push(entry);
+    this.#extendEpisode(entry);
     for (const event of entry.events) this.#failure(event, entry.step);
     await this.options.onStep?.(entry);
+  }
+
+  /** The clean path from the start page that the archive can replay. */
+  #extendEpisode(entry: TraceEntry): void {
+    if (entry.action.kind === "goto") {
+      this.#episode = [];
+      this.#episodeClean = true;
+      return;
+    }
+    if (entry.writes?.length) this.#episodeClean = false;
+    if (entry.outcome !== "failed") this.#episode.push(entry.action);
   }
 
   #failure(event: OracleEvent, step: number): void {
@@ -553,37 +658,19 @@ class Explorer {
     leaf: Leaf,
     observation: Observation,
   ): Promise<ExploreAction> {
-    const plan: ExploreAction[] = [];
-    for (const fill of observation.fills) {
-      const target = identityOf(observation.fills, fill, observation.url);
-      const generator =
-        this.options.mode === "guided"
-          ? await this.#fieldGenerator(target, observation)
-          : this.#heuristic(target);
-      if (generator)
-        plan.push({
-          kind: "type",
-          target,
-          value: this.#generators.generate(generator),
-          source: { kind: "faker", generator },
-        });
-    }
-    plan.push({ kind: "press", key: "Enter" });
-    const rest = plan.slice(1);
+    const plan = await this.#form.start(observation);
+    if (!plan?.length) return { kind: "wait", ms: 500 };
+    const [first, ...rest] = plan;
     this.#plan = rest.length
-      ? {
-          route: observation.route,
-          destination: leaf.destination!,
-          actions: rest,
-        }
+      ? { ...formPlan(observation, rest), destination: leaf.destination! }
       : undefined;
-    return plan[0]!;
+    return first!;
   }
 
   /** The next planned action, while the page stays on the planned route. */
   #planned(observation: Observation): ExploreAction | undefined {
     const plan = this.#plan;
-    if (!plan || plan.route !== observation.route) {
+    if (!plan || leftForm(plan, observation)) {
       this.#plan = undefined;
       return undefined;
     }
@@ -675,6 +762,8 @@ class Explorer {
       kinds: Object.fromEntries(this.#coverage.visits),
       skippedDestructive: [...this.#skipped].sort(),
       writes: Object.fromEntries(this.#writes),
+      restores: this.#restores,
+      archived: this.#archive.size,
       ...(this.#stopReason ? { stopReason: this.#stopReason } : {}),
       calls: this.#calls,
       measurementCalls: this.#measurementCalls,

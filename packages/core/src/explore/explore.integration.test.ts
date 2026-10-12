@@ -12,6 +12,13 @@ import { emitTest } from "./emit.js";
 import { explore } from "./explorer.js";
 import { replay, shrink } from "./replay.js";
 import type { ExploreAction } from "./types.js";
+import { runAction } from "./actions.js";
+import { FormFlow } from "./form-flow.js";
+import { formatTools } from "./forms.js";
+import { heuristicGenerator } from "./inputs.js";
+import { observe } from "./observe.js";
+import { SeededRandom } from "./random.js";
+import { goalGenerators } from "../goal-data.js";
 
 const link = (name: string): ExploreAction => ({
   kind: "click",
@@ -109,6 +116,44 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       for (const entry of first)
         if (entry.outcome !== "forced")
           expect(entry.route).toMatch(/^\/explore/u);
+    }, 120_000);
+
+    it("completes a two-page wizard with date parts, a UK postcode and a radio", async () => {
+      const fresh = await freshPage();
+      const random = new SeededRandom(5);
+      const generators = goalGenerators(1);
+      const flow = new FormFlow({
+        page: fresh.page,
+        tools: formatTools(random),
+        chooseGenerator: async (target) =>
+          heuristicGenerator(target.inputType ?? "text", target.name),
+        generate: (generator) => generators.generate(generator),
+        safe: () => true,
+      });
+      const before = site.stats.bugs["plan-projection"] ?? 0;
+      const done: string[] = [];
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/account/plan/new`);
+        let plan = await flow.start(await observe(fresh.page));
+        for (let round = 0; plan && round < 8; round++) {
+          for (const action of plan) {
+            await runAction(fresh.page, action).catch(() => undefined);
+            done.push(
+              "target" in action
+                ? `${action.kind} ${action.target.name}`
+                : action.kind,
+            );
+          }
+          plan = await flow.next(await observe(fresh.page));
+        }
+        expect(fresh.page.url).toContain("/explore/account/plan/created");
+        expect(site.stats.bugs["plan-projection"]).toBe(before + 1);
+        expect(done).toContain("click Save & Continue");
+        expect(done).toContain("click Create plan");
+        expect(done).toContain("click Yes");
+      } finally {
+        await fresh.close();
+      }
     }, 120_000);
 
     it("replays, shrinks and emits a hostile-input crash", async () => {

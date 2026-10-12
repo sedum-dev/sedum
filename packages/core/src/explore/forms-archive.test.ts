@@ -1,0 +1,110 @@
+import { describe, expect, it } from "vitest";
+import { Archive, routeTemplate } from "./archive.js";
+import {
+  editsExistingRecord,
+  fieldsToFill,
+  formatTools,
+  formatValue,
+  type FieldInfo,
+} from "./forms.js";
+import { SeededRandom } from "./random.js";
+import type { ExploreAction } from "./types.js";
+
+const field = (hints: string, extra: Partial<FieldInfo> = {}): FieldInfo => ({
+  ref: hints,
+  empty: true,
+  invalid: false,
+  required: true,
+  type: "text",
+  hints,
+  ...extra,
+});
+
+describe("format rules", () => {
+  const tools = formatTools(new SeededRandom(3));
+
+  it("fills date parts, UK postcodes, emails and ranges validly", () => {
+    expect(
+      Number(formatValue(field("dd day"), tools)?.value),
+    ).toBeLessThanOrEqual(28);
+    expect(Number(formatValue(field("mm"), tools)?.value)).toBeLessThanOrEqual(
+      12,
+    );
+    const year = Number(formatValue(field("yyyy"), tools)?.value);
+    expect(year).toBeGreaterThanOrEqual(1950);
+    expect(year).toBeLessThanOrEqual(1995);
+    expect(formatValue(field("postcode"), tools)?.value).toMatch(
+      /^[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}$/iu,
+    );
+    expect(
+      formatValue(field("email", { type: "email" }), tools)?.value,
+    ).toMatch(/@example\.com$/u);
+    const age = Number(
+      formatValue(
+        field("retirement age", { type: "number", min: 55, max: 75 }),
+        tools,
+      )?.value,
+    );
+    expect(age).toBeGreaterThanOrEqual(55);
+    expect(age).toBeLessThanOrEqual(75);
+  });
+
+  it("never fills passwords and leaves unknown fields to the model", () => {
+    expect(
+      formatValue(field("password", { type: "password" }), tools)?.generator,
+    ).toBe("format.password");
+    expect(formatValue(field("favourite colour"), tools)).toBeNull();
+  });
+
+  it("leaves forms that edit an existing record alone", () => {
+    const settings = [
+      field("first name", { empty: false }),
+      field("last name", { empty: false }),
+      field("phone"),
+    ];
+    expect(editsExistingRecord(settings)).toBe(true);
+    expect(editsExistingRecord([field("first name"), field("last name")])).toBe(
+      false,
+    );
+  });
+
+  it("retries only the fields the page flagged", () => {
+    const fields = [field("dd", { empty: false, invalid: true }), field("mm")];
+    expect(fieldsToFill(fields, true).map((f) => f.hints)).toEqual(["dd"]);
+    expect(fieldsToFill(fields, false).map((f) => f.hints)).toEqual([
+      "dd",
+      "mm",
+    ]);
+  });
+});
+
+describe("archive", () => {
+  const go = (name: string): ExploreAction => ({
+    kind: "click",
+    target: { role: "link", name, occurrence: 0 },
+  });
+
+  it("folds ids out of routes", () => {
+    expect(
+      routeTemplate(
+        "/clients/78863d26-108d-43ca-bcf9-cb4901bf11f5/plans/12?tab=a",
+      ),
+    ).toBe("/clients/:id/plans/:id");
+  });
+
+  it("keeps the shortest clean path and never a path that wrote", () => {
+    const archive = new Archive({ staleAfter: 2, maxPath: 10 });
+    archive.visit("/a|form", [go("x"), go("y")], true);
+    archive.visit("/a|form", [go("y")], true);
+    archive.visit("/b|form", [go("z")], false);
+    archive.untried("/a|form", 3);
+    archive.untried("/b|form", 5);
+    expect(archive.due()).toBe(false);
+    archive.visit("/a|form", [go("y")], true);
+    expect(archive.due()).toBe(true);
+    const cell = archive.pick(new SeededRandom(1), "/home|home");
+    expect(cell?.key).toBe("/a|form");
+    expect(cell?.path).toEqual([go("y")]);
+    expect(archive.due()).toBe(false);
+  });
+});
