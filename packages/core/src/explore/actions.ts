@@ -33,6 +33,8 @@ export interface Leaf {
   readonly identity?: TargetIdentity;
   /** Where a click leads: its link target, or the button on this route. */
   readonly destination?: string;
+  /** The key a press leaf sends (Enter by default). */
+  readonly key?: "Enter" | "Escape";
 }
 
 /**
@@ -50,12 +52,15 @@ const WEIGHTS = {
   reload: 1,
   wait: 1,
   form: 40,
+  escape: 60,
 } as const;
 
 export interface TreeContext {
   readonly observation: Observation;
   readonly canGoBack: boolean;
   readonly lastKind?: ExploreActionKind;
+  /** The last action was refused (not actionable): something may cover the page. */
+  readonly lastRefused?: boolean;
   /** Offer the planned form fill (guided and heuristic modes only). */
   readonly formPage?: boolean;
   /** Kinds left out of this run by swarm testing. */
@@ -129,20 +134,36 @@ function fillLeaves(observation: Observation): Leaf[] {
   });
 }
 
-function otherLeaves(context: TreeContext): Leaf[] {
+/** Form fill, Enter on forms, and Escape after a refused click. */
+function formAndKeyLeaves(context: TreeContext): Leaf[] {
   const leaves: Leaf[] = [];
-  if (context.formPage && context.observation.fills.length)
+  const route = context.observation.route;
+  const hasFields = context.observation.fills.length > 0;
+  if (context.formPage && hasFields)
     leaves.push({
       kind: "form",
       base: WEIGHTS.form,
-      destination: `${context.observation.route} form`,
+      destination: `${route} form`,
     });
-  if (context.observation.fills.length)
+  if (hasFields)
     leaves.push({
       kind: "press",
       base: WEIGHTS.press,
-      destination: `${context.observation.route} press Enter`,
+      destination: `${route} press Enter`,
     });
+  // A refused click usually means an overlay covers the page; dismiss it.
+  if (context.lastRefused)
+    leaves.push({
+      kind: "press",
+      key: "Escape",
+      base: WEIGHTS.escape,
+      destination: `${route} press Escape`,
+    });
+  return leaves;
+}
+
+function otherLeaves(context: TreeContext): Leaf[] {
+  const leaves: Leaf[] = [...formAndKeyLeaves(context)];
   leaves.push({ kind: "scroll", base: WEIGHTS.scroll });
   if (context.canGoBack) leaves.push({ kind: "back", base: WEIGHTS.back });
   if (context.lastKind !== "reload" && context.lastKind !== "wait")

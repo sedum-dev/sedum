@@ -235,6 +235,22 @@ describe("action tree", () => {
     state: "s",
   };
 
+  it("offers Escape after a refused click", () => {
+    const quiet = actionTree({
+      observation,
+      canGoBack: false,
+      excluded: new Set(),
+    });
+    const refused = actionTree({
+      observation,
+      canGoBack: false,
+      excluded: new Set(),
+      lastRefused: true,
+    });
+    expect(quiet.some((l) => l.key === "Escape")).toBe(false);
+    expect(refused.find((l) => l.key === "Escape")?.kind).toBe("press");
+  });
+
   it("drops links that leave the origin and offers the form fill on form pages", () => {
     const plain = actionTree({
       observation,

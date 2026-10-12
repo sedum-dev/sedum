@@ -36,7 +36,7 @@ export type ExploreAction =
       readonly value: string;
       readonly source: InputSource;
     }
-  | { readonly kind: "press"; readonly key: "Enter" }
+  | { readonly kind: "press"; readonly key: "Enter" | "Escape" }
   | { readonly kind: "scroll"; readonly direction: "down" | "up" }
   | { readonly kind: "back" }
   | { readonly kind: "reload" }

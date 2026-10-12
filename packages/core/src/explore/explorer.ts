@@ -290,6 +290,7 @@ class Explorer {
       observation,
       canGoBack: await this.#canGoBack(),
       ...(this.#lastKind ? { lastKind: this.#lastKind } : {}),
+      lastRefused: this.#lastRefused(),
       excluded: this.#excluded,
       globalTargets: this.#chrome.targets,
     });
@@ -315,6 +316,10 @@ class Explorer {
     this.#lastKind = action.kind;
     this.#pendingDestination = this.#plan ? undefined : leaf.destination;
     this.#learnFailure(leaf);
+  }
+
+  #lastRefused(): boolean {
+    return /not_actionable/u.test(this.#trace.at(-1)?.error ?? "");
   }
 
   /** A target that could not be acted on loses weight everywhere it appears. */
@@ -520,7 +525,7 @@ class Explorer {
         };
       }
       case "press":
-        return { kind: "press", key: "Enter" };
+        return { kind: "press", key: leaf.key ?? "Enter" };
       case "scroll":
         return {
           kind: "scroll",
