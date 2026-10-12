@@ -358,6 +358,31 @@ describe("write log", () => {
     );
   });
 
+  it("keeps a target skipped once it was judged destructive", () => {
+    const coverage = new Coverage();
+    const importPlan = candidate("Import plan");
+    const leaves = [{ ...click("Import plan"), candidate: importPlan }];
+    const judge = (p: number) =>
+      guide({
+        mode: "guided",
+        leaves,
+        coverage,
+        tuning: DEFAULT_TUNING,
+        advice: {
+          answer: {
+            kind: { choice: "form", probabilities: { form: 1 }, confidence: 1 },
+            destructive: { t0: p },
+            leadsTo: {},
+            call,
+          },
+          ids: new Map([[0, "t0"]]),
+        },
+      });
+    expect(judge(0.2).skipped).toEqual([]);
+    expect(judge(0.8).skipped).toEqual(["Import plan"]);
+    expect(judge(0.2).skipped).toEqual(["Import plan"]);
+  });
+
   it("halves a target's weight after each failure", () => {
     const coverage = new Coverage();
     const view = candidate("View");

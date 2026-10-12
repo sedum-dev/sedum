@@ -13,6 +13,7 @@ import type {
 export class Coverage {
   readonly visits = new Map<string, number>();
   readonly #failures = new Map<string, number>();
+  readonly #dangerous = new Set<string>();
   readonly #observed = new Map<string, string>();
   readonly #tried = new Map<string, number>();
 
@@ -24,6 +25,15 @@ export class Coverage {
   learn(destination: string, kind: string | undefined): void {
     this.#tried.set(destination, (this.#tried.get(destination) ?? 0) + 1);
     if (kind) this.#observed.set(destination, kind);
+  }
+
+  /** Remember a target judged destructive, by role, name and location. */
+  markDangerous(candidate: Candidate): void {
+    this.#dangerous.add(targetSignature(candidate));
+  }
+
+  dangerous(candidate: Candidate): boolean {
+    return this.#dangerous.has(targetSignature(candidate));
   }
 
   /** A target (by signature) that could not be acted on, such as a hidden menu item. */
@@ -113,6 +123,8 @@ function cautious(
   leaf: Leaf,
   judged: number | undefined,
 ): number {
+  // Once judged destructive anywhere, a target stays skipped everywhere.
+  if (leaf.candidate && input.coverage.dangerous(leaf.candidate)) return 1;
   const keyword = looksDestructive(leaf.identity!.name) ? 1 : 0;
   if (judged === undefined) return keyword;
   return input.tuning.strictSafety ? Math.max(judged, keyword) : judged;
@@ -215,6 +227,7 @@ export function guide(input: GuidanceInput): Guided {
       destructive >= input.tuning.skipDestructive
     ) {
       skipped.push(leaf.identity!.name);
+      if (leaf.candidate) input.coverage.markDangerous(leaf.candidate);
       safeBase.push(0);
       return 0;
     }
