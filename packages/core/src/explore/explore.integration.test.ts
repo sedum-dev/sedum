@@ -184,6 +184,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         expect(fresh.page.url).toContain("/explore/account/accounts/saved");
         expect(site.stats.writes["accounts"]).toBe(before + 1);
         expect(done).toContain("click Select a wrapper type");
+        expect(done).toContain("type Choose a portfolio");
         expect(
           done.some((d) =>
             /^click Platform = (Aviva|Transact|Other)$/u.test(d),

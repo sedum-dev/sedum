@@ -67,27 +67,56 @@ input type. It exists as an ablation. `--mode random` is the blind walk.
 A random walk almost never completes a form on its own. It has to fill every
 field correctly and then submit without wandering off, and a wizard repeats
 that on every page. So the form action is a small program, not a choice per
-field:
+field. Code does the mechanics; Jev answers the questions code cannot, each
+as a closed choice:
 
 1. Read each field's state from the page: empty, invalid, required, type,
-   label, placeholder, `min`, `max` and `maxlength`.
-2. Fill every empty field. Code recognises common formats (day, month and
-   year boxes, dates, postcodes, emails, phone numbers, numbers within their
-   range, first and last names). Jev picks a Faker generator for the rest.
-   Passwords are never filled.
+   label, placeholder, `min`, `max`, `maxlength` and `pattern`.
+2. Fill every empty field. Code recognises common formats: a `pattern`
+   attribute (sampled directly), day, month and year boxes, dates, UK
+   postcodes, sort codes, National Insurance numbers, IBANs, account
+   numbers, emails, phone numbers, numbers within their range, money
+   amounts, reference codes, and first and last names. Jev picks a
+   generator, Faker or one of these formats, for the rest. Passwords are
+   never filled.
 3. Answer each radio group that has no choice yet.
-4. Click the form's own submit button. If the form has no submit button in
+4. Answer each dropdown that still shows a placeholder ("Select a wrapper
+   type", "Choose…"), with an option Jev picks:
+   - a native `<select>` is chosen in one click that names the option;
+   - a custom dropdown is opened, and the targets that appear are its
+     options, whatever their markup;
+   - a select hidden under a type-ahead widget (Tom Select, Select2) is
+     chosen by typing the option into the widget's input and clicking the
+     matching result.
+5. Click the form's own submit button. If the form has no submit button in
    view, press Enter. If the submit button is unsafe, give up, because Enter
-   would submit the form anyway.
-5. If the same page comes back with fields marked invalid, fill only those
-   and submit again (at most 3 attempts). If a new set of fields appears,
-   treat it as the next page of a wizard (at most 6 pages).
+   would submit the form anyway. If it is disabled, give up too: something
+   else, such as a sub-form, must come first.
+6. Read what the submit changed. Fields marked invalid, and fields named by
+   new error lines anywhere in the form (a summary box such as "Wrapper type
+   is required"), are filled again, up to 3 attempts. Code matches an error
+   line to a field by its label; Jev maps the lines code cannot. A refill
+   uses the format the error states ("must be 6 digits"), else the field's
+   format, else a generator Jev picks knowing the error.
+7. If a new set of fields appears, treat it as the next page of a wizard (at
+   most 6 pages). A page the app filled in with defaults is still submitted
+   when its button continues ("Save & Continue").
 
-A form that is mostly filled in already edits an existing record, such as
-account settings, so the macro leaves it alone. The walk can still type into
-it one field at a time. Each part of the plan runs as its own step and is
-recorded as an ordinary action, so replay and shrinking treat it like any
-other.
+The macro leaves two kinds of form alone. Jev judges what a form does
+(creates something, fills in one record, changes settings, searches), and a
+form that changes settings for the whole account, firm or team is skipped.
+A form that is mostly filled in already edits an existing record and is
+skipped too. The walk can still type into either one field at a time.
+
+These questions go through one closed-choice call, `decide`, that asks
+several questions about one form or dropdown at once. Answers are cached
+per form, so a form costs a call or two. Heuristic mode answers them with
+rules: settings by route, options at random, errors by label.
+
+Each part of the plan runs as its own step and is recorded as an ordinary
+action, so replay and shrinking treat it like any other. A native dropdown
+choice becomes `select "ISA" from the "Wrapper type" dropdown` in an
+emitted test.
 
 ## Returning to unfinished pages
 
@@ -192,11 +221,17 @@ refusal halves that target's weight everywhere it appears.
   admin console revealed by a preference checkbox, a newsletter welcome
   page behind form validation, and a plan summary behind a two-page wizard
   with split date boxes, a postcode check, a radio group and number ranges);
-- five planted bugs: a crash on non-ASCII search text, a console error after
+- an "Add account" dialog without dialog roles: a custom div dropdown with a
+  heading, a native select with a placeholder, a type-ahead widget over a
+  hidden select, a field no format rule knows, and errors shown only in a
+  summary box;
+- six planted bugs: a crash on non-ASCII search text, a console error after
   a valid newsletter signup, an HTTP 500 on CSV export, a console error in
-  the admin console, and a console error on the plan summary;
+  the admin console, a console error on the plan summary, and a console
+  error after saving an account;
 - four destructive buttons, one of them worded without any destructive
   keyword ("Start over with an empty account");
+- a single-field firm branding form, which the form macro must leave alone;
 - a benign button worded like a destructive one ("Remove all filters");
 - an off-origin link.
 
@@ -240,5 +275,10 @@ each, same seeds.
 | Returns to an unfinished page (mean)      | –       | 1.4     |
 | Destructive actions                       | 0       | 0       |
 | Cost per run (mean)                       | $0.0129 | $0.0129 |
+
+That comparison predates the "Add account" dialog and the branding form.
+An integration test drives the form macro through the dialog (custom,
+native and type-ahead dropdowns, then a retry from the error summary)
+without a model.
 
 These are feasibility numbers on one synthetic site, not a benchmark.

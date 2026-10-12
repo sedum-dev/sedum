@@ -255,11 +255,23 @@ document.querySelectorAll('.opt').forEach((option) => option.onclick = () => {
   $('wrapper').textContent = option.textContent; $('wrapper').dataset.value = option.textContent;
   $('wrapper-menu').hidden = true;
 });
+// A type-ahead widget over a hidden select, like Tom Select.
+$('portfolio-search').oninput = () => {
+  const query = $('portfolio-search').value.toLowerCase();
+  $('portfolio-results').innerHTML = '';
+  [...$('portfolio').options].filter((o) => o.value && o.text.toLowerCase().includes(query)).forEach((o) => {
+    const row = document.createElement('div');
+    row.textContent = o.text; row.style.cursor = 'pointer';
+    row.onclick = () => { $('portfolio').value = o.value; $('portfolio-search').value = o.text; $('portfolio-results').innerHTML = ''; };
+    $('portfolio-results').append(row);
+  });
+};
 const CHECKS = [
   [() => $('name').value.trim(), 'Account name is required'],
   [() => /^[0-9]{8}$/.test($('accountId').value), 'Account ID must be 8 digits'],
   [() => $('platform').value, 'Platform is required'],
   [() => $('wrapper').dataset.value, 'Wrapper type is required'],
+  [() => $('portfolio').value, 'Current portfolio is required'],
   [() => /^[0-9]{6}$/.test($('adviser').value), 'Adviser code must be 6 digits'],
   [() => Number($('balance').value) > 0, 'Balance must be a number above 0'],
 ];
@@ -286,6 +298,7 @@ function accountsPage(): string {
 <label for="accountId">Account ID</label><input id="accountId">
 <label for="platform">Platform</label><select id="platform"><option value="">Select a platform</option><option>Aviva</option><option>Transact</option><option>Other</option></select>
 <div>Wrapper type</div><div><div id="wrapper" style="cursor:pointer">Select a wrapper type</div><div id="wrapper-menu" hidden><div>Most common</div>${options}</div></div>
+<label for="portfolio">Current portfolio</label><select id="portfolio" style="position:absolute;width:1px;height:1px;opacity:0"><option value="">Choose a portfolio</option><option value="c">Cautious</option><option value="b">Balanced</option><option value="g">Growth</option></select><div><input id="portfolio-search" placeholder="Choose a portfolio" autocomplete="off"><div id="portfolio-results"></div></div>
 <label for="adviser">Adviser code</label><input id="adviser">
 <label for="balance">Balance</label><input id="balance" placeholder="0.00">
 <div id="summary" hidden></div>

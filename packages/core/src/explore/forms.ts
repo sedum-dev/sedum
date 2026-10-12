@@ -119,6 +119,11 @@ export interface Dropdown {
   readonly label: string;
   /** What it shows now, such as "Select a wrapper type". */
   readonly shown: string;
+  /**
+   * A type-ahead widget over a hidden select: type an option into the
+   * input named `shown`, then click the matching result.
+   */
+  readonly typeahead?: boolean;
   /** Options of a native select; a custom one lists them once opened. */
   readonly options?: readonly string[];
 }
@@ -206,15 +211,47 @@ const DROPDOWNS = String.raw`(refs) => {
   const labelOf = (el) =>
     (el.labels && el.labels[0] && text(el.labels[0])) || el.getAttribute("aria-label") || labelBefore(el);
   const out = [];
-  const selects = [...document.querySelectorAll("select")].filter((s) => !s.disabled && !s.multiple && visible(s));
-  for (const select of scope.querySelectorAll("select")) {
-    if (!selects.includes(select)) continue;
+  // A select drawn over by a widget (Tom Select, Select2…) is chosen through
+  // the widget's type-ahead input instead.
+  const covered = (s) => {
+    const b = s.getBoundingClientRect();
+    if (b.width < 4 || b.height < 4) return true;
+    const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    return !!top && top !== s && !s.contains(top);
+  };
+  // The widget's input: in the next siblings (where Tom Select and Select2
+  // put it), else the only input beside the select.
+  const inputIn = (box) => [...box.querySelectorAll("input:not([type=hidden])")].filter(visible);
+  const proxyInput = (s) => {
+    for (let next = s.nextElementSibling, n = 0; next && n < 2; next = next.nextElementSibling, n++) {
+      const inputs = next.matches("input") ? [next] : inputIn(next);
+      if (inputs.length) return inputs[0];
+    }
+    const beside = s.parentElement ? inputIn(s.parentElement) : [];
+    return beside.length === 1 ? beside[0] : null;
+  };
+  const optionsOf = (select) => [...select.options]
+    .filter((o) => !o.disabled && o.value && !PLACEHOLDER.test(o.label || o.text))
+    .map((o) => (o.label || o.text).replace(/\s+/g, " ").trim()).slice(0, 60);
+  const unanswered = (select) => {
     const chosen = select.selectedOptions[0];
-    if (select.value && chosen && !PLACEHOLDER.test(text(chosen))) continue;
-    const options = [...select.options]
-      .filter((o) => !o.disabled && o.value && !PLACEHOLDER.test(o.label || o.text))
-      .map((o) => (o.label || o.text).replace(/\s+/g, " ").trim()).slice(0, 60);
-    if (options.length) out.push({ native: true, nth: selects.indexOf(select), label: labelOf(select), shown: chosen ? text(chosen) : "", options });
+    return !select.value || !chosen || PLACEHOLDER.test(text(chosen));
+  };
+  const usable = [...document.querySelectorAll("select")].filter((s) => !s.disabled && !s.multiple);
+  const selects = usable.filter((s) => visible(s) && !covered(s));
+  for (const select of scope.querySelectorAll("select")) {
+    const options = optionsOf(select);
+    if (!usable.includes(select) || !unanswered(select) || !options.length) continue;
+    if (selects.includes(select)) {
+      const chosen = select.selectedOptions[0];
+      out.push({ native: true, nth: selects.indexOf(select), label: labelOf(select), shown: chosen ? text(chosen) : "", options });
+      continue;
+    }
+    const input = proxyInput(select);
+    if (!input) continue;
+    const shown = input.getAttribute("placeholder") || input.getAttribute("aria-label") || "";
+    const nth = out.filter((d) => d.typeahead && d.shown === shown).length;
+    out.push({ native: false, typeahead: true, nth, label: labelOf(select) || shown, shown, options });
   }
   const seen = new Set();
   for (const el of scope.querySelectorAll("*")) {

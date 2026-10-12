@@ -70,13 +70,22 @@ interface Active {
   /** Custom dropdowns still to open this attempt. */
   queue: Dropdown[];
   /** The dropdown just opened, and the targets shown before it opened. */
-  opened?: { dropdown: Dropdown; before: ReadonlySet<string> } | undefined;
+  opened?: Opened | undefined;
+  /** Names of type-ahead inputs: chosen through their list, never typed. */
+  proxies: ReadonlySet<string>;
   /** Fields typed into this attempt. */
   typed: Set<string>;
   /** Submitted this attempt; the next step checks what the page says. */
   submitted: boolean;
   /** The form's lines before its first submit: errors are lines it lacked. */
   baseline?: readonly string[] | undefined;
+}
+
+/** A dropdown just opened, the targets before it, and the option typed. */
+interface Opened {
+  readonly dropdown: Dropdown;
+  readonly before: ReadonlySet<string>;
+  readonly want?: string;
 }
 
 /** One planned value: the field, and the error it must fix, if any. */
@@ -113,6 +122,7 @@ export class FormFlow {
   /** Plan a first attempt on this page, or null when there is nothing to do. */
   async start(observation: Observation): Promise<ExploreAction[] | null> {
     const fields = await inspectFields(this.deps.page, observation.fills);
+    if (!fieldsToFill(fields, false).length) return null;
     if (!(await this.#allowed(observation, fields))) return null;
     this.#active = this.#fresh(observation, 1);
     return this.#finish(await this.#attempt(observation, fields, []));
@@ -144,6 +154,7 @@ export class FormFlow {
       queue: [],
       typed: new Set(),
       submitted: false,
+      proxies: new Set(),
     };
   }
 
@@ -152,6 +163,10 @@ export class FormFlow {
     fields: readonly FieldInfo[],
   ): Promise<boolean> {
     if (editsExistingRecord(fields)) return false;
+    return this.#notSettings(observation);
+  }
+
+  async #notSettings(observation: Observation): Promise<boolean> {
     const labels = observation.fills.map((c) => c.name);
     const purpose = await this.deps.judge.purpose(observation, labels);
     return purpose !== "settings";
@@ -167,13 +182,17 @@ export class FormFlow {
     errors: readonly Fill[],
   ): Promise<ExploreAction[] | null> {
     const active = this.#active!;
-    const fills = errors.length
-      ? errors
-      : fieldsToFill(fields, false).map((field) => ({ field }));
     const dropdowns = await unansweredDropdowns(
       this.deps.page,
       observation.fills,
     );
+    active.proxies = new Set(
+      dropdowns.filter((d) => d.typeahead).map((d) => d.shown),
+    );
+    const planned = errors.length
+      ? errors
+      : fieldsToFill(fields, false).map((field) => ({ field }));
+    const fills = this.#typeable(observation, planned);
     const actions = [
       ...(await this.#typeAll(observation, fills)),
       ...(await this.#choices(observation)),
@@ -182,6 +201,17 @@ export class FormFlow {
     active.queue = dropdowns.filter((d) => !d.native);
     const rest = await this.#advance(observation, active);
     return rest ? [...actions, ...rest] : null;
+  }
+
+  /** Leave out type-ahead inputs: their list chooses the value. */
+  #typeable(observation: Observation, fills: readonly Fill[]): Fill[] {
+    const proxies = this.#active!.proxies;
+    return fills.filter((fill) => {
+      const name = observation.fills.find(
+        (c) => c.ref === fill.field.ref,
+      )?.name;
+      return !name || !proxies.has(name);
+    });
   }
 
   async #typeAll(
@@ -205,12 +235,48 @@ export class FormFlow {
   ): Promise<ExploreAction[] | null> {
     while (active.queue.length) {
       const dropdown = active.queue.shift()!;
-      const candidate = this.#usable(observation, dropdown);
-      if (!candidate) continue;
-      active.opened = { dropdown, before: shown(observation) };
-      return [click(observation, candidate)];
+      const opened = dropdown.typeahead
+        ? await this.#search(observation, dropdown)
+        : this.#open(observation, dropdown);
+      if (!opened) continue;
+      active.opened = opened.opened;
+      return [opened.action];
     }
     return this.#submitAll(observation, active);
+  }
+
+  #open(
+    observation: Observation,
+    dropdown: Dropdown,
+  ): { opened: Opened; action: ExploreAction } | null {
+    const candidate = this.#usable(observation, dropdown);
+    if (!candidate) return null;
+    const opened = { dropdown, before: shown(observation) };
+    return { opened, action: click(observation, candidate) };
+  }
+
+  /** Type a chosen option into a type-ahead input; its result is clicked next. */
+  async #search(
+    observation: Observation,
+    dropdown: Dropdown,
+  ): Promise<{ opened: Opened; action: ExploreAction } | null> {
+    const input = observation.fills.filter((c) => c.name === dropdown.shown)[
+      dropdown.nth
+    ];
+    const options = dropdown.options ?? [];
+    if (!input || !options.length) return null;
+    const want =
+      options[await this.#optionIndex(observation, dropdown, options)]!;
+    const opened = { dropdown, before: shown(observation), want };
+    return {
+      opened,
+      action: {
+        kind: "type",
+        target: identityOf(observation.fills, input, observation.url),
+        value: want,
+        source: { kind: "faker", generator: "format.option" },
+      },
+    };
   }
 
   /** Fields that appeared after a choice (conditional fields), then submit. */
@@ -219,9 +285,12 @@ export class FormFlow {
     active: Active,
   ): Promise<ExploreAction[] | null> {
     const fields = await inspectFields(this.deps.page, observation.fills);
-    const extra = fieldsToFill(fields, false)
-      .filter((f) => !active.typed.has(f.ref))
-      .map((field) => ({ field }));
+    const extra = this.#typeable(
+      observation,
+      fieldsToFill(fields, false)
+        .filter((f) => !active.typed.has(f.ref))
+        .map((field) => ({ field })),
+    );
     const actions = await this.#typeAll(observation, extra);
     const submit = this.#submit(observation, fields);
     if (!submit) return null;
@@ -235,7 +304,7 @@ export class FormFlow {
     observation: Observation,
     active: Active,
   ): Promise<ExploreAction[] | null> {
-    const { dropdown, before } = active.opened!;
+    const { dropdown, before, want } = active.opened!;
     active.opened = undefined;
     const options = observation.clicks.filter(
       (c) =>
@@ -245,6 +314,8 @@ export class FormFlow {
         this.deps.safe(c),
     );
     if (!options.length) return [{ kind: "press", key: "Escape" }];
+    const typed = want ? matching(options, want) : undefined;
+    if (typed) return [click(observation, typed)];
     const names = options.map((c) => c.name);
     const chosen = await this.#optionIndex(observation, dropdown, names);
     return [click(observation, options[chosen]!)];
@@ -352,9 +423,11 @@ export class FormFlow {
     fields: readonly FieldInfo[],
   ): Promise<ExploreAction[] | null> {
     const active = this.#active!;
-    if (active.pages >= MAX_PAGES || !fieldsToFill(fields, false).length)
-      return null;
-    if (!(await this.#allowed(observation, fields))) return null;
+    // The macro started this record, so values the app filled in by
+    // default do not make the next page an edit form.
+    if (active.pages >= MAX_PAGES) return null;
+    if (!fieldsToFill(fields, false).length && !continues(fields)) return null;
+    if (!(await this.#notSettings(observation))) return null;
     this.#active = this.#fresh(observation, active.pages + 1);
     return this.#attempt(observation, fields, []);
   }
@@ -423,6 +496,8 @@ export class FormFlow {
     const name = fields.find((f) => f.submit)?.submit;
     const named = observation.clicks.filter((c) => name && c.name === name);
     if (!named.length) return { kind: "press", key: "Enter" };
+    // A disabled submit waits for something else first, such as a sub-form.
+    if (named.every((c) => c.disabled)) return null;
     // A nav link can share the button's name ("Search"); prefer the button.
     const buttons = named.filter((c) => !c.signals.href);
     const pool = buttons.length ? buttons : named;
@@ -439,6 +514,25 @@ function click(
     kind: "click",
     target: identityOf(observation.clicks, candidate, observation.url),
   };
+}
+
+/** The result whose name is the typed option, or contains it. */
+function matching(
+  options: readonly Candidate[],
+  want: string,
+): Candidate | undefined {
+  const norm = (text: string) =>
+    text.toLowerCase().replace(/\s+/gu, " ").trim();
+  return (
+    options.find((c) => norm(c.name) === norm(want)) ??
+    options.find((c) => norm(c.name).includes(norm(want)))
+  );
+}
+
+/** A wizard page with nothing empty that still asks to continue. */
+function continues(fields: readonly FieldInfo[]): boolean {
+  const submit = fields.find((f) => f.submit)?.submit ?? "";
+  return /continue|next/iu.test(submit);
 }
 
 /** The click candidate of a dropdown the page script found. */
