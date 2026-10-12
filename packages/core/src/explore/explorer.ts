@@ -46,6 +46,8 @@ export interface ExploreOptions {
    */
   readonly measureKinds?: boolean;
   readonly onStep?: (entry: TraceEntry) => void | Promise<void>;
+  /** A step still running after this long restarts the walk (default 60 s). */
+  readonly stepTimeoutMs?: number;
   /** More origins to watch, and whether rejected submissions count. */
   readonly oracles?: OracleOptions;
   /**
@@ -91,6 +93,23 @@ export interface ExploreResult {
 
 const TARGET_LIMIT = 60;
 const STUCK_OUTSIDE = 6;
+const STEP_TIMEOUT_MS = 60_000;
+
+class StepTimeout extends Error {
+  constructor(ms: number) {
+    super(`The step took longer than ${ms / 1000} s; the page may be hung.`);
+    this.name = "StepTimeout";
+  }
+}
+
+/** Reject when `work` takes longer than `ms`; the work itself is not cancelled. */
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new StepTimeout(ms)), ms);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
 const FORM_KINDS = new Set(["form", "search", "auth"]);
 const PAGE_TEXT_LIMIT = 3_000;
 const SWARM_KINDS: readonly ExploreActionKind[] = [
@@ -173,6 +192,7 @@ class Explorer {
   readonly #chrome = new SiteChrome();
   readonly #writes = new Map<string, number>();
   #outsideStreak = 0;
+  readonly #abandoned = new Set<number>();
   #stopReason: string | undefined;
   readonly #calls: ProviderCall[] = [];
   readonly #measurementCalls: ProviderCall[] = [];
@@ -208,8 +228,8 @@ class Explorer {
     this.#oracles = new Oracles(this.page, this.#origin, this.options.oracles);
     try {
       for (let step = 0; step < steps && this.#running(); step++)
-        await this.#step(step).catch((error: unknown) =>
-          this.#recover(step, error),
+        await withDeadline(this.#step(step), this.#stepTimeoutMs()).catch(
+          (error: unknown) => this.#recover(step, error),
         );
     } finally {
       this.#oracles.detach();
@@ -228,6 +248,10 @@ class Explorer {
     if (info.kind) this.#coverage.visit(info.kind);
     if (!(await this.#continuePlan(step, observation, info)))
       await this.#choose(step, observation, info);
+  }
+
+  #stepTimeoutMs(): number {
+    return this.options.stepTimeoutMs ?? STEP_TIMEOUT_MS;
   }
 
   #running(): boolean {
@@ -363,13 +387,25 @@ class Explorer {
     });
   }
 
+  async #reopen(): Promise<void> {
+    try {
+      await withDeadline(this.page.goto(this.options.startUrl), 30_000);
+      await settle(this.page);
+    } catch {
+      this.#stopReason =
+        "The page stopped responding and could not be reopened.";
+    }
+  }
+
   /** A page that cannot be observed (crash, download, hang) restarts the walk. */
   async #recover(step: number, error: unknown): Promise<void> {
     if (this.options.signal?.aborted) throw error;
+    // A hung step may still finish later; its late entry is dropped.
+    this.#abandoned.add(step);
     const route = this.page.url;
-    await this.page.goto(this.options.startUrl);
-    await settle(this.page);
+    await this.#reopen();
     this.#pendingDestination = undefined;
+    this.#plan = undefined;
     await this.#record({
       step,
       route,
@@ -384,6 +420,7 @@ class Explorer {
   }
 
   async #record(base: TraceEntry): Promise<void> {
+    if (this.#abandoned.has(base.step) && base.outcome !== "forced") return;
     const writes = this.#oracles!.drainWrites();
     const entry = writes.length ? { ...base, writes } : base;
     for (const write of writes) {
