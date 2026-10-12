@@ -68,8 +68,9 @@ input type. It exists as an ablation. `--mode random` is the blind walk.
 
 ## Oracles
 
-The walk always reports console errors, uncaught page exceptions and HTTP 5xx
-responses from the start origin. Two options widen that:
+The walk always reports console errors, uncaught page exceptions, HTTP 5xx
+responses from the start origin, and broken links: page navigations answered
+with 4xx or 5xx. These options adjust that:
 
 - `--watch-origin <origin>` also watches another origin, such as a separate
   API host. Repeat it for more origins.
@@ -77,10 +78,40 @@ responses from the start origin. Two options widen that:
   except GET or HEAD; 401, 403 and 404 are excluded). Such an answer means the
   UI let the user send something the server refuses. It is opt-in because some
   apps rely on server-side validation on purpose.
+- `--ignore-console <regex>` ignores known console noise, such as a
+  third-party player's permissions-policy warning. Repeat it for more patterns.
 
 After each action, the walk waits for the DOM to go quiet and for no request
 to have been in flight for 300 ms (at most 3 s). Single-page apps fetch route
 code and data after the DOM settles.
+
+Each trace entry also lists the successful writes the action caused: every
+non-GET request to a watched origin, where a GraphQL request counts only when
+it carries a mutation. The summary totals writes per endpoint, so you can
+audit what an exploration changed.
+
+## Exploring a real staging account
+
+- `--cookies <storage-state.json>` signs the browser in with the cookies of a
+  Playwright storage-state file. Log in with a separate script, so the
+  exploration never types or records credentials.
+- `--strict-safety` skips a target when either Jev or the destructive keyword
+  list (delete, remove, send, invite, share, archive, log out…) says so. Jev
+  judges a confirming button (Yes, OK, Proceed) by what it confirms, and
+  counts imports, syncs, integrations and signing out as irreversible. Once a
+  target is judged destructive anywhere, it stays skipped for the rest of the
+  walk.
+- A step still running after 60 s restarts the walk from the start page, and
+  the walk stops when it keeps leaving the site, for example after the
+  session expires.
+- The walk can still create data through ordinary forms. Use an organization
+  or account you can reset, and review the write log after each run.
+
+Two adjustments help on large apps. A non-link target seen on three or more
+paths, such as a navigation bar built from buttons, shares one destination,
+so it stops looking new on every page. After a click the page refuses (for
+example, one covered by an open panel), the walk offers Escape, and each
+refusal halves that target's weight everywhere it appears.
 
 ## Reproduce, replay and shrink
 
