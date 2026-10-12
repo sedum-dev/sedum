@@ -60,9 +60,43 @@ export interface TreeContext {
   readonly formPage?: boolean;
   /** Kinds left out of this run by swarm testing. */
   readonly excluded: ReadonlySet<ExploreActionKind>;
+  /**
+   * Signatures of non-link targets seen on several routes, such as a
+   * navigation bar built from buttons. Their destination is shared across
+   * routes, so trying one on one page counts everywhere.
+   */
+  readonly globalTargets?: ReadonlySet<string>;
 }
 
-function clickLeaves(observation: Observation): Leaf[] {
+/** Non-link targets seen on several routes, such as a button-built nav bar. */
+export class SiteChrome {
+  readonly targets = new Set<string>();
+  readonly #routes = new Map<string, Set<string>>();
+
+  constructor(private readonly afterRoutes = 3) {}
+
+  learn(observation: Observation): void {
+    const route = observation.route.split("?")[0]!;
+    for (const candidate of observation.clicks) {
+      if (candidate.signals.href) continue;
+      const signature = targetSignature(candidate);
+      const routes = this.#routes.get(signature) ?? new Set<string>();
+      routes.add(route);
+      this.#routes.set(signature, routes);
+      if (routes.size >= this.afterRoutes) this.targets.add(signature);
+    }
+  }
+}
+
+/** Role, name and location: what makes a target the same across pages. */
+export function targetSignature(candidate: Candidate): string {
+  return `${candidate.role}|${candidate.name}|${candidate.location ?? ""}`;
+}
+
+function clickLeaves(
+  observation: Observation,
+  globalTargets: ReadonlySet<string> = new Set(),
+): Leaf[] {
   const allowed = observation.clicks.filter(
     (c) => sameOriginHref(c.signals.href, observation.url) !== null,
   );
@@ -75,7 +109,9 @@ function clickLeaves(observation: Observation): Leaf[] {
       identity,
       destination: identity.href
         ? `link ${identity.href}`
-        : `${observation.route} ${identity.role} ${identity.name}#${identity.occurrence}`,
+        : globalTargets.has(targetSignature(candidate))
+          ? `global ${targetSignature(candidate)}#${identity.occurrence}`
+          : `${observation.route} ${identity.role} ${identity.name}#${identity.occurrence}`,
     };
   });
 }
@@ -119,7 +155,7 @@ function otherLeaves(context: TreeContext): Leaf[] {
 /** The weighted action tree of one state, flattened, inside the origin. */
 export function actionTree(context: TreeContext): Leaf[] {
   return [
-    ...clickLeaves(context.observation),
+    ...clickLeaves(context.observation, context.globalTargets),
     ...fillLeaves(context.observation),
     ...otherLeaves(context),
   ].filter((leaf) => leaf.kind === "form" || !context.excluded.has(leaf.kind));

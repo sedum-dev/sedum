@@ -89,8 +89,20 @@ function destructiveProbability(
   const judged =
     id === undefined ? undefined : input.advice?.answer.destructive[id];
   // Heuristic mode, and guided mode without an answer (a failed call or a
-  // target past the request limit), fall back to the keyword list.
-  return judged ?? (looksDestructive(leaf.identity.name) ? 1 : 0);
+  // target past the request limit), fall back to the keyword list. Strict
+  // safety uses whichever of the two is more cautious.
+  return cautious(input, leaf, judged);
+}
+
+/** The judged probability, or the keyword list when there is none or when strict. */
+function cautious(
+  input: GuidanceInput,
+  leaf: Leaf,
+  judged: number | undefined,
+): number {
+  const keyword = looksDestructive(leaf.identity!.name) ? 1 : 0;
+  if (judged === undefined) return keyword;
+  return input.tuning.strictSafety ? Math.max(judged, keyword) : judged;
 }
 
 /** Guided adds Jev's part: favour destinations of rarely seen page kinds. */

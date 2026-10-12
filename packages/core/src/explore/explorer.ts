@@ -2,7 +2,7 @@ import type { BrowserPage } from "../browser-driver.js";
 import { goalGenerators } from "../goal-data.js";
 import type { Aim } from "../page-protocol.js";
 import type { ProviderCall } from "../provider.js";
-import { actionTree, runAction, type Leaf } from "./actions.js";
+import { actionTree, runAction, SiteChrome, type Leaf } from "./actions.js";
 import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
 import { PAGE_KINDS } from "./kinds.js";
@@ -73,6 +73,10 @@ export interface ExploreResult {
   readonly kinds: Readonly<Record<string, number>>;
   /** Distinct destructive targets the guidance refused to act on. */
   readonly skippedDestructive: readonly string[];
+  /** Successful writes per "METHOD endpoint", for a side-effect audit. */
+  readonly writes: Readonly<Record<string, number>>;
+  /** Why the walk stopped before its step budget, if it did. */
+  readonly stopReason?: string;
   /** Calls that steered the walk. */
   readonly calls: readonly ProviderCall[];
   /** Calls made only to measure coverage. */
@@ -86,6 +90,7 @@ export interface ExploreResult {
 }
 
 const TARGET_LIMIT = 60;
+const STUCK_OUTSIDE = 6;
 const FORM_KINDS = new Set(["form", "search", "auth"]);
 const PAGE_TEXT_LIMIT = 3_000;
 const SWARM_KINDS: readonly ExploreActionKind[] = [
@@ -165,6 +170,10 @@ class Explorer {
   readonly #states = new Set<string>();
   readonly #routes = new Set<string>();
   readonly #skipped = new Set<string>();
+  readonly #chrome = new SiteChrome();
+  readonly #writes = new Map<string, number>();
+  #outsideStreak = 0;
+  #stopReason: string | undefined;
   readonly #calls: ProviderCall[] = [];
   readonly #measurementCalls: ProviderCall[] = [];
   readonly #advisorMs: number[] = [];
@@ -198,7 +207,7 @@ class Explorer {
     await settle(this.page);
     this.#oracles = new Oracles(this.page, this.#origin, this.options.oracles);
     try {
-      for (let step = 0; step < steps && !this.options.signal?.aborted; step++)
+      for (let step = 0; step < steps && this.#running(); step++)
         await this.#step(step).catch((error: unknown) =>
           this.#recover(step, error),
         );
@@ -212,12 +221,17 @@ class Explorer {
     const observation = await observe(this.page);
     this.#states.add(observation.state);
     this.#routes.add(observation.route);
+    this.#chrome.learn(observation);
     const info = await this.#stateInfo(observation);
     if (this.#pendingDestination)
       this.#coverage.learn(this.#pendingDestination, info.kind);
     if (info.kind) this.#coverage.visit(info.kind);
     if (!(await this.#continuePlan(step, observation, info)))
       await this.#choose(step, observation, info);
+  }
+
+  #running(): boolean {
+    return !this.options.signal?.aborted && !this.#stopReason;
   }
 
   /** Run the next planned form action; false when no plan applies. */
@@ -253,6 +267,7 @@ class Explorer {
       canGoBack: await this.#canGoBack(),
       ...(this.#lastKind ? { lastKind: this.#lastKind } : {}),
       excluded: this.#excluded,
+      globalTargets: this.#chrome.targets,
     });
     const steering = this.options.mode === "guided" && info.advice;
     const guided = guide({
@@ -315,7 +330,12 @@ class Explorer {
 
   /** Bombadil's URL boundary: leaving the origin forces a step back. */
   async #enforceBoundary(step: number): Promise<void> {
-    if (onOrigin(this.page.url, this.#origin)) return;
+    if (onOrigin(this.page.url, this.#origin)) {
+      this.#outsideStreak = 0;
+      return;
+    }
+    if (++this.#outsideStreak >= STUCK_OUTSIDE)
+      this.#stopReason = `Left the site ${STUCK_OUTSIDE} times in a row; the session may have expired.`;
     const route = this.page.url;
     let action: ExploreAction = { kind: "back" };
     await runAction(this.page, action).catch(() => undefined);
@@ -356,7 +376,13 @@ class Explorer {
     });
   }
 
-  async #record(entry: TraceEntry): Promise<void> {
+  async #record(base: TraceEntry): Promise<void> {
+    const writes = this.#oracles!.drainWrites();
+    const entry = writes.length ? { ...base, writes } : base;
+    for (const write of writes) {
+      const key = `${write.method} ${write.endpoint}`;
+      this.#writes.set(key, (this.#writes.get(key) ?? 0) + 1);
+    }
     this.#trace.push(entry);
     for (const event of entry.events) this.#failure(event, entry.step);
     await this.options.onStep?.(entry);
@@ -599,6 +625,8 @@ class Explorer {
       routes: [...this.#routes].sort(),
       kinds: Object.fromEntries(this.#coverage.visits),
       skippedDestructive: [...this.#skipped].sort(),
+      writes: Object.fromEntries(this.#writes),
+      ...(this.#stopReason ? { stopReason: this.#stopReason } : {}),
       calls: this.#calls,
       measurementCalls: this.#measurementCalls,
       advisorMs: this.#advisorMs,

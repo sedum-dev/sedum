@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionTree, type Leaf } from "./actions.js";
+import { actionTree, targetSignature, type Leaf } from "./actions.js";
 import type { Observation } from "./observe.js";
 import { targetVariants } from "./emit.js";
 import { Coverage, guide } from "./guidance.js";
@@ -255,6 +255,60 @@ describe("action tree", () => {
       "/signup form",
     );
     expect(form.some((l) => l.kind === "back")).toBe(false);
+  });
+});
+
+describe("learned from a real staging run", () => {
+  const advice = (p: number): ExploreAdvice => ({
+    kind: { choice: "listing", probabilities: { listing: 1 }, confidence: 1 },
+    destructive: { t0: p, t1: 0.02 },
+    leadsTo: {},
+    call,
+  });
+  const ids = new Map([
+    [0, "t0"],
+    [1, "t1"],
+  ]);
+
+  it("strict safety skips a keyword match that Jev scored low", () => {
+    const leaves = [click("Log out"), click("Clients")];
+    const run = (strictSafety: boolean) =>
+      guide({
+        mode: "guided",
+        leaves,
+        coverage: new Coverage(),
+        tuning: { ...DEFAULT_TUNING, strictSafety },
+        advice: { answer: advice(0.16), ids },
+      });
+    expect(run(false).skipped).toEqual([]);
+    expect(run(true).skipped).toEqual(["Log out"]);
+  });
+
+  it("shares one destination for chrome seen on several routes", () => {
+    const nav = candidate("Clients", { role: "" });
+    const observation = {
+      url: "http://app.test/a",
+      route: "/a",
+      title: "",
+      text: "",
+      version: { document: "d", revision: 1, route: "/a" },
+      clicks: [nav],
+      fills: [],
+      state: "s",
+    };
+    const plain = actionTree({
+      observation,
+      canGoBack: false,
+      excluded: new Set(),
+    });
+    const global = actionTree({
+      observation,
+      canGoBack: false,
+      excluded: new Set(),
+      globalTargets: new Set([targetSignature(nav)]),
+    });
+    expect(plain[0]?.destination).toBe("/a  Clients#0");
+    expect(global[0]?.destination).toBe("global |Clients|#0");
   });
 });
 

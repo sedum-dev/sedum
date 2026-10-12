@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { InvalidArgumentError } from "commander";
 import type {
+  BrowserPage,
   BrowserSession,
   ExploreAction,
   ExploreFailure,
@@ -26,6 +27,12 @@ export interface ExploreCommandOptions {
   readonly watchOrigins?: readonly string[];
   /** Report 4xx answers to submissions (see OracleOptions). */
   readonly rejectedSubmits?: boolean;
+  /** Console errors matching these regular expressions are ignored. */
+  readonly ignoreConsole?: readonly string[];
+  /** Union Jev's safety judgment with the destructive keyword list. */
+  readonly strictSafety?: boolean;
+  /** A Playwright storage-state file whose cookies sign the browser in. */
+  readonly cookies?: string;
   readonly signal?: AbortSignal;
   readonly write: (text: string) => void;
 }
@@ -61,13 +68,45 @@ function watched(options: ExploreCommandOptions): {
   oracles?: OracleOptions;
 } {
   const origins = options.watchOrigins ?? [];
-  if (!origins.length && !options.rejectedSubmits) return {};
-  return {
-    oracles: {
-      ...(origins.length ? { watchOrigins: origins } : {}),
-      ...(options.rejectedSubmits ? { rejectedSubmits: true } : {}),
-    },
+  const ignore = options.ignoreConsole ?? [];
+  const oracles: OracleOptions = {
+    ...(origins.length ? { watchOrigins: origins } : {}),
+    ...(options.rejectedSubmits ? { rejectedSubmits: true } : {}),
+    ...(ignore.length ? { ignoreConsole: ignore } : {}),
   };
+  return Object.keys(oracles).length ? { oracles } : {};
+}
+
+function tuning(options: ExploreCommandOptions): {
+  tuning?: { skipDestructive?: number; strictSafety?: boolean };
+} {
+  if (options.allowDestructive) return { tuning: { skipDestructive: 2 } };
+  return options.strictSafety ? { tuning: { strictSafety: true } } : {};
+}
+
+/** A new browser context, signed in with the stored cookies when given. */
+async function openPage(
+  browser: BrowserSession,
+  cookies: string | undefined,
+): Promise<{ page: BrowserPage; close: () => Promise<void> }> {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 720 },
+  });
+  const page = await context.newPage();
+  if (cookies) {
+    const state = JSON.parse(await readFile(cookies, "utf8")) as {
+      cookies?: unknown[];
+    };
+    const native = page.playwright?.();
+    if (!native) throw new Error("Cookies need a Playwright browser.");
+    await native.context.addCookies((state.cookies ?? []) as never);
+  }
+  return { page, close: () => context.close() };
+}
+
+/** Collect a repeatable string option. */
+export function collectText(value: string, previous: readonly string[] = []) {
+  return [...previous, value];
 }
 
 /** Collect `--watch-origin` values as normalized origins. */
@@ -136,12 +175,7 @@ async function shrinkFailures(
   const resolver = (await advisor("guided", true))!;
   const actions = result.trace.map((entry) => entry.action);
   const calls: ProviderCall[] = [];
-  const freshPage = async () => {
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
-    });
-    return { page: await context.newPage(), close: () => context.close() };
-  };
+  const freshPage = () => openPage(browser, options.cookies);
   for (const [index, failure] of result.failures.entries()) {
     const prefix = actions.slice(0, failure.step + 1);
     const shrunk = await shrink({
@@ -192,6 +226,12 @@ function summary(result: ExploreResult): string {
       ? `Skipped as destructive: ${result.skippedDestructive.join(", ")}.`
       : "",
     result.calls.length ? `Jev: ${cost(result.calls)}.` : "",
+    Object.keys(result.writes).length
+      ? `Writes (successful non-GET requests): ${Object.entries(result.writes)
+          .map(([key, n]) => `${key} ×${n}`)
+          .join(", ")}.`
+      : "No writes observed.",
+    result.stopReason ? `Stopped early: ${result.stopReason}` : "",
     result.failures.length
       ? `Failures (${result.failures.length}):\n${result.failures.map((f: ExploreFailure) => `  step ${f.step}: ${f.signature}`).join("\n")}`
       : "No failures observed.",
@@ -224,10 +264,7 @@ export async function executeExploreCommand(
   );
   const browser = await launch(options.headed);
   try {
-    const context = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
-    });
-    const page = await context.newPage();
+    const { page, close } = await openPage(browser, options.cookies);
     const lines: string[] = [];
     const guide = await advisor(options.mode, false);
     const result = await explore(page, {
@@ -236,7 +273,7 @@ export async function executeExploreCommand(
       seed,
       mode: options.mode,
       ...(guide ? { advisor: guide } : {}),
-      ...(options.allowDestructive ? { tuning: { skipDestructive: 2 } } : {}),
+      ...tuning(options),
       ...watched(options),
       ...(options.signal ? { signal: options.signal } : {}),
       onStep: async (entry) => {
@@ -245,7 +282,7 @@ export async function executeExploreCommand(
         await writeFile(tracePath, `${lines.at(-1)}\n`, { flag: "a" });
       },
     });
-    await context.close();
+    await close();
     options.write(summary(result));
     // The trace is already in trace.jsonl.
     await writeFile(
@@ -305,6 +342,9 @@ export interface ExploreFlags {
   readonly allowDestructive: boolean;
   readonly watchOrigin: readonly string[];
   readonly rejectedSubmits: boolean;
+  readonly ignoreConsole: readonly string[];
+  readonly strictSafety: boolean;
+  readonly cookies?: string;
   readonly headed: boolean;
 }
 
@@ -327,6 +367,9 @@ function run(url: string, flags: ExploreFlags, io: ExploreIo): Promise<number> {
     allowDestructive: flags.allowDestructive,
     watchOrigins: flags.watchOrigin,
     rejectedSubmits: flags.rejectedSubmits,
+    ignoreConsole: flags.ignoreConsole,
+    strictSafety: flags.strictSafety,
+    ...(flags.cookies ? { cookies: path.resolve(io.cwd, flags.cookies) } : {}),
     ...(io.signal ? { signal: io.signal } : {}),
     write: io.write,
   });

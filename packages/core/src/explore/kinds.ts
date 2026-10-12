@@ -24,7 +24,7 @@ export const PAGE_KINDS: Readonly<Record<string, string>> = {
  * irreversible actions.
  */
 const DESTRUCTIVE_WORDS =
-  /\b(delete|remove|erase|destroy|revoke|cancel|terminate|deactivate|close account|unsubscribe|reset|wipe|purge|sign out|log ?out|pay|purchase|place order|transfer)\b/iu;
+  /\b(delete|remove|erase|destroy|revoke|cancel|terminate|deactivate|disconnect|archive|close account|unsubscribe|reset|wipe|purge|sign ?out|log ?out|pay|purchase|place order|transfer|send|resend|invite|share)\b/iu;
 
 export function looksDestructive(name: string): boolean {
   return DESTRUCTIVE_WORDS.test(name);

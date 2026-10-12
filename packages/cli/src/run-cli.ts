@@ -26,6 +26,7 @@ import {
   seedValue,
   startUrl,
   watchOrigin,
+  collectText,
   type ExploreFlags,
 } from "./explore-command.js";
 import {
@@ -648,6 +649,21 @@ export async function runCli(
       "also report HTTP 5xx from this origin, such as an API host (repeatable)",
       watchOrigin,
       [],
+    )
+    .option(
+      "--strict-safety",
+      "also skip targets named like destructive actions (delete, send, log out…), even when Jev disagrees",
+      false,
+    )
+    .option(
+      "--ignore-console <regex>",
+      "ignore console errors matching this regular expression (repeatable)",
+      collectText,
+      [],
+    )
+    .option(
+      "--cookies <storage-state.json>",
+      "sign the browser in with the cookies of a Playwright storage-state file",
     )
     .option(
       "--rejected-submits",

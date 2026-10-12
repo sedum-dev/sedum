@@ -56,10 +56,24 @@ export interface OracleOptions {
    * server refuses. Opt-in, since some apps rely on server-side validation.
    */
   readonly rejectedSubmits?: boolean;
+  /**
+   * Report a page navigation answered with HTTP 4xx or 5xx: a broken link or
+   * a stale reference. On unless set to false.
+   */
+  readonly brokenLinks?: boolean;
+  /** Console errors matching any of these regular expressions are ignored. */
+  readonly ignoreConsole?: readonly string[];
+}
+
+/** A successful request that may have changed data on the server. */
+export interface WriteRecord {
+  readonly method: string;
+  readonly endpoint: string;
+  readonly status: number;
 }
 
 export interface OracleEvent {
-  readonly kind: "console" | "pageerror" | "http" | "rejected";
+  readonly kind: "console" | "pageerror" | "http" | "rejected" | "broken-link";
   readonly message: string;
   /** Normalized message: the identity of a distinct failure. */
   readonly signature: string;
@@ -92,6 +106,8 @@ export interface TraceEntry {
   readonly outcome: "acted" | "failed" | "forced";
   readonly error?: string;
   readonly events: readonly OracleEvent[];
+  /** Successful non-GET requests the action caused, for side-effect audits. */
+  readonly writes?: readonly WriteRecord[];
   readonly elapsedMs: number;
 }
 
@@ -160,6 +176,11 @@ export interface ExploreTuning {
   readonly predictTargets: boolean;
   /** Bombadil-style swarm testing: drop some action kinds for this seed. */
   readonly swarm: boolean;
+  /**
+   * Also skip targets whose name matches the destructive keyword list, even
+   * when Jev disagrees. For real accounts, where a miss is costly.
+   */
+  readonly strictSafety: boolean;
 }
 
 export const DEFAULT_TUNING: ExploreTuning = {
@@ -169,4 +190,5 @@ export const DEFAULT_TUNING: ExploreTuning = {
   hostileInput: 0.25,
   predictTargets: true,
   swarm: false,
+  strictSafety: false,
 };

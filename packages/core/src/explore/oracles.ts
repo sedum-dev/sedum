@@ -1,5 +1,5 @@
 import type { BrowserPage } from "../browser-driver.js";
-import type { OracleEvent, OracleOptions } from "./types.js";
+import type { OracleEvent, OracleOptions, WriteRecord } from "./types.js";
 
 interface ConsoleMessage {
   type(): string;
@@ -10,10 +10,15 @@ interface Response {
   status(): number;
   url(): string;
   text(): Promise<string>;
-  request(): { method(): string };
+  request(): {
+    method(): string;
+    isNavigationRequest(): boolean;
+    frame(): unknown;
+  };
 }
 
 const NOT_REJECTIONS = new Set([401, 403, 404]);
+const READS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /** API paths name records by slug or id; keep one signature per endpoint. */
 export function endpoint(pathname: string): string {
@@ -31,6 +36,9 @@ export function endpoint(pathname: string): string {
 export class Oracles {
   #events: OracleEvent[] = [];
   #pending: Promise<void>[] = [];
+  #writes: WriteRecord[] = [];
+  readonly #ignore: readonly RegExp[];
+  readonly #mainFrame: unknown;
   readonly #detach: () => void;
 
   constructor(
@@ -41,6 +49,10 @@ export class Oracles {
     const native = page.playwright?.();
     if (!native) throw new Error("Exploration needs a Playwright page.");
     const browserPage = native.page;
+    this.#mainFrame = browserPage.mainFrame();
+    this.#ignore = (options.ignoreConsole ?? []).map(
+      (source) => new RegExp(source, "u"),
+    );
     const onConsole = (message: ConsoleMessage) => this.#console(message);
     const onPageError = (error: Error) =>
       this.#push("pageerror", `${error.name}: ${error.message}`);
@@ -64,7 +76,9 @@ export class Oracles {
   #console(message: ConsoleMessage): void {
     const text = message.text();
     // Resource failures are reported once, by the HTTP oracle.
-    if (message.type() === "error" && !/^Failed to load resource/u.test(text))
+    if (message.type() !== "error" || /^Failed to load resource/u.test(text))
+      return;
+    if (!this.#ignore.some((pattern) => pattern.test(text)))
       this.#push("console", text);
   }
 
@@ -76,9 +90,12 @@ export class Oracles {
     if (!watched) return;
     const status = response.status();
     const method = response.request().method();
-    const where = `${url.origin === this.origin ? "" : url.host}${url.pathname}`;
+    const where = this.#where(url);
+    this.#write(response, url);
     if (status >= 500) this.#push("http", `HTTP ${status} ${method} ${where}`);
-    else if (this.#rejection(status, method))
+    else if (this.#brokenLink(response))
+      this.#push("broken-link", `HTTP ${status} page ${endpoint(where)}`);
+    else if (this.#rejection(response))
       this.#pending.push(
         response
           .text()
@@ -92,7 +109,35 @@ export class Oracles {
       );
   }
 
-  #rejection(status: number, method: string): boolean {
+  /** A page the user navigated to that does not exist or failed. */
+  #brokenLink(response: Response): boolean {
+    const request = response.request();
+    return (
+      this.options.brokenLinks !== false &&
+      response.status() >= 400 &&
+      request.isNavigationRequest() &&
+      request.frame() === this.#mainFrame
+    );
+  }
+
+  #where(url: URL): string {
+    return `${url.origin === this.origin ? "" : url.host}${url.pathname}`;
+  }
+
+  #write(response: Response, url: URL): void {
+    const method = response.request().method();
+    const status = response.status();
+    if (!READS.has(method) && status < 400)
+      this.#writes.push({
+        method,
+        endpoint: endpoint(this.#where(url)),
+        status,
+      });
+  }
+
+  #rejection(response: Response): boolean {
+    const status = response.status();
+    const method = response.request().method();
     return (
       this.options.rejectedSubmits === true &&
       status >= 400 &&
@@ -118,6 +163,11 @@ export class Oracles {
     const events = this.#events;
     this.#events = [];
     return events;
+  }
+
+  /** Successful non-GET requests since the last call. */
+  drainWrites(): WriteRecord[] {
+    return this.#writes.splice(0);
   }
 
   detach(): void {
