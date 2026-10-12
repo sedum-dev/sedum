@@ -164,6 +164,18 @@ async function advisor(mode: ExploreMode, needed: boolean) {
   return new TypeSafeAdapter();
 }
 
+/**
+ * The trace length up to and including a step. Forced entries (a return to
+ * the site, a restart) share a step number, so steps and indices differ.
+ */
+function traceEnd(result: ExploreResult, step: number): number {
+  let end = 0;
+  result.trace.forEach((entry, index) => {
+    if (entry.step <= step) end = index + 1;
+  });
+  return end;
+}
+
 /** Shrink each failure and write it as a plain-English Sedum test. */
 async function shrinkFailures(
   browser: BrowserSession,
@@ -177,7 +189,7 @@ async function shrinkFailures(
   const calls: ProviderCall[] = [];
   const freshPage = () => openPage(browser, options.cookies);
   for (const [index, failure] of result.failures.entries()) {
-    const prefix = actions.slice(0, failure.step + 1);
+    const prefix = actions.slice(0, traceEnd(result, failure.step));
     const shrunk = await shrink({
       startUrl: result.startUrl,
       actions: prefix,

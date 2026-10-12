@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Archive, routeTemplate } from "./archive.js";
+import { Archive, returnPath, routeTemplate } from "./archive.js";
 import {
   editsExistingRecord,
   fieldsToFill,
@@ -94,17 +94,70 @@ describe("archive", () => {
 
   it("keeps the shortest clean path and never a path that wrote", () => {
     const archive = new Archive({ staleAfter: 2, maxPath: 10 });
-    archive.visit("/a|form", [go("x"), go("y")], true);
-    archive.visit("/a|form", [go("y")], true);
-    archive.visit("/b|form", [go("z")], false);
+    const from = (...actions: ExploreAction[]) => ({ start: "/", actions });
+    archive.visit({
+      key: "/a|form",
+      url: "/a",
+      episode: from(go("x"), go("y")),
+      clean: true,
+    });
+    archive.visit({
+      key: "/a|form",
+      url: "/a?again",
+      episode: from(go("y")),
+      clean: true,
+    });
+    archive.visit({
+      key: "/b|form",
+      url: "/b",
+      episode: from(go("z")),
+      clean: false,
+    });
     archive.untried("/a|form", 3);
     archive.untried("/b|form", 5);
     expect(archive.due()).toBe(false);
-    archive.visit("/a|form", [go("y")], true);
+    archive.visit({
+      key: "/a|form",
+      url: "/a",
+      episode: from(go("y")),
+      clean: true,
+    });
+    archive.visit({
+      key: "/a|form",
+      url: "/a",
+      episode: from(go("y")),
+      clean: true,
+    });
     expect(archive.due()).toBe(true);
-    const cell = archive.pick(new SeededRandom(1), "/home|home");
+    const cell = archive.pick(new SeededRandom(1), "/b|form");
     expect(cell?.key).toBe("/a|form");
-    expect(cell?.path).toEqual([go("y")]);
+    expect(cell?.path?.actions).toEqual([go("y")]);
     expect(archive.due()).toBe(false);
+  });
+
+  it("returns by URL first, and by path once the URL lands elsewhere", () => {
+    const archive = new Archive({ staleAfter: 1, maxPath: 10 });
+    archive.visit({
+      key: "/a|form",
+      url: "/a",
+      episode: { start: "/", actions: [go("x")] },
+      clean: true,
+    });
+    archive.visit({
+      key: "/b|form",
+      url: "/b",
+      episode: { start: "/", actions: [] },
+      clean: false,
+    });
+    archive.untried("/a|form", 1);
+    archive.untried("/b|form", 1);
+    const a = archive.pick(new SeededRandom(1), "/b|form")!;
+    expect(returnPath(a)).toEqual([{ kind: "goto", url: "/a" }]);
+    archive.arrived(a, "/home|home");
+    expect(returnPath(a)).toEqual([{ kind: "goto", url: "/" }, go("x")]);
+    const b = archive.pick(new SeededRandom(1), "/a|form")!;
+    archive.arrived(b, "/home|home");
+    // No clean path and no working URL: never picked again.
+    expect(archive.pick(new SeededRandom(1), "/a|form")).toBeUndefined();
   });
 });

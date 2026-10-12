@@ -2,19 +2,38 @@ import { pickWeighted, type SeededRandom } from "./random.js";
 import type { ExploreAction } from "./types.js";
 
 /**
- * Go-explore without snapshots: remember how each kind of page was first
- * reached, then return there by replaying that path and explore onwards.
- * Antithesis branches from interesting states with a hypervisor; Sedum's
- * traces replay deterministically, which is enough for a web app.
+ * Go-explore without snapshots: remember each kind of page and how it was
+ * reached, then return there and explore onwards. Antithesis branches from
+ * interesting states with a hypervisor; a web app usually only needs the
+ * page's URL, and a recorded path when the URL alone does not restore it.
  */
 export interface Cell {
   readonly key: string;
-  /** Actions from the start page; never one that wrote to the server. */
-  path: readonly ExploreAction[];
+  /** The page's URL when first seen; loading it is the cheapest return. */
+  readonly url: string;
+  /** False once loading the URL landed on another kind of page. */
+  direct: boolean;
+  /** A clean path that reached the cell: never one that wrote to the server. */
+  path?: Episode;
   visits: number;
   returns: number;
   /** Targets on this page the walk has not tried yet. */
   untried: number;
+}
+
+/** Actions since the walk last loaded a URL. */
+export interface Episode {
+  readonly start: string;
+  readonly actions: readonly ExploreAction[];
+}
+
+/** One observation of a cell: where the walk is and how it got there. */
+export interface Visit {
+  readonly key: string;
+  readonly url: string;
+  readonly episode: Episode;
+  /** No action in the episode wrote to the server. */
+  readonly clean: boolean;
 }
 
 export interface ArchiveOptions {
@@ -35,11 +54,17 @@ export function routeTemplate(route: string): string {
     .join("/");
 }
 
-function shorter(cell: Cell, path: readonly ExploreAction[]): boolean {
-  return !cell.path.length || path.length < cell.path.length;
+function shorter(cell: Cell, episode: Episode): boolean {
+  return !cell.path || episode.actions.length < cell.path.actions.length;
 }
 
-export const DEFAULT_ARCHIVE: ArchiveOptions = { staleAfter: 30, maxPath: 40 };
+/** How to get back to a cell: load its URL, or replay its path. */
+export function returnPath(cell: Cell): ExploreAction[] {
+  if (cell.direct || !cell.path) return [{ kind: "goto", url: cell.url }];
+  return [{ kind: "goto", url: cell.path.start }, ...cell.path.actions];
+}
+
+export const DEFAULT_ARCHIVE: ArchiveOptions = { staleAfter: 30, maxPath: 15 };
 
 export class Archive {
   readonly #cells = new Map<string, Cell>();
@@ -56,28 +81,35 @@ export class Archive {
    * kept; a path that wrote to the server is never kept, so returning never
    * repeats a create or a save.
    */
-  visit(key: string, path: readonly ExploreAction[], clean: boolean): void {
+  visit({ key, url, episode, clean }: Visit): void {
+    const usable = clean && episode.actions.length <= this.options.maxPath;
     const cell = this.#cells.get(key);
-    const usable = clean && path.length <= this.options.maxPath;
     if (!cell) {
       this.#cells.set(key, {
         key,
-        path: usable ? [...path] : [],
+        url,
+        direct: true,
+        ...(usable ? { path: copy(episode) } : {}),
         visits: 1,
         returns: 0,
         untried: 0,
       });
-      if (usable) this.#sinceNew = 0;
+      this.#sinceNew = 0;
       return;
     }
     cell.visits++;
     this.#sinceNew++;
-    if (usable && shorter(cell, path)) cell.path = [...path];
+    if (usable && shorter(cell, episode)) cell.path = copy(episode);
   }
 
   untried(key: string, count: number): void {
     const cell = this.#cells.get(key);
     if (cell) cell.untried = count;
+  }
+
+  /** A return ended on `landed`: a direct load that missed is not tried again. */
+  arrived(cell: Cell, landed: string): void {
+    if (landed !== cell.key && cell.direct) cell.direct = false;
   }
 
   /** Time to return to a frontier: the walk has stopped finding new cells. */
@@ -92,7 +124,7 @@ export class Archive {
   pick(random: SeededRandom, current: string): Cell | undefined {
     this.#sinceNew = 0;
     const options = [...this.#cells.values()].filter(
-      (c) => c.key !== current && c.path.length > 0 && c.untried > 0,
+      (c) => c.key !== current && c.untried > 0 && (c.direct || c.path),
     );
     if (!options.length) return undefined;
     const weights = options.map(
@@ -102,4 +134,8 @@ export class Archive {
     cell.returns++;
     return cell;
   }
+}
+
+function copy(episode: Episode): Episode {
+  return { start: episode.start, actions: [...episode.actions] };
 }

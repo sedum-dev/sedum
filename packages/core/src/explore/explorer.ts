@@ -8,7 +8,7 @@ import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
 import { looksDestructive, PAGE_KINDS } from "./kinds.js";
 import { observe, onOrigin, settle, type Observation } from "./observe.js";
 import { Oracles } from "./oracles.js";
-import { Archive, routeTemplate } from "./archive.js";
+import { Archive, returnPath, routeTemplate, type Cell } from "./archive.js";
 import { FormFlow } from "./form-flow.js";
 import { formatTools } from "./forms.js";
 import { pickWeighted, SeededRandom } from "./random.js";
@@ -153,6 +153,11 @@ function adviceTarget(identity: TargetIdentity): AdviceTarget {
   };
 }
 
+/** The leaves advice ids are keyed by: every kind, no exclusions. */
+function adviceLeaves(observation: Observation): Leaf[] {
+  return actionTree({ observation, canGoBack: false, excluded: new Set() });
+}
+
 /** Click targets offered to the advisor, with ids by leaf index. */
 function adviceTargets(observation: Observation): {
   ids: Map<number, string>;
@@ -160,12 +165,7 @@ function adviceTargets(observation: Observation): {
 } {
   const ids = new Map<number, string>();
   const targets: Record<string, AdviceTarget> = {};
-  const leaves = actionTree({
-    observation,
-    canGoBack: false,
-    excluded: new Set(),
-  });
-  leaves.forEach((leaf, index) => {
+  adviceLeaves(observation).forEach((leaf, index) => {
     if (leaf.kind !== "click" || ids.size >= TARGET_LIMIT) return;
     const id = `t${ids.size}`;
     ids.set(index, id);
@@ -231,7 +231,9 @@ class Explorer {
   readonly #form: FormFlow;
   readonly #archive = new Archive();
   #episode: ExploreAction[] = [];
+  #episodeStart: string;
   #episodeClean = true;
+  #returning: Cell | undefined;
   #restores = 0;
   #pendingDestination: string | undefined;
 
@@ -246,6 +248,7 @@ class Explorer {
       ? swarmExclusions(this.#random)
       : new Set();
     this.#origin = new URL(options.startUrl).origin;
+    this.#episodeStart = options.startUrl;
     this.#form = new FormFlow({
       page,
       tools: formatTools(this.#random),
@@ -283,11 +286,18 @@ class Explorer {
     this.#routes.add(observation.route);
     this.#chrome.learn(observation);
     const info = await this.#stateInfo(observation);
+    this.#markJudged(observation, info);
     if (this.#pendingDestination)
       this.#coverage.learn(this.#pendingDestination, info.kind);
     if (info.kind) this.#coverage.visit(info.kind);
     const cell = cellKey(observation, info);
-    this.#archive.visit(cell, this.#episode, this.#episodeClean);
+    this.#noteArrival(cell);
+    this.#archive.visit({
+      key: cell,
+      url: observation.url,
+      episode: { start: this.#episodeStart, actions: this.#episode },
+      clean: this.#episodeClean,
+    });
     await this.#refreshPlan(observation, cell);
     if (!(await this.#continuePlan(step, observation, info)))
       await this.#choose(step, observation, info, cell);
@@ -307,12 +317,30 @@ class Explorer {
     const target = this.#archive.pick(this.#random, cell);
     if (!target) return;
     this.#restores++;
-    const home: ExploreAction = { kind: "goto", url: this.options.startUrl };
-    this.#plan = {
-      kind: "restore",
-      route: "",
-      actions: [home, ...target.path],
-    };
+    this.#returning = target;
+    this.#plan = { kind: "restore", route: "", actions: returnPath(target) };
+  }
+
+  /** Once a return has run, check it reached the cell it aimed for. */
+  #noteArrival(cell: string): void {
+    if (!this.#returning || this.#plan) return;
+    this.#archive.arrived(this.#returning, cell);
+    this.#returning = undefined;
+  }
+
+  /**
+   * Record this state's destructive verdicts before any plan runs, so a
+   * form plan made outside the weighted pick never clicks such a target.
+   */
+  #markJudged(observation: Observation, info: StateInfo): void {
+    const advice = info.advice;
+    if (!advice) return;
+    adviceLeaves(observation).forEach((leaf, index) => {
+      const id = advice.ids.get(index);
+      const p = id === undefined ? undefined : advice.answer.destructive[id];
+      if (leaf.candidate && (p ?? 0) >= this.#tuning.skipDestructive)
+        this.#coverage.markDangerous(leaf.candidate);
+    });
   }
 
   #archiveOn(): boolean {
@@ -535,6 +563,7 @@ class Explorer {
   #extendEpisode(entry: TraceEntry): void {
     if (entry.action.kind === "goto") {
       this.#episode = [];
+      this.#episodeStart = entry.action.url;
       this.#episodeClean = true;
       return;
     }

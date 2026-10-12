@@ -101,8 +101,9 @@ export class FormFlow {
     observation: Observation,
     fields: readonly FieldInfo[],
   ): Promise<ExploreAction[] | null> | null {
+    // Without a field the page flags as invalid, the submit went through.
     if (active.attempts >= MAX_ATTEMPTS) return null;
-    if (!fieldsToFill(fields, true).length) return null;
+    if (!fields.some((f) => f.invalid)) return null;
     active.attempts++;
     return this.#plan(observation, fields, true);
   }
@@ -133,8 +134,9 @@ export class FormFlow {
       if (typed) actions.push(typed);
     }
     actions.push(...(await this.#choices(observation)));
-    if (!actions.length) return null;
-    actions.push(this.#submit(observation, fields));
+    const submit = this.#submit(observation, fields);
+    if (!actions.length || !submit) return null;
+    actions.push(submit);
     return actions;
   }
 
@@ -182,21 +184,26 @@ export class FormFlow {
     });
   }
 
-  /** The form's own submit control when it is safe, else Enter. */
+  /**
+   * The form's own submit control, Enter when the form has none in view,
+   * and nothing when its submit is unsafe: Enter would submit it anyway.
+   */
   #submit(
     observation: Observation,
     fields: readonly FieldInfo[],
-  ): ExploreAction {
+  ): ExploreAction | null {
     const name = fields.find((f) => f.submit)?.submit;
-    const candidate = name
-      ? observation.clicks.find((c) => c.name === name && this.deps.safe(c))
-      : undefined;
-    return candidate
-      ? {
-          kind: "click",
-          target: identityOf(observation.clicks, candidate, observation.url),
-        }
-      : { kind: "press", key: "Enter" };
+    const named = observation.clicks.filter((c) => name && c.name === name);
+    if (!named.length) return { kind: "press", key: "Enter" };
+    // A nav link can share the button's name ("Search"); prefer the button.
+    const buttons = named.filter((c) => !c.signals.href);
+    const pool = buttons.length ? buttons : named;
+    if (!pool.every((c) => this.deps.safe(c))) return null;
+    const candidate = pool[0]!;
+    return {
+      kind: "click",
+      target: identityOf(observation.clicks, candidate, observation.url),
+    };
   }
 }
 

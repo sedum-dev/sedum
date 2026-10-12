@@ -43,12 +43,8 @@ guarantee.
    stands in. On pages Jev calls a form or search, typing gets more weight,
    and Enter gets more weight as fields fill.
 
-   Those pages also offer a planned "fill this form" action (weight 40). It
-   types a valid Faker value into every field, then presses Enter. A random
-   walk almost never completes a form on its own, because it has to fill
-   every field correctly and then submit, without wandering off. Each part of
-   the plan runs as its own step and is recorded as an ordinary action, so
-   replay and shrinking treat it like any other. Finally, 20% of every pick
+   Those pages also offer a planned "complete this form" action (weight 40).
+   See [Completing forms](#completing-forms). Finally, 20% of every pick
    comes from the unguided weights over the safe actions, so the walk never
    fully trusts the model.
 
@@ -65,6 +61,46 @@ guarantee.
 `--mode heuristic` runs the same walk without a model. Safety comes from a
 keyword list, coverage from untried destinations, and values from Faker by
 input type. It exists as an ablation. `--mode random` is the blind walk.
+
+## Completing forms
+
+A random walk almost never completes a form on its own. It has to fill every
+field correctly and then submit without wandering off, and a wizard repeats
+that on every page. So the form action is a small program, not a choice per
+field:
+
+1. Read each field's state from the page: empty, invalid, required, type,
+   label, placeholder, `min`, `max` and `maxlength`.
+2. Fill every empty field. Code recognises common formats (day, month and
+   year boxes, dates, postcodes, emails, phone numbers, numbers within their
+   range, first and last names). Jev picks a Faker generator for the rest.
+   Passwords are never filled.
+3. Answer each radio group that has no choice yet.
+4. Click the form's own submit button. If the form has no submit button in
+   view, press Enter. If the submit button is unsafe, give up, because Enter
+   would submit the form anyway.
+5. If the same page comes back with fields marked invalid, fill only those
+   and submit again (at most 3 attempts). If a new set of fields appears,
+   treat it as the next page of a wizard (at most 6 pages).
+
+A form that is mostly filled in already edits an existing record, such as
+account settings, so the macro leaves it alone. The walk can still type into
+it one field at a time. Each part of the plan runs as its own step and is
+recorded as an ordinary action, so replay and shrinking treat it like any
+other.
+
+## Returning to unfinished pages
+
+The walk keeps an archive of the kinds of page it has seen: a route with ids
+folded (`/clients/:id`) plus the page kind. It also records how many targets
+on each page it has not tried yet. After 30 steps without a new kind of page,
+it returns to one that still has untried targets, weighted towards pages
+visited least. To return, it loads the page's URL. If that lands on another
+kind of page, the next return replays the shortest clean path (at most 15
+actions) that reached the page. A path that wrote to the server is never
+kept, so a return never repeats a create or a save. This is go-explore
+without snapshots: Antithesis can branch from any state, and most web pages
+can be restored from their URL. Random mode never returns.
 
 ## Oracles
 
@@ -153,11 +189,12 @@ refusal halves that target's weight everywhere it appears.
 
 - 48 product pages that link to each other;
 - pages reachable only through a sequence of actions (a reports page, an
-  admin console revealed by a preference checkbox, and a newsletter welcome
-  page behind form validation);
-- four planted bugs: a crash on non-ASCII search text, a console error after a
-  valid newsletter signup, an HTTP 500 on CSV export, and a console error in
-  the admin console;
+  admin console revealed by a preference checkbox, a newsletter welcome
+  page behind form validation, and a plan summary behind a two-page wizard
+  with split date boxes, a postcode check, a radio group and number ranges);
+- five planted bugs: a crash on non-ASCII search text, a console error after
+  a valid newsletter signup, an HTTP 500 on CSV export, a console error in
+  the admin console, and a console error on the plan summary;
 - four destructive buttons, one of them worded without any destructive
   keyword ("Start over with an empty account");
 - a benign button worded like a destructive one ("Remove all filters");
@@ -186,5 +223,22 @@ guided mode is steered by the answers.
 | Input tokens per run (mean)                | –       | –                    | 164k        |
 | Cost per run (mean)                        | –       | –                    | $0.0069     |
 | Jev latency (p50 / p95)                    | –       | –                    | 95 / 126 ms |
+
+That table predates the plan wizard and the fifth bug.
+
+Results from 2026-10-12: guided mode before (`107ebcc`) and after form
+completion and returns, on the site with the wizard, 12 seeds × 150 steps
+each, same seeds.
+
+|                                           | before  | after   |
+| ----------------------------------------- | ------- | ------- |
+| Wizard completed (runs)                   | 0 / 12  | 6 / 12  |
+| Plan-summary bug found (runs)             | 0 / 12  | 6 / 12  |
+| The other four planted bugs found per run | 2.17    | 2.00    |
+| Hidden pages, of 4 (mean)                 | 2.25    | 2.50    |
+| Distinct states (mean)                    | 50.2    | 52.0    |
+| Returns to an unfinished page (mean)      | –       | 1.4     |
+| Destructive actions                       | 0       | 0       |
+| Cost per run (mean)                       | $0.0129 | $0.0129 |
 
 These are feasibility numbers on one synthetic site, not a benchmark.
