@@ -24,6 +24,8 @@ import {
   type ExplorationAdvisor,
   type ExploreAdvice,
   type ExploreAdviceRequest,
+  type ExploreDecision,
+  type ExploreDecisionRequest,
   type GoalState,
   type GoalDecision,
   type GoalValueState,
@@ -48,7 +50,9 @@ import { ProviderGate } from "./gate.js";
 import { askProvider } from "./request-lifecycle.js";
 import { buildGoalRequest, validateGoalDecision } from "./goal-request.js";
 import {
+  buildDecisionRequest,
   buildExploreRequest,
+  validateDecision,
   validateExploreAdvice,
 } from "./explore-request.js";
 
@@ -316,10 +320,33 @@ export class TypeSafeAdapter
     options?: ProviderCallOptions,
   ): Promise<ExploreAdvice> {
     const { request, targetIds } = buildExploreRequest(input, this.model);
+    return this.answered(request, options, (response) =>
+      validateExploreAdvice(input, targetIds, response),
+    );
+  }
+
+  /** Closed choices about one form or dropdown, in one call. */
+  async decide(
+    input: ExploreDecisionRequest,
+    options?: ProviderCallOptions,
+  ): Promise<ExploreDecision> {
+    return this.answered(
+      buildDecisionRequest(input, this.model),
+      { ...options, maxAttempts: 1 },
+      (response) => validateDecision(input, response),
+    );
+  }
+
+  /** Ask, then validate the answers; an invalid answer still reports its call. */
+  private async answered<T extends object>(
+    request: SystemOneRequest,
+    options: ProviderCallOptions | undefined,
+    validate: (response: unknown) => T,
+  ) {
     const { response, meta } = await this.ask(request, options);
     const call = validateCall(response, meta, this.model, this.estimateJevCost);
     try {
-      return { ...validateExploreAdvice(input, targetIds, response), call };
+      return { ...validate(response), call };
     } catch (error) {
       throw responseError(error, call.attempts, call);
     }

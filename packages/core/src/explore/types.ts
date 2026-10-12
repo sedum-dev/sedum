@@ -29,7 +29,12 @@ export type InputSource =
   | { readonly kind: "random" };
 
 export type ExploreAction =
-  | { readonly kind: "click"; readonly target: TargetIdentity }
+  | {
+      readonly kind: "click";
+      readonly target: TargetIdentity;
+      /** The option to choose when the target is a native dropdown. */
+      readonly option?: string;
+    }
   | {
       readonly kind: "type";
       readonly target: TargetIdentity;
@@ -153,12 +158,44 @@ export interface ExploreAdvice {
   readonly call: ProviderCall;
 }
 
+/**
+ * Questions about one subject on a page, such as a form or a dropdown,
+ * each answered by choosing one of its options.
+ */
+export interface ExploreDecisionRequest {
+  /** Visible page text; untrusted data. */
+  readonly page: string;
+  /** The subject, as short labelled facts (untrusted). */
+  readonly subject: Readonly<Record<string, string>>;
+  readonly questions: Readonly<
+    Record<
+      string,
+      {
+        readonly question: string;
+        readonly rules?: string;
+        /** Option id to its description (null when the id says it all). */
+        readonly choices: Readonly<Record<string, string | null>>;
+      }
+    >
+  >;
+}
+
+export interface ExploreDecision {
+  readonly answers: Readonly<Record<string, GoalChoice>>;
+  readonly call: ProviderCall;
+}
+
 export interface ExplorationAdvisor {
   /** One call per new page state: page kind, safety and target kinds. */
   assess(
     request: ExploreAdviceRequest,
     options?: ProviderCallOptions,
   ): Promise<ExploreAdvice>;
+  /** Closed choices about one subject, asked together in one call. */
+  decide?(
+    request: ExploreDecisionRequest,
+    options?: ProviderCallOptions,
+  ): Promise<ExploreDecision>;
   /** A closed choice among Faker generators, as goal mode makes it. */
   chooseGoalValue?(
     state: GoalValueState,

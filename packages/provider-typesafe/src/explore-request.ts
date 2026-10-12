@@ -3,6 +3,8 @@ import {
   ProviderError,
   type ExploreAdvice,
   type ExploreAdviceRequest,
+  type ExploreDecision,
+  type ExploreDecisionRequest,
 } from "@sedum-dev/core";
 import { answersOf, validateChoice, validateNoul } from "./validation.js";
 
@@ -106,5 +108,61 @@ export function validateExploreAdvice(
     kind: validateChoice(answers.page_kind, kinds),
     destructive,
     leadsTo,
+  };
+}
+
+/**
+ * Closed choices about one subject on a page (a form, a dropdown), fanned
+ * out as one request: every question is a Choice over its own options.
+ */
+function validDecision(input: ExploreDecisionRequest): boolean {
+  const questions = Object.values(input.questions);
+  const counted = questions.length > 0 && questions.length <= TARGET_LIMIT;
+  return (
+    counted &&
+    questions.every((q) => {
+      const count = Object.keys(q.choices).length;
+      return count >= 2 && count <= 255;
+    })
+  );
+}
+
+export function buildDecisionRequest(
+  input: ExploreDecisionRequest,
+  model: string,
+): SystemOneRequest {
+  if (!validDecision(input))
+    throw new ProviderError("invalid-input", "Invalid decision");
+  const questions = Object.create(null) as SystemOneRequest["questions"];
+  for (const [id, q] of Object.entries(input.questions))
+    questions[id] = choice(
+      {
+        question: q.question,
+        rules: [q.rules, UNTRUSTED].filter(Boolean).join(" "),
+      },
+      q.choices as Record<string, string | null>,
+    );
+  const request: SystemOneRequest = {
+    model,
+    state: { page: { text: input.page }, subject: { ...input.subject } },
+    questions,
+  };
+  if (Buffer.byteLength(JSON.stringify(request)) > BODY_LIMIT_BYTES)
+    throw new ProviderError("invalid-input", "Decision request too large");
+  return request;
+}
+
+export function validateDecision(
+  input: ExploreDecisionRequest,
+  response: unknown,
+): Omit<ExploreDecision, "call"> {
+  const answers = answersOf(response);
+  return {
+    answers: Object.fromEntries(
+      Object.entries(input.questions).map(([id, q]) => [
+        id,
+        validateChoice(answers[id], Object.keys(q.choices)),
+      ]),
+    ),
   };
 }

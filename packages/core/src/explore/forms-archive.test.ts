@@ -23,6 +23,29 @@ const field = (hints: string, extra: Partial<FieldInfo> = {}): FieldInfo => ({
 describe("format rules", () => {
   const tools = formatTools(new SeededRandom(3));
 
+  it("fills UK banking and identity formats", () => {
+    expect(formatValue(field("sort code"), tools)?.value).toMatch(
+      /^\d{2}-\d{2}-\d{2}$/u,
+    );
+    expect(
+      formatValue(field("national insurance number"), tools)?.value,
+    ).toMatch(/^QQ\d{6}[A-D]$/u);
+    expect(formatValue(field("account id"), tools)?.value).toMatch(/^\d{8}$/u);
+    expect(formatValue(field("balance 0.00"), tools)?.value).toMatch(
+      /^\d+\.\d{2}$/u,
+    );
+    for (let i = 0; i < 20; i++)
+      expect(formatValue(field("postcode"), tools)?.value).toMatch(
+        /^[A-Z]{1,2}\d{1,2} \d[A-Z]{2}$/u,
+      );
+  });
+
+  it("follows a pattern attribute before any label", () => {
+    expect(
+      formatValue(field("postcode", { pattern: "[0-9]{5}" }), tools)?.value,
+    ).toMatch(/^\d{5}$/u);
+  });
+
   it("fills date parts, UK postcodes, emails and ranges validly", () => {
     expect(
       Number(formatValue(field("dd day"), tools)?.value),

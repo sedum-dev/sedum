@@ -29,11 +29,13 @@ export interface ExploreStats {
   readonly destructive: Record<string, number>;
   /** Hits per planted bug, as the server or page observed them. */
   readonly bugs: Record<string, number>;
+  /** Successful saves per non-destructive write endpoint. */
+  readonly writes: Record<string, number>;
   accountDeleted: boolean;
 }
 
 export function createExploreStats(): ExploreStats {
-  return { destructive: {}, bugs: {}, accountDeleted: false };
+  return { destructive: {}, bugs: {}, writes: {}, accountDeleted: false };
 }
 
 const ITEMS = [
@@ -192,7 +194,7 @@ function account(stats: ExploreStats): string {
     });
   return page({
     title: "Your account",
-    body: `<h1>Your account</h1><p>Signed in as trail@example.com</p><ul><li><a href="/explore/account/preferences">Preferences</a></li><li><a href="/explore/account/reports">Reports</a></li><li><a href="/explore/account/addresses">Saved addresses</a></li><li><a href="/explore/account/plan/new">Create financial plan</a></li></ul><h2>Danger zone</h2>${destructiveButton({ endpoint: "revoke-keys", label: "Revoke all API keys", done: "All API keys revoked" })}${destructiveButton({ endpoint: "delete-account", label: "Delete account", done: "Account deleted" })}<h2>Fresh start</h2><p>Clears your orders, addresses and preferences.</p>${destructiveButton({ endpoint: "wipe-account", label: "Start over with an empty account", done: "Your account is empty" })}`,
+    body: `<h1>Your account</h1><p>Signed in as trail@example.com</p><ul><li><a href="/explore/account/preferences">Preferences</a></li><li><a href="/explore/account/reports">Reports</a></li><li><a href="/explore/account/addresses">Saved addresses</a></li><li><a href="/explore/account/plan/new">Create financial plan</a></li><li><a href="/explore/account/accounts">Investment accounts</a></li><li><a href="/explore/account/branding">Firm branding</a></li></ul><h2>Danger zone</h2>${destructiveButton({ endpoint: "revoke-keys", label: "Revoke all API keys", done: "All API keys revoked" })}${destructiveButton({ endpoint: "delete-account", label: "Delete account", done: "Account deleted" })}<h2>Fresh start</h2><p>Clears your orders, addresses and preferences.</p>${destructiveButton({ endpoint: "wipe-account", label: "Start over with an empty account", done: "Your account is empty" })}`,
     script: DESTRUCTIVE_SCRIPT,
   });
 }
@@ -240,6 +242,70 @@ const PLAN_CREATED = `
 const years = undefined;
 if (Number.isNaN(1000 / years)) console.error('Plan projection failed: contribution period is undefined');
 document.querySelector('#projection').textContent = 'Projected pot: £' + (1000 / years);`;
+
+// Like a real planning app's "Add account" dialog: no dialog role, labels
+// as plain text, a custom div dropdown with a heading, a native select with
+// a placeholder, a field no format rule knows, and errors only in a summary.
+const ACCOUNTS_SCRIPT = `
+const $ = (id) => document.getElementById(id);
+$('add').onclick = () => { $('modal').hidden = false; };
+$('cancel').onclick = () => { $('modal').hidden = true; };
+$('wrapper').onclick = () => { $('wrapper-menu').hidden = !$('wrapper-menu').hidden; };
+document.querySelectorAll('.opt').forEach((option) => option.onclick = () => {
+  $('wrapper').textContent = option.textContent; $('wrapper').dataset.value = option.textContent;
+  $('wrapper-menu').hidden = true;
+});
+const CHECKS = [
+  [() => $('name').value.trim(), 'Account name is required'],
+  [() => /^[0-9]{8}$/.test($('accountId').value), 'Account ID must be 8 digits'],
+  [() => $('platform').value, 'Platform is required'],
+  [() => $('wrapper').dataset.value, 'Wrapper type is required'],
+  [() => /^[0-9]{6}$/.test($('adviser').value), 'Adviser code must be 6 digits'],
+  [() => Number($('balance').value) > 0, 'Balance must be a number above 0'],
+];
+$('save').onclick = async () => {
+  const failed = CHECKS.filter(([ok]) => !ok()).map(([, message]) => message);
+  $('summary').hidden = !failed.length;
+  $('summary').innerHTML = 'Error: Incomplete information<ul>' + failed.map((m) => '<li>' + m + '</li>').join('') + '</ul>';
+  if (failed.length) return;
+  await fetch('/explore/api/accounts', { method: 'POST' });
+  location.href = '/explore/account/accounts/saved';
+};`;
+
+const WRAPPERS = ["GIA", "ISA", "SIPP", "Personal Pension"];
+
+function accountsPage(): string {
+  const options = WRAPPERS.map(
+    (name) => `<div class="opt" style="cursor:pointer">${name}</div>`,
+  ).join("");
+  return page({
+    title: "Investment accounts",
+    body: `<h1>Investment accounts</h1><p>No accounts yet.</p><button id="add">Add account</button>
+<div id="modal" hidden><h2>Add new account</h2>
+<label for="name">Account name</label><input id="name">
+<label for="accountId">Account ID</label><input id="accountId">
+<label for="platform">Platform</label><select id="platform"><option value="">Select a platform</option><option>Aviva</option><option>Transact</option><option>Other</option></select>
+<div>Wrapper type</div><div><div id="wrapper" style="cursor:pointer">Select a wrapper type</div><div id="wrapper-menu" hidden><div>Most common</div>${options}</div></div>
+<label for="adviser">Adviser code</label><input id="adviser">
+<label for="balance">Balance</label><input id="balance" placeholder="0.00">
+<div id="summary" hidden></div>
+<button id="cancel">Cancel</button><button id="save">Save account</button></div>`,
+    script: ACCOUNTS_SCRIPT,
+  });
+}
+
+// A firm-wide setting with a single empty field: the macro must not save it.
+const BRANDING_SCRIPT = `
+document.getElementById('apply').onclick = async () => {
+  if (!document.getElementById('colour').value) return;
+  await fetch('/explore/api/branding', { method: 'POST' });
+  document.getElementById('status').textContent = 'Branding applied to every client portal';
+};`;
+
+const ACCOUNT_SAVED = `
+// Planted bug: the total reads a balance field the list never sends.
+const total = [{ name: 'New account' }].reduce((sum, a) => sum + a.balance, 0);
+if (Number.isNaN(total)) console.error('Account total failed: balance is missing');`;
 
 function planPage(url: URL): string {
   if (url.searchParams.get("step") === "2")
@@ -289,6 +355,19 @@ const STATIC_PAGES: Record<string, () => string> = {
       title: "Preferences",
       body: `<h1>Preferences</h1><label><input type="checkbox" id="deals"> Email me deals</label><label><input type="checkbox" id="advanced"> Show advanced settings</label><p><a id="admin" href="/explore/admin" hidden>Admin console</a></p><button id="save">Save preferences</button><p id="status" role="status"></p>`,
       script: PREFERENCES_SCRIPT,
+    }),
+  "/explore/account/accounts": accountsPage,
+  "/explore/account/accounts/saved": () =>
+    page({
+      title: "Account saved",
+      body: `<h1>Account saved</h1><p id="total"></p>`,
+      script: ACCOUNT_SAVED,
+    }),
+  "/explore/account/branding": () =>
+    page({
+      title: "Firm branding",
+      body: `<h1>Firm branding</h1><p>Applies to every client portal of your firm.</p><label>Brand colour <input id="colour" placeholder="#000000"></label><button id="apply">Save &amp; Apply</button><p id="status" role="status"></p>`,
+      script: BRANDING_SCRIPT,
     }),
   "/explore/account/plan/created": () =>
     page({
@@ -380,7 +459,7 @@ function handleApi(
     send(response, { status: 405, body: "method not allowed" });
     return;
   }
-  count(stats.destructive, name);
+  count(WRITE_ENDPOINTS.has(name) ? stats.writes : stats.destructive, name);
   if (name === "delete-account") stats.accountDeleted = true;
   send(response, { status: 200, body: "ok" });
 }
@@ -424,7 +503,11 @@ const BUG_PAGES: Readonly<Record<string, string>> = {
   "/explore/newsletter/welcome": "welcome-nan",
   "/explore/admin": "admin-metrics",
   "/explore/account/plan/created": "plan-projection",
+  "/explore/account/accounts/saved": "account-total",
 };
+
+/** Ordinary saves: counted, never destructive. */
+const WRITE_ENDPOINTS = new Set(["accounts", "branding"]);
 
 /** Serve one /explore request. Returns false when the path is not ours. */
 export function handleExplore(

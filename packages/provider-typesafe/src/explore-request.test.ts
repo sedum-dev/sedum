@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ProviderError, type ExploreAdviceRequest } from "@sedum-dev/core";
 import {
+  ProviderError,
+  type ExploreAdviceRequest,
+  type ExploreDecisionRequest,
+} from "@sedum-dev/core";
+import {
+  buildDecisionRequest,
   buildExploreRequest,
+  validateDecision,
   validateExploreAdvice,
 } from "./explore-request.js";
 
@@ -79,5 +85,55 @@ describe("exploration request", () => {
     expect(() =>
       buildExploreRequest({ ...input, targets }, "jev-latest"),
     ).toThrow(ProviderError);
+  });
+});
+
+describe("exploration decisions", () => {
+  const decision: ExploreDecisionRequest = {
+    page: "Add new account",
+    subject: { error0: "Wrapper type is required" },
+    questions: {
+      line0: {
+        question: "Which form field is the error about?",
+        choices: { none: "No field", f0: "Account name", f1: "Wrapper type" },
+      },
+    },
+  };
+
+  it("asks every question about one subject in one call", () => {
+    const request = buildDecisionRequest(decision, "jev-latest");
+    expect(Object.keys(request.questions)).toEqual(["line0"]);
+    expect(request.questions.line0?.type).toBe("choice");
+    expect(JSON.stringify(request.state)).toContain("Wrapper type is required");
+  });
+
+  it("rejects a question with fewer than two options", () => {
+    expect(() =>
+      buildDecisionRequest(
+        {
+          ...decision,
+          questions: { q: { question: "?", choices: { only: null } } },
+        },
+        "jev-latest",
+      ),
+    ).toThrow(ProviderError);
+  });
+
+  it("validates each answer against its own options", () => {
+    const answer = {
+      type: "choice",
+      choice: "f1",
+      confidence: 0.9,
+      probabilities: { none: 0.02, f0: 0.03, f1: 0.95 },
+    };
+    expect(
+      validateDecision(decision, { answers: { line0: answer } }).answers.line0
+        ?.choice,
+    ).toBe("f1");
+    expect(() =>
+      validateDecision(decision, {
+        answers: { line0: { ...answer, choice: "f9" } },
+      }),
+    ).toThrow();
   });
 });

@@ -94,7 +94,10 @@ class SentenceTrip {
   ) {}
 
   verb(action: TargetAction): string {
-    if (action.kind === "click") return "click";
+    if (action.kind === "click")
+      return action.option === undefined
+        ? "click"
+        : `select ${JSON.stringify(action.option)} from`;
     const name = `value${Object.keys(this.data).length + 1}`;
     this.data[name] = action.value;
     return `type {{${name}}} into`;

@@ -215,9 +215,12 @@ function targetCommand(
   action: TargetAction,
   target: ResolvedStepTarget,
 ): StepCommand {
-  return action.kind === "click"
+  if (action.kind === "type")
+    return { op: "type", target, value: new RuntimeValue(action.value) };
+  const option = action.option;
+  return option === undefined
     ? { op: "click", target }
-    : { op: "type", target, value: new RuntimeValue(action.value) };
+    : { op: "click", target, chooseOption: () => option };
 }
 
 /** Commands for actions that need no target, by kind. */

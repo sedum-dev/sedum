@@ -5,6 +5,7 @@ import {
 } from "../../../../fixtures/site/explore-site.js";
 import {
   PlaywrightBrowserDriver,
+  type BrowserPage,
   type BrowserSession,
 } from "../browser-driver.js";
 import type { Resolver } from "../provider.js";
@@ -14,7 +15,8 @@ import { replay, shrink } from "./replay.js";
 import type { ExploreAction } from "./types.js";
 import { runAction } from "./actions.js";
 import { FormFlow } from "./form-flow.js";
-import { formatTools } from "./forms.js";
+import { RULE_JUDGE } from "./form-judge.js";
+import { formatById, formatTools } from "./forms.js";
 import { heuristicGenerator } from "./inputs.js";
 import { observe } from "./observe.js";
 import { SeededRandom } from "./random.js";
@@ -118,34 +120,47 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
           expect(entry.route).toMatch(/^\/explore/u);
     }, 120_000);
 
-    it("completes a two-page wizard with date parts, a UK postcode and a radio", async () => {
-      const fresh = await freshPage();
+    /** The form macro with rules only: random options, no model. */
+    function macro(page: BrowserPage): FormFlow {
       const random = new SeededRandom(5);
+      const tools = formatTools(random);
       const generators = goalGenerators(1);
-      const flow = new FormFlow({
-        page: fresh.page,
-        tools: formatTools(random),
+      return new FormFlow({
+        page,
+        tools,
         chooseGenerator: async (target) =>
           heuristicGenerator(target.inputType ?? "text", target.name),
-        generate: (generator) => generators.generate(generator),
+        generate: (generator, field) =>
+          formatById(generator, tools, field) ?? generators.generate(generator),
         safe: () => true,
+        judge: RULE_JUDGE,
       });
-      const before = site.stats.bugs["plan-projection"] ?? 0;
+    }
+
+    /** Run the macro's plans until it finishes; the actions it took. */
+    async function drive(flow: FormFlow, page: BrowserPage): Promise<string[]> {
       const done: string[] = [];
+      let plan = await flow.start(await observe(page));
+      for (let round = 0; plan && round < 16; round++) {
+        for (const action of plan) {
+          await runAction(page, action).catch(() => undefined);
+          done.push(
+            "target" in action
+              ? `${action.kind} ${action.target.name}${action.kind === "click" && action.option ? ` = ${action.option}` : ""}`
+              : `${action.kind}`,
+          );
+        }
+        plan = await flow.next(await observe(page));
+      }
+      return done;
+    }
+
+    it("completes a two-page wizard with date parts, a UK postcode and a radio", async () => {
+      const fresh = await freshPage();
+      const before = site.stats.bugs["plan-projection"] ?? 0;
       try {
         await fresh.page.goto(`${site.baseUrl}/explore/account/plan/new`);
-        let plan = await flow.start(await observe(fresh.page));
-        for (let round = 0; plan && round < 8; round++) {
-          for (const action of plan) {
-            await runAction(fresh.page, action).catch(() => undefined);
-            done.push(
-              "target" in action
-                ? `${action.kind} ${action.target.name}`
-                : action.kind,
-            );
-          }
-          plan = await flow.next(await observe(fresh.page));
-        }
+        const done = await drive(macro(fresh.page), fresh.page);
         expect(fresh.page.url).toContain("/explore/account/plan/created");
         expect(site.stats.bugs["plan-projection"]).toBe(before + 1);
         expect(done).toContain("click Save & Continue");
@@ -155,6 +170,44 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         await fresh.close();
       }
     }, 120_000);
+
+    it("completes a dialog with custom and native dropdowns and a summary of errors", async () => {
+      const fresh = await freshPage();
+      const before = site.stats.writes["accounts"] ?? 0;
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/account/accounts`);
+        await runAction(fresh.page, {
+          kind: "click",
+          target: { role: "button", name: "Add account", occurrence: 0 },
+        });
+        const done = await drive(macro(fresh.page), fresh.page);
+        expect(fresh.page.url).toContain("/explore/account/accounts/saved");
+        expect(site.stats.writes["accounts"]).toBe(before + 1);
+        expect(done).toContain("click Select a wrapper type");
+        expect(
+          done.some((d) =>
+            /^click Platform = (Aviva|Transact|Other)$/u.test(d),
+          ),
+        ).toBe(true);
+        // The adviser code is retried once with the format its error states.
+        expect(done.filter((d) => d === "type Adviser code")).toHaveLength(2);
+      } finally {
+        await fresh.close();
+      }
+    }, 120_000);
+
+    it("leaves a firm-wide settings form alone", async () => {
+      const fresh = await freshPage();
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/account/branding`);
+        const flow = macro(fresh.page);
+        const observation = await observe(fresh.page);
+        expect(await flow.offers(observation)).toBe(false);
+        expect(await flow.start(observation)).toBeNull();
+      } finally {
+        await fresh.close();
+      }
+    }, 60_000);
 
     it("replays, shrinks and emits a hostile-input crash", async () => {
       const fresh = await freshPage();

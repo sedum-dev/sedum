@@ -9,8 +9,15 @@ import { looksDestructive, PAGE_KINDS } from "./kinds.js";
 import { observe, onOrigin, settle, type Observation } from "./observe.js";
 import { Oracles } from "./oracles.js";
 import { Archive, returnPath, routeTemplate, type Cell } from "./archive.js";
-import { FormFlow } from "./form-flow.js";
-import { formatTools } from "./forms.js";
+import { FormFlow, type FormJudge } from "./form-flow.js";
+import { JevJudge, RULE_JUDGE } from "./form-judge.js";
+import {
+  formatById,
+  formatTools,
+  FORMAT_DESCRIPTIONS,
+  type FieldInfo,
+  type FormatTools,
+} from "./forms.js";
 import { pickWeighted, SeededRandom } from "./random.js";
 import {
   DEFAULT_TUNING,
@@ -229,6 +236,7 @@ class Explorer {
   #lastKind: ExploreActionKind | undefined;
   #plan: Plan | undefined;
   readonly #form: FormFlow;
+  readonly #tools: FormatTools;
   readonly #archive = new Archive();
   #episode: ExploreAction[] = [];
   #episodeStart: string;
@@ -249,15 +257,17 @@ class Explorer {
       : new Set();
     this.#origin = new URL(options.startUrl).origin;
     this.#episodeStart = options.startUrl;
+    this.#tools = formatTools(this.#random);
     this.#form = new FormFlow({
       page,
-      tools: formatTools(this.#random),
-      chooseGenerator: (target, observation) =>
+      tools: this.#tools,
+      chooseGenerator: (target, observation, error) =>
         this.options.mode === "guided"
-          ? this.#fieldGenerator(target, observation)
+          ? this.#fieldGenerator(target, observation, error)
           : Promise.resolve(this.#heuristic(target)),
-      generate: (generator) => this.#generators.generate(generator),
+      generate: (generator, field) => this.#generate(generator, field),
       safe: (candidate) => this.#safe(candidate),
+      judge: this.#judge(),
     });
     if (options.mode === "guided" && !options.advisor)
       throw new TypeError("Guided exploration needs an advisor");
@@ -341,6 +351,31 @@ class Explorer {
       if (leaf.candidate && (p ?? 0) >= this.#tuning.skipDestructive)
         this.#coverage.markDangerous(leaf.candidate);
     });
+  }
+
+  /** Jev answers the form macro's questions in guided mode; rules otherwise. */
+  #judge(): FormJudge {
+    const advisor = this.options.advisor;
+    if (this.options.mode !== "guided" || !advisor) return RULE_JUDGE;
+    return new JevJudge({
+      advisor,
+      callOptions: () => this.#callOptions(),
+      recorded: (call, ms) => {
+        this.#calls.push(call);
+        this.#advisorMs.push(ms);
+      },
+      failed: (error) => this.#advisorFailed(error),
+    });
+  }
+
+  /** A Faker value, or a format value for a `format.*` generator. */
+  #generate(generator: string, field: FieldInfo): string {
+    if (!generator.startsWith("format."))
+      return this.#generators.generate(generator);
+    return (
+      formatById(generator, this.#tools, field) ||
+      this.#generators.generate("faker.lorem.word")
+    );
   }
 
   #archiveOn(): boolean {
@@ -711,7 +746,14 @@ class Explorer {
   #value(source: InputSource, leaf: Leaf): string {
     const inputType = leaf.identity?.inputType ?? "text";
     if (source.kind === "faker")
-      return this.#generators.generate(source.generator);
+      return this.#generate(source.generator, {
+        ref: "",
+        empty: true,
+        invalid: false,
+        required: false,
+        type: inputType,
+        hints: (leaf.identity?.name ?? "").toLowerCase(),
+      });
     if (source.kind === "hostile") return hostileText(this.#random);
     return blindValue(this.#random, inputType);
   }
@@ -737,8 +779,9 @@ class Explorer {
   async #fieldGenerator(
     identity: TargetIdentity,
     observation: Observation,
+    error?: string,
   ): Promise<string | null> {
-    const key = `${observation.route}|${identity.name}|${identity.inputType}`;
+    const key = `${observation.route}|${identity.name}|${identity.inputType}|${error ?? ""}`;
     if (this.#fieldGenerators.has(key)) return this.#fieldGenerators.get(key)!;
     const advisor = this.options.advisor;
     if (!advisor?.chooseGoalValue) return null;
@@ -753,9 +796,11 @@ class Explorer {
             role: identity.role,
             inputType: identity.inputType,
             location: identity.location,
+            ...(error ? { error } : {}),
           }),
           choices: {
             BLOCKED: "No synthetic generator fits this field",
+            ...FORMAT_DESCRIPTIONS,
             ...this.#generators.descriptions,
           },
         },
@@ -766,7 +811,7 @@ class Explorer {
     if (!selected) return null;
     this.#calls.push(selected.call);
     const choice = selected.value.choice;
-    const generator = choice.startsWith("faker.") ? choice : null;
+    const generator = /^(faker|format)\./u.test(choice) ? choice : null;
     this.#fieldGenerators.set(key, generator);
     return generator;
   }
