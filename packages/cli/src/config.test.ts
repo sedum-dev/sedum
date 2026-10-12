@@ -96,6 +96,59 @@ describe("project configuration", () => {
     expect(config.variables.CLOUDFLARE_API_TOKEN).toBeUndefined();
   });
 
+  it.each(["OPENROUTER_API_KEY", "OPEN_ROUTER_API_KEY"])(
+    "selects OpenRouter using %s without inheriting TypeSafe settings",
+    async (name) => {
+      const root = await temporaryRoot();
+      await writeFile(
+        path.join(root, "sedum.config.yaml"),
+        "provider: { name: openrouter }\n",
+      );
+      await writeFile(path.join(root, ".env"), "OPENROUTER_API_KEY=file-key\n");
+      const config = await loadProjectConfig(root, {
+        [name]: "host-key",
+        TYPESAFE_API_KEY: "wrong-key",
+        TYPESAFE_BASE_URL: "https://wrong.example",
+        TYPESAFE_DEFAULT_MODEL: "wrong-model",
+      });
+      expect(config).toMatchObject({
+        providerName: "openrouter",
+        providerBaseUrl: "https://openrouter.ai/api",
+        providerModel: "typesafe/jev-1.13",
+        apiKey: "host-key",
+        visionApiKey: "host-key",
+        vision: { enabled: false },
+      });
+      expect(config.variables[name]).toBeUndefined();
+      expect(config.variables.OPENROUTER_API_KEY).toBeUndefined();
+      await writeFile(
+        path.join(root, "sedum.config.yaml"),
+        "provider: { name: openrouter, model: cloudflare/clef-flash }\n",
+      );
+      expect((await loadProjectConfig(root, {})).providerModel).toBe(
+        "cloudflare/clef-flash",
+      );
+    },
+  );
+
+  it("does not substitute TypeSafe credentials when the OpenRouter key is missing", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "provider: { name: openrouter }\n",
+    );
+    expect(
+      (await loadProjectConfig(root, { TYPESAFE_API_KEY: "wrong-key" })).apiKey,
+    ).toBeUndefined();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "variables: { OPENROUTER_API_KEY: forbidden-key }\n",
+    );
+    await expect(loadProjectConfig(root, {})).rejects.toMatchObject({
+      diagnostics: [expect.objectContaining({ code: "api_key_in_config" })],
+    });
+  });
+
   it.each(["CLOUDFLARE_AUTH_TOKEN", "CLOUDFLARE_API_TOKEN"])(
     "accepts the Clef token from %s in the project .env",
     async (name) => {

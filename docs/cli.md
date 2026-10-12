@@ -92,6 +92,8 @@ Glob exclusions are not redaction or a privacy guarantee. It uses the same
 provider configuration and credentials as the runner. For Clef those are
 `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_AUTH_TOKEN` (or its
 `CLOUDFLARE_API_TOKEN` alias); for TypeSafe, they are the `TYPESAFE_*` settings.
+For OpenRouter, set `provider.name: openrouter`, choose a compatible decision
+model with `provider.model`, and set `OPENROUTER_API_KEY` (or `OPEN_ROUTER_API_KEY`).
 Selection makes additional billable calls.
 
 The default base is the first available ref in this order: local `main`,

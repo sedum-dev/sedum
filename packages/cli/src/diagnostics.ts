@@ -1,5 +1,5 @@
 import { BrowserDriverError, ProviderError } from "@sedum-dev/core";
-import { ProjectConfigError } from "./config.js";
+import { ProjectConfigError, type ResolvedProjectConfig } from "./config.js";
 
 export interface CliDiagnostic {
   readonly code: string;
@@ -12,12 +12,21 @@ export interface CanonicalDiagnosticError {
   readonly message: string;
 }
 
-export type ProviderName = "typesafe" | "clef";
+export type ProviderName = ResolvedProjectConfig["providerName"];
 
 export function providerDiagnostic(
   providerName: ProviderName,
   code: "authentication" | "configuration",
 ): CliDiagnostic {
+  if (providerName === "openrouter")
+    return {
+      code: `provider_${code}`,
+      message:
+        code === "authentication"
+          ? "OpenRouter rejected the configured API key."
+          : "The OpenRouter decision provider is not configured correctly.",
+      fix: "Set OPENROUTER_API_KEY (or OPEN_ROUTER_API_KEY) to a valid OpenRouter key, check account credits and provider.model with `sedum doctor`, then rerun.",
+    };
   if (providerName === "clef")
     return code === "authentication"
       ? {
@@ -49,7 +58,7 @@ export function setupDiagnostic(
 ): CliDiagnostic {
   if (error instanceof ProjectConfigError) return configDiagnostic(error);
   if (error instanceof ProviderError && error.code === "configuration")
-    return providerName === "clef"
+    return providerName !== "typesafe"
       ? providerDiagnostic(providerName, "configuration")
       : {
           code: "missing_key",

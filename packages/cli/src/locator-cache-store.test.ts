@@ -77,6 +77,7 @@ describe("local locator cache", () => {
     });
   });
 
+  // Real Git subprocesses and worktree I/O can exceed five seconds on Windows CI.
   it("keeps per-worktree, atomic, digest-only entries and clears key with data", async () => {
     const root = await checkout();
     const worktree = path.join(root, "linked");
@@ -140,7 +141,7 @@ describe("local locator cache", () => {
     expect(cold.key).not.toEqual(a.key);
     expect(await cold.lookup(digest)).toEqual({ reason: "absent" });
     expect(await b.lookup(digest)).toEqual({ reason: "absent" });
-  });
+  }, 15_000);
 
   it("fails closed on a corrupt entry or key and invalidates entries after key loss", async () => {
     const root = await checkout();

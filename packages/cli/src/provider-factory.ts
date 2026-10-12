@@ -45,7 +45,7 @@ export async function createCliProvider(
   }
   const { TypeSafeAdapter } = await import("@sedum-dev/provider-typesafe");
   return new TypeSafeAdapter({
-    ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+    apiKey: config.apiKey ?? "",
     baseURL: config.providerBaseUrl,
     model: config.providerModel,
     gate,

@@ -179,6 +179,7 @@ export class TypeSafeAdapter
   private readonly client: TypeSafeClient;
   private readonly model: string;
   private readonly estimateJevCost: boolean;
+  private readonly provider: string;
   private readonly deadlineMs: number;
   private readonly attemptTimeoutMs: number;
   private readonly backoffInitialMs: number;
@@ -192,6 +193,8 @@ export class TypeSafeAdapter
     this.model = providerModel(options);
     this.estimateJevCost =
       parsedBaseURL.toString().replace(/\/$/u, "") === BASE_URL;
+    this.provider =
+      parsedBaseURL.hostname === "openrouter.ai" ? "openrouter" : "typesafe";
     this.deadlineMs = positiveDuration(
       options.deadlineMs ?? DEFAULT_DEADLINE_MS,
       "Provider deadline",
@@ -229,7 +232,7 @@ export class TypeSafeAdapter
     request: SystemOneRequest,
     options?: ProviderCallOptions,
   ): Promise<{ response: unknown; meta: CallMeta }> {
-    return askProvider(
+    const result = await askProvider(
       {
         client: this.client,
         gate: this.gate,
@@ -242,6 +245,17 @@ export class TypeSafeAdapter
       request,
       options,
     );
+    return {
+      ...result,
+      meta: {
+        ...result.meta,
+        provider: this.provider,
+        // Only the direct TypeSafe service guarantees unbilled 429 attempts.
+        billableAttempts: this.estimateJevCost
+          ? (result.meta.billableAttempts ?? result.meta.attempts)
+          : result.meta.attempts,
+      },
+    };
   }
 
   /** Value selection is a closed choice, never free-text generation. */

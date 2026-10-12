@@ -118,9 +118,31 @@ Sedum cannot apply its confidence thresholds to missing probabilities.
 Gateway receipts retain the requested and returned model IDs and token usage.
 When the service supplies Vercel-style `provider_metadata.gateway.cost`, Sedum
 records that USD amount, including zero, without applying direct Jev pricing.
-Missing or invalid cost metadata leaves cost unknown. After a potentially
-billable retry, the successful response cost is retained but total cost stays
+Missing or invalid cost metadata leaves cost unknown. After any gateway
+retry, the successful response cost is retained but total cost stays
 unknown. Receipt provider identity remains `typesafe`, identifying the adapter.
+
+## OpenRouter
+
+For OpenRouter, the CLI accepts `provider: { name: openrouter, model: typesafe/jev-1.13 }`
+with `OPENROUTER_API_KEY` (or `OPEN_ROUTER_API_KEY`); see
+[gateway configuration](configuration.md#openrouter-decision-models). Programmatic
+callers use the same adapter with an explicit key and endpoint:
+
+```ts
+const provider = new TypeSafeAdapter({
+  apiKey: process.env.OPENROUTER_API_KEY ?? "",
+  baseURL: "https://openrouter.ai/api",
+  model: "typesafe/jev-1.13", // or cloudflare/clef-flash
+});
+```
+
+The SDK appends `/v1/systemone`. Use a gateway key, not a direct TypeSafe key.
+Gateway receipts use reported `usage.cost` when present, otherwise unknown
+cost. No direct Jev rate is applied, and retries (including 429s) make the total
+unknown. OpenRouter calls are identified as `openrouter`, regardless of the
+upstream model author. The gateway and its upstream provider receive the
+same bounded inputs described here; review both services' data policies.
 
 ## Request and response handling
 
