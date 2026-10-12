@@ -72,6 +72,20 @@ describe("dropdowns and settings", () => {
       expect(PLACEHOLDER.test(shown)).toBe(false);
   });
 
+  it("opens the target that adds what a disabled submit waits for", async () => {
+    const page = { route: "/plan/accounts" } as Observation;
+    expect(
+      await RULE_JUDGE.prerequisite(page, "Save & Continue", [
+        "Back",
+        "+ Add an account",
+        "Help",
+      ]),
+    ).toBe(1);
+    expect(
+      await RULE_JUDGE.prerequisite(page, "Save & Continue", ["Back", "Help"]),
+    ).toBeNull();
+  });
+
   it("treats settings routes as settings without a model", async () => {
     const at = (route: string) => ({ route }) as Observation;
     expect(

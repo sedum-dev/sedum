@@ -35,6 +35,15 @@ export interface FormJudge {
     dropdown: string,
     options: readonly string[],
   ): Promise<number | null>;
+  /**
+   * The submit `submit` is disabled: the index of the target that must be
+   * used first (such as "Add an account"), or null for none.
+   */
+  prerequisite(
+    observation: Observation,
+    submit: string,
+    targets: readonly string[],
+  ): Promise<number | null>;
   /** For each error line, the index of the label it is about, or null. */
   errorLabels(
     observation: Observation,
@@ -61,6 +70,11 @@ export interface FormFlowDeps {
 
 const MAX_ATTEMPTS = 3;
 const MAX_PAGES = 6;
+/** Times one form may open a sub-form to enable its submit. */
+const MAX_UNLOCKS = 2;
+/** Sub-forms inside sub-forms, at most. */
+const MAX_DEPTH = 2;
+const TARGET_LIMIT = 60;
 
 interface Active {
   route: string;
@@ -79,7 +93,23 @@ interface Active {
   submitted: boolean;
   /** The form's lines before its first submit: errors are lines it lacked. */
   baseline?: readonly string[] | undefined;
+  /** A sub-form opened from a form whose submit was disabled. */
+  nested: boolean;
+  unlocks: number;
+  /** A target was used to enable the submit; what the page held before. */
+  unlocking?: Unlocking | undefined;
 }
+
+interface Unlocking {
+  readonly route: string;
+  readonly fills: ReadonlySet<string>;
+}
+
+/** The form's submit: an action, disabled (by name), or none usable. */
+type Submit =
+  | { readonly kind: "act"; readonly action: ExploreAction }
+  | { readonly kind: "disabled"; readonly name: string }
+  | { readonly kind: "none" };
 
 /** A dropdown just opened, the targets before it, and the option typed. */
 interface Opened {
@@ -105,6 +135,8 @@ interface Fill {
  */
 export class FormFlow {
   #active: Active | undefined;
+  /** Forms waiting for the sub-form they opened. */
+  #stack: Active[] = [];
 
   constructor(private readonly deps: FormFlowDeps) {}
 
@@ -124,6 +156,7 @@ export class FormFlow {
     const fields = await inspectFields(this.deps.page, observation.fills);
     if (!fieldsToFill(fields, false).length) return null;
     if (!(await this.#allowed(observation, fields))) return null;
+    this.#stack = [];
     this.#active = this.#fresh(observation, 1);
     return this.#finish(await this.#attempt(observation, fields, []));
   }
@@ -132,12 +165,31 @@ export class FormFlow {
   async next(observation: Observation): Promise<ExploreAction[] | null> {
     const active = this.#active;
     if (!active) return null;
-    const actions = active.opened
-      ? await this.#pick(observation, active)
-      : active.submitted
-        ? await this.#afterSubmit(observation, active)
-        : await this.#advance(observation, active);
-    return this.#finish(actions);
+    const actions = await this.#step(observation, active);
+    if (actions?.length) return actions;
+    return this.#resume(observation);
+  }
+
+  #step(
+    observation: Observation,
+    active: Active,
+  ): Promise<ExploreAction[] | null> {
+    if (active.unlocking) return this.#enterSub(observation, active);
+    if (active.opened) return this.#pick(observation, active);
+    return active.submitted
+      ? this.#afterSubmit(observation, active)
+      : this.#advance(observation, active);
+  }
+
+  /** This form is done: carry on with the form that opened it, if any. */
+  async #resume(observation: Observation): Promise<ExploreAction[] | null> {
+    const parent = this.#stack.pop();
+    this.#active = parent;
+    if (!parent) return null;
+    // The sub-form may have added rows or fields to the parent form.
+    parent.fields = fieldKey(observation);
+    parent.submitted = false;
+    return this.next(observation);
   }
 
   #finish(actions: ExploreAction[] | null): ExploreAction[] | null {
@@ -155,6 +207,8 @@ export class FormFlow {
       typed: new Set(),
       submitted: false,
       proxies: new Set(),
+      nested: false,
+      unlocks: 0,
     };
   }
 
@@ -293,10 +347,62 @@ export class FormFlow {
     );
     const actions = await this.#typeAll(observation, extra);
     const submit = this.#submit(observation, fields);
-    if (!submit) return null;
+    if (submit.kind === "none") return null;
+    // Typing may enable a disabled submit; only then look for a sub-form.
+    if (submit.kind === "disabled")
+      return actions.length
+        ? actions
+        : this.#unlock(observation, active, submit.name);
     active.baseline ??= await formLines(this.deps.page, observation.fills);
     active.submitted = true;
-    return [...actions, submit];
+    return [...actions, submit.action];
+  }
+
+  /** Use the target Jev says must come first, such as "Add an account". */
+  async #unlock(
+    observation: Observation,
+    active: Active,
+    submit: string,
+  ): Promise<ExploreAction[] | null> {
+    if (active.unlocks >= MAX_UNLOCKS || this.#stack.length >= MAX_DEPTH)
+      return null;
+    active.unlocks++;
+    const targets = observation.clicks
+      .filter((c) => c.name && !c.disabled && this.deps.safe(c))
+      .slice(0, TARGET_LIMIT);
+    const names = targets.map((c) => c.name);
+    const index = await this.deps.judge.prerequisite(
+      observation,
+      submit,
+      names,
+    );
+    if (index === null) return null;
+    active.unlocking = {
+      route: observation.route,
+      fills: new Set(observation.fills.map((c) => targetSignature(c))),
+    };
+    return [click(observation, targets[index]!)];
+  }
+
+  /** Complete the sub-form the unlocking target opened, as its own form. */
+  async #enterSub(
+    observation: Observation,
+    active: Active,
+  ): Promise<ExploreAction[] | null> {
+    const before = active.unlocking!;
+    active.unlocking = undefined;
+    const appeared = observation.fills.some(
+      (c) => !before.fills.has(targetSignature(c)),
+    );
+    // No new fields (a checkbox, say): try the submit again.
+    if (!appeared && observation.route === before.route)
+      return this.#advance(observation, active);
+    this.#stack.push(active);
+    this.#active = { ...this.#fresh(observation, active.pages), nested: true };
+    const fields = await inspectFields(this.deps.page, observation.fills);
+    if (!fieldsToFill(fields, false).length) return null;
+    if (!(await this.#notSettings(observation))) return null;
+    return this.#attempt(observation, fields, []);
   }
 
   /** Choose one of the targets that appeared when the dropdown opened. */
@@ -375,7 +481,9 @@ export class FormFlow {
       observation.fills,
       samePage,
     );
-    if (!samePage) return this.#nextPage(observation, fields);
+    // A sub-form that closed or moved on is done; its parent carries on.
+    if (!samePage)
+      return active.nested ? null : this.#nextPage(observation, fields);
     if (active.attempts >= MAX_ATTEMPTS) return null;
     const lines = newErrorLines(
       active.baseline ?? [],
@@ -426,7 +534,8 @@ export class FormFlow {
     // The macro started this record, so values the app filled in by
     // default do not make the next page an edit form.
     if (active.pages >= MAX_PAGES) return null;
-    if (!fieldsToFill(fields, false).length && !continues(fields)) return null;
+    if (!fieldsToFill(fields, false).length && !continues(observation, fields))
+      return null;
     if (!(await this.#notSettings(observation))) return null;
     this.#active = this.#fresh(observation, active.pages + 1);
     return this.#attempt(observation, fields, []);
@@ -486,23 +595,19 @@ export class FormFlow {
   }
 
   /**
-   * The form's own submit control, Enter when the form has none in view,
-   * and nothing when its submit is unsafe: Enter would submit it anyway.
+   * The form's own submit control (or the page's Continue button), Enter
+   * when a form has none in view, and none when its submit is unsafe: Enter
+   * would submit it anyway. A disabled submit waits for a sub-form.
    */
-  #submit(
-    observation: Observation,
-    fields: readonly FieldInfo[],
-  ): ExploreAction | null {
-    const name = fields.find((f) => f.submit)?.submit;
+  #submit(observation: Observation, fields: readonly FieldInfo[]): Submit {
+    const name = submitName(observation, fields);
     const named = observation.clicks.filter((c) => name && c.name === name);
-    if (!named.length) return { kind: "press", key: "Enter" };
-    // A disabled submit waits for something else first, such as a sub-form.
-    if (named.every((c) => c.disabled)) return null;
+    if (!named.length) return noButton(observation, fields, name);
     // A nav link can share the button's name ("Search"); prefer the button.
     const buttons = named.filter((c) => !c.signals.href);
     const pool = buttons.length ? buttons : named;
-    if (!pool.every((c) => this.deps.safe(c))) return null;
-    return click(observation, pool[0]!);
+    if (!pool.every((c) => this.deps.safe(c))) return { kind: "none" };
+    return { kind: "act", action: click(observation, pool[0]!) };
   }
 }
 
@@ -529,10 +634,40 @@ function matching(
   );
 }
 
+/** No enabled submit: one that waits (disabled), Enter in a form, or none. */
+function noButton(
+  observation: Observation,
+  fields: readonly FieldInfo[],
+  name: string,
+): Submit {
+  if (name && observation.disabled.some((c) => c.name === name))
+    return { kind: "disabled", name };
+  return fields.length
+    ? { kind: "act", action: { kind: "press", key: "Enter" } }
+    : { kind: "none" };
+}
+
+const CONTINUE = /continue|next/iu;
+
+/** The submit of the fields' form, else the page's Continue button. */
+function submitName(
+  observation: Observation,
+  fields: readonly FieldInfo[],
+): string {
+  const own = fields.find((f) => f.submit)?.submit;
+  if (own) return own;
+  const next = [...observation.clicks, ...observation.disabled].find(
+    (c) => !c.signals.href && CONTINUE.test(c.name),
+  );
+  return next?.name ?? "";
+}
+
 /** A wizard page with nothing empty that still asks to continue. */
-function continues(fields: readonly FieldInfo[]): boolean {
-  const submit = fields.find((f) => f.submit)?.submit ?? "";
-  return /continue|next/iu.test(submit);
+function continues(
+  observation: Observation,
+  fields: readonly FieldInfo[],
+): boolean {
+  return CONTINUE.test(submitName(observation, fields));
 }
 
 /** The click candidate of a dropdown the page script found. */

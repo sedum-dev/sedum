@@ -14,6 +14,8 @@ export interface Observation {
   readonly version: PageVersion;
   readonly clicks: readonly Candidate[];
   readonly fills: readonly Candidate[];
+  /** Disabled buttons, such as a submit waiting for a sub-form; never clicked. */
+  readonly disabled: readonly Candidate[];
   /** Route plus visible text: the identity of a page state. */
   readonly state: string;
 }
@@ -101,6 +103,7 @@ async function observeOnce(page: BrowserPage): Promise<Observation | null> {
     text: digest.text,
     version: digest.version,
     clicks: clicks.candidates.filter((c) => !c.disabled && !c.editable),
+    disabled: clicks.candidates.filter((c) => c.disabled && !c.editable),
     fills: fills.candidates.filter((c) => !c.disabled && c.editable),
     state: hashText(`${route}\n${digest.text}`),
   };

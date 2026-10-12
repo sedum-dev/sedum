@@ -17,6 +17,9 @@ const PURPOSES: Readonly<Record<FormPurpose, string>> = {
   search: "Only searches, filters or looks something up",
 };
 
+/** A target that adds the item a form still needs, such as "Add an account". */
+const ADD = /^\+?\s*(add|new|create)\b/iu;
+
 const SETTINGS_ROUTE =
   /settings|preferences|config|branding|profile|billing|permissions/iu;
 
@@ -51,6 +54,10 @@ export const RULE_JUDGE: FormJudge = {
       SETTINGS_ROUTE.test(observation.route) ? "settings" : undefined,
     ),
   option: () => Promise.resolve(null),
+  prerequisite: (_observation, _submit, targets) => {
+    const index = targets.findIndex((name) => ADD.test(name));
+    return Promise.resolve(index < 0 ? null : index);
+  },
   errorLabels: (_observation, lines, labels) =>
     Promise.resolve(lines.map((line) => labelInLine(line, labels))),
 };
@@ -123,6 +130,37 @@ export class JevJudge implements FormJudge {
         },
       );
       return answers ? Number(answers.option!.slice(1)) : null;
+    });
+  }
+
+  prerequisite(
+    observation: Observation,
+    submit: string,
+    targets: readonly string[],
+  ): Promise<number | null> {
+    const key = `prerequisite|${routeTemplate(observation.route)}|${submit}|${targets.join(";")}`;
+    return this.#once(key, async () => {
+      const choices: Record<string, string> = {
+        none: "None of these targets enables it",
+      };
+      targets.forEach((name, index) => (choices[`t${index}`] = name));
+      const answers = await this.#decide(
+        observation,
+        { submit },
+        {
+          target: {
+            question:
+              "The button `subject.submit` is disabled until the form has what it needs. Which target must the user use first?",
+            rules:
+              "Usually a target that adds the missing item, such as an 'Add …' button. Never a link to another page, a destructive action, or a way to leave the form.",
+            choices,
+          },
+        },
+      );
+      const answer = answers?.target;
+      if (answer === undefined)
+        return RULE_JUDGE.prerequisite(observation, submit, targets);
+      return answer.startsWith("t") ? Number(answer.slice(1)) : null;
     });
   }
 

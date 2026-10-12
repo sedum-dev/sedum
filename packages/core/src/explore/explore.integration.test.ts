@@ -95,6 +95,24 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await site?.close();
     });
 
+    it("stops a guided walk once Jev keeps failing", async () => {
+      const fresh = await freshPage();
+      const down = () => Promise.reject(new Error("no available API credits"));
+      try {
+        const result = await explore(fresh.page, {
+          startUrl: `${site.baseUrl}/explore/`,
+          steps: 40,
+          seed: 1,
+          mode: "guided",
+          advisor: { assess: down, decide: down, chooseGoalValue: down },
+        });
+        expect(result.stopReason).toMatch(/^Jev stopped answering/u);
+        expect(result.trace.length).toBeLessThanOrEqual(3);
+      } finally {
+        await fresh.close();
+      }
+    }, 120_000);
+
     it("repeats a blind walk for a seed and stays on the origin", async () => {
       const walk = async () => {
         const fresh = await freshPage();
@@ -155,7 +173,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       return done;
     }
 
-    it("completes a two-page wizard with date parts, a UK postcode and a radio", async () => {
+    it("completes a three-page wizard with date parts, a UK postcode, a radio and a sub-form", async () => {
       const fresh = await freshPage();
       const before = site.stats.bugs["plan-projection"] ?? 0;
       try {
@@ -165,6 +183,9 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         expect(site.stats.bugs["plan-projection"]).toBe(before + 1);
         expect(done).toContain("click Save & Continue");
         expect(done).toContain("click Create plan");
+        // Continue is disabled until the "Add an account" sub-form is saved.
+        expect(done).toContain("click Add an account");
+        expect(done).toContain("click Save account");
         expect(done).toContain("click Yes");
       } finally {
         await fresh.close();

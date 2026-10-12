@@ -215,6 +215,7 @@ describe("action tree", () => {
     title: "Sign up",
     text: "Sign up",
     version: { document: "d", revision: 1, route: "/signup" },
+    disabled: [],
     clicks: [
       candidate("Help", {
         role: "link",
@@ -310,6 +311,7 @@ describe("learned from a real staging run", () => {
       version: { document: "d", revision: 1, route: "/a" },
       clicks: [nav],
       fills: [],
+      disabled: [],
       state: "s",
     };
     const plain = actionTree({

@@ -223,7 +223,7 @@ form.onsubmit = (event) => {
   const values = Object.fromEntries(new FormData(form));
   const failed = RULES.filter(([name, good]) => !good(values[name]));
   RULES.forEach(([name, , message]) => show(name, failed.some((f) => f[0] === name) ? message : ''));
-  if (!failed.length) location.href = '/explore/account/plan/new?step=2';
+  if (!failed.length) location.href = '/explore/account/plan/new?step=accounts';
 };`;
 
 const PLAN_STEP_TWO = `
@@ -320,16 +320,43 @@ const ACCOUNT_SAVED = `
 const total = [{ name: 'New account' }].reduce((sum, a) => sum + a.balance, 0);
 if (Number.isNaN(total)) console.error('Account total failed: balance is missing');`;
 
+// Like a real planning app's accounts step: Continue stays disabled until
+// an account is added through a sub-form the page reveals.
+const PLAN_ACCOUNTS = `
+const $ = (id) => document.getElementById(id);
+$('add-account').onclick = () => { $('sub').hidden = false; };
+$('acc-save').onclick = () => {
+  const missing = [['acc-name', 'Account name is required'], ['acc-wrapper', 'Wrapper is required'], ['acc-balance', 'Balance must be above 0']]
+    .filter(([id]) => !(id === 'acc-balance' ? Number($(id).value) > 0 : $(id).value)).map(([, message]) => message);
+  $('acc-error').textContent = missing.join('. ');
+  if (missing.length) return;
+  $('accounts').insertAdjacentHTML('beforeend', '<li>' + $('acc-name').value + '</li>');
+  $('sub').hidden = true;
+  $('continue').disabled = false;
+};
+$('continue').onclick = () => { location.href = '/explore/account/plan/new?step=2'; };`;
+
+const PLAN_ACCOUNTS_BODY = `<h1>New financial plan</h1><p>Step 2 of 3: investment accounts</p><ul id="accounts"></ul>
+<button id="add-account" type="button">Add an account</button>
+<div id="sub" hidden><label>Account name <input id="acc-name"></label><label>Wrapper <select id="acc-wrapper"><option value="">Select a wrapper</option><option>ISA</option><option>SIPP</option></select></label><label>Balance <input id="acc-balance" type="number" min="1" max="1000000"></label><button id="acc-save" type="button">Save account</button><p id="acc-error"></p></div>
+<button id="continue" type="button" disabled>Save &amp; Continue</button>`;
+
 function planPage(url: URL): string {
+  if (url.searchParams.get("step") === "accounts")
+    return page({
+      title: "New financial plan · accounts",
+      body: PLAN_ACCOUNTS_BODY,
+      script: PLAN_ACCOUNTS,
+    });
   if (url.searchParams.get("step") === "2")
     return page({
       title: "New financial plan · step 2",
-      body: `<h1>New financial plan</h1><p>Step 2 of 2: contributions</p><form novalidate><label>Retirement age <input name="age" type="number" min="55" max="75" required></label><label>Monthly contribution (£) <input name="monthly" type="number" min="0" max="10000" required></label><p id="error" role="alert"></p><button type="submit">Create plan</button></form>`,
+      body: `<h1>New financial plan</h1><p>Step 3 of 3: contributions</p><form novalidate><label>Retirement age <input name="age" type="number" min="55" max="75" required></label><label>Monthly contribution (£) <input name="monthly" type="number" min="0" max="10000" required></label><p id="error" role="alert"></p><button type="submit">Create plan</button></form>`,
       script: PLAN_STEP_TWO,
     });
   return page({
     title: "New financial plan · step 1",
-    body: `<h1>New financial plan</h1><p>Step 1 of 2: about the client</p><form novalidate>
+    body: `<h1>New financial plan</h1><p>Step 1 of 3: about the client</p><form novalidate>
 <label>First name <input name="first" required></label><span data-error="first"></span>
 <fieldset><legend>Date of birth</legend><label>DD <input name="day" placeholder="DD" maxlength="2" required></label><label>MM <input name="month" placeholder="MM" maxlength="2" required></label><label>YYYY <input name="year" placeholder="YYYY" maxlength="4" required></label><span data-error="day"></span><span data-error="month"></span><span data-error="year"></span></fieldset>
 <label>Postcode <input name="postcode" required></label><span data-error="postcode"></span>

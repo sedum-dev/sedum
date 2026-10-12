@@ -119,6 +119,8 @@ function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 const FORM_KINDS = new Set(["form", "search", "auth"]);
 const PAGE_TEXT_LIMIT = 3_000;
+/** Consecutive failed Jev calls after which a guided walk stops. */
+const GUIDE_FAILURES = 3;
 const SWARM_KINDS: readonly ExploreActionKind[] = [
   "type",
   "press",
@@ -226,6 +228,7 @@ class Explorer {
   readonly #chrome = new SiteChrome();
   readonly #writes = new Map<string, number>();
   #outsideStreak = 0;
+  #failStreak = 0;
   readonly #abandoned = new Set<number>();
   #stopReason: string | undefined;
   readonly #calls: ProviderCall[] = [];
@@ -362,6 +365,7 @@ class Explorer {
       callOptions: () => this.#callOptions(),
       recorded: (call, ms) => {
         this.#calls.push(call);
+        this.#failStreak = 0;
         this.#advisorMs.push(ms);
       },
       failed: (error) => this.#advisorFailed(error),
@@ -670,6 +674,7 @@ class Explorer {
       )
       .catch((error: unknown) => this.#advisorFailed(error));
     this.#advisorMs.push(Math.round(performance.now() - started));
+    if (answer) this.#failStreak = 0;
     return answer;
   }
 
@@ -810,6 +815,7 @@ class Explorer {
     this.#advisorMs.push(Math.round(performance.now() - started));
     if (!selected) return null;
     this.#calls.push(selected.call);
+    this.#failStreak = 0;
     const choice = selected.value.choice;
     const generator = /^(faker|format)\./u.test(choice) ? choice : null;
     this.#fieldGenerators.set(key, generator);
@@ -818,9 +824,14 @@ class Explorer {
 
   #advisorFailed(error: unknown): undefined {
     if (this.options.signal?.aborted) throw error;
-    this.#advisorErrors.push(
-      error instanceof Error ? error.message.slice(0, 200) : String(error),
-    );
+    const message =
+      error instanceof Error ? error.message.slice(0, 200) : String(error);
+    this.#advisorErrors.push(message);
+    // A guided walk without its guide is an unguided walk with Jev's safety
+    // judgements missing: stop rather than carry on.
+    this.#failStreak++;
+    if (this.options.mode === "guided" && this.#failStreak >= GUIDE_FAILURES)
+      this.#stopReason ??= `Jev stopped answering: ${message}`;
     return undefined;
   }
 

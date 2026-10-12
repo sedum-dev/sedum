@@ -91,7 +91,7 @@ as a closed choice:
 5. Click the form's own submit button. If the form has no submit button in
    view, press Enter. If the submit button is unsafe, give up, because Enter
    would submit the form anyway. If it is disabled, give up too: something
-   else, such as a sub-form, must come first.
+   else must come first: see step 8.
 6. Read what the submit changed. Fields marked invalid, and fields named by
    new error lines anywhere in the form (a summary box such as "Wrapper type
    is required"), are filled again, up to 3 attempts. Code matches an error
@@ -101,6 +101,12 @@ as a closed choice:
 7. If a new set of fields appears, treat it as the next page of a wizard (at
    most 6 pages). A page the app filled in with defaults is still submitted
    when its button continues ("Save & Continue").
+8. If the submit (or the page's Continue button) is disabled, Jev picks the
+   target that must be used first, such as "Add an account". The macro
+   uses it and completes the sub-form that appears as a form of its own,
+   then returns to the first form and submits it. A form opens at most two
+   sub-forms, nested at most two deep. Heuristic mode picks the first "Add",
+   "New" or "Create" target.
 
 The macro leaves two kinds of form alone. Jev judges what a form does
 (creates something, fills in one record, changes settings, searches), and a
@@ -169,6 +175,9 @@ audit what an exploration changed.
 - A step still running after 60 s restarts the walk from the start page, and
   the walk stops when it keeps leaving the site, for example after the
   session expires.
+- A guided walk stops after three Jev calls in a row fail, for example when
+  the TypeSafe account runs out of credits. Carrying on would be an
+  unguided walk without Jev's safety judgements.
 - The walk can still create data through ordinary forms. Use an organization
   or account you can reset, and review the write log after each run.
 
@@ -219,8 +228,10 @@ refusal halves that target's weight everywhere it appears.
 - 48 product pages that link to each other;
 - pages reachable only through a sequence of actions (a reports page, an
   admin console revealed by a preference checkbox, a newsletter welcome
-  page behind form validation, and a plan summary behind a two-page wizard
-  with split date boxes, a postcode check, a radio group and number ranges);
+  page behind form validation, and a plan summary behind a three-page wizard
+  with split date boxes, a postcode check, a radio group, an accounts step
+  whose Continue button is disabled until an "Add an account" sub-form is
+  saved, and number ranges);
 - an "Add account" dialog without dialog roles: a custom div dropdown with a
   heading, a native select with a placeholder, a type-ahead widget over a
   hidden select, a field no format rule knows, and errors shown only in a
