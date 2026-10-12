@@ -8,7 +8,7 @@ import {
   type BrowserPage,
   type BrowserSession,
 } from "../browser-driver.js";
-import type { Resolver } from "../provider.js";
+import { ProviderError, type Resolver } from "../provider.js";
 import { emitTest } from "./emit.js";
 import { explore } from "./explorer.js";
 import { replay, shrink } from "./replay.js";
@@ -108,6 +108,18 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         });
         expect(result.stopReason).toMatch(/^Jev stopped answering/u);
         expect(result.trace.length).toBeLessThanOrEqual(3);
+        // A request refused on this side says nothing about Jev.
+        const local = () =>
+          Promise.reject(new ProviderError("invalid-input", "too large"));
+        const kept = await explore(fresh.page, {
+          startUrl: `${site.baseUrl}/explore/`,
+          steps: 6,
+          seed: 1,
+          mode: "guided",
+          advisor: { assess: local, decide: local, chooseGoalValue: local },
+        });
+        expect(kept.stopReason).toBeUndefined();
+        expect(kept.trace.length).toBe(6);
       } finally {
         await fresh.close();
       }

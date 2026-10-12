@@ -137,3 +137,25 @@ describe("exploration decisions", () => {
     ).toThrow();
   });
 });
+
+describe("large exploration requests", () => {
+  it("asks about as many targets as fit, in page order", () => {
+    const long = "A very long target name that repeats ".repeat(20);
+    const targets = Object.fromEntries(
+      Array.from({ length: 60 }, (_, i) => [
+        `t${i}`,
+        { role: "button", name: `${long}${i}` },
+      ]),
+    );
+    const { request, targetIds } = buildExploreRequest(
+      { ...input, targets },
+      "jev-latest",
+    );
+    expect(targetIds.length).toBeGreaterThan(0);
+    expect(targetIds.length).toBeLessThan(60);
+    expect(targetIds[0]).toBe("t0");
+    expect(Buffer.byteLength(JSON.stringify(request))).toBeLessThanOrEqual(
+      64 * 1024,
+    );
+  });
+});

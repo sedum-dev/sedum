@@ -59,16 +59,11 @@ function targetQuestions(
  * One speculative fan-out request per page state: the page kind, then one
  * yes/no safety question and one destination-kind Choice per click target.
  */
-export function buildExploreRequest(
+function exploreRequest(
   input: ExploreAdviceRequest,
   model: string,
-): ExploreRequest {
-  const kinds = Object.keys(input.kinds);
-  const targetIds = Object.keys(input.targets);
-  const kindsValid = kinds.length >= 2 && kinds.length <= 64;
-  if (!kindsValid || targetIds.length > TARGET_LIMIT)
-    throw new ProviderError("invalid-input", "Invalid exploration request");
-  const request: SystemOneRequest = {
+): SystemOneRequest {
+  return {
     model,
     state: {
       page: { route: input.route, title: input.title, text: input.page },
@@ -82,12 +77,52 @@ export function buildExploreRequest(
         },
         input.kinds as Record<string, string>,
       ),
-      ...targetQuestions(input, kinds),
+      ...targetQuestions(input, Object.keys(input.kinds)),
     },
   };
-  if (Buffer.byteLength(JSON.stringify(request)) > BODY_LIMIT_BYTES)
-    throw new ProviderError("invalid-input", "Exploration request too large");
-  return { request, targetIds };
+}
+
+function fits(request: SystemOneRequest): boolean {
+  return Buffer.byteLength(JSON.stringify(request)) <= BODY_LIMIT_BYTES;
+}
+
+/**
+ * One request per page state. A page with many long targets is asked about
+ * its first targets only, as many as fit; the rest fall back to the
+ * keyword list.
+ */
+export function buildExploreRequest(
+  input: ExploreAdviceRequest,
+  model: string,
+): ExploreRequest {
+  const targets = Object.keys(input.targets);
+  if (!validKinds(input) || targets.length > TARGET_LIMIT)
+    throw new ProviderError("invalid-input", "Invalid exploration request");
+  return fittingRequest(input, model, targets);
+}
+
+function validKinds(input: ExploreAdviceRequest): boolean {
+  const kinds = Object.keys(input.kinds).length;
+  return kinds >= 2 && kinds <= 64;
+}
+
+/** Drop targets from the end until the request fits. */
+function fittingRequest(
+  input: ExploreAdviceRequest,
+  model: string,
+  ids: readonly string[],
+): ExploreRequest {
+  let targetIds = [...ids];
+  for (;;) {
+    const kept = Object.fromEntries(
+      targetIds.map((id) => [id, input.targets[id]!]),
+    );
+    const request = exploreRequest({ ...input, targets: kept }, model);
+    if (fits(request)) return { request, targetIds };
+    if (!targetIds.length)
+      throw new ProviderError("invalid-input", "Exploration request too large");
+    targetIds = targetIds.slice(0, Math.floor(targetIds.length * 0.75));
+  }
 }
 
 export function validateExploreAdvice(

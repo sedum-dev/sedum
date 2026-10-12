@@ -1,7 +1,7 @@
 import type { BrowserPage } from "../browser-driver.js";
 import { goalGenerators } from "../goal-data.js";
 import type { Aim, Candidate } from "../page-protocol.js";
-import type { ProviderCall } from "../provider.js";
+import { ProviderError, type ProviderCall } from "../provider.js";
 import { actionTree, runAction, SiteChrome, type Leaf } from "./actions.js";
 import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
@@ -119,6 +119,11 @@ function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 const FORM_KINDS = new Set(["form", "search", "auth"]);
 const PAGE_TEXT_LIMIT = 3_000;
+/** A request this side refused (too large, say) says nothing about Jev. */
+function refusedLocally(error: unknown): boolean {
+  return error instanceof ProviderError && error.code === "invalid-input";
+}
+
 /** Consecutive failed Jev calls after which a guided walk stops. */
 const GUIDE_FAILURES = 3;
 const SWARM_KINDS: readonly ExploreActionKind[] = [
@@ -827,12 +832,18 @@ class Explorer {
     const message =
       error instanceof Error ? error.message.slice(0, 200) : String(error);
     this.#advisorErrors.push(message);
-    // A guided walk without its guide is an unguided walk with Jev's safety
-    // judgements missing: stop rather than carry on.
+    if (!refusedLocally(error)) this.#guideFailed(message);
+    return undefined;
+  }
+
+  /**
+   * A guided walk without its guide is an unguided walk with Jev's safety
+   * judgements missing: stop rather than carry on.
+   */
+  #guideFailed(message: string): void {
     this.#failStreak++;
     if (this.options.mode === "guided" && this.#failStreak >= GUIDE_FAILURES)
       this.#stopReason ??= `Jev stopped answering: ${message}`;
-    return undefined;
   }
 
   #result(elapsedMs: number): ExploreResult {
