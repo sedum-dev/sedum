@@ -251,7 +251,10 @@ const $ = (id) => document.getElementById(id);
 $('add').onclick = () => { $('modal').hidden = false; };
 $('cancel').onclick = () => { $('modal').hidden = true; };
 $('wrapper').onclick = () => { $('wrapper-menu').hidden = !$('wrapper-menu').hidden; };
+// Like a menu still loading: the first click on an option does nothing.
+let loaded = false;
 document.querySelectorAll('.opt').forEach((option) => option.onclick = () => {
+  if (!loaded) { loaded = true; return; }
   $('wrapper').textContent = option.textContent; $('wrapper').dataset.value = option.textContent;
   $('wrapper-menu').hidden = true;
 });

@@ -94,6 +94,10 @@ interface Active {
   queue: Dropdown[];
   /** The dropdown just opened, and the targets shown before it opened. */
   opened?: Opened | undefined;
+  /** The option just clicked, to check it took (menus re-render). */
+  picked?: Picked | undefined;
+  /** Dropdowns already picked again: never a third time. */
+  retried: Set<string>;
   /** Names of type-ahead inputs: chosen through their list, never typed. */
   proxies: ReadonlySet<string>;
   /** Fields typed into this attempt. */
@@ -125,6 +129,14 @@ interface Opened {
   readonly dropdown: Dropdown;
   readonly before: ReadonlySet<string>;
   readonly want?: string;
+}
+
+/** An option clicked in a custom dropdown, once or twice. */
+interface Picked {
+  readonly dropdown: Dropdown;
+  readonly name: string;
+  readonly before: ReadonlySet<string>;
+  readonly again: boolean;
 }
 
 /** One planned value: the field, and the error it must fix, if any. */
@@ -216,6 +228,7 @@ export class FormFlow {
       proxies: new Set(),
       nested: false,
       unlocks: 0,
+      retried: new Set(),
     };
   }
 
@@ -305,6 +318,8 @@ export class FormFlow {
     observation: Observation,
     active: Active,
   ): Promise<ExploreAction[] | null> {
+    const again = await this.#repick(observation, active);
+    if (again) return again;
     while (active.queue.length) {
       const dropdown = active.queue.shift()!;
       const opened = dropdown.typeahead
@@ -441,11 +456,47 @@ export class FormFlow {
     );
     if (!options.length) return [{ kind: "press", key: "Escape" }];
     const typed = want ? matching(options, want) : undefined;
-    if (typed) return [click(observation, typed)];
     const names = options.map((c) => c.name);
     const label = dropdown.label || dropdown.shown;
-    const chosen = await this.#optionIndex(observation, label, names);
-    return [click(observation, options[chosen]!)];
+    const option =
+      typed ?? options[await this.#optionIndex(observation, label, names)]!;
+    const again = active.retried.has(dropdownKey(dropdown));
+    active.picked = { dropdown, name: option.name, before, again };
+    return [click(observation, option)];
+  }
+
+  /**
+   * A dropdown that still shows its placeholder after a pick: the menu
+   * re-rendered under the click. Click the option again while the menu is
+   * open, or reopen the dropdown, once.
+   */
+  async #repick(
+    observation: Observation,
+    active: Active,
+  ): Promise<ExploreAction[] | null> {
+    const picked = active.picked;
+    active.picked = undefined;
+    if (!picked || picked.again) return null;
+    const dropdowns = await unansweredDropdowns(
+      this.deps.page,
+      observation.fills,
+    );
+    const { dropdown } = picked;
+    const still = dropdowns.some(
+      (d) =>
+        !d.native && d.shown === dropdown.shown && d.label === dropdown.label,
+    );
+    if (!still) return null;
+    active.retried.add(dropdownKey(dropdown));
+    const option = observation.clicks.find(
+      (c) => c.name === picked.name && !picked.before.has(targetSignature(c)),
+    );
+    if (!option) {
+      active.queue.unshift(dropdown);
+      return null;
+    }
+    active.picked = { ...picked, again: true };
+    return [click(observation, option)];
   }
 
   /** Native selects choose their option in one click. */
@@ -732,6 +783,10 @@ function continues(
   fields: readonly FieldInfo[],
 ): boolean {
   return CONTINUE.test(submitName(observation, fields));
+}
+
+function dropdownKey(dropdown: Dropdown): string {
+  return `${dropdown.label}|${dropdown.shown}|${dropdown.nth}`;
 }
 
 /** The click candidate of a dropdown the page script found. */
