@@ -95,6 +95,28 @@ function pathOf(url: string): string {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Findings for one page state from Jev's answers: exact-text leaks only when
+ * Jev confirms a broken value, and stuck loading only when the page stayed
+ * unchanged. Exploration asks the same questions in its own call.
+ */
+export function stateDetections(
+  fullText: string,
+  inspection: Omit<PageInspection, "call">,
+  thresholds: SemanticThresholds,
+  stuck: boolean,
+): Detection[] {
+  const text =
+    inspection.probabilities.broken_value >= thresholds.confirmText
+      ? textDetections(fullText)
+      : [];
+  const skip = new Set<SemanticCheck>();
+  if (!stuck) skip.add("stuck_loading");
+  // An exact leak was already found in code; the model adds nothing.
+  if (text.length) skip.add("broken_value");
+  return [...text, ...semanticDetections(inspection, thresholds, skip)];
+}
+
+/**
  * Jev's page checks: one System One call per new page state, cached run-wide
  * by a hash of the path, title, and visible text. Exact-text leaks are kept
  * only when Jev confirms a broken value, and a loading answer counts only if
@@ -177,15 +199,7 @@ export class PageChecks {
     inspection: PageInspection,
     stuck: boolean,
   ): Detection[] {
-    const text =
-      inspection.probabilities.broken_value >= this.thresholds.confirmText
-        ? textDetections(state.fullText)
-        : [];
-    const skip = new Set<SemanticCheck>();
-    if (!stuck) skip.add("stuck_loading");
-    // An exact leak was already found in code; the model adds nothing.
-    if (text.length) skip.add("broken_value");
-    return [...text, ...semanticDetections(inspection, this.thresholds, skip)];
+    return stateDetections(state.fullText, inspection, this.thresholds, stuck);
   }
 
   private async ask(

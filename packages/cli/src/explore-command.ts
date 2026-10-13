@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { InvalidArgumentError } from "commander";
+import type { ExploreDetect } from "./cli-arguments.js";
 import type {
   BrowserPage,
   BrowserSession,
@@ -29,6 +30,10 @@ export interface ExploreCommandOptions {
   readonly rejectedSubmits?: boolean;
   /** Console errors matching these regular expressions are ignored. */
   readonly ignoreConsole?: readonly string[];
+  /** "semantic" adds the bug detector's page checks to each Jev call. */
+  readonly detect?: ExploreDetect;
+  /** Known findings to ignore, as `--detect-allow` rules. */
+  readonly detectAllow?: readonly string[];
   /** Union Jev's safety judgment with the destructive keyword list. */
   readonly strictSafety?: boolean;
   /** A Playwright storage-state file whose cookies sign the browser in. */
@@ -69,10 +74,12 @@ function watched(options: ExploreCommandOptions): {
 } {
   const origins = options.watchOrigins ?? [];
   const ignore = options.ignoreConsole ?? [];
+  const allow = options.detectAllow ?? [];
   const oracles: OracleOptions = {
     ...(origins.length ? { watchOrigins: origins } : {}),
     ...(options.rejectedSubmits ? { rejectedSubmits: true } : {}),
     ...(ignore.length ? { ignoreConsole: ignore } : {}),
+    ...(allow.length ? { allow } : {}),
   };
   return Object.keys(oracles).length ? { oracles } : {};
 }
@@ -189,6 +196,11 @@ async function shrinkFailures(
   const calls: ProviderCall[] = [];
   const freshPage = () => openPage(browser, options.cookies);
   for (const [index, failure] of result.failures.entries()) {
+    // A page check needs Jev on every replay; it is reported, not shrunk.
+    if (failure.kind === "semantic") {
+      options.write(`  ${failure.signature}: page check, not shrunk\n`);
+      continue;
+    }
     const prefix = actions.slice(0, traceEnd(result, failure.step));
     const shrunk = await shrink({
       startUrl: result.startUrl,
@@ -287,6 +299,7 @@ export async function executeExploreCommand(
       ...(guide ? { advisor: guide } : {}),
       ...tuning(options),
       ...watched(options),
+      ...(options.detect ? { detect: options.detect } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       onStep: async (entry) => {
         lines.push(JSON.stringify(entry));
@@ -355,6 +368,8 @@ export interface ExploreFlags {
   readonly watchOrigin: readonly string[];
   readonly rejectedSubmits: boolean;
   readonly ignoreConsole: readonly string[];
+  readonly detect: ExploreDetect;
+  readonly detectAllow: readonly string[];
   readonly strictSafety: boolean;
   readonly cookies?: string;
   readonly headed: boolean;
@@ -380,11 +395,26 @@ function run(url: string, flags: ExploreFlags, io: ExploreIo): Promise<number> {
     watchOrigins: flags.watchOrigin,
     rejectedSubmits: flags.rejectedSubmits,
     ignoreConsole: flags.ignoreConsole,
+    detect: flags.detect,
+    detectAllow: flags.detectAllow,
     strictSafety: flags.strictSafety,
     ...(flags.cookies ? { cookies: path.resolve(io.cwd, flags.cookies) } : {}),
     ...(io.signal ? { signal: io.signal } : {}),
     write: io.write,
   });
+}
+
+/** What is wrong with an exploration's arguments, or null. */
+function usageProblem({
+  url,
+  flags,
+}: {
+  readonly url?: string | undefined;
+  readonly flags: ExploreFlags;
+}): string | null {
+  if (flags.detect === "semantic" && flags.mode !== "guided")
+    return "--detect semantic asks Jev in each new page's guided call.\nFix: use it with --mode guided.\n";
+  return url ? null : "Missing start URL.\nFix: use `sedum explore <url>`.\n";
 }
 
 /** The `sedum explore` action: replay a trace, or explore from a URL. */
@@ -401,8 +431,9 @@ export async function exploreAction(
         headed: flags.headed,
         write: io.write,
       });
-    if (url) return await run(url, flags, io);
-    io.writeErr("Missing start URL.\nFix: use `sedum explore <url>`.\n");
+    const problem = usageProblem({ url, flags });
+    if (!problem) return await run(url!, flags, io);
+    io.writeErr(problem);
   } catch (error) {
     if (!(error instanceof ProviderError && error.code === "configuration"))
       throw error;

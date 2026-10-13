@@ -32,7 +32,11 @@ export async function replay(
 ): Promise<ReplayResult> {
   await page.goto(startUrl);
   await settle(page);
-  const oracles = new Oracles(page, new URL(startUrl).origin, hooks.oracles);
+  const oracles = await Oracles.attach(
+    page,
+    new URL(startUrl).origin,
+    hooks.oracles,
+  );
   const events: OracleEvent[] = [];
   const urls: string[] = [];
   try {

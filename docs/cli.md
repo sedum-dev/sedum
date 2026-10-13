@@ -317,10 +317,14 @@ The HTML report includes light and dark themes, failure and flagged-flow filters
 
 ## `sedum explore` (proof of concept)
 
-`sedum explore <url>` explores a site by a seeded random walk guided by Jev,
-and reports console errors, page exceptions and HTTP 5xx responses. Use
-`--steps`, `--seed`, `--mode guided|heuristic|random`, `--replay <trace>` and
-`--shrink`. See [Exploration mode](explore-mode.md).
+`sedum explore <url>` explores a site by a seeded random walk guided by Jev.
+It reports what `--detect browser` reports (console errors, uncaught
+exceptions, unhandled rejections, failed requests), plus HTTP 5xx responses
+and broken links. `--detect semantic` also asks the detector's page checks in
+the walk's existing Jev call for each new page, and `--detect-allow <rule>`
+ignores known findings. Use `--steps`, `--seed`,
+`--mode guided|heuristic|random`, `--replay <trace>` and `--shrink`. See
+[Exploration mode](explore-mode.md).
 
 ## `sedum validate`
 

@@ -6,6 +6,7 @@ import {
   type ExploreDecision,
   type ExploreDecisionRequest,
 } from "@sedum-dev/core";
+import { INSPECT_QUESTIONS, inspectionOf } from "./inspect-request.js";
 import { answersOf, validateChoice, validateNoul } from "./validation.js";
 
 const BODY_LIMIT_BYTES = 64 * 1024;
@@ -78,8 +79,31 @@ function exploreRequest(
         input.kinds as Record<string, string>,
       ),
       ...targetQuestions(input, Object.keys(input.kinds)),
+      ...(input.inspect ? inspectQuestions() : {}),
     },
   };
+}
+
+const INSPECT_PREFIX = "inspect_";
+
+/** The bug detector's page checks, asked in the same call (`--detect semantic`). */
+function inspectQuestions(): SystemOneRequest["questions"] {
+  return Object.fromEntries(
+    Object.entries(INSPECT_QUESTIONS).map(([key, question]) => [
+      `${INSPECT_PREFIX}${key}`,
+      question,
+    ]),
+  );
+}
+
+function inspectAnswers(
+  answers: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(answers)
+      .filter(([key]) => key.startsWith(INSPECT_PREFIX))
+      .map(([key, answer]) => [key.slice(INSPECT_PREFIX.length), answer]),
+  );
 }
 
 function fits(request: SystemOneRequest): boolean {
@@ -143,6 +167,9 @@ export function validateExploreAdvice(
     kind: validateChoice(answers.page_kind, kinds),
     destructive,
     leadsTo,
+    ...(input.inspect
+      ? { inspection: inspectionOf(inspectAnswers(answers)) }
+      : {}),
   };
 }
 

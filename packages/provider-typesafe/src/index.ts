@@ -45,10 +45,13 @@ import {
   validateCall,
   validateChoice,
   validateNoul,
-  validateScore,
   type CallMeta,
 } from "./validation.js";
-import { INSPECT_KEYS, buildInspectRequest } from "./inspect-request.js";
+import {
+  INSPECT_KEYS,
+  buildInspectRequest,
+  inspectionOf,
+} from "./inspect-request.js";
 import { buildRelevanceRequests, type RelevanceTest } from "./relevance.js";
 export type { RelevanceTest } from "./relevance.js";
 import { ProviderGate } from "./gate.js";
@@ -462,16 +465,7 @@ export class TypeSafeAdapter
         INSPECT_KEYS,
         "Inspection answer keys do not match the questions.",
       );
-      return {
-        probabilities: {
-          error_message: validateNoul(answers.error_message),
-          stuck_loading: validateNoul(answers.stuck_loading),
-          empty_content: validateNoul(answers.empty_content),
-          broken_value: validateNoul(answers.broken_value),
-        },
-        severity: validateScore(answers.severity, 4),
-        call,
-      };
+      return { ...inspectionOf(answers), call };
     } catch (error) {
       throw responseError(error, call.attempts, call);
     }

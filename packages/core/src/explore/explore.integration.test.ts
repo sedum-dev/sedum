@@ -11,6 +11,7 @@ import {
 import { ProviderError, type Resolver } from "../provider.js";
 import { emitTest } from "./emit.js";
 import { explore } from "./explorer.js";
+import { Oracles } from "./oracles.js";
 import { replay, shrink } from "./replay.js";
 import type { ExploreAction } from "./types.js";
 import { runAction } from "./actions.js";
@@ -94,6 +95,35 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       await browser?.close();
       await site?.close();
     });
+
+    it("takes errors from the bug detector's signals, with its allow rules", async () => {
+      const fresh = await freshPage();
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/help`);
+        const oracles = await Oracles.attach(fresh.page, site.baseUrl, {
+          ignoreConsole: ["^known noise"],
+          allow: ["console_error:third-party"],
+        });
+        await fresh.page.evaluate(`(() => {
+          console.error("ResizeObserver loop completed with undelivered notifications");
+          console.error("known noise from a widget");
+          console.error("third-party script failed");
+          console.error("Cart total failed");
+          Promise.reject(new Error("checkout lost"));
+          setTimeout(() => { throw new Error("late crash"); }, 0);
+        })()`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const events = await oracles.drain();
+        expect(events.map((e) => `${e.kind}: ${e.message}`).sort()).toEqual([
+          "console: Cart total failed",
+          "pageerror: Error: late crash",
+          "rejection: Error: checkout lost",
+        ]);
+        oracles.detach();
+      } finally {
+        await fresh.close();
+      }
+    }, 60_000);
 
     it("stops a guided walk once Jev keeps failing", async () => {
       const fresh = await freshPage();

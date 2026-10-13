@@ -159,3 +159,58 @@ describe("large exploration requests", () => {
     );
   });
 });
+
+describe("page checks in the exploration request", () => {
+  it("asks the bug detector's questions and returns its inspection", () => {
+    const asked = { ...input, inspect: true };
+    const { request, targetIds } = buildExploreRequest(asked, "jev-latest");
+    const keys = Object.keys(request.questions).filter((k) =>
+      k.startsWith("inspect_"),
+    );
+    expect(keys.sort()).toEqual([
+      "inspect_broken_value",
+      "inspect_empty_content",
+      "inspect_error_message",
+      "inspect_severity",
+      "inspect_stuck_loading",
+    ]);
+    const noul = (value: number) => ({ type: "noul", noul: value });
+    const choiceOf = (choice: string, ids: string[]) => ({
+      type: "choice",
+      choice,
+      confidence: 0.9,
+      probabilities: Object.fromEntries(
+        ids.map((id) => [id, id === choice ? 1 : 0]),
+      ),
+    });
+    const kinds = Object.keys(input.kinds);
+    const advice = validateExploreAdvice(asked, targetIds, {
+      answers: {
+        page_kind: choiceOf("account", kinds),
+        destructive_t0: noul(0.9),
+        destructive_t1: noul(0.1),
+        leads_t0: choiceOf("other", kinds),
+        leads_t1: choiceOf("other", kinds),
+        inspect_error_message: noul(0.8),
+        inspect_stuck_loading: noul(0.1),
+        inspect_empty_content: noul(0.2),
+        inspect_broken_value: noul(0.7),
+        inspect_severity: {
+          type: "score",
+          score: 2,
+          confidence: 0.7,
+          probabilities: { "0": 0.1, "1": 0.1, "2": 0.6, "3": 0.2 },
+        },
+      },
+    });
+    expect(advice.inspection?.probabilities.error_message).toBe(0.8);
+    expect(advice.inspection?.severity.score).toBe(2);
+  });
+
+  it("asks no page checks unless requested", () => {
+    const { request } = buildExploreRequest(input, "jev-latest");
+    expect(
+      Object.keys(request.questions).some((k) => k.startsWith("inspect_")),
+    ).toBe(false);
+  });
+});

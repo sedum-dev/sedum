@@ -1,10 +1,19 @@
+import type { BrowserContext, Page } from "playwright-core";
 import type { BrowserPage } from "../browser-driver.js";
+import {
+  allowed,
+  DEFAULT_ALLOW,
+  parseAllowRule,
+  signalDetection,
+  type AllowRule,
+  type Detection,
+} from "../detector/checks.js";
+import {
+  PageSignalCollector,
+  type BrowserSignal,
+  type BrowserSignalSource,
+} from "../detector/signals.js";
 import type { OracleEvent, OracleOptions, WriteRecord } from "./types.js";
-
-interface ConsoleMessage {
-  type(): string;
-  text(): string;
-}
 
 interface Response {
   status(): number;
@@ -57,66 +66,92 @@ function parseJson(text: string): unknown {
   }
 }
 
+/** Allow rules: the detector's defaults, the run's own, and ignored console text. */
+function allowRules(options: OracleOptions): AllowRule[] {
+  return [
+    ...DEFAULT_ALLOW,
+    ...(options.allow ?? []),
+    ...(options.ignoreConsole ?? []).map(
+      (source) => `console_error:re:${source}`,
+    ),
+  ].map(parseAllowRule);
+}
+
 /**
- * Bombadil's default properties as event collectors: console errors,
- * uncaught exceptions and unhandled rejections, and HTTP 5xx responses.
+ * Bombadil's default properties as event collectors. Console errors,
+ * uncaught exceptions, unhandled rejections and failed requests come from
+ * the bug detector's signal collector (`--detect browser`); HTTP 5xx,
+ * broken links, rejected submits and the write log are exploration's own.
  * Consumers drain events after each settled step.
  */
 export class Oracles {
   #events: OracleEvent[] = [];
   #pending: Promise<void>[] = [];
   #writes: WriteRecord[] = [];
-  readonly #ignore: readonly RegExp[];
+  readonly #allow: readonly AllowRule[];
   readonly #mainFrame: unknown;
   readonly #detach: () => void;
 
-  constructor(
+  /** Attach to a page; the detector's collector needs the browser context. */
+  static async attach(
     page: BrowserPage,
-    private readonly origin: string,
-    private readonly options: OracleOptions = {},
-  ) {
+    origin: string,
+    options: OracleOptions = {},
+  ): Promise<Oracles> {
     const native = page.playwright?.();
     if (!native) throw new Error("Exploration needs a Playwright page.");
+    const signals = await PageSignalCollector.attach(
+      native.page,
+      native.context,
+    );
+    return new Oracles(native, origin, options, signals);
+  }
+
+  private constructor(
+    native: { readonly page: Page; readonly context: BrowserContext },
+    private readonly origin: string,
+    private readonly options: OracleOptions,
+    private readonly signals: BrowserSignalSource,
+  ) {
     const browserPage = native.page;
     this.#mainFrame = browserPage.mainFrame();
-    this.#ignore = (options.ignoreConsole ?? []).map(
-      (source) => new RegExp(source, "u"),
-    );
-    const onConsole = (message: ConsoleMessage) => this.#console(message);
-    const onPageError = (error: Error) =>
-      this.#push("pageerror", `${error.name}: ${error.message}`);
+    this.#allow = allowRules(options);
     const onResponse = (response: Response) => this.#response(response);
     // Explorations never follow new windows; close them.
     const onPopup = (popup: { close(): Promise<void> }) => {
       void popup.close().catch(() => undefined);
     };
-    browserPage.on("console", onConsole);
-    browserPage.on("pageerror", onPageError);
     browserPage.on("response", onResponse);
     browserPage.on("popup", onPopup);
     this.#detach = () => {
-      browserPage.off("console", onConsole);
-      browserPage.off("pageerror", onPageError);
       browserPage.off("response", onResponse);
       browserPage.off("popup", onPopup);
     };
   }
 
-  #console(message: ConsoleMessage): void {
-    const text = message.text();
-    // Resource failures are reported once, by the HTTP oracle.
-    if (message.type() !== "error" || /^Failed to load resource/u.test(text))
-      return;
-    if (!this.#ignore.some((pattern) => pattern.test(text)))
-      this.#push("console", text);
+  #watched(url: URL): boolean {
+    return (
+      url.origin === this.origin ||
+      (this.options.watchOrigins ?? []).includes(url.origin)
+    );
+  }
+
+  /**
+   * A detector signal as an exploration event. HTTP answers are left to the
+   * response oracle, which tells 5xx, broken links and rejections apart;
+   * only requests that failed without an answer come from here.
+   */
+  #signal(signal: BrowserSignal): void {
+    if (allowed(signalDetection(signal), this.#allow)) return;
+    const kind = SIGNAL_EVENTS[signal.kind];
+    if (kind !== "http") return this.#push(kind, signal.message);
+    if (signal.status !== 0 || !URL.canParse(signal.url)) return;
+    if (this.#watched(new URL(signal.url))) this.#push("http", signal.message);
   }
 
   #response(response: Response): void {
     const url = new URL(response.url());
-    const watched =
-      url.origin === this.origin ||
-      (this.options.watchOrigins ?? []).includes(url.origin);
-    if (!watched) return;
+    if (!this.#watched(url)) return;
     const status = response.status();
     const method = response.request().method();
     const where = this.#where(url);
@@ -180,17 +215,33 @@ export class Oracles {
     );
   }
 
-  #push(kind: OracleEvent["kind"], message: string): void {
+  #push(kind: OracleEvent["kind"], message: string, identity?: string): void {
     const bounded = message.slice(0, 500);
     this.#events.push({
       kind,
       message: bounded,
-      signature: `${kind}: ${signature(bounded, this.origin)}`,
+      signature: `${kind}: ${identity ?? signature(bounded, this.origin)}`,
     });
+  }
+
+  /**
+   * The detector's page checks for a new state, under its allow rules. One
+   * finding per check and kind of page (`/clients/:id`), not per message.
+   */
+  report(detections: readonly Detection[], route: string): void {
+    for (const detection of detections) {
+      if (allowed(detection, this.#allow)) continue;
+      this.#push(
+        "semantic",
+        `${detection.check} on ${route}: ${detection.message}`,
+        `${detection.check} on ${route}`,
+      );
+    }
   }
 
   /** Events so far, after any response bodies still being read. */
   async drain(): Promise<OracleEvent[]> {
+    for (const signal of this.signals.drain()) this.#signal(signal);
     await Promise.all(this.#pending.splice(0));
     const events = this.#events;
     this.#events = [];
@@ -206,6 +257,15 @@ export class Oracles {
     this.#detach();
   }
 }
+
+const SIGNAL_EVENTS: Readonly<
+  Record<BrowserSignal["kind"], OracleEvent["kind"]>
+> = {
+  console_error: "console",
+  uncaught_exception: "pageerror",
+  unhandled_rejection: "rejection",
+  http_error: "http",
+};
 
 /** Strip what varies between occurrences of the same failure. */
 export function signature(message: string, origin: string): string {

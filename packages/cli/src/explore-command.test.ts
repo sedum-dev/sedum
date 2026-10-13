@@ -1,5 +1,6 @@
 import { InvalidArgumentError } from "commander";
 import { describe, expect, it } from "vitest";
+import { exploreDetect } from "./cli-arguments.js";
 import {
   exploreMode,
   seedValue,
@@ -30,6 +31,8 @@ describe("explore arguments", () => {
     for (const bad of ["-1", "1.5", "2147483648", "x", ""])
       expect(() => seedValue(bad)).toThrow(InvalidArgumentError);
     expect(() => exploreMode("smart")).toThrow(InvalidArgumentError);
+    expect(exploreDetect("semantic")).toBe("semantic");
+    expect(() => exploreDetect("off")).toThrow(/browser or semantic/u);
     expect(() => startUrl("file:///etc/passwd")).toThrow(InvalidArgumentError);
     expect(() => startUrl("/relative")).toThrow(InvalidArgumentError);
   });
@@ -38,5 +41,29 @@ describe("explore arguments", () => {
     const output = await runCli(["explore", "--mode", "random"], "0.0.0");
     expect(output.exitCode).toBe(3);
     expect(output.stderr).toContain("Missing start URL");
+  });
+
+  it("asks for guided mode with --detect semantic", async () => {
+    const output = await runCli(
+      [
+        "explore",
+        "https://example.test/",
+        "--mode",
+        "random",
+        "--detect",
+        "semantic",
+      ],
+      "0.0.0",
+    );
+    expect(output.exitCode).toBe(3);
+    expect(output.stderr).toContain("--mode guided");
+  });
+
+  it("rejects malformed --detect-allow rules", async () => {
+    const output = await runCli(
+      ["explore", "https://example.test/", "--detect-allow", "console_error:"],
+      "0.0.0",
+    );
+    expect(output.exitCode).not.toBe(0);
   });
 });

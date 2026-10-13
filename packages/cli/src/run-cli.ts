@@ -49,6 +49,7 @@ import {
   collectReporter,
   collectValue,
   collectAllowRule,
+  exploreDetect,
   detectMode,
   commandHelp,
   nonnegativeInteger,
@@ -676,6 +677,18 @@ export async function runCli(
       "--ignore-console <regex>",
       "ignore console errors matching this regular expression (repeatable)",
       collectText,
+      [],
+    )
+    .option(
+      "--detect <mode>",
+      "browser (console errors, exceptions, rejections, failed requests; always on) or semantic (also asks Jev whether each new page looks broken, in the same call; guided mode)",
+      exploreDetect,
+      "browser",
+    )
+    .option(
+      "--detect-allow <rule>",
+      "ignore a known finding: [check:]substring or [check:]re:regex (repeatable)",
+      collectAllowRule,
       [],
     )
     .option(

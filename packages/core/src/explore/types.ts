@@ -1,3 +1,4 @@
+import type { PageInspection } from "../detector/semantic.js";
 import type { GoalChoice, GoalValueState } from "../goal-runner.js";
 import type { ProviderCall, ProviderCallOptions } from "../provider.js";
 
@@ -68,6 +69,11 @@ export interface OracleOptions {
   readonly brokenLinks?: boolean;
   /** Console errors matching any of these regular expressions are ignored. */
   readonly ignoreConsole?: readonly string[];
+  /**
+   * Known findings to ignore, in the bug detector's `--detect-allow` syntax:
+   * `[check:]substring` or `[check:]re:regex`.
+   */
+  readonly allow?: readonly string[];
 }
 
 /** A successful request that may have changed data on the server. */
@@ -78,7 +84,14 @@ export interface WriteRecord {
 }
 
 export interface OracleEvent {
-  readonly kind: "console" | "pageerror" | "http" | "rejected" | "broken-link";
+  readonly kind:
+    | "console"
+    | "pageerror"
+    | "rejection"
+    | "http"
+    | "rejected"
+    | "broken-link"
+    | "semantic";
   readonly message: string;
   /** Normalized message: the identity of a distinct failure. */
   readonly signature: string;
@@ -147,6 +160,8 @@ export interface ExploreAdviceRequest {
   readonly kinds: Readonly<Record<string, string>>;
   /** Also predict the kind each target leads to (speculative fan-out). */
   readonly predictTargets: boolean;
+  /** Also ask the bug detector's page checks (`--detect semantic`). */
+  readonly inspect?: boolean;
 }
 
 export interface ExploreAdvice {
@@ -155,6 +170,8 @@ export interface ExploreAdvice {
   readonly destructive: Readonly<Record<string, number>>;
   /** Per target id: predicted distribution over page kinds. */
   readonly leadsTo: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** The detector's page checks, when the request asked them. */
+  readonly inspection?: Omit<PageInspection, "call">;
   readonly call: ProviderCall;
 }
 

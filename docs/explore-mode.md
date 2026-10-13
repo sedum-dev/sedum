@@ -4,9 +4,11 @@ title: "Exploration mode (proof of concept)"
 
 `sedum explore <url>` explores a site on its own. It takes a seeded, weighted
 random walk over the same candidate scanner that `sedum run` uses, guided by
-Jev. It watches three oracles: console errors, uncaught page exceptions and
-same-origin HTTP 5xx responses. With `--shrink`, it turns each failure into a
-short plain-English test you can commit.
+Jev. It reports what the [bug detector](cli.md#detecting-browser-errors) reports for `sedum run`
+(console errors, uncaught exceptions, unhandled rejections, failed
+requests), plus HTTP 5xx responses and broken links, and with
+`--detect semantic` pages that look broken. With `--shrink`, it turns each
+failure into a short plain-English test you can commit.
 
 ```sh
 sedum explore https://staging.example.com/ --steps 200 --seed 7
@@ -143,9 +145,27 @@ can be restored from their URL. Random mode never returns.
 
 ## Oracles
 
-The walk always reports console errors, uncaught page exceptions, HTTP 5xx
-responses from the start origin, and broken links: page navigations answered
-with 4xx or 5xx. These options adjust that:
+The walk always reports:
+
+- what `sedum run --detect browser` reports, from the same signal
+  collector: console errors, uncaught exceptions, unhandled promise
+  rejections (dropped again if a handler is attached later), and requests to
+  a watched origin that failed without an answer;
+- HTTP 5xx responses from the start origin;
+- broken links: page navigations answered with 4xx or 5xx.
+
+`--detect semantic` (guided mode) also asks `sedum run --detect semantic`'s
+page checks: does the page show an application error, stay stuck loading,
+announce content that is not there, or show a broken value such as `$NaN`?
+They are asked in the same Jev call as the page kind and safety questions,
+once per new page state, so they add questions, not calls: about 15% more
+per call on the fixture shop. The detector's thresholds apply. An exact
+leak such as `NaN` counts only when Jev confirms a broken value, and a page
+that looks like it is loading must stay unchanged for 3 seconds. A page
+check is reported once per check and kind of page (`/clients/:id`), and is
+not shrunk, because each replay would need Jev.
+
+These options adjust what is reported:
 
 - `--watch-origin <origin>` also watches another origin, such as a separate
   API host. Repeat it for more origins.
@@ -155,6 +175,10 @@ with 4xx or 5xx. These options adjust that:
   apps rely on server-side validation on purpose.
 - `--ignore-console <regex>` ignores known console noise, such as a
   third-party player's permissions-policy warning. Repeat it for more patterns.
+- `--detect-allow <rule>` ignores a known finding with the detector's rules,
+  `[check:]substring` or `[check:]re:regex`, such as
+  `console_error:widget` or `broken_value:re:/docs/`. The detector's default
+  rules (favicon 404s, ResizeObserver warnings) always apply.
 
 After each action, the walk waits for the DOM to go quiet and for no request
 to have been in flight for 300 ms (at most 3 s). Single-page apps fetch route

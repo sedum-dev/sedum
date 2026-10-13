@@ -86,7 +86,7 @@ const MESSAGES: Record<SemanticCheck, string> = {
 export const SEMANTIC_CHECKS = Object.keys(MESSAGES) as SemanticCheck[];
 
 export function semanticDetections(
-  inspection: PageInspection,
+  inspection: Omit<PageInspection, "call">,
   thresholds: SemanticThresholds,
   skip: ReadonlySet<SemanticCheck> = new Set(),
 ): Detection[] {

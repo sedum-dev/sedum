@@ -4,7 +4,12 @@ import {
   ProviderError,
   codePoints,
 } from "@sedum-dev/core";
-import type { InspectedPage, SemanticCheck } from "@sedum-dev/core";
+import type {
+  InspectedPage,
+  PageInspection,
+  SemanticCheck,
+} from "@sedum-dev/core";
+import { validateNoul, validateScore } from "./validation.js";
 
 const {
   path: PATH_LIMIT,
@@ -73,6 +78,24 @@ export const INSPECT_KEYS = [
   ...(Object.keys(QUESTIONS) as SemanticCheck[]),
   "severity",
 ] as const;
+
+/** The detector's page questions, for requests that ask them alongside others. */
+export const INSPECT_QUESTIONS = { ...QUESTIONS, severity: SEVERITY };
+
+/** Probabilities and severity from the answers to `INSPECT_QUESTIONS`. */
+export function inspectionOf(
+  answers: Record<string, unknown>,
+): Omit<PageInspection, "call"> {
+  return {
+    probabilities: {
+      error_message: validateNoul(answers.error_message),
+      stuck_loading: validateNoul(answers.stuck_loading),
+      empty_content: validateNoul(answers.empty_content),
+      broken_value: validateNoul(answers.broken_value),
+    },
+    severity: validateScore(answers.severity, 4),
+  };
+}
 
 function checkText(value: unknown, limit: number, field: string): string {
   if (typeof value !== "string" || codePoints(value) > limit)

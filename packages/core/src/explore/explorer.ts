@@ -2,6 +2,9 @@ import type { BrowserPage } from "../browser-driver.js";
 import { goalGenerators } from "../goal-data.js";
 import type { Aim, Candidate } from "../page-protocol.js";
 import { ProviderError, type ProviderCall } from "../provider.js";
+import { stateDetections } from "../detector/page-checks.js";
+import { DEFAULT_SEMANTIC_THRESHOLDS } from "../detector/semantic.js";
+import { visibleText } from "../page-bridge.js";
 import { actionTree, runAction, SiteChrome, type Leaf } from "./actions.js";
 import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
@@ -54,6 +57,12 @@ export interface ExploreOptions {
   readonly stepTimeoutMs?: number;
   /** More origins to watch, and whether rejected submissions count. */
   readonly oracles?: OracleOptions;
+  /**
+   * "semantic" also asks the bug detector's page checks (an error shown,
+   * stuck loading, empty content, a broken value) in each new state's Jev
+   * call. Browser signals are always on.
+   */
+  readonly detect?: "browser" | "semantic";
   /**
    * Diagnostic capture, such as a screenshot, after a click or fill target is
    * aimed and before it is dispatched. `box` is the target as fractions (0-1) of the viewport.
@@ -123,6 +132,9 @@ const PAGE_TEXT_LIMIT = 3_000;
 function refusedLocally(error: unknown): boolean {
   return error instanceof ProviderError && error.code === "invalid-input";
 }
+
+/** How long a page that looks like it is loading must stay unchanged. */
+const STUCK_MS = 3_000;
 
 /** Consecutive failed Jev calls after which a guided walk stops. */
 const GUIDE_FAILURES = 3;
@@ -286,7 +298,11 @@ class Explorer {
     const steps = clampSteps(this.options.steps);
     await this.page.goto(this.options.startUrl);
     await settle(this.page);
-    this.#oracles = new Oracles(this.page, this.#origin, this.options.oracles);
+    this.#oracles = await Oracles.attach(
+      this.page,
+      this.#origin,
+      this.options.oracles,
+    );
     try {
       for (let step = 0; step < steps && this.#running(); step++)
         await withDeadline(this.#step(step), this.#stepTimeoutMs()).catch(
@@ -649,12 +665,48 @@ class Explorer {
     // A failed call leaves this state unguided; the walk goes on.
     if (!answer) return {};
     (steering ? this.#calls : this.#measurementCalls).push(answer.call);
+    if (answer.inspection)
+      await this.#inspectState(observation, answer.inspection);
     const info: StateInfo = {
       kind: answer.kind.choice,
       ...(steering ? { advice: { answer, ids } } : {}),
     };
     this.#advice.set(observation.state, info);
     return info;
+  }
+
+  /**
+   * The bug detector's page checks for a new state, from answers asked in
+   * the same Jev call: an exact-text leak needs Jev's confirmation, and a
+   * page that looks like it is loading must stay unchanged for 3 seconds.
+   */
+  async #inspectState(
+    observation: Observation,
+    inspection: NonNullable<ExploreAdvice["inspection"]>,
+  ): Promise<void> {
+    const loading =
+      inspection.probabilities.stuck_loading >=
+      DEFAULT_SEMANTIC_THRESHOLDS.stuck_loading;
+    const text = (await visibleText(this.page).catch(() => null)) ?? "";
+    const stuck = loading && (await this.#unchanged(text));
+    const found = stateDetections(
+      text,
+      inspection,
+      DEFAULT_SEMANTIC_THRESHOLDS,
+      stuck,
+    );
+    this.#oracles!.report(found, routeTemplate(observation.route));
+  }
+
+  /** Whether the page's visible text stays the same for `STUCK_MS`. */
+  async #unchanged(text: string): Promise<boolean> {
+    const deadline = performance.now() + STUCK_MS;
+    while (performance.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const now = await visibleText(this.page).catch(() => null);
+      if (now !== null && now !== text) return false;
+    }
+    return true;
   }
 
   async #assess(
@@ -674,6 +726,7 @@ class Explorer {
           targets,
           kinds: PAGE_KINDS,
           predictTargets: steering && this.#tuning.predictTargets,
+          inspect: this.options.detect === "semantic",
         },
         this.#callOptions(),
       )
