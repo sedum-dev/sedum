@@ -52,11 +52,27 @@ export function providerDiagnostic(
       };
 }
 
+/** `--detect semantic` with a provider that cannot answer its page questions. */
+export class DetectorUnsupportedError extends Error {
+  constructor(readonly providerName: string) {
+    super(
+      `--detect semantic is not supported by the ${providerName} provider.`,
+    );
+    this.name = "DetectorUnsupportedError";
+  }
+}
+
 export function setupDiagnostic(
   error: unknown,
   providerName: ProviderName = "typesafe",
 ): CliDiagnostic {
   if (error instanceof ProjectConfigError) return configDiagnostic(error);
+  if (error instanceof DetectorUnsupportedError)
+    return {
+      code: "detect_unsupported",
+      message: `--detect semantic needs a System One provider; ${error.providerName} cannot answer its page questions.`,
+      fix: "Use --detect browser with this provider, or select the TypeSafe or OpenRouter provider.",
+    };
   if (error instanceof ProviderError && error.code === "configuration")
     return providerName !== "typesafe"
       ? providerDiagnostic(providerName, "configuration")

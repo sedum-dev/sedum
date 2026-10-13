@@ -22,7 +22,7 @@ steps:
   - verify a list of products with prices is shown
 ```
 
-Use either `steps` with at least one sentence, or a nonblank `goal` and required nonblank top-level `verify` claim. Do not combine the two modes. [Goal tests](goal-mode.md) use the same data bindings and CLI commands; their independent verification must pass before the test passes. Optional `before` and `after` lists use the same authored-step shape in either mode. A `use:` entry names a `*.module.yaml` file. `tags` is a list of strings and `meta` is a free-form mapping. `name`, `fileType`, and `run:` are not accepted.
+`steps` must list at least one sentence. Optional `before` and `after` lists use the same authored-step shape. A `use:` entry names a `*.module.yaml` file. `tags` is a list of strings and `meta` is a free-form mapping. `name`, `fileType`, and `run:` are not accepted.
 
 ## Reusable modules and hooks
 

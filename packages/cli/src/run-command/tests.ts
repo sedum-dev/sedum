@@ -9,6 +9,7 @@ import {
   probeOpenRouterKey,
   runFlow,
   runScriptTest,
+  type BugDetector,
   type FlowRunnerDependencies,
   type RejectionRouter,
   type RunRecorder,
@@ -30,6 +31,7 @@ import type { RunCommandOptions } from "../run-command.js";
 import { ReporterOutputError } from "./output.js";
 import { planLanes, runPool } from "../run-pool.js";
 import { verifyGraceMs } from "./support.js";
+import { createDetector } from "./detector.js";
 import type { CliDiagnostic } from "../diagnostics.js";
 
 interface SelectedTest {
@@ -71,6 +73,7 @@ interface ExecutionResources {
   >;
   readonly locatorCache: Awaited<ReturnType<typeof openLocatorCache>>;
   readonly visionResolver?: OpenRouterVisionResolver;
+  readonly detector?: BugDetector;
 }
 
 export interface TestExecutionOutcome {
@@ -159,8 +162,11 @@ async function createExecutionResources(
   gate: ProviderGate,
 ): Promise<ExecutionResources> {
   const { config, options } = request;
+  const provider = await createCliProvider(config, { gate });
+  const detector = createDetector(options, provider, config.providerName);
   return {
-    provider: await createCliProvider(config, { gate }),
+    provider,
+    ...(detector ? { detector } : {}),
     classificationCache: await FileClassificationCache.load(
       path.join(config.projectRoot, ".sedum", "classifications.json"),
       config.providerModel,
@@ -249,6 +255,7 @@ function testDependencies(
     ...(resources.visionResolver
       ? { visionResolver: resources.visionResolver }
       : {}),
+    ...(resources.detector ? { detector: resources.detector } : {}),
     env: {
       ...config.variables,
       SEDUM_PARALLEL_INDEX: String(lane),

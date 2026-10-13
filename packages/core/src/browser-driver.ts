@@ -13,6 +13,10 @@ import {
 } from "playwright-core";
 import type { Aim, AimResult, FillTarget } from "./page-protocol.js";
 import { safeCallLog } from "./safe-diagnostics.js";
+import {
+  PageSignalCollector,
+  type BrowserSignalSource,
+} from "./detector/signals.js";
 
 export type BrowserKind = "chrome" | "chromium";
 
@@ -88,6 +92,8 @@ export interface BrowserContextOptions {
     readonly dir: string;
     readonly size?: { readonly width: number; readonly height: number };
   };
+  /** Buffer console, exception, and HTTP error signals for the bug detector. */
+  readonly collectSignals?: boolean;
 }
 
 export interface NavigationOptions {
@@ -165,6 +171,8 @@ export interface BrowserPage {
   captureFrame?(): Promise<Uint8Array>;
   /** The underlying Playwright objects, for code in `*.test.ts` bodies. */
   playwright?(): { readonly page: Page; readonly context: BrowserContext };
+  /** Present when the context was opened with `collectSignals`. */
+  signals?(): BrowserSignalSource | null;
   goto(url: string, options?: NavigationOptions): Promise<NavigationResult>;
   history(
     move: HistoryMove,
@@ -328,6 +336,7 @@ class PlaywrightPage implements BrowserPage {
     private readonly page: Page,
     private readonly contextState: () => BrowserDriverState,
     private readonly overlay: boolean,
+    private readonly signalSource: BrowserSignalSource | null = null,
   ) {
     page.on("crash", () => {
       this.crashed = true;
@@ -343,6 +352,10 @@ class PlaywrightPage implements BrowserPage {
 
   playwright(): { readonly page: Page; readonly context: BrowserContext } {
     return { page: this.page, context: this.page.context() };
+  }
+
+  signals(): BrowserSignalSource | null {
+    return this.signalSource;
   }
 
   async title(): Promise<string> {
@@ -838,6 +851,7 @@ class PlaywrightContext implements BrowserContextSession {
     private readonly context: BrowserContext,
     private readonly browserState: () => BrowserDriverState,
     private readonly overlay: boolean,
+    private readonly collectSignals = false,
   ) {
     context.on("close", () => {
       this.closed = true;
@@ -852,14 +866,20 @@ class PlaywrightContext implements BrowserContextSession {
       );
     }
     try {
+      const page = await this.context.newPage();
+      // Attach before the first navigation so its signals are kept.
+      const signals = this.collectSignals
+        ? await PageSignalCollector.attach(page, this.context)
+        : null;
       return new PlaywrightPage(
-        await this.context.newPage(),
+        page,
         () => ({
           ...this.browserState(),
           closed: this.closed,
           crashed: false,
         }),
         this.overlay,
+        signals,
       );
     } catch (error) {
       throw operationError(
@@ -933,7 +953,12 @@ class PlaywrightSession implements BrowserSession {
         );
       }
       await context.addInitScript({ path: asset });
-      return new PlaywrightContext(context, () => this.state(), this.overlay);
+      return new PlaywrightContext(
+        context,
+        () => this.state(),
+        this.overlay,
+        options.collectSignals ?? false,
+      );
     } catch (error) {
       if (
         error instanceof BrowserDriverError &&

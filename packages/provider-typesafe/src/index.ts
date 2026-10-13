@@ -7,7 +7,10 @@ import {
 import { ClassificationBatchError, ProviderError } from "@sedum-dev/core";
 import type {
   ClassificationProvider,
+  InspectedPage,
   ItemVerdict,
+  PageInspection,
+  PageInspector,
   ModelClassification,
   Judge,
   JudgeDecision,
@@ -42,8 +45,10 @@ import {
   validateCall,
   validateChoice,
   validateNoul,
+  validateScore,
   type CallMeta,
 } from "./validation.js";
+import { INSPECT_KEYS, buildInspectRequest } from "./inspect-request.js";
 import { buildRelevanceRequests, type RelevanceTest } from "./relevance.js";
 export type { RelevanceTest } from "./relevance.js";
 import { ProviderGate } from "./gate.js";
@@ -190,7 +195,8 @@ export class TypeSafeAdapter
     Judge,
     ClassificationProvider,
     RelevanceProvider,
-    ExplorationAdvisor
+    ExplorationAdvisor,
+    PageInspector
 {
   private readonly client: TypeSafeClient;
   private readonly model: string;
@@ -439,6 +445,36 @@ export class TypeSafeAdapter
       throw responseError(error, attempts, call);
     }
     return { holds, contradicted, call };
+  }
+
+  /** Bug-detector questions about one page state, answered in one call. */
+  async inspectPage(
+    page: InspectedPage,
+    options?: ProviderCallOptions,
+  ): Promise<PageInspection> {
+    const request = buildInspectRequest(page, this.model);
+    const { response, meta } = await this.ask(request, options);
+    const call = validateCall(response, meta, this.model, this.estimateJevCost);
+    try {
+      const answers = answersOf(response);
+      validateAnswerKeys(
+        answers,
+        INSPECT_KEYS,
+        "Inspection answer keys do not match the questions.",
+      );
+      return {
+        probabilities: {
+          error_message: validateNoul(answers.error_message),
+          stuck_loading: validateNoul(answers.stuck_loading),
+          empty_content: validateNoul(answers.empty_content),
+          broken_value: validateNoul(answers.broken_value),
+        },
+        severity: validateScore(answers.severity, 4),
+        call,
+      };
+    } catch (error) {
+      throw responseError(error, call.attempts, call);
+    }
   }
 
   /** Experimental test-impact scoring; one independent Noul per complete test. */

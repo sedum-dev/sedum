@@ -1,6 +1,7 @@
 import type {
   ResultCall,
   ResultAttempt,
+  ResultDetection,
   ResultStep,
   ResultTest,
   RunResult,
@@ -109,6 +110,28 @@ export function stepStatus(step: ResultStep): string {
   if (step.state === "running") return "running";
   if (step.flags.length) return "passed, flagged";
   return step.verdict ?? "measured";
+}
+
+/** One line per bug-detector finding on a step. */
+export function detectionTexts(step: ResultStep): string[] {
+  return (step.detections ?? []).map(
+    (detection) =>
+      `suspected bug: ${detection.check}${evidence(detection)}: ${detection.message}`,
+  );
+}
+
+/** Where a page finding came from: ` (text)`, or ` (model p=0.98, severity 2.9/3)`. */
+function evidence(detection: ResultDetection): string {
+  if (!detection.source) return "";
+  const probability =
+    detection.probability === undefined
+      ? ""
+      : ` p=${detection.probability.toFixed(2)}`;
+  const severity =
+    detection.severity === undefined
+      ? ""
+      : `, severity ${detection.severity.toFixed(1)}/3`;
+  return ` (${detection.source}${probability}${severity})`;
 }
 
 /** The steps every reporter calls out: failures, errors, interruptions, flags. */

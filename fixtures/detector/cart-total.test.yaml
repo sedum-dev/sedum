@@ -1,0 +1,6 @@
+# Updating the total blanks the amount: "Total: $".
+description: Update the cart total
+url: __BASE_URL__/detector/fuzzy-after-click
+steps:
+  - verify the cart lists the Canvas Backpack
+  - click the Update total button

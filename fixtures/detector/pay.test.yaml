@@ -1,0 +1,5 @@
+# Paying shows an internal error message; no step asserts against it.
+description: Pay for the order
+url: __BASE_URL__/detector/error-after-pay
+steps:
+  - click the Pay now button

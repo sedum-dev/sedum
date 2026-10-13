@@ -1,0 +1,6 @@
+# The Save request fails with 500 while the page still says "Saved".
+description: Profile save shows Saved
+url: __BASE_URL__/detector/click-save-500
+steps:
+  - click the Save button
+  - verify the text Saved is shown

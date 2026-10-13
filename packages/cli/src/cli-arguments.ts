@@ -1,4 +1,5 @@
 import { Command, InvalidArgumentError } from "commander";
+import { parseAllowRule } from "@sedum-dev/core";
 import { validAffectedGlob } from "./affected-paths.js";
 import {
   MAX_PARALLEL,
@@ -74,6 +75,34 @@ class ValueCollector implements Collector<readonly string[]> {
   parse(text: RawOptionText, previous: readonly string[]): string[] {
     if (!text.trimmed) invalid("Value must not be blank.");
     return [...previous, text.value];
+  }
+}
+
+class AllowRuleCollector implements Collector<readonly string[]> {
+  parse(text: RawOptionText, previous: readonly string[]): string[] {
+    try {
+      parseAllowRule(text.value);
+    } catch (error) {
+      invalid(
+        `Invalid allow rule ${JSON.stringify(text.value)}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return [...previous, text.value];
+  }
+}
+
+const DETECT_MODES = ["off", "browser", "semantic"] as const;
+export type DetectMode = (typeof DETECT_MODES)[number];
+
+class DetectModeParser implements ScalarParser<DetectMode> {
+  parse(text: RawOptionText): DetectMode {
+    const mode = DETECT_MODES.find((item) => item === text.trimmed);
+    return (
+      mode ??
+      invalid(
+        `Unknown detector mode ${JSON.stringify(text.value)}. Use off, browser, or semantic.`,
+      )
+    );
   }
 }
 
@@ -167,6 +196,8 @@ function rangedNumber(range: NumberRange): (value: string) => number {
 
 export const collectOrigin = collector(new OriginCollector());
 export const collectValue = collector(new ValueCollector());
+export const collectAllowRule = collector(new AllowRuleCollector());
+export const detectMode = scalar(new DetectModeParser());
 /** `--reporter` is repeatable and also takes a comma list, e.g. junit,markdown. */
 export const collectReporter = collector(new ReporterCollector());
 export const collectGlob = collector(new GlobCollector());

@@ -1,4 +1,10 @@
-import { createServer, type Server } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import { detectorResponse, type DetectorResponse } from "./detector-pages.js";
 
 export interface FixtureSite {
   readonly baseUrl: string;
@@ -67,18 +73,41 @@ function timedPage(route: string, delay: number): string {
   );
 }
 
+/** The fixture page for a URL; `?delay=` is clamped to 0–2000 ms, default 250. */
+function pageBody(url: URL): string | undefined {
+  if (url.pathname !== "/slow" && url.pathname !== "/rerender")
+    return pages[url.pathname];
+  const requestedDelay = Number(url.searchParams.get("delay") ?? 250);
+  const delay = Number.isInteger(requestedDelay)
+    ? Math.max(0, Math.min(requestedDelay, 2_000))
+    : 250;
+  return timedPage(url.pathname, delay);
+}
+
+function sendDetector(
+  request: IncomingMessage,
+  response: ServerResponse,
+  detector: DetectorResponse,
+): void {
+  if (detector.drop) {
+    request.socket.destroy();
+    return;
+  }
+  response.writeHead(detector.status, {
+    "content-type": detector.contentType,
+    "cache-control": "no-store",
+    ...(detector.location ? { location: detector.location } : {}),
+  });
+  response.end(detector.body);
+}
+
 /** A private, ephemeral HTTP site for browser-backed engine tests. */
 export async function startFixtureSite(): Promise<FixtureSite> {
   const server: Server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://fixture.local");
-    const requestedDelay = Number(url.searchParams.get("delay") ?? 250);
-    const delay = Number.isInteger(requestedDelay)
-      ? Math.max(0, Math.min(requestedDelay, 2_000))
-      : 250;
-    const body =
-      url.pathname === "/slow" || url.pathname === "/rerender"
-        ? timedPage(url.pathname, delay)
-        : pages[url.pathname];
+    const detector = detectorResponse(url.pathname);
+    if (detector) return sendDetector(request, response, detector);
+    const body = pageBody(url);
     response.writeHead(body === undefined ? 404 : 200, {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",

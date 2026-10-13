@@ -3,6 +3,7 @@ import type { BrowserPage } from "../browser-driver.js";
 import { LocatorCacheConflict } from "../cache-store.js";
 import type { ClassifiedFlowSentence } from "../flow-classification.js";
 import { executeAssertion } from "./assertions.js";
+import { detectStep } from "./detection.js";
 import {
   pendingTarget,
   performWithRecovery,
@@ -158,15 +159,31 @@ export async function executeSentence(
     const failed =
       (outcome === "failed" && !presentation.check) ||
       (typeof outcome === "object" && outcome.status === "failed");
-    const flags = facts.verify?.kind === "verify" ? facts.verify.flags : [];
+    const { detections, calls: detectorCalls } = await detectStep(
+      page,
+      dependencies.detector,
+      { privacy, sensitive },
+      dependencies.signal,
+    );
+    const verifyFlags =
+      facts.verify?.kind === "verify" ? facts.verify.flags : [];
+    const flags: ResultStep["flags"] = [
+      ...verifyFlags,
+      ...(detections.length ? (["suspected_bug"] as const) : []),
+    ];
     const needsEvidence = failed || isError || flags.length > 0;
+    // A detector finding is about the page the step left, not the one it acted on.
+    const detectorOnly = !failed && !isError && verifyFlags.length === 0;
     const evidence: ResultFrame = !needsEvidence
       ? { status: "omitted", reason: "clean_step" }
       : sensitive
         ? { status: "omitted", reason: "sensitive_page" }
         : !report.evidenceEnabled
           ? { status: "omitted", reason: "disabled" }
-          : await capture("evidence", acceptedVersion);
+          : await capture(
+              "evidence",
+              detectorOnly ? undefined : acceptedVersion,
+            );
     const replayFrame = !report.replay
       ? null
       : sensitive
@@ -193,6 +210,7 @@ export async function executeSentence(
       ...(facts.verify
         ? [resultCall(facts.verify.call, "judge", facts.verify.elapsedMs)]
         : []),
+      ...detectorCalls,
     ];
     const policy = facts.verify?.kind === "verify" ? facts.verify : null;
     const judgement = facts.verify
@@ -229,7 +247,8 @@ export async function executeSentence(
       state: isError ? "error" : "completed",
       verdict:
         isError || kind === "measure" ? null : failed ? "failed" : "passed",
-      flags: [...flags],
+      flags,
+      ...(detections.length ? { detections: [...detections] } : {}),
       elapsedMs: performance.now() - started,
       page: pageInfo,
       locator: locator

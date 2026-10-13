@@ -10,6 +10,7 @@ import {
   usageLines,
   visionSummary,
   decisionLines,
+  detectionTexts,
   duration,
   needsAttention,
   score,
@@ -116,6 +117,31 @@ function earlierAttempts(test: ResultTest): string | null {
     .join(", ");
 }
 
+function locatorLines(locator: ResultStep["locator"]): string[] {
+  if (!locator) return [];
+  const cache = locator.cache
+    ? ` · cache ${locator.cache.outcome}` +
+      (locator.cache.reason ? ` (${inline(locator.cache.reason)})` : "") +
+      (locator.cache.targetChanged ? ", target changed" : "")
+    : "";
+  const options = locator.options.length
+    ? locator.options.map(
+        (option) =>
+          `  - ${inline(option.label) || "(unlabeled)"}` +
+          (option.role ? ` (${inline(option.role)})` : "") +
+          `: ${score(option.probability)}`,
+      )
+    : ["  - no candidates weighed"];
+  return [
+    `- **locator**: ${locator.source} · ${locator.vision ? "text-model " : ""}confidence ${score(locator.confidence)}${cache}`,
+    ...options,
+  ];
+}
+
+function detectionBullets(step: ResultStep): string[] {
+  return detectionTexts(step).map((text) => `- **${inline(text)}**`);
+}
+
 function stepSection(
   number: number,
   test: ResultTest,
@@ -149,25 +175,7 @@ function stepSection(
       ? `- **page**: ${code(step.page.url)} — "${inline(step.page.title)}"`
       : `- **page**: ${step.page.status} (${inline(step.page.reason)})`,
   );
-  const locator = step.locator;
-  if (locator) {
-    const cache = locator.cache
-      ? ` · cache ${locator.cache.outcome}` +
-        (locator.cache.reason ? ` (${inline(locator.cache.reason)})` : "") +
-        (locator.cache.targetChanged ? ", target changed" : "")
-      : "";
-    out.push(
-      `- **locator**: ${locator.source} · ${locator.vision ? "text-model " : ""}confidence ${score(locator.confidence)}${cache}`,
-    );
-    if (locator.options.length)
-      for (const option of locator.options)
-        out.push(
-          `  - ${inline(option.label) || "(unlabeled)"}` +
-            (option.role ? ` (${inline(option.role)})` : "") +
-            `: ${score(option.probability)}`,
-        );
-    else out.push("  - no candidates weighed");
-  }
+  out.push(...detectionBullets(step), ...locatorLines(step.locator));
   out.push(
     step.evidence.status === "captured"
       ? `- **frame**: ![step ${step.index} frame](${step.evidence.path}) ${code(step.evidence.path)}`

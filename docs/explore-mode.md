@@ -49,8 +49,8 @@ guarantee.
    fully trusts the model.
 
 4. **Choose a value.** A guided fill uses a Faker generator 60% of the time.
-   The generator is picked by goal mode's closed choice among about 180 local
-   generators, asked once per field. 25% of fills use hostile text
+   Jev picks the generator in one closed choice among about 190 local
+   generators (Faker's plus Sedum's own formats), asked once per field. 25% of fills use hostile text
    (bidi overrides, zero-width joiners, combining marks, emoji, injection
    strings) and 15% use Bombadil-style random text.
 5. **Act and record.** The target is collected again and found by identity

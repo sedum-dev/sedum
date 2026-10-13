@@ -7,6 +7,7 @@ import {
 } from "@sedum-dev/core";
 import {
   decisionLines,
+  detectionTexts,
   needsAttention,
   runIsTrustworthy,
   score,
@@ -199,20 +200,23 @@ function renderSuite(suite: Suite): string {
   );
 }
 
-function flagCounts(
-  result: RunResult,
-): Record<"low_confidence" | "contradiction", number> {
-  const total = { low_confidence: 0, contradiction: 0 };
+type StepFlagCounts = Record<ResultStep["flags"][number], number>;
+
+function flagCounts(result: RunResult): StepFlagCounts {
+  const total = { low_confidence: 0, contradiction: 0, suspected_bug: 0 };
   for (const test of result.tests)
     for (const step of selectedAttempt(test)?.steps ?? [])
       for (const flag of step.flags) total[flag] += 1;
   return total;
 }
 
-function flagSummary(
-  counted: Record<"low_confidence" | "contradiction", number>,
-): string {
-  return `low_confidence ${counted.low_confidence}, contradiction ${counted.contradiction}`;
+/** Detector flags are listed only when present, so runs without them read as before. */
+function suspectedSummary(count: number): string {
+  return count ? `, suspected_bug ${count}` : "";
+}
+
+function flagSummary(counted: StepFlagCounts): string {
+  return `low_confidence ${counted.low_confidence}, contradiction ${counted.contradiction}${suspectedSummary(counted.suspected_bug)}`;
 }
 
 function frameLine(
@@ -248,6 +252,7 @@ function stepLines(
       `  contradiction ${score(judgement.contradicted, [judgement.contradictionCutoff])} / cutoff ${score(judgement.contradictionCutoff)}`,
     );
   }
+  out.push(...detectionTexts(step).map((text) => `  ${oneLine(text)}`));
   out.push(
     step.page.status === "available"
       ? `  page: ${step.page.url} "${oneLine(step.page.title)}"`
@@ -383,7 +388,7 @@ function testSuite(
   );
   const output: string[] = [];
   if (test.flags.length && attempt) {
-    const stepFlags = { low_confidence: 0, contradiction: 0 };
+    const stepFlags = { low_confidence: 0, contradiction: 0, suspected_bug: 0 };
     for (const step of attempt.steps)
       for (const flag of step.flags) stepFlags[flag] += 1;
     output.push(

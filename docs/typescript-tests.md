@@ -78,7 +78,7 @@ test(title, options, body);
 
 Titles must be unique within a file and ids unique in the project. Each test
 gets a fresh browser context and runs on its own, in parallel lanes and with
-`--retries` like a YAML test unless it enters a goal (see below). Top-level code
+`--retries` like a YAML test. Top-level code
 in the file runs once when Sedum imports it, so keep per-test setup inside the
 body.
 
@@ -108,89 +108,6 @@ resolved the same way: `click`, `type`, `press`, `goto`, `scroll`, `wait`,
 `verify`, `measure`, and `remember` (see
 [step classification](classification.md)). A list runs its sentences in order,
 sharing one values object.
-
-### Goals and separate verification
-
-`ai.goal(goal, values?, options?)` asks the planner to complete a bounded task on the
-current page:
-
-```ts
-await ai.goal("Create a new account and complete its profile");
-await ai('verify the page displays the confirmation message "Profile saved"');
-await expect(page.getByRole("status")).toHaveText("Profile saved");
-```
-
-The promise resolves when the planner reports `DONE` and that decision passes
-the normal confidence and freshness checks. This means **planner-reported
-completion, not independent verification**: `ai.goal` does not call the Judge
-or add a hidden assertion. A goal-only test can pass and is reported as
-completed, not verified. Add a separate `ai("verify ...")` step for a semantic
-check, a Playwright `expect` for an exact check, or both. A later check proves
-only what it asserts; it does not retroactively verify every part of the goal.
-There is no `ai.act`, `ai.assert`, or `ai.verify` API.
-
-Goals, authored `ai` steps, Playwright calls, and assertions can be interleaved
-on the same page. Each goal starts with fresh planning history, counters,
-references, and generated-value memory, while observing the page left by the
-preceding code:
-
-```ts
-const customer = {
-  email: faker.internet.exampleEmail(),
-  firstName: faker.person.firstName(),
-};
-
-await ai.goal("Create an account for {{email}}", customer);
-await expect(page).toHaveURL(/\/profile/);
-
-await page.getByLabel("Marketing emails").uncheck();
-await ai.goal(
-  "Complete the profile for {{email}} using {{firstName}}",
-  customer,
-);
-await ai('verify the page displays the confirmation message "Profile saved"');
-await expect(page.getByRole("status")).toHaveText("Profile saved");
-```
-
-The optional values argument follows the same rules as `ai(sentence, values)`.
-Every explicit `{{placeholder}}` must have a supplied binding; a missing one is
-an authoring error. With the TypeSafe provider, a goal may also choose a local,
-allowlisted Faker generator for a fill that has no applicable binding. Faker
-runs locally for each invocation. Automatically generated values can be reused
-within that goal (for example, in a confirmation field), but are not shared
-with another goal. To reuse an identity, generate it in TypeScript as above and
-pass it explicitly to every goal; wrap sensitive values with `secret()`.
-
-Automatic generation defaults to enabled. Set `generateData: false` in the
-third argument to restrict fills to supplied or remembered values:
-
-```ts
-await ai.goal("Complete the profile for {{email}}", customer, {
-  generateData: false,
-});
-// With no values, allow goals that do not need generated input.
-await ai.goal("Open billing settings", undefined, { generateData: false });
-```
-
-This setting applies only to that invocation. It disables automatic Faker
-generation, not Faker calls you make in TypeScript. Missing data cannot be
-generated; a blocked goal rejects. Completion still depends on the planner,
-so keep independent checks for the outcome you need.
-
-A goal uses the unchanged defaults of 24 requests, 18 dispatched actions, and
-120 seconds. Value-selection requests count toward the same request budget.
-`BLOCKED`, abstention, no progress, budget exhaustion, cancellation, and action
-errors reject the goal. Once a valid goal enters planning, Sedum does not
-automatically retry the whole test, even if the goal succeeds and a later
-`expect`, verify step, or cleanup fails. This prevents replaying side effects;
-manual reruns are still possible. Tests that never enter a goal retain normal
-`--retries` behavior.
-
-Goal actions are limited to the operations offered by goal mode (currently
-click and type); use deterministic Playwright or authored `ai` steps for other
-work. Goals are still exclusive, tracked `ai` operations: always `await` them,
-and do not overlap them with another `ai` call. Multiple goals are sequential,
-not parallel.
 
 **Pass values separately, not with `${}`.** Write `{{name}}` in the sentence
 and give the value in the second argument. The sentence text stays the same on
@@ -320,13 +237,6 @@ that code left.
   object, or a missing `await` stops the run as an invalid test, like a YAML
   file with an error, with the file, line, and a fix.
 
-Supplied secret and generated goal values join the attempt-wide redaction
-history, so later goals, verification, diagnostics, reports, and cleanup do not
-echo known values. They do not become fill choices for later goals. Redaction
-cannot mask screenshots, video, arbitrary application logging, or values Sedum
-never learned; use disposable accounts and the existing evidence controls for
-sensitive pages.
-
 Reports name a TypeScript test by its file and title, and rerun commands add
 `--id` to select just that test.
 
@@ -334,19 +244,11 @@ Reports name a TypeScript test by its file and title, and rerun commands add
 
 `sedum list` imports each `*.test.ts` file and lists one row per `test()`.
 `sedum validate` also finds the sentences passed to `ai(...)`, `ai([...])`,
-`ai.goal(...)`, and `ai.group(name, [...])`, in the test file and in the local modules it
+and `ai.group(name, [...])`, in the test file and in the local modules it
 imports, and checks them offline, or online with `--online`, exactly like YAML
 steps. A list or sentence held in a `const` in the same file is read too, when
 the file declares that name once and never reassigns it.
 Validation recognizes the `ai` name.
-
-For `ai.goal`, validation checks literal and supported `const`/local-helper
-shapes, placeholder syntax, and statically readable argument shapes. Required
-bindings and planner availability are checked at run time. Validation
-does not execute the body, generate Faker data, ask a model whether the goal is
-feasible, or classify the goal as one authored step. Dynamic expressions and
-aliases it cannot resolve produce the same honest validation warnings as other
-`ai` calls; runtime validation remains authoritative.
 
 An argument validation cannot read, such as a variable, a function call, or a
 sentence built with `${}`, is reported as a warning. So is any way of running

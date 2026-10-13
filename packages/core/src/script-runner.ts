@@ -24,6 +24,7 @@ import {
   type FlowRunnerDependencies,
   type SentencePresentation,
 } from "./flow-runner.js";
+import { contextOptions } from "./flow-runner/browser-session.js";
 import type { FlowSource, SentenceStep } from "./flow-types.js";
 import { runGoalTask } from "./goal-runner.js";
 import {
@@ -384,11 +385,7 @@ export async function runScriptTest(
         : { slowMoMs: dependencies.slowMoMs }),
       ...(dependencies.headedOverlay ? { overlay: true } : {}),
     });
-    context = await session.newContext(
-      dependencies.viewport === undefined
-        ? {}
-        : { viewport: dependencies.viewport },
-    );
+    context = await session.newContext(contextOptions(dependencies));
     page = await context.newPage();
     const activePage = page;
     if (entryUrl !== undefined)

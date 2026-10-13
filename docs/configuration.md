@@ -88,6 +88,20 @@ to TypeSafe and the model to `jev-latest`; the API key is read from
 Process values override the project `.env`. `TYPESAFE_API_KEY` is rejected
 from `sedum.config.yaml`.
 
+For **Vercel AI Gateway**, keep `provider.name: typesafe` and use:
+
+```dotenv
+TYPESAFE_BASE_URL=https://ai-gateway.vercel.sh/typesafe
+TYPESAFE_DEFAULT_MODEL=typesafe-ai/jev
+TYPESAFE_API_KEY=your_vercel_ai_gateway_key
+```
+
+An explicit `provider.model` overrides the environment model. Use the gateway's
+model ID, not the direct `jev-latest` alias. The key must belong to the gateway;
+Sedum does not automatically read `AI_GATEWAY_API_KEY`. See
+[gateway setup and supported decision models](provider-typesafe.md#vercel-ai-gateway)
+for SDK usage, billing, and compatibility requirements.
+
 ### OpenRouter decision models
 
 To route Jev or another compatible System One model through OpenRouter:
@@ -113,7 +127,7 @@ Choice and Noul questions and response distributions; appearing in the
 of equivalent accuracy or limits. Direct Cloudflare Clef remains a separate provider.
 
 This selection ignores `TYPESAFE_*` settings, including credentials. It applies
-to runs, goal planning, online validation, and affected-test selection. Cached
+to runs, online validation, and affected-test selection. Cached
 classifications are separated by provider and requested model. `sedum doctor`
 sends a small, potentially billable request to the selected model.
 

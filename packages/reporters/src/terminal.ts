@@ -1,7 +1,8 @@
-import type { RunResult } from "@sedum-dev/core";
+import type { ResultStep, RunResult } from "@sedum-dev/core";
 import path from "node:path";
 import type { ReporterEvent } from "./lifecycle.js";
 import {
+  detectionTexts,
   needsAttention,
   rerunArgs,
   selectedAttempt,
@@ -73,6 +74,10 @@ function source(
   return stack.map((item) => `${item.file}:${item.line}`).join(" <- ");
 }
 
+function findings(step: ResultStep): string[] {
+  return detectionTexts(step).map((text) => `    ${text}`);
+}
+
 function attention(result: RunResult, context: ReporterContext): string {
   const lines: string[] = [];
   const reruns = new Set<string>();
@@ -96,7 +101,7 @@ function attention(result: RunResult, context: ReporterContext): string {
       lines.push(
         `  ${label(step.state, step.verdict)}${flags(step.flags)} ${step.phase} step ${step.index}: ${stepText(step)}`,
       );
-      lines.push(`    at ${source(step.sourceStack)}`);
+      lines.push(`    at ${source(step.sourceStack)}`, ...findings(step));
       if (step.detail) lines.push(`    result ${step.detail}`);
       const linkedProblems = attempt.problems.filter(
         (problem) => problem.stepId === step.id,

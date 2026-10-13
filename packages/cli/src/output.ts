@@ -199,6 +199,17 @@ function cacheLine(step: ResultStep): string | null {
   return `  step ${step.index}: cache ${cache.outcome}${reason}${fallback}${changed}`;
 }
 
+function detectionLines(step: ResultStep): string[] {
+  return (step.detections ?? []).map((detection) =>
+    `  step ${step.index}: suspected bug, ${detection.check}${detection.source ? ` (${detection.source}${detection.probability === undefined ? "" : ` p=${detection.probability.toFixed(2)}`})` : ""}: ${detection.message}`.replace(
+      // Page text and URLs must not move the terminal cursor.
+      // eslint-disable-next-line no-control-regex
+      /[\u0000-\u001f\u007f-\u009f]/g,
+      " ",
+    ),
+  );
+}
+
 function testDetailLines(test: ResultTest, flagCounts: FlagCounts): string[] {
   const retry =
     test.attempts.length > 1
@@ -210,7 +221,7 @@ function testDetailLines(test: ResultTest, flagCounts: FlagCounts): string[] {
   const caches = (selected?.steps ?? []).flatMap((step) => {
     for (const flag of step.flags) flagCounts[flag] += 1;
     const line = cacheLine(step);
-    return line ? [line] : [];
+    return [...(line ? [line] : []), ...detectionLines(step)];
   });
   const details = [...compact([retry]), ...caches];
   return details.length ? [testLabel(test), ...details] : [];
@@ -240,7 +251,10 @@ function flagCountLine(value: RunResult, counts: FlagCounts): string {
   const flaky = value.tests.filter((test) =>
     test.flags.includes("flaky"),
   ).length;
-  return `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${counts.low_confidence}, contradiction ${counts.contradiction}, flaky ${flaky} test(s)`;
+  const suspected = counts.suspected_bug
+    ? `, suspected_bug ${counts.suspected_bug}`
+    : "";
+  return `flags ${value.totals.flaggedSteps} flagged step(s), low_confidence ${counts.low_confidence}, contradiction ${counts.contradiction}${suspected}, flaky ${flaky} test(s)`;
 }
 
 function visionDetailLines(value: RunResult): string[] {
@@ -291,7 +305,7 @@ export function renderRunSummary(
   const value = validateRunResult(result);
   const color = capabilities.stdoutIsTTY && capabilities.color;
   const lines: string[] = [];
-  const flagCounts = { low_confidence: 0, contradiction: 0 };
+  const flagCounts = { low_confidence: 0, contradiction: 0, suspected_bug: 0 };
   // The live reporter has already printed each test's outcome; the summary
   // only adds the detail it did not show, under the test's file.
   for (const test of value.tests)

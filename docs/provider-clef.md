@@ -70,8 +70,8 @@ text adapter.
 
 ## Scope and data sent
 
-Phase 1 supports six text operations: step classification, target resolution,
-repeated-item verification, assertion judging, goal planning, and affected-test
+Phase 1 supports five text operations: step classification, target resolution,
+repeated-item verification, assertion judging, and affected-test
 relevance scoring. Inputs are bounded and choices are restricted to options
 Sedum supplies; Clef cannot return arbitrary actions or selectors. Normal
 browser decisions send the same bounded projection described in the
