@@ -91,7 +91,28 @@ function tuning(options: ExploreCommandOptions): {
   return options.strictSafety ? { tuning: { strictSafety: true } } : {};
 }
 
-/** A new browser context, signed in with the stored cookies when given. */
+/** A Playwright storage-state file: cookies, and local storage per origin. */
+interface StorageState {
+  readonly cookies?: unknown[];
+  readonly origins?: readonly {
+    readonly origin: string;
+    readonly localStorage: readonly { name: string; value: string }[];
+  }[];
+}
+
+/** A page script, run before the page's own: restore one origin's items. */
+function restoreLocalStorage(
+  origin: string,
+  items: readonly { name: string; value: string }[],
+): string {
+  return `(() => {
+  if (location.origin !== ${JSON.stringify(origin)}) return;
+  for (const { name, value } of ${JSON.stringify(items)})
+    if (localStorage.getItem(name) === null) localStorage.setItem(name, value);
+})()`;
+}
+
+/** A new browser context, signed in with a stored state when given. */
 async function openPage(
   browser: BrowserSession,
   cookies: string | undefined,
@@ -101,12 +122,15 @@ async function openPage(
   });
   const page = await context.newPage();
   if (cookies) {
-    const state = JSON.parse(await readFile(cookies, "utf8")) as {
-      cookies?: unknown[];
-    };
+    const state = JSON.parse(await readFile(cookies, "utf8")) as StorageState;
     const native = page.playwright?.();
     if (!native) throw new Error("Cookies need a Playwright browser.");
     await native.context.addCookies((state.cookies ?? []) as never);
+    // Apps that keep their sign-in token in local storage (a JWT) need it too.
+    for (const { origin, localStorage } of state.origins ?? [])
+      await native.context.addInitScript(
+        restoreLocalStorage(origin, localStorage),
+      );
   }
   return { page, close: () => context.close() };
 }

@@ -91,6 +91,8 @@ export interface GuidanceInput {
   readonly tuning: ExploreTuning;
   /** The page is mainly a form (guided: by page kind), so favour typing. */
   readonly formPage?: boolean;
+  /** The last action typed into a field: submitting it is the natural next step. */
+  readonly afterTyping?: boolean;
   /** Advice for this state, with target ids by leaf index. */
   readonly advice?: {
     readonly answer: ExploreAdvice;
@@ -99,6 +101,8 @@ export interface GuidanceInput {
 }
 
 const UNTRIED_BONUS = 1.5;
+/** Enter right after typing: a one-field form such as a to-do list or a search. */
+const AFTER_TYPING = 5;
 /** Typing mass on pages whose main purpose is a form. */
 const FORM_BOOST = 4;
 
@@ -166,11 +170,17 @@ function coverageFactor(
     : kindNovelty(input, leaf, index, local);
 }
 
+/** Enter grows with the fields typed on the page, and right after typing. */
+function enterBoost(input: GuidanceInput, leaf: Leaf): number {
+  if (!leaf.destination || leaf.key === "Escape") return 1;
+  const typed = 1 + input.coverage.typedOn(leaf.destination);
+  return typed * (input.afterTyping ? AFTER_TYPING : 1);
+}
+
 /** Category-level boosts; guidance otherwise only redistributes within a kind. */
 function kindBoost(input: GuidanceInput, leaf: Leaf): number {
   if (leaf.kind === "type") return input.formPage ? FORM_BOOST : 1;
-  if (leaf.kind === "press" && leaf.destination)
-    return 1 + input.coverage.typedOn(leaf.destination);
+  if (leaf.kind === "press") return enterBoost(input, leaf);
   return 1;
 }
 

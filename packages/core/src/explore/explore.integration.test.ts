@@ -125,6 +125,25 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       }
     }, 60_000);
 
+    it("reports a dead link, not a 404 page that moves straight on", async () => {
+      const fresh = await freshPage();
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/`);
+        const oracles = await Oracles.attach(fresh.page, site.baseUrl);
+        await fresh.page.goto(`${site.baseUrl}/explore/moved`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        expect(await oracles.drain()).toEqual([]);
+        await fresh.page.goto(`${site.baseUrl}/explore/no-such-page`);
+        const events = await oracles.drain();
+        expect(events.map((e) => e.signature)).toEqual([
+          "broken-link: HTTP # page /explore/:id",
+        ]);
+        oracles.detach();
+      } finally {
+        await fresh.close();
+      }
+    }, 60_000);
+
     it("stops a guided walk once Jev keeps failing", async () => {
       const fresh = await freshPage();
       const down = () => Promise.reject(new Error("no available API credits"));
@@ -255,6 +274,40 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         ).toBe(true);
         // The adviser code is retried once with the format its error states.
         expect(done.filter((d) => d === "type Adviser code")).toHaveLength(2);
+      } finally {
+        await fresh.close();
+      }
+    }, 120_000);
+
+    it("makes up a password to sign up, never to sign in", async () => {
+      const fresh = await freshPage();
+      const before = site.stats.writes["register"] ?? 0;
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/register`);
+        const signup = await drive(macro(fresh.page), fresh.page);
+        expect(fresh.page.url).toContain("/explore/register/done");
+        expect(site.stats.writes["register"]).toBe(before + 1);
+        expect(signup).toContain("type Password");
+        expect(signup).toContain("type Confirm password");
+        await fresh.page.goto(`${site.baseUrl}/explore/signin`);
+        const signin = await drive(macro(fresh.page), fresh.page);
+        expect(signin).not.toContain("type Password");
+      } finally {
+        await fresh.close();
+      }
+    }, 120_000);
+
+    it("stops on a page with nothing to click or fill", async () => {
+      const fresh = await freshPage();
+      try {
+        const result = await explore(fresh.page, {
+          startUrl: `${site.baseUrl}/explore/blank`,
+          steps: 60,
+          seed: 2,
+          mode: "random",
+        });
+        expect(result.stopReason).toMatch(/^Nothing to click or fill/u);
+        expect(result.trace.length).toBeLessThanOrEqual(16);
       } finally {
         await fresh.close();
       }

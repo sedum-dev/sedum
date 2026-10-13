@@ -5,7 +5,12 @@ import { targetVariants } from "./emit.js";
 import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
 import { looksDestructive } from "./kinds.js";
-import { findByIdentity, identityOf, sameOriginHref } from "./observe.js";
+import {
+  findByIdentity,
+  identityOf,
+  routeOf,
+  sameOriginHref,
+} from "./observe.js";
 import { endpoint, graphqlMutation, signature } from "./oracles.js";
 import { hashText, pickWeighted, SeededRandom } from "./random.js";
 import { DEFAULT_TUNING, type ExploreAdvice } from "./types.js";
@@ -150,6 +155,22 @@ describe("guidance", () => {
     expect(guided.skipped).toEqual(["Delete account"]);
     expect(guided.probabilities[0]).toBe(0);
     expect(guided.probabilities[1]!).toBeGreaterThan(guided.probabilities[2]!);
+  });
+
+  it("favours Enter right after typing", () => {
+    const leaves = [
+      click("Help"),
+      { kind: "press", base: 10, destination: "/todo press Enter" } as Leaf,
+    ];
+    const enter = (afterTyping: boolean) =>
+      guide({
+        mode: "heuristic",
+        leaves,
+        coverage: new Coverage(),
+        tuning,
+        afterTyping,
+      }).probabilities[1]!;
+    expect(enter(true)).toBeGreaterThan(2 * enter(false));
   });
 
   it("keeps the blind share over safe leaves only", () => {
@@ -427,5 +448,17 @@ describe("oracle signatures", () => {
     expect(signature("TypeError: x\n    at f (a.js:1:2)", origin)).toBe(
       "TypeError: x",
     );
+  });
+});
+
+describe("routes", () => {
+  it("keep a hash route, and drop an in-page anchor", () => {
+    expect(routeOf("https://shop.test/#/account?tab=1")).toBe(
+      "/#/account?tab=1",
+    );
+    expect(routeOf("https://shop.test/app/#!/orders/7")).toBe(
+      "/app/#!/orders/7",
+    );
+    expect(routeOf("https://shop.test/help?q=a#returns")).toBe("/help?q=a");
   });
 });

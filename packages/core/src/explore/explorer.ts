@@ -133,6 +133,12 @@ function refusedLocally(error: unknown): boolean {
   return error instanceof ProviderError && error.code === "invalid-input";
 }
 
+/** Steps on pages with nothing to click or fill before the walk stops. */
+const IDLE_STEPS = 15;
+const ACTIONABLE: ReadonlySet<string> = new Set(["click", "type", "form"]);
+/** Wait before loading the start page a second time. */
+const START_RETRY_MS = 5_000;
+
 /** How long a page that looks like it is loading must stay unchanged. */
 const STUCK_MS = 3_000;
 
@@ -245,6 +251,7 @@ class Explorer {
   readonly #chrome = new SiteChrome();
   readonly #writes = new Map<string, number>();
   #outsideStreak = 0;
+  #idleStreak = 0;
   #failStreak = 0;
   readonly #abandoned = new Set<number>();
   #stopReason: string | undefined;
@@ -293,10 +300,20 @@ class Explorer {
       throw new TypeError("Guided exploration needs an advisor");
   }
 
+  /** A cold server (a sleeping demo host) may time out once; try again. */
+  async #openStart(): Promise<void> {
+    try {
+      await this.page.goto(this.options.startUrl);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, START_RETRY_MS));
+      await this.page.goto(this.options.startUrl);
+    }
+  }
+
   async run(): Promise<ExploreResult> {
     const started = performance.now();
     const steps = clampSteps(this.options.steps);
-    await this.page.goto(this.options.startUrl);
+    await this.#openStart();
     await settle(this.page);
     this.#oracles = await Oracles.attach(
       this.page,
@@ -469,6 +486,7 @@ class Explorer {
       globalTargets: this.#chrome.targets,
     });
     this.#archive.untried(cell, this.#untried(leaves));
+    this.#noteIdle(leaves, observation);
     const steering = this.options.mode === "guided" && info.advice;
     const guided = guide({
       mode: this.options.mode,
@@ -476,6 +494,7 @@ class Explorer {
       coverage: this.#coverage,
       tuning: this.#tuning,
       formPage,
+      afterTyping: this.#lastKind === "type",
       ...(steering ? { advice: info.advice } : {}),
     });
     guided.skipped.forEach((name) => this.#skipped.add(name));
@@ -491,6 +510,17 @@ class Explorer {
     this.#lastKind = action.kind;
     this.#pendingDestination = this.#plan ? undefined : leaf.destination;
     this.#learnFailure(leaf);
+  }
+
+  /**
+   * A page with nothing to click or fill (a host's error page, a blank
+   * screen) only offers scrolling and waiting: stop instead of idling.
+   */
+  #noteIdle(leaves: readonly Leaf[], observation: Observation): void {
+    const actionable = leaves.some((leaf) => ACTIONABLE.has(leaf.kind));
+    this.#idleStreak = actionable ? 0 : this.#idleStreak + 1;
+    if (this.#idleStreak >= IDLE_STEPS)
+      this.#stopReason ??= `Nothing to click or fill on ${observation.route} for ${IDLE_STEPS} steps.`;
   }
 
   #untried(leaves: readonly Leaf[]): number {
@@ -644,7 +674,11 @@ class Explorer {
   /** Guided asks Jev's page kind; the heuristic only sees fields. */
   #formPage(observation: Observation, info: StateInfo): boolean {
     if (this.options.mode === "heuristic") return observation.fills.length > 0;
-    return this.options.mode === "guided" && FORM_KINDS.has(info.kind ?? "");
+    // A checkout or an "Add account" dialog may sit on a page Jev calls a
+    // cart or a detail page; two or more fields make it a form anyway.
+    const fields =
+      FORM_KINDS.has(info.kind ?? "") || observation.fills.length >= 2;
+    return this.options.mode === "guided" && fields;
   }
 
   async #canGoBack(): Promise<boolean> {

@@ -21,7 +21,8 @@ import { valueForError } from "./pattern-sample.js";
 import type { ExploreAction, TargetIdentity } from "./types.js";
 
 /** What submitting a form does, as far as the macro cares. */
-export type FormPurpose = "create" | "record" | "settings" | "search";
+export type FormPurpose =
+  "create" | "record" | "settings" | "search" | "signin";
 
 /** The questions code cannot answer: Jev in guided mode, rules otherwise. */
 export interface FormJudge {
@@ -108,6 +109,10 @@ interface Active {
   baseline?: readonly string[] | undefined;
   /** A sub-form opened from a form whose submit was disabled. */
   nested: boolean;
+  /** What Jev says the form does; only a "create" form gets a password. */
+  purpose?: FormPurpose | undefined;
+  /** One new password per form, so a confirmation field matches. */
+  password?: string | undefined;
   unlocks: number;
   /** A target was used to enable the submit; what the page held before. */
   unlocking?: Unlocking | undefined;
@@ -274,9 +279,13 @@ export class FormFlow {
     active.proxies = new Set(
       dropdowns.filter((d) => d.typeahead).map((d) => d.shown),
     );
+    active.purpose ??= await this.#purpose(observation);
     const planned = errors.length
       ? errors
-      : fieldsToFill(fields, false).map((field) => ({ field }));
+      : [
+          ...fieldsToFill(fields, false),
+          ...this.#newPasswords(active, fields),
+        ].map((field) => ({ field }));
     const fills = this.#typeable(observation, planned);
     const actions = [
       ...(await this.#typeAll(observation, fills)),
@@ -286,6 +295,15 @@ export class FormFlow {
     active.queue = dropdowns.filter((d) => !d.native);
     const rest = await this.#advance(observation, active);
     return rest ? [...actions, ...rest] : null;
+  }
+
+  /**
+   * A sign-up form needs a password the macro makes up; a sign-in form
+   * would need a real one, so it gets none.
+   */
+  #newPasswords(active: Active, fields: readonly FieldInfo[]): FieldInfo[] {
+    if (active.purpose !== "create") return [];
+    return fields.filter((f) => f.type === "password" && f.empty);
   }
 
   /** Leave out type-ahead inputs: their list chooses the value. */
@@ -671,7 +689,7 @@ export class FormFlow {
     if (stated) return { generator: "format.stated", text: stated };
     // A recognised format stays right on a retry; only its value changes.
     const formatted = formatValue(field, this.deps.tools);
-    if (formatted?.generator === "format.password") return null;
+    if (formatted?.generator === "format.password") return this.#password();
     if (formatted?.value)
       return { generator: formatted.generator, text: formatted.value };
     // A default zero the form refused stays a number, such as a fee.
@@ -684,6 +702,14 @@ export class FormFlow {
       (await this.deps.chooseGenerator(target, observation, error)) ??
       "faker.lorem.words";
     return { generator, text: this.deps.generate(generator, field) };
+  }
+
+  /** The form's new password; only creation forms plan password fields. */
+  #password(): { generator: string; text: string } | null {
+    const active = this.#active!;
+    if (active.purpose !== "create") return null;
+    active.password ??= `${this.deps.tools.faker.internet.password({ length: 12 })}Aa1!`;
+    return { generator: "format.newPassword", text: active.password };
   }
 
   /** Answer radio groups nobody answered, with an option Jev picks. */

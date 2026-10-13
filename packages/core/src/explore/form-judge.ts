@@ -15,10 +15,14 @@ const PURPOSES: Readonly<Record<FormPurpose, string>> = {
   settings:
     "Changes settings or configuration for the whole account, firm, organisation or team: branding, fees, preferences, integrations, permissions",
   search: "Only searches, filters or looks something up",
+  signin:
+    "Signs in to an existing account, checks a code, or resets a password",
 };
 
 /** A target that adds the item a form still needs, such as "Add an account". */
 const ADD = /^\+?\s*(add|new|create)\b/iu;
+
+const SIGNUP_ROUTE = /register|sign-?up|join/iu;
 
 const SETTINGS_ROUTE =
   /settings|preferences|config|branding|profile|billing|permissions/iu;
@@ -51,7 +55,11 @@ export function labelInLine(
 export const RULE_JUDGE: FormJudge = {
   purpose: (observation) =>
     Promise.resolve(
-      SETTINGS_ROUTE.test(observation.route) ? "settings" : undefined,
+      SETTINGS_ROUTE.test(observation.route)
+        ? "settings"
+        : SIGNUP_ROUTE.test(observation.route)
+          ? "create"
+          : undefined,
     ),
   option: () => Promise.resolve(null),
   prerequisite: (_observation, _submit, targets) => {

@@ -43,14 +43,16 @@ export interface ArchiveOptions {
   readonly maxPath: number;
 }
 
+/** Numbers, UUIDs, ULIDs and other long tokens that mix letters and digits. */
+const RECORD_ID =
+  /^\d+$|[0-9a-f]{8}-[0-9a-f-]{27}|^[0-9A-HJKMNP-TV-Z]{26}$|^(?=.*\d)[\w-]{16,}$/iu;
+
 /** A route with record ids and query folded, e.g. /clients/:id. */
 export function routeTemplate(route: string): string {
   return route
     .split("?")[0]!
     .split("/")
-    .map((part) =>
-      /^\d+$|[0-9a-f]{8}-[0-9a-f-]{27}/iu.test(part) ? ":id" : part,
-    )
+    .map((part) => (RECORD_ID.test(part) ? ":id" : part))
     .join("/");
 }
 

@@ -318,6 +318,24 @@ document.getElementById('apply').onclick = async () => {
   document.getElementById('status').textContent = 'Branding applied to every client portal';
 };`;
 
+// Sign up needs a new password typed twice; sign in needs a real one.
+const REGISTER_SCRIPT = `
+document.querySelector('form').onsubmit = async (event) => {
+  event.preventDefault();
+  const v = Object.fromEntries(new FormData(event.target));
+  const CHECKS = [
+    [!!v.name, 'Name is required'],
+    [/@/.test(v.email || ''), 'Email is required'],
+    [(v.password || '').length >= 8, 'Password needs 8 characters'],
+    [v.password === v.confirm, 'Passwords must match'],
+  ];
+  const failed = CHECKS.find(([ok]) => !ok);
+  document.getElementById('error').textContent = failed ? failed[1] : '';
+  if (failed) return;
+  await fetch('/explore/api/register', { method: 'POST' });
+  location.href = '/explore/register/done';
+};`;
+
 const ACCOUNT_SAVED = `
 // Planted bug: the total reads a balance field the list never sends.
 const total = [{ name: 'New account' }].reduce((sum, a) => sum + a.balance, 0);
@@ -405,6 +423,19 @@ const STATIC_PAGES: Record<string, () => string> = {
       title: "Account saved",
       body: `<h1>Account saved</h1><p id="total"></p>`,
       script: ACCOUNT_SAVED,
+    }),
+  "/explore/register": () =>
+    page({
+      title: "Create an account",
+      body: `<h1>Create an account</h1><form novalidate><label>Name <input name="name"></label><label>Email <input name="email" type="email"></label><label>Password <input name="password" type="password"></label><label>Confirm password <input name="confirm" type="password"></label><p id="error" role="alert"></p><button>Create account</button></form>`,
+      script: REGISTER_SCRIPT,
+    }),
+  "/explore/register/done": () =>
+    page({ title: "Welcome", body: "<h1>Your account is ready</h1>" }),
+  "/explore/signin": () =>
+    page({
+      title: "Sign in",
+      body: `<h1>Sign in</h1><form action="/explore/signin"><label>Email <input name="email" type="email"></label><label>Password <input name="password" type="password"></label><button>Sign in</button></form>`,
     }),
   "/explore/account/branding": () =>
     page({
@@ -550,7 +581,19 @@ const BUG_PAGES: Readonly<Record<string, string>> = {
 };
 
 /** Ordinary saves: counted, never destructive. */
-const WRITE_ENDPOINTS = new Set(["accounts", "branding"]);
+const WRITE_ENDPOINTS = new Set(["accounts", "branding", "register"]);
+
+/** Pages served as they are, without the shop's layout. */
+const RAW_PAGES: Readonly<Record<string, Reply>> = {
+  // A host's error page: nothing to click or fill.
+  "/explore/blank": { status: 503, body: "<!doctype html><p>Back soon.</p>" },
+  // Like a single-page app on static hosting: a 404 page that sends the
+  // browser straight on to the app. Not a dead end for the user.
+  "/explore/moved": {
+    status: 404,
+    body: `<!doctype html><script>location.replace("/explore/help")</script>`,
+  },
+};
 
 /** Serve one /explore request. Returns false when the path is not ours. */
 export function handleExplore(
@@ -564,6 +607,13 @@ export function handleExplore(
   const api = /^\/explore\/api\/([a-z-]+)$/u.exec(pathname)?.[1];
   if (api) {
     handleApi(request, response, api, stats);
+    return true;
+  }
+  // Like a single-page app on static hosting: a 404 page that sends the
+  // browser straight on to the app. Not a dead end for the user.
+  const raw = RAW_PAGES[pathname];
+  if (raw) {
+    send(response, raw);
     return true;
   }
   const bug = BUG_PAGES[pathname];

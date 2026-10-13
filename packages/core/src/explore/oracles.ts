@@ -21,6 +21,7 @@ interface Response {
   text(): Promise<string>;
   request(): {
     method(): string;
+    resourceType(): string;
     postData(): string | null;
     isNavigationRequest(): boolean;
     frame(): unknown;
@@ -28,7 +29,18 @@ interface Response {
 }
 
 const NOT_REJECTIONS = new Set([401, 403, 404]);
-const READS = new Set(["GET", "HEAD", "OPTIONS"]);
+/** Methods that change nothing; QUERY is HTTP's read with a body. */
+const READS = new Set(["GET", "HEAD", "OPTIONS", "QUERY"]);
+
+/**
+ * A successful request that may change data: not a read, not a failure,
+ * and not a beacon (sendBeacon: analytics, RUM), which only reports.
+ */
+function changesData(response: Response): boolean {
+  const request = response.request();
+  if (READS.has(request.method()) || response.status() >= 400) return false;
+  return request.resourceType() !== "ping";
+}
 
 /** API paths name records by slug or id; keep one signature per endpoint. */
 export function endpoint(pathname: string): string {
@@ -87,6 +99,8 @@ function allowRules(options: OracleOptions): AllowRule[] {
 export class Oracles {
   #events: OracleEvent[] = [];
   #pending: Promise<void>[] = [];
+  /** A page answered 4xx this step, unless a working page replaced it. */
+  #deadEnd: string | null = null;
   #writes: WriteRecord[] = [];
   readonly #allow: readonly AllowRule[];
   readonly #mainFrame: unknown;
@@ -156,9 +170,12 @@ export class Oracles {
     const method = response.request().method();
     const where = this.#where(url);
     this.#write(response, url);
+    // A 404 page that sends the browser straight on to a working page (a
+    // single-page app on static hosting) is not a dead end for the user.
+    if (this.#mainNavigation(response) && status < 400) this.#deadEnd = null;
     if (status >= 500) this.#push("http", `HTTP ${status} ${method} ${where}`);
     else if (this.#brokenLink(response))
-      this.#push("broken-link", `HTTP ${status} page ${endpoint(where)}`);
+      this.#deadEnd = `HTTP ${status} page ${endpoint(where)}`;
     else if (this.#rejection(response))
       this.#pending.push(
         response
@@ -173,14 +190,17 @@ export class Oracles {
       );
   }
 
+  #mainNavigation(response: Response): boolean {
+    const request = response.request();
+    return request.isNavigationRequest() && request.frame() === this.#mainFrame;
+  }
+
   /** A page the user navigated to that does not exist or failed. */
   #brokenLink(response: Response): boolean {
-    const request = response.request();
     return (
       this.options.brokenLinks !== false &&
       response.status() >= 400 &&
-      request.isNavigationRequest() &&
-      request.frame() === this.#mainFrame
+      this.#mainNavigation(response)
     );
   }
 
@@ -191,7 +211,7 @@ export class Oracles {
   #write(response: Response, url: URL): void {
     const method = response.request().method();
     const status = response.status();
-    if (READS.has(method) || status >= 400) return;
+    if (!changesData(response)) return;
     const mutation = graphqlMutation(url, response.request().postData());
     if (mutation === null) return;
     const where = endpoint(this.#where(url));
@@ -242,6 +262,8 @@ export class Oracles {
   /** Events so far, after any response bodies still being read. */
   async drain(): Promise<OracleEvent[]> {
     for (const signal of this.signals.drain()) this.#signal(signal);
+    if (this.#deadEnd) this.#push("broken-link", this.#deadEnd);
+    this.#deadEnd = null;
     await Promise.all(this.#pending.splice(0));
     const events = this.#events;
     this.#events = [];

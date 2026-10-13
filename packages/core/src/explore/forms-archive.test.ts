@@ -113,6 +113,11 @@ describe("archive", () => {
         "/clients/78863d26-108d-43ca-bcf9-cb4901bf11f5/plans/12?tab=a",
       ),
     ).toBe("/clients/:id/plans/:id");
+    expect(routeTemplate("/product/01M4VMFV04DW6X9NS314TFSGDM")).toBe(
+      "/product/:id",
+    );
+    expect(routeTemplate("/#/account/favorites")).toBe("/#/account/favorites");
+    expect(routeTemplate("/help/returns-policy")).toBe("/help/returns-policy");
   });
 
   it("keeps the shortest clean path and never a path that wrote", () => {

@@ -47,10 +47,15 @@ export async function allCandidates(
   return { version: first.version, candidates };
 }
 
+/**
+ * Path and query; plus the fragment when it is a hash route such as
+ * `#/account` or `#!/account`, which single-page apps use as their path.
+ */
 export function routeOf(url: string): string {
   try {
     const parsed = new URL(url);
-    return parsed.pathname + parsed.search;
+    const hashRoute = /^#!?\//u.test(parsed.hash) ? parsed.hash : "";
+    return parsed.pathname + parsed.search + hashRoute;
   } catch {
     return url;
   }
