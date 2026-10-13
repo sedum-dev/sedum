@@ -430,6 +430,15 @@ const STATIC_PAGES: Record<string, () => string> = {
       body: `<h1>Create an account</h1><form novalidate><label>Name <input name="name"></label><label>Email <input name="email" type="email"></label><label>Password <input name="password" type="password"></label><label>Confirm password <input name="confirm" type="password"></label><p id="error" role="alert"></p><button>Create account</button></form>`,
       script: REGISTER_SCRIPT,
     }),
+  "/explore/lottery": () =>
+    page({
+      title: "Lottery",
+      body: `<h1>Lottery</h1><button id="draw">Draw</button><p id="out"></p>`,
+      script: `document.getElementById('draw').onclick = async () => {
+  const r = await fetch('/explore/api/draw');
+  document.getElementById('out').textContent = r.ok ? 'You drew a ticket' : 'Try again';
+};`,
+    }),
   "/explore/register/done": () =>
     page({ title: "Welcome", body: "<h1>Your account is ready</h1>" }),
   "/explore/signin": () =>
@@ -524,9 +533,9 @@ function handleApi(
   name: string,
   stats: ExploreStats,
 ): void {
-  if (name === "export") {
-    count(stats.bugs, "export-500");
-    send(response, { status: 500, body: "export failed" });
+  const reply = READ_APIS[name]?.(stats);
+  if (reply) {
+    send(response, reply);
     return;
   }
   if (request.method !== "POST") {
@@ -578,6 +587,22 @@ const BUG_PAGES: Readonly<Record<string, string>> = {
   "/explore/admin": "admin-metrics",
   "/explore/account/plan/created": "plan-projection",
   "/explore/account/accounts/saved": "account-total",
+};
+
+/** GET endpoints with planted failures. */
+const READ_APIS: Readonly<Record<string, (stats: ExploreStats) => Reply>> = {
+  export: (stats) => {
+    count(stats.bugs, "export-500");
+    return { status: 500, body: "export failed" };
+  },
+  // An intermittent bug: every second draw fails.
+  draw: (stats) => {
+    count(stats.bugs, "draw");
+    const fails = stats.bugs["draw"]! % 2 === 0;
+    return fails
+      ? { status: 500, body: "draw failed" }
+      : { status: 200, body: "ok" };
+  },
 };
 
 /** Ordinary saves: counted, never destructive. */

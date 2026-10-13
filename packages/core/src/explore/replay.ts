@@ -113,6 +113,35 @@ async function reduceOnce(
  * A candidate fails when replaying it shows the same failure signature; a
  * divergent replay counts as passing. Bombadil has no shrinking.
  */
+/**
+ * Most failures come from the last few actions on a page the start URL
+ * reaches: try the last 1, 2, 4, … actions alone before delta debugging,
+ * which spends its budget slowly on long traces.
+ */
+async function shortestTail(
+  actions: readonly ExploreAction[],
+  fails: Check,
+): Promise<ExploreAction[]> {
+  for (let length = 1; length < actions.length; length *= 2) {
+    const tail = actions.slice(-length);
+    if (await fails(tail)) return tail;
+  }
+  return [...actions];
+}
+
+/** Tries of the whole trace before a failure counts as not reproducible. */
+const FIRST_TRIES = 3;
+
+/** Some bugs show only some of the time; try the whole trace a few times. */
+async function reproduces(
+  actions: readonly ExploreAction[],
+  fails: Check,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < FIRST_TRIES; attempt++)
+    if (await fails(actions)) return true;
+  return false;
+}
+
 export async function shrink(options: ShrinkOptions): Promise<ShrinkResult> {
   const maxReplays = options.maxReplays ?? 48;
   let replays = 0;
@@ -132,9 +161,9 @@ export async function shrink(options: ShrinkOptions): Promise<ShrinkResult> {
       await fresh.close();
     }
   };
-  if (!(await fails(options.actions)))
+  if (!(await reproduces(options.actions, fails)))
     return { actions: options.actions, reproduced: false, replays };
-  let current = [...options.actions];
+  let current = await shortestTail(options.actions, fails);
   let chunks = 2;
   const budgetLeft = () => replays < maxReplays;
   while (current.length >= 2 && budgetLeft()) {

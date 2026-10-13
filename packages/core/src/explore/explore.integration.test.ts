@@ -144,6 +144,73 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       }
     }, 60_000);
 
+    it("shrinks a bug that shows only some of the time", async () => {
+      const draw: ExploreAction = {
+        kind: "click",
+        target: { role: "button", name: "Draw", occurrence: 0 },
+      };
+      // Every second draw fails, so a single first replay may pass.
+      const shrunk = await shrink({
+        startUrl: `${site.baseUrl}/explore/lottery`,
+        actions: [draw],
+        signature: "http: HTTP # GET /explore/api/draw",
+        freshPage,
+      });
+      expect(shrunk.reproduced).toBe(true);
+    }, 120_000);
+
+    it("never shows Jev the walk's own typed values as page content", async () => {
+      const fresh = await freshPage();
+      const pages: string[] = [];
+      const call = {
+        requestedModel: "jev-latest",
+        model: "jev-1.13.0",
+        attempts: 1,
+        usage: { inputTokens: 1, outputTokens: 0 },
+        rate: null,
+        successfulResponseCostUsd: 0,
+        totalCostUsd: 0,
+      };
+      try {
+        const result = await explore(fresh.page, {
+          startUrl: `${site.baseUrl}/explore/search`,
+          steps: 40,
+          seed: 4,
+          mode: "guided",
+          advisor: {
+            assess: async (request) => {
+              pages.push(request.page);
+              return {
+                kind: {
+                  choice: "search",
+                  probabilities: { search: 1 },
+                  confidence: 1,
+                },
+                destructive: Object.fromEntries(
+                  Object.keys(request.targets).map((id) => [id, 0]),
+                ),
+                leadsTo: {},
+                call,
+              };
+            },
+          },
+        });
+        const typed = result.trace.flatMap((e) =>
+          e.action.kind === "type" && e.action.value.trim().length >= 3
+            ? [e.action.value.trim()]
+            : [],
+        );
+        expect(typed.length).toBeGreaterThan(0);
+        expect(pages.some((p) => p.includes("[text the tester typed]"))).toBe(
+          true,
+        );
+        for (const value of typed)
+          expect(pages.some((p) => p.includes(value))).toBe(false);
+      } finally {
+        await fresh.close();
+      }
+    }, 120_000);
+
     it("stops a guided walk once Jev keeps failing", async () => {
       const fresh = await freshPage();
       const down = () => Promise.reject(new Error("no available API credits"));

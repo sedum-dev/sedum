@@ -133,11 +133,18 @@ function refusedLocally(error: unknown): boolean {
   return error instanceof ProviderError && error.code === "invalid-input";
 }
 
+/** Values the walk typed are masked in what Jev and the leak check read. */
+const TYPED_MARK = "[text the tester typed]";
+const TYPED_MIN = 3;
+const TYPED_LIMIT = 300;
+
 /** Steps on pages with nothing to click or fill before the walk stops. */
 const IDLE_STEPS = 15;
 const ACTIONABLE: ReadonlySet<string> = new Set(["click", "type", "form"]);
 /** Wait before loading the start page a second time. */
 const START_RETRY_MS = 5_000;
+/** A sleeping host can take more than a minute to wake. */
+const START_RETRY_TIMEOUT_MS = 120_000;
 
 /** How long a page that looks like it is loading must stay unchanged. */
 const STUCK_MS = 3_000;
@@ -251,6 +258,8 @@ class Explorer {
   readonly #chrome = new SiteChrome();
   readonly #writes = new Map<string, number>();
   #outsideStreak = 0;
+  /** Values the walk typed; a page that shows them back is not broken. */
+  readonly #typed = new Set<string>();
   #idleStreak = 0;
   #failStreak = 0;
   readonly #abandoned = new Set<number>();
@@ -306,7 +315,9 @@ class Explorer {
       await this.page.goto(this.options.startUrl);
     } catch {
       await new Promise((resolve) => setTimeout(resolve, START_RETRY_MS));
-      await this.page.goto(this.options.startUrl);
+      await this.page.goto(this.options.startUrl, {
+        timeoutMs: START_RETRY_TIMEOUT_MS,
+      });
     }
   }
 
@@ -512,6 +523,23 @@ class Explorer {
     this.#learnFailure(leaf);
   }
 
+  #noteTyped(action: ExploreAction): void {
+    const value = action.kind === "type" ? action.value.trim() : "";
+    if (value.length >= TYPED_MIN && this.#typed.size < TYPED_LIMIT)
+      this.#typed.add(value);
+  }
+
+  /**
+   * Page text with the walk's own values replaced: Jev would otherwise
+   * judge "test NaN value" or lorem ipsum in a to-do list as broken.
+   */
+  #masked(text: string): string {
+    let masked = text;
+    for (const value of [...this.#typed].sort((a, b) => b.length - a.length))
+      masked = masked.replaceAll(value, TYPED_MARK);
+    return masked;
+  }
+
   /**
    * A page with nothing to click or fill (a host's error page, a blank
    * screen) only offers scrolling and waiting: stop instead of idling.
@@ -547,6 +575,7 @@ class Explorer {
     why: TraceEntry["why"],
   ): Promise<void> {
     const started = performance.now();
+    this.#noteTyped(action);
     let error: string | undefined;
     try {
       const before = this.options.beforeAction;
@@ -721,7 +750,9 @@ class Explorer {
     const loading =
       inspection.probabilities.stuck_loading >=
       DEFAULT_SEMANTIC_THRESHOLDS.stuck_loading;
-    const text = (await visibleText(this.page).catch(() => null)) ?? "";
+    const text = this.#masked(
+      (await visibleText(this.page).catch(() => null)) ?? "",
+    );
     const stuck = loading && (await this.#unchanged(text));
     const found = stateDetections(
       text,
@@ -756,7 +787,7 @@ class Explorer {
         {
           route: observation.route,
           title: observation.title,
-          page: observation.text.slice(0, PAGE_TEXT_LIMIT),
+          page: this.#masked(observation.text).slice(0, PAGE_TEXT_LIMIT),
           targets,
           kinds: PAGE_KINDS,
           predictTargets: steering && this.#tuning.predictTargets,

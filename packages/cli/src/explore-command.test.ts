@@ -61,7 +61,12 @@ describe("explore arguments", () => {
 
   it("rejects malformed --detect-allow rules", async () => {
     const output = await runCli(
-      ["explore", "https://example.test/", "--detect-allow", "console_error:"],
+      [
+        "explore",
+        "https://example.test/",
+        "--detect-allow",
+        "console_error:re:(",
+      ],
       "0.0.0",
     );
     expect(output.exitCode).not.toBe(0);
