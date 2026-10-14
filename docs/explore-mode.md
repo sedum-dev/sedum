@@ -322,3 +322,28 @@ native and type-ahead dropdowns, then a retry from the error summary)
 without a model.
 
 These are feasibility numbers on one synthetic site, not a benchmark.
+
+## Evaluation on practice sites
+
+Run on 2026-10-13 and 14 against eight sites built for automated testing:
+SauceDemo (`standard_user`, `problem_user`, `error_user`), Toolshop (clean
+and with planted bugs), Sweet Shop, the-internet, RealWorld, TodoMVC and
+Coffee Cart. Each round ran every site with 2 seeds × 200 guided steps and
+`--detect semantic`. Every finding was labelled from its screenshot, and
+each generic problem the sites exposed was fixed between rounds.
+
+|                                               | first round | final   |
+| --------------------------------------------- | ----------- | ------- |
+| False findings (9 comparable sites)           | 19 of 37    | 2 of 22 |
+| False findings with the-internet              | –           | 9 of 56 |
+| Form completions on the six sites with forms  | 0 of 14     | 7 of 15 |
+| Real findings shrunk into a test that replays | –           | 5 of 6  |
+| Destructive or settings actions               | 0           | 0       |
+| Cost per 100 guided steps                     | –           | $0.0099 |
+
+Planted bugs found include SauceDemo `error_user`'s cart, sort and
+checkout errors, `problem_user`'s wrong product page, Sweet Shop's broken
+About link, Toolshop's failing add-to-cart, and the-internet's status codes
+and JavaScript errors. Visual and behavioural bugs, such as the same photo
+on every product or sorting that does nothing, are out of reach of these
+checks.
