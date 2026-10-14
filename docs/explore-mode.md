@@ -29,8 +29,7 @@ see [Safety](#safety).
    A state is identified by its route plus its visible text.
 2. **Build the action tree.** The tree has clicks (100 in total, split across
    targets), typing (50), pressing Enter (10), scrolling (5), going back (10),
-   reloading (1) and waiting (1). These are Bombadil's defaults, adjusted for
-   Sedum. Links that leave the start URL's origin are removed. If an action
+   reloading (1) and waiting (1). Links that leave the start URL's origin are removed. If an action
    still leaves the origin, the walk is forced back.
 3. **Guide (guided mode).** One TypeSafe request per new state asks:
    - a `choice`: which kind of page this is (home, listing, detail, search,
@@ -57,7 +56,7 @@ see [Safety](#safety).
    Jev picks the generator in one closed choice among about 190 local
    generators (Faker's plus Sedum's own formats), asked once per field. 25% of fills use hostile text
    (bidi overrides, zero-width joiners, combining marks, emoji, injection
-   strings) and 15% use Bombadil-style random text.
+   strings) and 15% use random Unicode text.
 5. **Act and record.** The target is collected again and found by identity
    (role, name, location, peer text, occurrence) before Sedum's step executor
    dispatches it. Each action is appended to `trace.jsonl` with its route,
@@ -86,8 +85,8 @@ as a closed choice:
    never filled.
 3. Answer each radio group that has no choice yet, native or ARIA
    (`role="radio"`), with an option Jev picks.
-4. Answer each dropdown that still shows a placeholder ("Select a wrapper
-   type", "Choose…", "Search for a portfolio"), with an option Jev picks:
+4. Answer each dropdown that still shows a placeholder ("Select an account
+   type", "Choose…", "Search for a store"), with an option Jev picks:
    - a native `<select>` is chosen in one click that names the option;
    - a custom dropdown is opened, and the targets that appear are its
      options, whatever their markup;
@@ -99,7 +98,7 @@ as a closed choice:
    would submit the form anyway. If it is disabled, give up too: something
    else must come first: see step 8.
 6. Read what the submit changed. Fields marked invalid, and fields named by
-   new error lines anywhere in the form (a summary box such as "Wrapper type
+   new error lines anywhere in the form (a summary box such as "Account type
    is required"), are filled again, up to 3 attempts. Code matches an error
    line to a field by its label; Jev maps the lines code cannot. A refill
    uses the format the error states ("must be 6 digits"), else the field's
@@ -118,8 +117,8 @@ as a closed choice:
 
 Jev judges what a form does: creates something, fills in one record,
 changes settings, or searches. A form that changes settings for the whole
-account, firm or team is skipped. A form that creates something is
-completed even when the app pre-filled it (a new plan copies the client's
+account, organisation or team is skipped. A form that creates something is
+completed even when the app pre-filled it (a new order copies the customer's
 details). Any other form that is mostly filled in already edits an existing
 record and is skipped. The walk can still type into either one field at a time.
 
@@ -130,21 +129,20 @@ rules: settings by route, options at random, errors by label.
 
 Each part of the plan runs as its own step and is recorded as an ordinary
 action, so replay and shrinking treat it like any other. A native dropdown
-choice becomes `select "ISA" from the "Wrapper type" dropdown` in an
+choice becomes `select "Savings" from the "Account type" dropdown` in an
 emitted test.
 
 ## Returning to unfinished pages
 
 The walk keeps an archive of the kinds of page it has seen: a route with ids
-folded (`/clients/:id`) plus the page kind. It also records how many targets
+folded (`/customers/:id`) plus the page kind. It also records how many targets
 on each page it has not tried yet. After 30 steps without a new kind of page,
 it returns to one that still has untried targets, weighted towards pages
 visited least. To return, it loads the page's URL. If that lands on another
 kind of page, the next return replays the shortest clean path (at most 15
 actions) that reached the page. A path that wrote to the server is never
 kept, so a return never repeats a create or a save. This is go-explore
-without snapshots: Antithesis can branch from any state, and most web pages
-can be restored from their URL. Random mode never returns.
+without snapshots: most web pages can be restored from their URL. Random mode never returns.
 
 ## Oracles
 
@@ -165,7 +163,7 @@ once per new page state, so they add questions, not calls: about 15% more
 per call on the fixture shop. The detector's thresholds apply. An exact
 leak such as `NaN` counts only when Jev confirms a broken value, and a page
 that looks like it is loading must stay unchanged for 3 seconds. A page
-check is reported once per check and kind of page (`/clients/:id`), and is
+check is reported once per check and kind of page (`/customers/:id`), and is
 not shrunk, because each replay would need Jev.
 
 These options adjust what is reported:
@@ -265,7 +263,7 @@ after its start time and seed:
 - `--seed` makes the choices of a random or heuristic walk repeat exactly.
   A guided walk repeats as long as Jev's answers do.
 - `--rerun trace.jsonl` runs the recorded actions again. Every action kind is
-  matched by identity, including reload, which Bombadil's replay cannot match.
+  matched by identity, including reload.
   Typed values are stored, so a replay does not depend on the seed.
 - `--shrink` cuts each failing trace with delta debugging (complement removal,
   up to 48 replays in fresh browser contexts) to the shortest list that shows
@@ -302,21 +300,21 @@ after its start time and seed:
 - 48 product pages that link to each other;
 - pages reachable only through a sequence of actions (a reports page, an
   admin console revealed by a preference checkbox, a newsletter welcome
-  page behind form validation, and a plan summary behind a three-page wizard
-  with split date boxes, a postcode check, a radio group, an accounts step
-  whose Continue button is disabled until an "Add an account" sub-form is
-  saved, and number ranges);
+  page behind form validation, and a trip summary behind a three-page wizard
+  with split date boxes, a postcode check, a radio group, a gear step whose
+  Continue button is disabled until an "Add an item" sub-form is saved, and
+  number ranges);
 - an "Add account" dialog without dialog roles: a custom div dropdown with a
   heading, a native select with a placeholder, a type-ahead widget over a
   hidden select, a field no format rule knows, and errors shown only in a
   summary box;
 - six planted bugs: a crash on non-ASCII search text, a console error after
   a valid newsletter signup, an HTTP 500 on CSV export, a console error in
-  the admin console, a console error on the plan summary, and a console
+  the admin console, a console error on the trip summary, and a console
   error after saving an account;
 - four destructive buttons, one of them worded without any destructive
   keyword ("Start over with an empty account");
-- a single-field firm branding form, which the form macro must leave alone;
+- a single-field store branding form, which the form macro must leave alone;
 - a benign button worded like a destructive one ("Remove all filters");
 - an off-origin link.
 
@@ -344,7 +342,7 @@ guided mode is steered by the answers.
 | Cost per run (mean)                        | –       | –                    | $0.0069     |
 | Jev latency (p50 / p95)                    | –       | –                    | 95 / 126 ms |
 
-That table predates the plan wizard and the fifth bug.
+That table predates the trip wizard and the fifth bug.
 
 Results from 2026-10-12: guided mode before (`107ebcc`) and after form
 completion and returns, on the site with the wizard, 12 seeds × 150 steps
@@ -353,7 +351,7 @@ each, same seeds.
 |                                           | before  | after   |
 | ----------------------------------------- | ------- | ------- |
 | Wizard completed (runs)                   | 0 / 12  | 6 / 12  |
-| Plan-summary bug found (runs)             | 0 / 12  | 6 / 12  |
+| Trip-summary bug found (runs)             | 0 / 12  | 6 / 12  |
 | The other four planted bugs found per run | 2.17    | 2.00    |
 | Hidden pages, of 4 (mean)                 | 2.25    | 2.50    |
 | Distinct states (mean)                    | 50.2    | 52.0    |

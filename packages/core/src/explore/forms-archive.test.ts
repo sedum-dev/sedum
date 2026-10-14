@@ -71,14 +71,14 @@ describe("format rules", () => {
     expect(
       formatValue(field("email", { type: "email" }), tools)?.value,
     ).toMatch(/@example\.com$/u);
-    const age = Number(
+    const size = Number(
       formatValue(
-        field("retirement age", { type: "number", min: 55, max: 75 }),
+        field("group size", { type: "number", min: 2, max: 12 }),
         tools,
       )?.value,
     );
-    expect(age).toBeGreaterThanOrEqual(55);
-    expect(age).toBeLessThanOrEqual(75);
+    expect(size).toBeGreaterThanOrEqual(2);
+    expect(size).toBeLessThanOrEqual(12);
   });
 
   it("never fills passwords and leaves unknown fields to the model", () => {
@@ -119,9 +119,9 @@ describe("archive", () => {
   it("folds ids out of routes", () => {
     expect(
       routeTemplate(
-        "/clients/78863d26-108d-43ca-bcf9-cb4901bf11f5/plans/12?tab=a",
+        "/customers/78863d26-108d-43ca-bcf9-cb4901bf11f5/orders/12?tab=a",
       ),
-    ).toBe("/clients/:id/plans/:id");
+    ).toBe("/customers/:id/orders/:id");
     expect(routeTemplate("/product/01M4VMFV04DW6X9NS314TFSGDM")).toBe(
       "/product/:id",
     );

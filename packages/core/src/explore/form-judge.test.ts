@@ -16,10 +16,10 @@ describe("summary errors", () => {
           "Balance",
           "Please keep this private",
           "Error: Incomplete information",
-          "Wrapper type is required",
+          "Account type is required",
         ],
       ),
-    ).toEqual(["Error: Incomplete information", "Wrapper type is required"]);
+    ).toEqual(["Error: Incomplete information", "Account type is required"]);
   });
 
   it("names the longest label a line mentions", () => {
@@ -31,14 +31,14 @@ describe("summary errors", () => {
 
   it("states a format outright when the error gives a length", () => {
     const random = new SeededRandom(2);
-    expect(valueForError("Adviser code must be 6 digits", random)).toMatch(
+    expect(valueForError("Member code must be 6 digits", random)).toMatch(
       /^\d{6}$/u,
     );
     expect(valueForError("Use at least 8 characters", random)).toMatch(
       /^[A-Z]{8}$/u,
     );
     expect(valueForError("Balance must be a number", random)).toMatch(/^\d+$/u);
-    expect(valueForError("Wrapper type is required", random)).toBeNull();
+    expect(valueForError("Account type is required", random)).toBeNull();
   });
 });
 
@@ -63,22 +63,27 @@ describe("patterns", () => {
 describe("dropdowns and settings", () => {
   it("recognises placeholder text, not actions", () => {
     for (const shown of [
-      "Select a wrapper type",
+      "Select an account type",
       "Choose…",
       "Please select",
       "--",
     ])
       expect(PLACEHOLDER.test(shown)).toBe(true);
-    for (const shown of ["Select all", "Choose file", "GIA", "Selected funds"])
+    for (const shown of [
+      "Select all",
+      "Choose file",
+      "Savings",
+      "Selected funds",
+    ])
       expect(PLACEHOLDER.test(shown)).toBe(false);
   });
 
   it("opens the target that adds what a disabled submit waits for", async () => {
-    const page = { route: "/plan/accounts" } as Observation;
+    const page = { route: "/trip/gear" } as Observation;
     expect(
       await RULE_JUDGE.prerequisite(page, "Save & Continue", [
         "Back",
-        "+ Add an account",
+        "+ Add an item",
         "Help",
       ]),
     ).toBe(1);
@@ -90,9 +95,9 @@ describe("dropdowns and settings", () => {
   it("treats settings routes as settings without a model", async () => {
     const at = (route: string) => ({ route }) as Observation;
     expect(
-      await RULE_JUDGE.purpose(at("/planning/account_settings/edit"), []),
+      await RULE_JUDGE.purpose(at("/workspace/account_settings/edit"), []),
     ).toBe("settings");
-    expect(await RULE_JUDGE.purpose(at("/clients/1/accounts"), [])).toBe(
+    expect(await RULE_JUDGE.purpose(at("/customers/1/accounts"), [])).toBe(
       undefined,
     );
   });

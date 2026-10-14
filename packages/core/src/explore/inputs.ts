@@ -1,8 +1,7 @@
 import type { SeededRandom } from "./random.js";
 
 /**
- * Code point ranges and weights for unconstrained text, after Bombadil's
- * text generator: mostly ASCII, with Latin-1, combining marks, zero-width and
+ * Code point ranges and weights for unconstrained text: mostly ASCII, with Latin-1, combining marks, zero-width and
  * bidi controls, Arabic, Hebrew, full-width forms, CJK punctuation, emoji and
  * private-use characters.
  */
@@ -79,7 +78,7 @@ function randomWord(random: SeededRandom, length: number): string {
 }
 
 /**
- * Bombadil's per-type defaults: emails look like emails, numbers are digits,
+ * Per-type defaults: emails look like emails, numbers are digits,
  * everything else is unconstrained text.
  */
 export function blindValue(random: SeededRandom, inputType: string): string {

@@ -3,7 +3,7 @@ import type { GoalChoice, GoalValueState } from "../goal-runner.js";
 import type { ProviderCall, ProviderCallOptions } from "../provider.js";
 
 /**
- * - random: a blind weighted random walk with Bombadil's default weights.
+ * - random: a blind weighted random walk with fixed default weights.
  * - heuristic: the same walk with model-free guidance (keyword safety list,
  *   untried-action bonus, type-based Faker values), as an ablation.
  * - guided: Jev decides safety, page kinds and Faker generators.
@@ -234,7 +234,7 @@ export interface ExploreTuning {
   /** Chance a guided fill uses hostile text; the rest is blind text. */
   readonly hostileInput: number;
   readonly predictTargets: boolean;
-  /** Bombadil-style swarm testing: drop some action kinds for this seed. */
+  /** Swarm testing: drop some action kinds for this seed. */
   readonly swarm: boolean;
   /**
    * "off" (the default, for disposable staging) never skips a target except

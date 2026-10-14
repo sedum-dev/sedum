@@ -47,7 +47,7 @@ export interface ChoiceGroup {
 
 /**
  * Radio groups with nothing chosen yet, native or ARIA (`role=radio`), such
- * as "Does the client have a partner?" with "Yes" and "No".
+ * as "Is anyone travelling with you?" with "Yes" and "No".
  */
 export async function unansweredChoices(
   page: BrowserPage,
@@ -160,9 +160,9 @@ export interface Dropdown {
    * the same text (custom): candidate refs do not survive a later scan.
    */
   readonly nth: number;
-  /** Its label, such as "Wrapper type"; "" when none is near. */
+  /** Its label, such as "Account type"; "" when none is near. */
   readonly label: string;
-  /** What it shows now, such as "Select a wrapper type". */
+  /** What it shows now, such as "Select an account type". */
   readonly shown: string;
   /**
    * A type-ahead widget over a hidden select: type an option into the

@@ -90,7 +90,7 @@ function allowRules(options: OracleOptions): AllowRule[] {
 }
 
 /**
- * Bombadil's default properties as event collectors. Console errors,
+ * Default properties as event collectors. Console errors,
  * uncaught exceptions, unhandled rejections and failed requests come from
  * the bug detector's signal collector (`--detect browser`); HTTP 5xx,
  * broken links, rejected submits and the write log are exploration's own.
@@ -246,7 +246,7 @@ export class Oracles {
 
   /**
    * The detector's page checks for a new state, under its allow rules. One
-   * finding per check and kind of page (`/clients/:id`), not per message.
+   * finding per check and kind of page (`/customers/:id`), not per message.
    */
   report(detections: readonly Detection[], route: string): void {
     for (const detection of detections) {

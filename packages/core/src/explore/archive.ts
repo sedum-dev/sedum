@@ -3,9 +3,9 @@ import type { ExploreAction } from "./types.js";
 
 /**
  * Go-explore without snapshots: remember each kind of page and how it was
- * reached, then return there and explore onwards. Antithesis branches from
- * interesting states with a hypervisor; a web app usually only needs the
- * page's URL, and a recorded path when the URL alone does not restore it.
+ * reached, then return there and explore onwards. A web app usually only
+ * needs the page's URL to restore a state, and a recorded path when the URL
+ * alone does not restore it.
  */
 export interface Cell {
   readonly key: string;
@@ -47,7 +47,7 @@ export interface ArchiveOptions {
 const RECORD_ID =
   /^\d+$|[0-9a-f]{8}-[0-9a-f-]{27}|^[0-9A-HJKMNP-TV-Z]{26}$|^(?=.*\d)[\w-]{16,}$/iu;
 
-/** A route with record ids and query folded, e.g. /clients/:id. */
+/** A route with record ids and query folded, e.g. /customers/:id. */
 export function routeTemplate(route: string): string {
   return route
     .split("?")[0]!

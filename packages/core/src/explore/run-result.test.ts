@@ -37,11 +37,11 @@ const walk: ExploreResult = {
   mode: "guided",
   startUrl: "https://shop.test/",
   trace: [
-    entry(0, "/clients/12"),
-    entry(1, "/clients/34", {
+    entry(0, "/customers/12"),
+    entry(1, "/customers/34", {
       writes: [{ method: "POST", endpoint: "/api/notes", status: 201 }],
     }),
-    entry(2, "/clients/34", {
+    entry(2, "/customers/34", {
       events: [
         { kind: "console", message: "boom", signature: "console: boom" },
       ],
@@ -52,7 +52,7 @@ const walk: ExploreResult = {
     { signature: "console: boom", kind: "console", message: "boom", step: 2 },
   ],
   states: 3,
-  routes: ["/clients/12", "/clients/34"],
+  routes: ["/customers/12", "/customers/34"],
   kinds: { detail: 3 },
   skippedDestructive: ["Log out"],
   writes: { "POST /api/notes": 2 },
@@ -89,7 +89,7 @@ describe("exploration result.json", () => {
         kind: "console",
         message: "boom",
         step: 2,
-        route: "/clients/34",
+        route: "/customers/34",
         test: { notShrunk: "did not reproduce on replay" },
       },
     ]);
@@ -116,7 +116,9 @@ describe("exploration result.json", () => {
     expect(run.writes).toEqual([
       { endpoint: "POST /api/notes", count: 2, firstStep: 1 },
     ]);
-    expect(run.coverage.routes).toEqual([{ route: "/clients/:id", visits: 3 }]);
+    expect(run.coverage.routes).toEqual([
+      { route: "/customers/:id", visits: 3 },
+    ]);
     expect(run.jev).toMatchObject({
       calls: 2,
       inputTokens: 200,

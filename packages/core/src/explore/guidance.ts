@@ -188,7 +188,7 @@ function kindBoost(input: GuidanceInput, leaf: Leaf): number {
 }
 
 /**
- * Keep Bombadil's tree shape: clicks keep their (safe) base mass and guidance
+ * Keep the tree's shape: clicks keep their (safe) base mass and guidance
  * moves probability among them. Other kinds keep their own damping, times
  * their boost.
  */

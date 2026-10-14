@@ -9,11 +9,11 @@ const OPTION_LIMIT = 60;
 
 const PURPOSES: Readonly<Record<FormPurpose, string>> = {
   create:
-    "Creates something new: a client, an account, a plan, an order, a message, a record",
+    "Creates something new: a customer, an account, a project, an order, a message, a record",
   record:
-    "Fills in or updates the details of one existing item, such as one client's details or one plan's steps",
+    "Fills in or updates the details of one existing item, such as one customer's details or one order's items",
   settings:
-    "Changes settings or configuration for the whole account, firm, organisation or team: branding, fees, preferences, integrations, permissions",
+    "Changes settings or configuration for the whole account, organisation or team: branding, fees, preferences, integrations, permissions",
   search: "Only searches, filters or looks something up",
   signin:
     "Signs in to an existing account, checks a code, or resets a password",

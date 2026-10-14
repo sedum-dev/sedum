@@ -155,7 +155,7 @@ interface Fill {
 }
 
 /**
- * Completes a form the way Bombadil's custom actions do, but generically:
+ * Completes a form generically:
  * fill every empty field (code recognises formats, Jev picks the rest),
  * answer radio groups and dropdowns, press the form's own submit, then fix
  * what the page reports, beside a field or in a summary box, and carry on
@@ -250,7 +250,7 @@ export class FormFlow {
 
   /**
    * Never a settings form. A form Jev says creates something is completed
-   * even when the app pre-filled it (a new plan copies the client's
+   * even when the app pre-filled it (a new order copies the customer's
    * details); otherwise one mostly filled in already edits a record.
    */
   async #worthStarting(

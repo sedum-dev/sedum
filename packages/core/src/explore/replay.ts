@@ -111,7 +111,7 @@ async function reduceOnce(
 /**
  * Delta debugging (ddmin, complements only) over a failing action list.
  * A candidate fails when replaying it shows the same failure signature; a
- * divergent replay counts as passing. Bombadil has no shrinking.
+ * divergent replay counts as passing.
  */
 /**
  * Most failures come from the last few actions on a page the start URL

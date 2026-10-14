@@ -91,11 +91,11 @@ describe("exploration request", () => {
 describe("exploration decisions", () => {
   const decision: ExploreDecisionRequest = {
     page: "Add new account",
-    subject: { error0: "Wrapper type is required" },
+    subject: { error0: "Account type is required" },
     questions: {
       line0: {
         question: "Which form field is the error about?",
-        choices: { none: "No field", f0: "Account name", f1: "Wrapper type" },
+        choices: { none: "No field", f0: "Account name", f1: "Account type" },
       },
     },
   };
@@ -104,7 +104,7 @@ describe("exploration decisions", () => {
     const request = buildDecisionRequest(decision, "jev-latest");
     expect(Object.keys(request.questions)).toEqual(["line0"]);
     expect(request.questions.line0?.type).toBe("choice");
-    expect(JSON.stringify(request.state)).toContain("Wrapper type is required");
+    expect(JSON.stringify(request.state)).toContain("Account type is required");
   });
 
   it("rejects a question with fewer than two options", () => {

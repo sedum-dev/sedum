@@ -73,7 +73,7 @@ describe("seeded random", () => {
 });
 
 describe("inputs", () => {
-  it("types plausible email and digits blindly, like Bombadil", () => {
+  it("types plausible email and digits blindly", () => {
     const random = new SeededRandom(3);
     expect(blindValue(random, "email")).toMatch(/^[a-z]+@[a-z]+\.test$/u);
     expect(blindValue(random, "number")).toMatch(/^\d+$/u);
@@ -309,7 +309,7 @@ describe("learned from a real staging run", () => {
   ]);
 
   it("strict safety skips a keyword match that Jev scored low", () => {
-    const leaves = [click("Send message"), click("Clients")];
+    const leaves = [click("Send message"), click("Customers")];
     const run = (safety: "on" | "strict") =>
       guide({
         mode: "guided",
@@ -326,7 +326,7 @@ describe("learned from a real staging run", () => {
     const leaves = [
       click("Delete all addresses"),
       click("Log out"),
-      click("Clients"),
+      click("Customers"),
     ];
     const guided = guide({
       mode: "guided",
@@ -340,7 +340,7 @@ describe("learned from a real staging run", () => {
   });
 
   it("shares one destination for chrome seen on several routes", () => {
-    const nav = candidate("Clients", { role: "" });
+    const nav = candidate("Customers", { role: "" });
     const observation = {
       url: "http://app.test/a",
       route: "/a",
@@ -363,8 +363,8 @@ describe("learned from a real staging run", () => {
       excluded: new Set(),
       globalTargets: new Set([targetSignature(nav)]),
     });
-    expect(plain[0]?.destination).toBe("/a  Clients#0");
-    expect(global[0]?.destination).toBe("global |Clients|#0");
+    expect(plain[0]?.destination).toBe("/a  Customers#0");
+    expect(global[0]?.destination).toBe("global |Customers|#0");
   });
 });
 
@@ -399,7 +399,7 @@ describe("write log", () => {
   it("counts GraphQL mutations, not queries", () => {
     const url = new URL("https://app.test/practice/graphql");
     expect(
-      graphqlMutation(url, JSON.stringify({ query: "query Clients { a }" })),
+      graphqlMutation(url, JSON.stringify({ query: "query Customers { a }" })),
     ).toBeNull();
     expect(
       graphqlMutation(
@@ -416,8 +416,8 @@ describe("write log", () => {
 
   it("keeps a target skipped once it was judged destructive", () => {
     const coverage = new Coverage();
-    const importPlan = candidate("Import plan");
-    const leaves = [{ ...click("Import plan"), candidate: importPlan }];
+    const importOrders = candidate("Import orders");
+    const leaves = [{ ...click("Import orders"), candidate: importOrders }];
     const judge = (p: number) =>
       guide({
         mode: "guided",
@@ -435,8 +435,8 @@ describe("write log", () => {
         },
       });
     expect(judge(0.2).skipped).toEqual([]);
-    expect(judge(0.8).skipped).toEqual(["Import plan"]);
-    expect(judge(0.2).skipped).toEqual(["Import plan"]);
+    expect(judge(0.8).skipped).toEqual(["Import orders"]);
+    expect(judge(0.2).skipped).toEqual(["Import orders"]);
   });
 
   it("halves a target's weight after each failure", () => {

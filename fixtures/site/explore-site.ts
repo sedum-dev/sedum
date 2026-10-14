@@ -194,15 +194,15 @@ function account(stats: ExploreStats): string {
     });
   return page({
     title: "Your account",
-    body: `<h1>Your account</h1><p>Signed in as trail@example.com</p><ul><li><a href="/explore/account/preferences">Preferences</a></li><li><a href="/explore/account/reports">Reports</a></li><li><a href="/explore/account/addresses">Saved addresses</a></li><li><a href="/explore/account/plan/new">Create financial plan</a></li><li><a href="/explore/account/accounts">Investment accounts</a></li><li><a href="/explore/account/branding">Firm branding</a></li></ul><h2>Danger zone</h2>${destructiveButton({ endpoint: "revoke-keys", label: "Revoke all API keys", done: "All API keys revoked" })}${destructiveButton({ endpoint: "delete-account", label: "Delete account", done: "Account deleted" })}<h2>Fresh start</h2><p>Clears your orders, addresses and preferences.</p>${destructiveButton({ endpoint: "wipe-account", label: "Start over with an empty account", done: "Your account is empty" })}`,
+    body: `<h1>Your account</h1><p>Signed in as trail@example.com</p><ul><li><a href="/explore/account/preferences">Preferences</a></li><li><a href="/explore/account/reports">Reports</a></li><li><a href="/explore/account/addresses">Saved addresses</a></li><li><a href="/explore/account/trip/new">Plan a trip</a></li><li><a href="/explore/account/accounts">Linked accounts</a></li><li><a href="/explore/account/branding">Store branding</a></li></ul><h2>Danger zone</h2>${destructiveButton({ endpoint: "revoke-keys", label: "Revoke all API keys", done: "All API keys revoked" })}${destructiveButton({ endpoint: "delete-account", label: "Delete account", done: "Account deleted" })}<h2>Fresh start</h2><p>Clears your orders, addresses and preferences.</p>${destructiveButton({ endpoint: "wipe-account", label: "Start over with an empty account", done: "Your account is empty" })}`,
     script: DESTRUCTIVE_SCRIPT,
   });
 }
 
-// A two-page wizard like a real planning app: date parts, a UK postcode and
+// A wizard like a real planning app: date parts, a UK postcode and
 // a required yes/no question on page 1, numeric ranges on page 2. Errors show
 // next to fields; nothing is submitted until both pages are valid.
-const PLAN_STEP_ONE = `
+const TRIP_STEP_ONE = `
 const form = document.querySelector('form');
 const UK = /^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i;
 const between = (low, high) => (v) => Number(v) >= low && Number(v) <= high;
@@ -212,7 +212,7 @@ const RULES = [
   ['month', between(1, 12), 'Month is required'],
   ['year', between(1900, 2008), 'Year should be between 1900 and 2008'],
   ['postcode', (v) => UK.test(String(v || '').trim()), 'Postcode should be a valid UK postal code'],
-  ['partner', (v) => !!v, 'Please answer'],
+  ['companion', (v) => !!v, 'Please answer'],
 ];
 const show = (name, message) => {
   document.querySelector('[data-error="' + name + '"]').textContent = message;
@@ -223,59 +223,59 @@ form.onsubmit = (event) => {
   const values = Object.fromEntries(new FormData(form));
   const failed = RULES.filter(([name, good]) => !good(values[name]));
   RULES.forEach(([name, , message]) => show(name, failed.some((f) => f[0] === name) ? message : ''));
-  if (!failed.length) location.href = '/explore/account/plan/new?step=accounts';
+  if (!failed.length) location.href = '/explore/account/trip/new?step=gear';
 };`;
 
-const PLAN_STEP_TWO = `
+const TRIP_STEP_THREE = `
 const form = document.querySelector('form');
 form.onsubmit = (event) => { event.preventDefault();
   const v = Object.fromEntries(new FormData(form));
-  const age = Number(v.age), monthly = Number(v.monthly);
+  const group = Number(v.group), budget = Number(v.budget);
   const error = document.querySelector('#error');
-  if (!(age >= 55 && age <= 75)) { error.textContent = 'Retirement age must be between 55 and 75'; form.elements.age.setAttribute('aria-invalid', 'true'); return; }
-  if (!(monthly >= 0 && monthly <= 10000)) { error.textContent = 'Monthly contribution must be 0 to 10000'; form.elements.monthly.setAttribute('aria-invalid', 'true'); return; }
-  location.href = '/explore/account/plan/created';
+  if (!(group >= 1 && group <= 12)) { error.textContent = 'Group size must be between 1 and 12'; form.elements.group.setAttribute('aria-invalid', 'true'); return; }
+  if (!(budget >= 0 && budget <= 10000)) { error.textContent = 'Daily budget must be 0 to 10000'; form.elements.budget.setAttribute('aria-invalid', 'true'); return; }
+  location.href = '/explore/account/trip/created';
 };`;
 
-const PLAN_CREATED = `
-// Planted bug: the projection divides by a contribution period that is never set.
-const years = undefined;
-if (Number.isNaN(1000 / years)) console.error('Plan projection failed: contribution period is undefined');
-document.querySelector('#projection').textContent = 'Projected pot: £' + (1000 / years);`;
+const TRIP_CREATED = `
+// Planted bug: the estimate divides by a trip length that is never set.
+const days = undefined;
+if (Number.isNaN(1000 / days)) console.error('Trip estimate failed: trip length is undefined');
+document.querySelector('#estimate').textContent = 'Estimated cost: £' + (1000 / days);`;
 
-// Like a real planning app's "Add account" dialog: no dialog role, labels
+// Like a real app's "Add account" dialog: no dialog role, labels
 // as plain text, a custom div dropdown with a heading, a native select with
 // a placeholder, a field no format rule knows, and errors only in a summary.
 const ACCOUNTS_SCRIPT = `
 const $ = (id) => document.getElementById(id);
 $('add').onclick = () => { $('modal').hidden = false; };
 $('cancel').onclick = () => { $('modal').hidden = true; };
-$('wrapper').onclick = () => { $('wrapper-menu').hidden = !$('wrapper-menu').hidden; };
+$('type').onclick = () => { $('type-menu').hidden = !$('type-menu').hidden; };
 // Like a menu still loading: the first click on an option does nothing.
 let loaded = false;
 document.querySelectorAll('.opt').forEach((option) => option.onclick = () => {
   if (!loaded) { loaded = true; return; }
-  $('wrapper').textContent = option.textContent; $('wrapper').dataset.value = option.textContent;
-  $('wrapper-menu').hidden = true;
+  $('type').textContent = option.textContent; $('type').dataset.value = option.textContent;
+  $('type-menu').hidden = true;
 });
 // A type-ahead widget over a hidden select, like Tom Select.
-$('portfolio-search').oninput = () => {
-  const query = $('portfolio-search').value.toLowerCase();
-  $('portfolio-results').innerHTML = '';
-  [...$('portfolio').options].filter((o) => o.value && o.text.toLowerCase().includes(query)).forEach((o) => {
+$('store-search').oninput = () => {
+  const query = $('store-search').value.toLowerCase();
+  $('store-results').innerHTML = '';
+  [...$('store').options].filter((o) => o.value && o.text.toLowerCase().includes(query)).forEach((o) => {
     const row = document.createElement('div');
     row.textContent = o.text; row.style.cursor = 'pointer';
-    row.onclick = () => { $('portfolio').value = o.value; $('portfolio-search').value = o.text; $('portfolio-results').innerHTML = ''; };
-    $('portfolio-results').append(row);
+    row.onclick = () => { $('store').value = o.value; $('store-search').value = o.text; $('store-results').innerHTML = ''; };
+    $('store-results').append(row);
   });
 };
 const CHECKS = [
   [() => $('name').value.trim(), 'Account name is required'],
   [() => /^[0-9]{8}$/.test($('accountId').value), 'Account ID must be 8 digits'],
-  [() => $('platform').value, 'Platform is required'],
-  [() => $('wrapper').dataset.value, 'Wrapper type is required'],
-  [() => $('portfolio').value, 'Current portfolio is required'],
-  [() => /^[0-9]{6}$/.test($('adviser').value), 'Adviser code must be 6 digits'],
+  [() => $('provider').value, 'Provider is required'],
+  [() => $('type').dataset.value, 'Account type is required'],
+  [() => $('store').value, 'Home store is required'],
+  [() => /^[0-9]{6}$/.test($('member').value), 'Member code must be 6 digits'],
   [() => Number($('balance').value) > 0, 'Balance must be a number above 0'],
 ];
 $('save').onclick = async () => {
@@ -287,22 +287,22 @@ $('save').onclick = async () => {
   location.href = '/explore/account/accounts/saved';
 };`;
 
-const WRAPPERS = ["GIA", "ISA", "SIPP", "Personal Pension"];
+const ACCOUNT_TYPES = ["Checking", "Savings", "Credit card", "Store card"];
 
 function accountsPage(): string {
-  const options = WRAPPERS.map(
+  const options = ACCOUNT_TYPES.map(
     (name) => `<div class="opt" style="cursor:pointer">${name}</div>`,
   ).join("");
   return page({
-    title: "Investment accounts",
-    body: `<h1>Investment accounts</h1><p>No accounts yet.</p><button id="add">Add account</button>
+    title: "Linked accounts",
+    body: `<h1>Linked accounts</h1><p>No accounts yet.</p><button id="add">Add account</button>
 <div id="modal" hidden><h2>Add new account</h2>
 <label for="name">Account name</label><input id="name">
 <label for="accountId">Account ID</label><input id="accountId">
-<label for="platform">Platform</label><select id="platform"><option value="">Select a platform</option><option>Aviva</option><option>Transact</option><option>Other</option></select>
-<div>Wrapper type</div><div><div id="wrapper" style="cursor:pointer">Select a wrapper type</div><div id="wrapper-menu" hidden><div>Most common</div>${options}</div></div>
-<label for="portfolio">Current portfolio</label><select id="portfolio" style="position:absolute;width:1px;height:1px;opacity:0"><option value="">Choose a portfolio</option><option value="c">Cautious</option><option value="b">Balanced</option><option value="g">Growth</option></select><div><input id="portfolio-search" placeholder="Choose a portfolio" autocomplete="off"><div id="portfolio-results"></div></div>
-<label for="adviser">Adviser code</label><input id="adviser">
+<label for="provider">Provider</label><select id="provider"><option value="">Select a provider</option><option>Northbank</option><option>Riverside</option><option>Other</option></select>
+<div>Account type</div><div><div id="type" style="cursor:pointer">Select an account type</div><div id="type-menu" hidden><div>Most common</div>${options}</div></div>
+<label for="store">Home store</label><select id="store" style="position:absolute;width:1px;height:1px;opacity:0"><option value="">Choose a store</option><option value="l">London</option><option value="m">Manchester</option><option value="b">Bristol</option></select><div><input id="store-search" placeholder="Choose a store" autocomplete="off"><div id="store-results"></div></div>
+<label for="member">Member code</label><input id="member">
 <label for="balance">Balance</label><input id="balance" placeholder="0.00">
 <div id="summary" hidden></div>
 <button id="cancel">Cancel</button><button id="save">Save account</button></div>`,
@@ -310,12 +310,12 @@ function accountsPage(): string {
   });
 }
 
-// A firm-wide setting with a single empty field: the macro must not save it.
+// A store-wide setting with a single empty field: the macro must not save it.
 const BRANDING_SCRIPT = `
 document.getElementById('apply').onclick = async () => {
   if (!document.getElementById('colour').value) return;
   await fetch('/explore/api/branding', { method: 'POST' });
-  document.getElementById('status').textContent = 'Branding applied to every client portal';
+  document.getElementById('status').textContent = 'Branding applied to every store page';
 };`;
 
 // Sign up needs a new password typed twice; sign in needs a real one.
@@ -341,49 +341,49 @@ const ACCOUNT_SAVED = `
 const total = [{ name: 'New account' }].reduce((sum, a) => sum + a.balance, 0);
 if (Number.isNaN(total)) console.error('Account total failed: balance is missing');`;
 
-// Like a real planning app's accounts step: Continue stays disabled until
-// an account is added through a sub-form the page reveals.
-const PLAN_ACCOUNTS = `
+// Like a real app's list step: Continue stays disabled until
+// an item is added through a sub-form the page reveals.
+const TRIP_GEAR = `
 const $ = (id) => document.getElementById(id);
-$('add-account').onclick = () => { $('sub').hidden = false; };
-$('acc-save').onclick = () => {
-  const missing = [['acc-name', 'Account name is required'], ['acc-wrapper', 'Wrapper is required'], ['acc-balance', 'Balance must be above 0']]
-    .filter(([id]) => !(id === 'acc-balance' ? Number($(id).value) > 0 : $(id).value)).map(([, message]) => message);
-  $('acc-error').textContent = missing.join('. ');
+$('add-item').onclick = () => { $('sub').hidden = false; };
+$('item-save').onclick = () => {
+  const missing = [['item-name', 'Item name is required'], ['item-category', 'Category is required'], ['item-quantity', 'Quantity must be above 0']]
+    .filter(([id]) => !(id === 'item-quantity' ? Number($(id).value) > 0 : $(id).value)).map(([, message]) => message);
+  $('item-error').textContent = missing.join('. ');
   if (missing.length) return;
-  $('accounts').insertAdjacentHTML('beforeend', '<li>' + $('acc-name').value + '</li>');
+  $('items').insertAdjacentHTML('beforeend', '<li>' + $('item-name').value + '</li>');
   $('sub').hidden = true;
   $('continue').disabled = false;
 };
-$('continue').onclick = () => { location.href = '/explore/account/plan/new?step=2'; };`;
+$('continue').onclick = () => { location.href = '/explore/account/trip/new?step=2'; };`;
 
-const PLAN_ACCOUNTS_BODY = `<h1>New financial plan</h1><p>Step 2 of 3: investment accounts</p><ul id="accounts"></ul>
-<button id="add-account" type="button">Add an account</button>
-<div id="sub" hidden><label>Account name <input id="acc-name"></label><label>Wrapper <select id="acc-wrapper"><option value="">Select a wrapper</option><option>ISA</option><option>SIPP</option></select></label><label>Balance <input id="acc-balance" type="number" min="1" max="1000000"></label><button id="acc-save" type="button">Save account</button><p id="acc-error"></p></div>
+const TRIP_GEAR_BODY = `<h1>New trip</h1><p>Step 2 of 3: gear</p><ul id="items"></ul>
+<button id="add-item" type="button">Add an item</button>
+<div id="sub" hidden><label>Item name <input id="item-name"></label><label>Category <select id="item-category"><option value="">Select a category</option><option>Tent</option><option>Backpack</option></select></label><label>Quantity <input id="item-quantity" type="number" min="1" max="20"></label><button id="item-save" type="button">Save item</button><p id="item-error"></p></div>
 <button id="continue" type="button" disabled>Save &amp; Continue</button>`;
 
-function planPage(url: URL): string {
-  if (url.searchParams.get("step") === "accounts")
+function tripPage(url: URL): string {
+  if (url.searchParams.get("step") === "gear")
     return page({
-      title: "New financial plan · accounts",
-      body: PLAN_ACCOUNTS_BODY,
-      script: PLAN_ACCOUNTS,
+      title: "New trip · gear",
+      body: TRIP_GEAR_BODY,
+      script: TRIP_GEAR,
     });
   if (url.searchParams.get("step") === "2")
     return page({
-      title: "New financial plan · step 2",
-      body: `<h1>New financial plan</h1><p>Step 3 of 3: contributions</p><form novalidate><label>Retirement age <input name="age" type="number" min="55" max="75" required></label><label>Monthly contribution (£) <input name="monthly" type="number" min="0" max="10000" required></label><p id="error" role="alert"></p><button type="submit">Create plan</button></form>`,
-      script: PLAN_STEP_TWO,
+      title: "New trip · budget",
+      body: `<h1>New trip</h1><p>Step 3 of 3: budget</p><form novalidate><label>Group size <input name="group" type="number" min="1" max="12" required></label><label>Daily budget (£) <input name="budget" type="number" min="0" max="10000" required></label><p id="error" role="alert"></p><button type="submit">Create trip</button></form>`,
+      script: TRIP_STEP_THREE,
     });
   return page({
-    title: "New financial plan · step 1",
-    body: `<h1>New financial plan</h1><p>Step 1 of 3: about the client</p><form novalidate>
+    title: "New trip · about you",
+    body: `<h1>New trip</h1><p>Step 1 of 3: about you</p><form novalidate>
 <label>First name <input name="first" required></label><span data-error="first"></span>
 <fieldset><legend>Date of birth</legend><label>DD <input name="day" placeholder="DD" maxlength="2" required></label><label>MM <input name="month" placeholder="MM" maxlength="2" required></label><label>YYYY <input name="year" placeholder="YYYY" maxlength="4" required></label><span data-error="day"></span><span data-error="month"></span><span data-error="year"></span></fieldset>
 <label>Postcode <input name="postcode" required></label><span data-error="postcode"></span>
-<fieldset><legend>Does the client have a partner?</legend><label><input type="radio" name="partner" value="yes"> Yes</label><label><input type="radio" name="partner" value="no"> No</label></fieldset><span data-error="partner"></span>
+<fieldset><legend>Is anyone travelling with you?</legend><label><input type="radio" name="companion" value="yes"> Yes</label><label><input type="radio" name="companion" value="no"> No</label></fieldset><span data-error="companion"></span>
 <button type="submit">Save &amp; Continue</button></form>`,
-    script: PLAN_STEP_ONE,
+    script: TRIP_STEP_ONE,
   });
 }
 
@@ -462,15 +462,15 @@ const STATIC_PAGES: Record<string, () => string> = {
     }),
   "/explore/account/branding": () =>
     page({
-      title: "Firm branding",
-      body: `<h1>Firm branding</h1><p>Applies to every client portal of your firm.</p><label>Brand colour <input id="colour" placeholder="#000000"></label><button id="apply">Save &amp; Apply</button><p id="status" role="status"></p>`,
+      title: "Store branding",
+      body: `<h1>Store branding</h1><p>Applies to every page of your store.</p><label>Brand colour <input id="colour" placeholder="#000000"></label><button id="apply">Save &amp; Apply</button><p id="status" role="status"></p>`,
       script: BRANDING_SCRIPT,
     }),
-  "/explore/account/plan/created": () =>
+  "/explore/account/trip/created": () =>
     page({
-      title: "Plan created",
-      body: `<h1>Your plan is ready</h1><p id="projection"></p>`,
-      script: PLAN_CREATED,
+      title: "Trip created",
+      body: `<h1>Your trip is ready</h1><p id="estimate"></p>`,
+      script: TRIP_CREATED,
     }),
   "/explore/account/reports": () =>
     page({
@@ -583,7 +583,7 @@ const QUERY_PAGES: Readonly<Record<string, (url: URL) => string>> = {
     catalog(
       Math.min(2, Math.max(1, Number(url.searchParams.get("page")) || 1)),
     ),
-  "/explore/account/plan/new": planPage,
+  "/explore/account/trip/new": tripPage,
 };
 
 function dynamicPage(url: URL, stats: ExploreStats): string | undefined {
@@ -599,7 +599,7 @@ function dynamicPage(url: URL, stats: ExploreStats): string | undefined {
 const BUG_PAGES: Readonly<Record<string, string>> = {
   "/explore/newsletter/welcome": "welcome-nan",
   "/explore/admin": "admin-metrics",
-  "/explore/account/plan/created": "plan-projection",
+  "/explore/account/trip/created": "trip-estimate",
   "/explore/account/accounts/saved": "account-total",
 };
 

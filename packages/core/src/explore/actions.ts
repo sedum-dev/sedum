@@ -27,7 +27,7 @@ export type LeafKind = Exclude<ExploreActionKind, "goto"> | "form";
 export interface Leaf {
   /** An action kind, or "form": fill every field with valid data, then submit. */
   readonly kind: LeafKind;
-  /** Unguided weight, after Bombadil's defaults. */
+  /** Unguided weight. */
   readonly base: number;
   readonly candidate?: Candidate;
   readonly identity?: TargetIdentity;
@@ -38,10 +38,8 @@ export interface Leaf {
 }
 
 /**
- * After Bombadil's defaults (clicks 100, inputs 100, scroll 50, navigation
- * 10, wait 1). Bombadil only types into an already focused field, so typing
- * here gets half the click weight; scroll is low because it reveals no new
- * candidates (the scanner reads the whole page).
+ * Unguided weights. Typing gets half the click weight; scroll is low because
+ * it reveals no new candidates (the scanner reads the whole page).
  */
 const WEIGHTS = {
   click: 100,

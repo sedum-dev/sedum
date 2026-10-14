@@ -168,7 +168,7 @@ interface StateInfo {
   };
 }
 
-/** Bombadil-style swarm testing: each run leaves out some action kinds. */
+/** Swarm testing: each run leaves out some action kinds. */
 function swarmExclusions(random: SeededRandom): Set<ExploreActionKind> {
   const keep = 0.3 + random.next() * 0.5;
   return new Set(SWARM_KINDS.filter(() => random.next() >= keep));
@@ -600,7 +600,7 @@ class Explorer {
     await this.#enforceBoundary(step);
   }
 
-  /** Bombadil's URL boundary: leaving the origin forces a step back. */
+  /** The URL boundary: leaving the origin forces a step back. */
   async #enforceBoundary(step: number): Promise<void> {
     if (onOrigin(this.page.url, this.#origin)) {
       this.#outsideStreak = 0;

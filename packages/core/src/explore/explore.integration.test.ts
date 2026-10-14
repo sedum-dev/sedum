@@ -252,17 +252,17 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
 
     it("completes a three-page wizard with date parts, a UK postcode, a radio and a sub-form", async () => {
       const fresh = await freshPage();
-      const before = site.stats.bugs["plan-projection"] ?? 0;
+      const before = site.stats.bugs["trip-estimate"] ?? 0;
       try {
-        await fresh.page.goto(`${site.baseUrl}/explore/account/plan/new`);
+        await fresh.page.goto(`${site.baseUrl}/explore/account/trip/new`);
         const done = await drive(macro(fresh.page), fresh.page);
-        expect(fresh.page.url).toContain("/explore/account/plan/created");
-        expect(site.stats.bugs["plan-projection"]).toBe(before + 1);
+        expect(fresh.page.url).toContain("/explore/account/trip/created");
+        expect(site.stats.bugs["trip-estimate"]).toBe(before + 1);
         expect(done).toContain("click Save & Continue");
-        expect(done).toContain("click Create plan");
-        // Continue is disabled until the "Add an account" sub-form is saved.
-        expect(done).toContain("click Add an account");
-        expect(done).toContain("click Save account");
+        expect(done).toContain("click Create trip");
+        // Continue is disabled until the "Add an item" sub-form is saved.
+        expect(done).toContain("click Add an item");
+        expect(done).toContain("click Save item");
         expect(done).toContain("click Yes");
       } finally {
         await fresh.close();
@@ -281,15 +281,15 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         const done = await drive(macro(fresh.page), fresh.page);
         expect(fresh.page.url).toContain("/explore/account/accounts/saved");
         expect(site.stats.writes["accounts"]).toBe(before + 1);
-        expect(done).toContain("click Select a wrapper type");
-        expect(done).toContain("type Choose a portfolio");
+        expect(done).toContain("click Select an account type");
+        expect(done).toContain("type Choose a store");
         expect(
           done.some((d) =>
-            /^click Platform = (Aviva|Transact|Other)$/u.test(d),
+            /^click Provider = (Northbank|Riverside|Other)$/u.test(d),
           ),
         ).toBe(true);
-        // The adviser code is retried once with the format its error states.
-        expect(done.filter((d) => d === "type Adviser code")).toHaveLength(2);
+        // The member code is retried once with the format its error states.
+        expect(done.filter((d) => d === "type Member code")).toHaveLength(2);
       } finally {
         await fresh.close();
       }
@@ -345,7 +345,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       }
     }, 120_000);
 
-    it("leaves a firm-wide settings form alone with safety on", async () => {
+    it("leaves a store-wide settings form alone with safety on", async () => {
       const fresh = await freshPage();
       try {
         await fresh.page.goto(`${site.baseUrl}/explore/account/branding`);

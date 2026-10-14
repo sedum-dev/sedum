@@ -124,7 +124,7 @@ export async function observe(page: BrowserPage): Promise<Observation> {
   throw new Error("The page did not hold still long enough to observe.");
 }
 
-/** Wait for DOM quiet, after Bombadil's quiescence and Sedum's settling. */
+/** Wait for DOM quiet, after Sedum's settling. */
 export async function settle(page: BrowserPage): Promise<void> {
   await page
     .settle({ state: "domcontentloaded", timeoutMs: 4_000 })
