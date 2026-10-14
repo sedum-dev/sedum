@@ -624,7 +624,7 @@ export async function runCli(
   program
     .command("explore")
     .description(
-      "explore a site by a seeded random walk guided by Jev (proof of concept)",
+      "explore a site by a seeded random walk guided by Jev (experimental)",
     )
     .argument(
       "[url]",

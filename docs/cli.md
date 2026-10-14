@@ -315,7 +315,7 @@ Frames are stored per attempt as `evidence/<attempt-key>/<frame>.jpg` inside the
 
 The HTML report includes light and dark themes, failure and flagged-flow filters, per-assertion scores and decision lines, all retry attempts, and a receipt from the recorded model calls. A missing cost is shown as unknown rather than zero. `--replay` captures step frames and embeds them in `report.html`; without it the report contains no frame bytes. Captured frames can contain private page pixels, so use `--sensitive-origin` or omit replay on sensitive pages. Frames show the visible page, while assertion grades come from the recorded judgement and judged page excerpt. The file contains its own styles, fonts, scripts, and optional frames and makes no network requests.
 
-## `sedum explore` (proof of concept)
+## `sedum explore` (experimental)
 
 `sedum explore <url>` explores a site by a seeded random walk guided by Jev.
 It reports what `--detect browser` reports (console errors, uncaught

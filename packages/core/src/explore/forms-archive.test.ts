@@ -40,6 +40,15 @@ describe("format rules", () => {
       );
   });
 
+  it("fills payment fields with a test card", () => {
+    expect(formatValue(field("credit card number"), tools)?.value).toBe(
+      "4242424242424242",
+    );
+    expect(formatValue(field("expiry date mm/yy"), tools)?.value).toBe("12/30");
+    expect(formatValue(field("expiry year"), tools)?.value).toBe("2030");
+    expect(formatValue(field("cvv"), tools)?.value).toBe("123");
+  });
+
   it("follows a pattern attribute before any label", () => {
     expect(
       formatValue(field("postcode", { pattern: "[0-9]{5}" }), tools)?.value,

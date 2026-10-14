@@ -208,7 +208,7 @@ interface EmitOptions {
 }
 
 const NO_ORACLE_NOTE =
-  "# Sedum has no sentence for console or network errors yet, so this\n# test reproduces the path but cannot fail on the error itself.\n";
+  "# Sedum has no sentence for console or network errors, so this test\n# reproduces the path without failing on the error. Run it with\n# `sedum run --detect browser` to have the error flagged on its step.\n";
 
 /** Sentences for every action, in order, once the replay has run. */
 function stepsFor(

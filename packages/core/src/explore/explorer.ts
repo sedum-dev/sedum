@@ -11,6 +11,7 @@ import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
 import { looksDestructive, PAGE_KINDS } from "./kinds.js";
 import { observe, onOrigin, settle, type Observation } from "./observe.js";
 import { Oracles } from "./oracles.js";
+import { trustedDetections, withoutOwnInput } from "./own-input.js";
 import { Archive, returnPath, routeTemplate, type Cell } from "./archive.js";
 import { FormFlow, type FormJudge } from "./form-flow.js";
 import { JevJudge, RULE_JUDGE } from "./form-judge.js";
@@ -133,8 +134,7 @@ function refusedLocally(error: unknown): boolean {
   return error instanceof ProviderError && error.code === "invalid-input";
 }
 
-/** Values the walk typed are masked in what Jev and the leak check read. */
-const TYPED_MARK = "[text the tester typed]";
+/** Values the walk typed, shown back by a page, are not broken values. */
 const TYPED_MIN = 3;
 const TYPED_LIMIT = 300;
 
@@ -530,17 +530,6 @@ class Explorer {
   }
 
   /**
-   * Page text with the walk's own values replaced: Jev would otherwise
-   * judge "test NaN value" or lorem ipsum in a to-do list as broken.
-   */
-  #masked(text: string): string {
-    let masked = text;
-    for (const value of [...this.#typed].sort((a, b) => b.length - a.length))
-      masked = masked.replaceAll(value, TYPED_MARK);
-    return masked;
-  }
-
-  /**
    * A page with nothing to click or fill (a host's error page, a blank
    * screen) only offers scrolling and waiting: stop instead of idling.
    */
@@ -750,17 +739,19 @@ class Explorer {
     const loading =
       inspection.probabilities.stuck_loading >=
       DEFAULT_SEMANTIC_THRESHOLDS.stuck_loading;
-    const text = this.#masked(
-      (await visibleText(this.page).catch(() => null)) ?? "",
-    );
+    const text = (await visibleText(this.page).catch(() => null)) ?? "";
     const stuck = loading && (await this.#unchanged(text));
     const found = stateDetections(
-      text,
+      withoutOwnInput(text, this.#typed),
       inspection,
       DEFAULT_SEMANTIC_THRESHOLDS,
       stuck,
     );
-    this.#oracles!.report(found, routeTemplate(observation.route));
+    const ownInput = [...this.#typed].some((value) => text.includes(value));
+    this.#oracles!.report(
+      trustedDetections(found, ownInput),
+      routeTemplate(observation.route),
+    );
   }
 
   /** Whether the page's visible text stays the same for `STUCK_MS`. */
@@ -787,7 +778,7 @@ class Explorer {
         {
           route: observation.route,
           title: observation.title,
-          page: this.#masked(observation.text).slice(0, PAGE_TEXT_LIMIT),
+          page: observation.text.slice(0, PAGE_TEXT_LIMIT),
           targets,
           kinds: PAGE_KINDS,
           predictTargets: steering && this.#tuning.predictTargets,

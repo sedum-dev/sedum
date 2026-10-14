@@ -8,6 +8,8 @@ import type { SeededRandom } from "./random.js";
 export interface FieldInfo {
   readonly ref: string;
   readonly empty: boolean;
+  /** The form, dialog or landmark the field belongs to; "page" when none. */
+  readonly group?: string;
   /** Holds only a zero the app put there by default, such as a balance of 0. */
   readonly zero?: boolean;
   readonly invalid: boolean;
@@ -59,12 +61,24 @@ const INSPECT = String.raw`(refs, afterSubmit) => {
   const SAVE = /save|continue|next|submit|create|add|done|finish|confirm|apply|register|sign up/i;
   const ERROR = /required|invalid|should|must|please|not valid|incorrect/i;
   const text = (e) => ((e && e.textContent) || "").replace(/\s+/g, " ").trim();
+  const NOT_SUBMIT = /cancel|back|reset|clear|close|dismiss/i;
+  const label = (b) => text(b) || b.value || "";
+  // An explicit submit first; an untyped button only if it is not Cancel.
+  const ownSubmit = (form) => form.querySelector("button[type=submit], input[type=submit]") ||
+    [...form.querySelectorAll("button:not([type])")].find((b) => !NOT_SUBMIT.test(label(b)));
   const submitOf = (field) => {
-    const own = field.form && field.form.querySelector("button[type=submit], input[type=submit], button:not([type])");
-    if (own) return text(own) || own.value;
+    const own = field.form && ownSubmit(field.form);
+    if (own) return label(own);
     const after = [...document.querySelectorAll("button, [role=button]")].filter(
-      (b) => field.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING && SAVE.test(text(b)));
+      (b) => field.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING && SAVE.test(text(b)) && !NOT_SUBMIT.test(text(b)));
     return after.length ? text(after[0]) : undefined;
+  };
+  // Which form a field belongs to: its form, a dialog or a landmark, else the page.
+  const GROUP = "[role=dialog], [aria-modal=true], dialog, [role=form], [role=search], aside, nav, header, footer";
+  const groupOf = (field) => {
+    const box = field.form || field.closest(GROUP);
+    if (!box) return "page";
+    return box.tagName + "#" + [...document.querySelectorAll(box.tagName)].indexOf(box);
   };
   const errorNear = (field) => {
     let box = field.parentElement;
@@ -77,13 +91,14 @@ const INSPECT = String.raw`(refs, afterSubmit) => {
   };
   return refs.map((ref) => {
     const field = document.querySelector('[data-sedum-ref="' + CSS.escape(ref) + '"]');
-    if (!field) return { ref, empty: false, invalid: false, required: false, type: "", hints: "" };
+    if (!field) return { ref, empty: false, invalid: false, required: false, type: "", hints: "", group: "" };
     const value = "value" in field ? field.value : text(field);
     const attr = (name) => field.getAttribute(name);
     const label = field.labels && field.labels[0] ? text(field.labels[0]) : "";
     const out = {
       ref,
       empty: !value,
+      group: groupOf(field),
       zero: /^[£$€]?\s*0+([.,]0+)?$/.test(String(value).trim()),
       invalid: attr("aria-invalid") === "true" ||
         (!!value && typeof field.checkValidity === "function" && !field.checkValidity()) ||
@@ -346,6 +361,28 @@ const RULES: readonly FormatRule[] = [
     id: "format.pattern",
     test: (f) => !!f.pattern,
     value: (t, f) => samplePattern(f.pattern!, t.random) ?? "",
+  },
+  {
+    id: "format.cardNumber",
+    test: (f) => has(f, /card ?number|credit ?card|cc-number/u),
+    value: () => "4242424242424242",
+  },
+  {
+    id: "format.cardExpiry",
+    test: (f) =>
+      has(f, /expir|exp(iry)? ?date|mm ?\/ ?yy|cc-exp\b/u) &&
+      !has(f, /year|month/u),
+    value: () => "12/30",
+  },
+  {
+    id: "format.cardExpiryYear",
+    test: (f) => has(f, /(exp\w* ?year|cc-exp-year)/u),
+    value: () => "2030",
+  },
+  {
+    id: "format.cardCvc",
+    test: (f) => has(f, /\bcvv|\bcvc|security code|cc-csc/u),
+    value: () => "123",
   },
   {
     id: "format.day",

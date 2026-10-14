@@ -159,58 +159,6 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       expect(shrunk.reproduced).toBe(true);
     }, 120_000);
 
-    it("never shows Jev the walk's own typed values as page content", async () => {
-      const fresh = await freshPage();
-      const pages: string[] = [];
-      const call = {
-        requestedModel: "jev-latest",
-        model: "jev-1.13.0",
-        attempts: 1,
-        usage: { inputTokens: 1, outputTokens: 0 },
-        rate: null,
-        successfulResponseCostUsd: 0,
-        totalCostUsd: 0,
-      };
-      try {
-        const result = await explore(fresh.page, {
-          startUrl: `${site.baseUrl}/explore/search`,
-          steps: 40,
-          seed: 4,
-          mode: "guided",
-          advisor: {
-            assess: async (request) => {
-              pages.push(request.page);
-              return {
-                kind: {
-                  choice: "search",
-                  probabilities: { search: 1 },
-                  confidence: 1,
-                },
-                destructive: Object.fromEntries(
-                  Object.keys(request.targets).map((id) => [id, 0]),
-                ),
-                leadsTo: {},
-                call,
-              };
-            },
-          },
-        });
-        const typed = result.trace.flatMap((e) =>
-          e.action.kind === "type" && e.action.value.trim().length >= 3
-            ? [e.action.value.trim()]
-            : [],
-        );
-        expect(typed.length).toBeGreaterThan(0);
-        expect(pages.some((p) => p.includes("[text the tester typed]"))).toBe(
-          true,
-        );
-        for (const value of typed)
-          expect(pages.some((p) => p.includes(value))).toBe(false);
-      } finally {
-        await fresh.close();
-      }
-    }, 120_000);
-
     it("stops a guided walk once Jev keeps failing", async () => {
       const fresh = await freshPage();
       const down = () => Promise.reject(new Error("no available API credits"));
@@ -375,6 +323,22 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         });
         expect(result.stopReason).toMatch(/^Nothing to click or fill/u);
         expect(result.trace.length).toBeLessThanOrEqual(16);
+      } finally {
+        await fresh.close();
+      }
+    }, 120_000);
+
+    it("completes one form at a time and never submits with Cancel", async () => {
+      const fresh = await freshPage();
+      const before = site.stats.writes["support"] ?? 0;
+      try {
+        await fresh.page.goto(`${site.baseUrl}/explore/support`);
+        const done = await drive(macro(fresh.page), fresh.page);
+        expect(fresh.page.url).toContain("/explore/help/sent");
+        expect(site.stats.writes["support"]).toBe(before + 1);
+        expect(done).not.toContain("type Search help");
+        expect(done).not.toContain("click Cancel");
+        expect(done).toContain("click Send message");
       } finally {
         await fresh.close();
       }

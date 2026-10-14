@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { labelInLine, RULE_JUDGE } from "./form-judge.js";
 import { newErrorLines, PLACEHOLDER } from "./forms.js";
 import type { Observation } from "./observe.js";
+import { trustedDetections, withoutOwnInput } from "./own-input.js";
 import { samplePattern, valueForError } from "./pattern-sample.js";
 import { SeededRandom } from "./random.js";
 
@@ -94,5 +95,32 @@ describe("dropdowns and settings", () => {
     expect(await RULE_JUDGE.purpose(at("/clients/1/accounts"), [])).toBe(
       undefined,
     );
+  });
+});
+
+describe("the walk's own input", () => {
+  it("is not a leak, and makes Jev's broken-value answer untrusted", () => {
+    const typed = ["test NaN value", "lorem ipsum"];
+    expect(withoutOwnInput("To-do: test NaN value. Total: NaN", typed)).toBe(
+      "To-do:  . Total: NaN",
+    );
+    const found = [
+      {
+        check: "broken_value" as const,
+        source: "model" as const,
+        message: "m",
+      },
+      { check: "broken_value" as const, source: "text" as const, message: "t" },
+      {
+        check: "error_message" as const,
+        source: "model" as const,
+        message: "e",
+      },
+    ];
+    expect(trustedDetections(found, true).map((d) => d.message)).toEqual([
+      "t",
+      "e",
+    ]);
+    expect(trustedDetections(found, false)).toHaveLength(3);
   });
 });

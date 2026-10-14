@@ -430,6 +430,20 @@ const STATIC_PAGES: Record<string, () => string> = {
       body: `<h1>Create an account</h1><form novalidate><label>Name <input name="name"></label><label>Email <input name="email" type="email"></label><label>Password <input name="password" type="password"></label><label>Confirm password <input name="confirm" type="password"></label><p id="error" role="alert"></p><button>Create account</button></form>`,
       script: REGISTER_SCRIPT,
     }),
+  // Two forms on one page, and a Cancel button before the real submit.
+  "/explore/support": () =>
+    page({
+      title: "Support",
+      body: `<h1>Support</h1><form role="search" action="/explore/search"><label>Search help <input name="q"></label><button>Search</button></form>
+<form id="contact"><label>Your name <input name="name"></label><label>Email <input name="email" type="email"></label><label>Card number <input name="card"></label><label>Message <textarea name="message"></textarea></label><button type="button" onclick="location.href='/explore/'">Cancel</button><input type="submit" value="Send message"></form>`,
+      script: `document.getElementById('contact').onsubmit = async (event) => {
+  event.preventDefault();
+  const v = Object.fromEntries(new FormData(event.target));
+  if (!/^4242/.test(v.card)) return;
+  await fetch('/explore/api/support', { method: 'POST' });
+  location.href = '/explore/help/sent';
+};`,
+    }),
   "/explore/lottery": () =>
     page({
       title: "Lottery",
@@ -606,7 +620,12 @@ const READ_APIS: Readonly<Record<string, (stats: ExploreStats) => Reply>> = {
 };
 
 /** Ordinary saves: counted, never destructive. */
-const WRITE_ENDPOINTS = new Set(["accounts", "branding", "register"]);
+const WRITE_ENDPOINTS = new Set([
+  "accounts",
+  "branding",
+  "register",
+  "support",
+]);
 
 /** Pages served as they are, without the shop's layout. */
 const RAW_PAGES: Readonly<Record<string, Reply>> = {

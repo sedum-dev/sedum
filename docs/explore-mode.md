@@ -1,5 +1,5 @@
 ---
-title: "Exploration mode (proof of concept)"
+title: "Exploration mode (experimental)"
 ---
 
 `sedum explore <url>` explores a site on its own. It takes a seeded, weighted
@@ -16,9 +16,9 @@ sedum explore https://staging.example.com/ --mode random --shrink
 sedum explore --replay .sedum/explore/<run>/trace.jsonl
 ```
 
-This is a proof of concept. Use it only against disposable environments: it
-clicks real buttons, and its safety check is a model's judgement, not a
-guarantee.
+This command is experimental: its flags and output may change. Use it only
+against disposable environments: it clicks real buttons and completes
+forms, and its safety check is a model's judgement, not a guarantee.
 
 ## How a step works
 
@@ -233,7 +233,8 @@ refusal halves that target's weight everywhere it appears.
   - Back and reload become `goto` the URL they reached.
   - When the failing page shows an error line, the test ends with a
     deterministic `verify the text "..." is not shown`. Otherwise a comment
-    explains that Sedum has no sentence for console or network errors yet.
+    says to run the test with `sedum run --detect browser`, which flags
+    console and network errors on the step that causes them.
 
 ## Limitations
 

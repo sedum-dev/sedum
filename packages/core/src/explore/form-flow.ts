@@ -87,6 +87,8 @@ const MAX_DEPTH = 2;
 const TARGET_LIMIT = 60;
 
 interface Active {
+  /** The form being completed, when a page has several (a search, a chat). */
+  group?: string | undefined;
   route: string;
   fields: readonly string[];
   attempts: number;
@@ -173,15 +175,17 @@ export class FormFlow {
   /** Whether this page offers a form worth completing. */
   async offers(observation: Observation): Promise<boolean> {
     const fields = await inspectFields(this.deps.page, observation.fills);
-    return this.#worthStarting(observation, fields);
+    return this.#worthStarting(observation, oneForm(fields));
   }
 
   /** Plan a first attempt on this page, or null when there is nothing to do. */
   async start(observation: Observation): Promise<ExploreAction[] | null> {
-    const fields = await inspectFields(this.deps.page, observation.fills);
+    const fields = oneForm(
+      await inspectFields(this.deps.page, observation.fills),
+    );
     if (!(await this.#worthStarting(observation, fields))) return null;
     this.#stack = [];
-    this.#active = this.#fresh(observation, 1);
+    this.#active = this.#fresh(observation, 1, fields);
     return this.#finish(await this.#attempt(observation, fields, []));
   }
 
@@ -221,8 +225,13 @@ export class FormFlow {
     return actions?.length ? actions : null;
   }
 
-  #fresh(observation: Observation, pages: number): Active {
+  #fresh(
+    observation: Observation,
+    pages: number,
+    fields: readonly FieldInfo[],
+  ): Active {
     return {
+      group: fields[0]?.group,
       route: observation.route,
       fields: fieldKey(observation),
       attempts: 1,
@@ -247,10 +256,17 @@ export class FormFlow {
     fields: readonly FieldInfo[],
   ): Promise<boolean> {
     const purpose = await this.#purpose(observation);
-    if (purpose === "settings") return false;
+    // A sign-in form needs real credentials; settings change the account.
+    if (purpose === "settings" || purpose === "signin") return false;
     const empty = fieldsToFill(fields, false).length > 0;
     if (purpose === "create") return empty || continues(observation, fields);
     return empty && !editsExistingRecord(fields);
+  }
+
+  /** The fields of the form being completed. */
+  async #fields(observation: Observation): Promise<FieldInfo[]> {
+    const fields = await inspectFields(this.deps.page, observation.fills);
+    return inGroup(fields, this.#active?.group);
   }
 
   #purpose(observation: Observation): Promise<FormPurpose | undefined> {
@@ -274,7 +290,7 @@ export class FormFlow {
     const active = this.#active!;
     const dropdowns = await unansweredDropdowns(
       this.deps.page,
-      observation.fills,
+      fillsOf(observation, fields),
     );
     active.proxies = new Set(
       dropdowns.filter((d) => d.typeahead).map((d) => d.shown),
@@ -389,7 +405,7 @@ export class FormFlow {
     observation: Observation,
     active: Active,
   ): Promise<ExploreAction[] | null> {
-    const fields = await inspectFields(this.deps.page, observation.fills);
+    const fields = await this.#fields(observation);
     const extra = this.#typeable(
       observation,
       fieldsToFill(fields, false)
@@ -451,8 +467,13 @@ export class FormFlow {
     if (!appeared && observation.route === before.route)
       return this.#advance(observation, active);
     this.#stack.push(active);
-    this.#active = { ...this.#fresh(observation, active.pages), nested: true };
-    const fields = await inspectFields(this.deps.page, observation.fills);
+    const fields = oneForm(
+      await inspectFields(this.deps.page, observation.fills),
+    );
+    this.#active = {
+      ...this.#fresh(observation, active.pages, fields),
+      nested: true,
+    };
     if (!fieldsToFill(fields, false).length) return null;
     if (!(await this.#notSettings(observation))) return null;
     return this.#attempt(observation, fields, []);
@@ -497,7 +518,7 @@ export class FormFlow {
     if (!picked || picked.again) return null;
     const dropdowns = await unansweredDropdowns(
       this.deps.page,
-      observation.fills,
+      fillsOf(observation, await this.#fields(observation)),
     );
     const { dropdown } = picked;
     const still = dropdowns.some(
@@ -569,15 +590,33 @@ export class FormFlow {
     const samePage =
       observation.route === active.route &&
       sameFields(fieldKey(observation), active.fields);
-    const fields = await inspectFields(
-      this.deps.page,
-      observation.fills,
-      samePage,
+    return samePage
+      ? this.#retryHere(observation, active)
+      : this.#movedOn(observation, active);
+  }
+
+  /** A sub-form that closed is done (its parent carries on); else a next page. */
+  async #movedOn(
+    observation: Observation,
+    active: Active,
+  ): Promise<ExploreAction[] | null> {
+    if (active.nested) return null;
+    const fields = oneForm(
+      await inspectFields(this.deps.page, observation.fills),
     );
-    // A sub-form that closed or moved on is done; its parent carries on.
-    if (!samePage)
-      return active.nested ? null : this.#nextPage(observation, fields);
+    return this.#nextPage(observation, fields);
+  }
+
+  /** Fix what the page reports on the same page, within the attempt budget. */
+  async #retryHere(
+    observation: Observation,
+    active: Active,
+  ): Promise<ExploreAction[] | null> {
     if (active.attempts >= MAX_ATTEMPTS) return null;
+    const fields = inGroup(
+      await inspectFields(this.deps.page, observation.fills, true),
+      active.group,
+    );
     const after = await formLines(this.deps.page, observation.fills);
     const lines = newErrorLines(active.baseline ?? [], after);
     const fixes = lines.length
@@ -650,7 +689,7 @@ export class FormFlow {
     if (!fieldsToFill(fields, false).length && !continues(observation, fields))
       return null;
     if (!(await this.#notSettings(observation))) return null;
-    this.#active = this.#fresh(observation, active.pages + 1);
+    this.#active = this.#fresh(observation, active.pages + 1, fields);
     return this.#attempt(observation, fields, []);
   }
 
@@ -813,6 +852,34 @@ function continues(
 
 function dropdownKey(dropdown: Dropdown): string {
   return `${dropdown.label}|${dropdown.shown}|${dropdown.nth}`;
+}
+
+/** Fields of one form: a page with a search box and a chat has two. */
+function inGroup(
+  fields: readonly FieldInfo[],
+  group: string | undefined,
+): FieldInfo[] {
+  return group === undefined
+    ? [...fields]
+    : fields.filter((f) => f.group === group);
+}
+
+/** The form on the page with the most fields left to fill. */
+function oneForm(fields: readonly FieldInfo[]): FieldInfo[] {
+  const empty = new Map<string | undefined, number>();
+  for (const field of fieldsToFill(fields, false))
+    empty.set(field.group, (empty.get(field.group) ?? 0) + 1);
+  const busiest = [...empty.entries()].sort((a, b) => b[1] - a[1])[0];
+  return busiest ? inGroup(fields, busiest[0]) : [...fields];
+}
+
+/** The fill candidates of these fields, to find the form around them. */
+function fillsOf(
+  observation: Observation,
+  fields: readonly FieldInfo[],
+): Candidate[] {
+  const refs = new Set(fields.map((f) => f.ref));
+  return observation.fills.filter((c) => refs.has(c.ref));
 }
 
 /** The click candidate of a dropdown the page script found. */
