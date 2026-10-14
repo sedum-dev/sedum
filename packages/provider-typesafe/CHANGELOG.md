@@ -1,5 +1,36 @@
 # @sedum-dev/provider-typesafe
 
+## 0.1.0-alpha.14
+
+### Minor Changes
+
+- 14e0ad8: Add experimental `--detect semantic`. On top of the browser checks, each new
+  page state gets one cached System One call asking whether the page shows an
+  application error, is stuck loading, has an empty section, or shows a broken
+  value, with a severity Score. Exact leaks such as `undefined` and
+  `{{template}}` are reported when Jev confirms a broken value. Findings carry
+  `source`, `probability`, and `severity`; detector calls have purpose
+  `detector`. Providers other than TypeSafe and OpenRouter stop the run with
+  `detect_unsupported`.
+- 1d12b31: Add experimental `sedum explore <url>`: a seeded random walk over the
+  candidate scanner, guided by Jev (page kind, where targets lead, field
+  values, dropdown options, form purpose), that reports console errors,
+  uncaught exceptions, unhandled rejections, failed requests, HTTP 5xx and
+  broken links, and with `--detect semantic` the bug detector's page checks.
+  A form macro completes forms, wizards and sub-forms; the walk returns to
+  unfinished pages by URL. Safety is off by default (the walk never logs
+  itself out); `--safe` skips what Jev judges destructive and `--safe strict`
+  adds a keyword list. Each run writes `trace.jsonl`, `result.json`,
+  `report.md` and `report.html` (frames with `--replay`); `--shrink` turns
+  failures into plain-English tests and `--rerun` runs a trace again.
+
+### Patch Changes
+
+- Updated dependencies [f1d726d]
+- Updated dependencies [14e0ad8]
+- Updated dependencies [1d12b31]
+  - @sedum-dev/core@0.1.0-alpha.14
+
 ## 0.1.0-alpha.13
 
 ### Minor Changes
