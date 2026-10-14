@@ -113,7 +113,7 @@ describe("boundary and identity", () => {
 });
 
 describe("guidance", () => {
-  const tuning = { ...DEFAULT_TUNING, epsilon: 0 };
+  const tuning = { ...DEFAULT_TUNING, epsilon: 0, safety: "on" as const };
 
   it("leaves the blind walk unchanged", () => {
     const leaves = [
@@ -309,17 +309,34 @@ describe("learned from a real staging run", () => {
   ]);
 
   it("strict safety skips a keyword match that Jev scored low", () => {
-    const leaves = [click("Log out"), click("Clients")];
-    const run = (strictSafety: boolean) =>
+    const leaves = [click("Send message"), click("Clients")];
+    const run = (safety: "on" | "strict") =>
       guide({
         mode: "guided",
         leaves,
         coverage: new Coverage(),
-        tuning: { ...DEFAULT_TUNING, strictSafety },
+        tuning: { ...DEFAULT_TUNING, safety },
         advice: { answer: advice(0.16), ids },
       });
-    expect(run(false).skipped).toEqual([]);
-    expect(run(true).skipped).toEqual(["Log out"]);
+    expect(run("on").skipped).toEqual([]);
+    expect(run("strict").skipped).toEqual(["Send message"]);
+  });
+
+  it("without safety skips only what ends the session", () => {
+    const leaves = [
+      click("Delete all addresses"),
+      click("Log out"),
+      click("Clients"),
+    ];
+    const guided = guide({
+      mode: "guided",
+      leaves,
+      coverage: new Coverage(),
+      tuning: DEFAULT_TUNING,
+      advice: { answer: advice(0.95), ids },
+    });
+    expect(DEFAULT_TUNING.safety).toBe("off");
+    expect(guided.skipped).toEqual(["Log out"]);
   });
 
   it("shares one destination for chrome seen on several routes", () => {
@@ -406,7 +423,7 @@ describe("write log", () => {
         mode: "guided",
         leaves,
         coverage,
-        tuning: DEFAULT_TUNING,
+        tuning: { ...DEFAULT_TUNING, safety: "on" },
         advice: {
           answer: {
             kind: { choice: "form", probabilities: { form: 1 }, confidence: 1 },

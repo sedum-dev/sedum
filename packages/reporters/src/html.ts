@@ -35,7 +35,7 @@ export interface HtmlReportOptions {
 const mark =
   '<svg viewBox="0 0 32 32" aria-hidden="true" fill="currentColor"><g><ellipse cx="16" cy="7.2" rx="3" ry="6.6"/><ellipse cx="16" cy="7.2" rx="3" ry="6.6" transform="rotate(72 16 16)"/><ellipse cx="16" cy="7.2" rx="3" ry="6.6" transform="rotate(144 16 16)"/><ellipse cx="16" cy="7.2" rx="3" ry="6.6" transform="rotate(216 16 16)"/><ellipse cx="16" cy="7.2" rx="3" ry="6.6" transform="rotate(288 16 16)"/></g><circle cx="16" cy="16" r="2.4" fill="#C24328"/></svg>';
 
-function esc(value: unknown): string {
+export function esc(value: unknown): string {
   return String(value ?? "").replace(
     /[&<>"']/g,
     (char) =>

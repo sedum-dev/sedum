@@ -8,7 +8,7 @@ import { visibleText } from "../page-bridge.js";
 import { actionTree, runAction, SiteChrome, type Leaf } from "./actions.js";
 import { Coverage, guide } from "./guidance.js";
 import { blindValue, heuristicGenerator, hostileText } from "./inputs.js";
-import { looksDestructive, PAGE_KINDS } from "./kinds.js";
+import { endsSession, looksDestructive, PAGE_KINDS } from "./kinds.js";
 import { observe, onOrigin, settle, type Observation } from "./observe.js";
 import { Oracles } from "./oracles.js";
 import { trustedDetections, withoutOwnInput } from "./own-input.js";
@@ -304,6 +304,7 @@ class Explorer {
       generate: (generator, field) => this.#generate(generator, field),
       safe: (candidate) => this.#safe(candidate),
       judge: this.#judge(),
+      skipSettings: this.#tuning.safety !== "off",
     });
     if (options.mode === "guided" && !options.advisor)
       throw new TypeError("Guided exploration needs an advisor");
@@ -396,7 +397,7 @@ class Explorer {
    */
   #markJudged(observation: Observation, info: StateInfo): void {
     const advice = info.advice;
-    if (!advice) return;
+    if (!advice || this.#tuning.safety === "off") return;
     adviceLeaves(observation).forEach((leaf, index) => {
       const id = advice.ids.get(index);
       const p = id === undefined ? undefined : advice.answer.destructive[id];
@@ -435,10 +436,16 @@ class Explorer {
     return this.#tuning.archive && this.options.mode !== "random";
   }
 
-  /** Never click a target judged destructive, or named so under strict safety. */
+  /**
+   * Never end the session; with safety on, never click a target judged
+   * destructive, nor (strict) one named like a destructive action.
+   */
   #safe(candidate: Candidate): boolean {
+    if (endsSession(candidate.name)) return false;
     if (this.#coverage.dangerous(candidate)) return false;
-    return !(this.#tuning.strictSafety && looksDestructive(candidate.name));
+    return !(
+      this.#tuning.safety === "strict" && looksDestructive(candidate.name)
+    );
   }
 
   #stepTimeoutMs(): number {
@@ -782,6 +789,7 @@ class Explorer {
           targets,
           kinds: PAGE_KINDS,
           predictTargets: steering && this.#tuning.predictTargets,
+          askDestructive: this.#tuning.safety !== "off",
           inspect: this.options.detect === "semantic",
         },
         this.#callOptions(),

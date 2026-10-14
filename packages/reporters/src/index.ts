@@ -37,3 +37,8 @@ export {
 export type { TestStatus } from "./shared.js";
 export { isEvidenceDirectory, renderJunit } from "./junit.js";
 export type { JunitReportOptions } from "./junit.js";
+export {
+  renderExploreMarkdown,
+  type ExploreMarkdownOptions,
+} from "./explore-markdown.js";
+export { renderExploreHtml, type ExploreHtmlOptions } from "./explore-html.js";

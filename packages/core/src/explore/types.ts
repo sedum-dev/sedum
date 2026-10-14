@@ -160,6 +160,8 @@ export interface ExploreAdviceRequest {
   readonly kinds: Readonly<Record<string, string>>;
   /** Also predict the kind each target leads to (speculative fan-out). */
   readonly predictTargets: boolean;
+  /** Ask whether each target is destructive (only with safety on). */
+  readonly askDestructive?: boolean;
   /** Also ask the bug detector's page checks (`--detect semantic`). */
   readonly inspect?: boolean;
 }
@@ -220,6 +222,8 @@ export interface ExplorationAdvisor {
   ): Promise<{ readonly value: GoalChoice; readonly call: ProviderCall }>;
 }
 
+export type ExploreSafety = "off" | "on" | "strict";
+
 export interface ExploreTuning {
   /** Share of each pick drawn from the unguided weights. */
   readonly epsilon: number;
@@ -233,10 +237,12 @@ export interface ExploreTuning {
   /** Bombadil-style swarm testing: drop some action kinds for this seed. */
   readonly swarm: boolean;
   /**
-   * Also skip targets whose name matches the destructive keyword list, even
-   * when Jev disagrees. For real accounts, where a miss is costly.
+   * "off" (the default, for disposable staging) never skips a target except
+   * one that ends the session. "on" skips what Jev judges destructive and
+   * leaves settings forms alone; "strict" also skips names on the
+   * destructive keyword list, even when Jev disagrees.
    */
-  readonly strictSafety: boolean;
+  readonly safety: ExploreSafety;
   /** Return to rarely visited, archived pages when nothing new turns up. */
   readonly archive: boolean;
 }
@@ -248,6 +254,6 @@ export const DEFAULT_TUNING: ExploreTuning = {
   hostileInput: 0.25,
   predictTargets: true,
   swarm: false,
-  strictSafety: false,
+  safety: "off",
   archive: true,
 };

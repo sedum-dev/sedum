@@ -38,7 +38,7 @@ import {
  */
 
 /** One line of escaped inline text. */
-function inline(value: string): string {
+export function inline(value: string): string {
   return value
     .split(/\s+/u)
     .filter(Boolean)
@@ -47,7 +47,7 @@ function inline(value: string): string {
 }
 
 /** An inline code span that survives backticks, and pipes inside a table cell. */
-function code(value: string, cell = false): string {
+export function code(value: string, cell = false): string {
   const text = value.split(/\s+/u).filter(Boolean).join(" ");
   const longest = Math.max(
     0,
@@ -59,7 +59,7 @@ function code(value: string, cell = false): string {
 }
 
 /** A fenced block one backtick longer than any backtick run inside it. */
-function fence(text: string): string {
+export function fence(text: string): string {
   const longest = Math.max(
     0,
     ...(text.match(/`+/g) ?? []).map((run) => run.length),

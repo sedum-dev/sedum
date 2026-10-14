@@ -50,6 +50,7 @@ import {
   collectValue,
   collectAllowRule,
   exploreDetect,
+  exploreSafe,
   detectMode,
   commandHelp,
   nonnegativeInteger,
@@ -654,24 +655,30 @@ export async function runCli(
       false,
     )
     .option(
-      "--replay <trace>",
-      "re-run a recorded trace.jsonl instead of exploring",
+      "--rerun <trace>",
+      "run a recorded trace.jsonl again instead of exploring",
     )
     .option(
-      "--allow-destructive",
-      "act on targets Jev judges destructive",
+      "--replay",
+      "capture a frame per step and embed them in report.html",
       false,
+    )
+    .option(
+      "--sensitive-origin <url>",
+      "capture no frames on this origin (repeatable)",
+      collectOrigin,
+      [],
+    )
+    .option(
+      "--safe [mode]",
+      "skip targets Jev judges destructive and leave settings forms alone; strict also skips names like delete, send or pay. Off by default: only log-out and account-closing targets are skipped",
+      exploreSafe,
     )
     .option(
       "--watch-origin <origin>",
       "also report HTTP 5xx from this origin, such as an API host (repeatable)",
       watchOrigin,
       [],
-    )
-    .option(
-      "--strict-safety",
-      "also skip targets named like destructive actions (delete, send, log out…), even when Jev disagrees",
-      false,
     )
     .option(
       "--ignore-console <regex>",
@@ -703,7 +710,7 @@ export async function runCli(
     .option("--headed", "show the browser", false)
     .addHelpText(
       "after",
-      "\nGuided mode and --shrink make billable TypeSafe calls (TYPESAFE_API_KEY).\nUse a disposable environment: exploration clicks real buttons.\n\nExamples:\n  sedum explore https://staging.example.com --steps 200 --seed 7\n  sedum explore https://staging.example.com --mode random --shrink\n  sedum explore --replay .sedum/explore/<run>/trace.jsonl\n\nExit codes:\n  0 no failures observed\n  1 console errors, page exceptions or HTTP 5xx observed\n  3 command or operational error\n",
+      "\nGuided mode and --shrink make billable TypeSafe calls (TYPESAFE_API_KEY).\nSafety is off by default, for disposable staging: exploration clicks real buttons\nand completes forms. Use --safe on shared or production-like data.\n\nWrites trace.jsonl, result.json, report.md and report.html into --out/<run-id>/.\n\nExamples:\n  sedum explore https://staging.example.com --steps 200 --seed 7 --replay\n  sedum explore https://staging.example.com --safe --shrink\n  sedum explore --rerun .sedum/explore/<run>/trace.jsonl\n\nExit codes:\n  0 no failures observed\n  1 console errors, page exceptions or HTTP 5xx observed\n  3 command or operational error\n",
     )
     .action(async (url: string | undefined, options: ExploreFlags) => {
       const { exploreAction } = await import("./explore-command.js");

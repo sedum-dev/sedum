@@ -11,14 +11,16 @@ requests), plus HTTP 5xx responses and broken links, and with
 failure into a short plain-English test you can commit.
 
 ```sh
-sedum explore https://staging.example.com/ --steps 200 --seed 7
-sedum explore https://staging.example.com/ --mode random --shrink
-sedum explore --replay .sedum/explore/<run>/trace.jsonl
+sedum explore https://staging.example.com/ --steps 200 --seed 7 --replay
+sedum explore https://staging.example.com/ --safe --shrink
+sedum explore --rerun .sedum/explore/<run>/trace.jsonl
 ```
 
-This command is experimental: its flags and output may change. Use it only
-against disposable environments: it clicks real buttons and completes
-forms, and its safety check is a model's judgement, not a guarantee.
+This command is experimental: its flags and output may change. Safety is
+off by default, for disposable staging: the walk clicks real buttons,
+completes forms, and may delete, send or pay. It never logs itself out or
+closes its own account. Use `--safe` on shared or production-like data;
+see [Safety](#safety).
 
 ## How a step works
 
@@ -33,13 +35,14 @@ forms, and its safety check is a model's judgement, not a guarantee.
 3. **Guide (guided mode).** One TypeSafe request per new state asks:
    - a `choice`: which kind of page this is (home, listing, detail, search,
      form, confirmation, auth, account, admin, cart, content, error, other);
-   - per click target, a `noul`: "would activating it perform a destructive or
-     irreversible action?";
    - per click target, a speculative `choice`: which kind of page it most
-     likely leads to.
+     likely leads to;
+   - with `--safe`, per click target, a `noul`: "would activating it perform
+     a destructive or irreversible action?".
 
-   Answers are cached per state. Targets at or above 0.6 destructive
-   probability are skipped, and the rest are weighted by (1 − p)². Clicks are
+   Answers are cached per state. With `--safe`, targets at or above 0.6
+   destructive probability are skipped and the rest are weighted by
+   (1 − p)². Clicks are
    weighted towards destinations not yet taken whose page kind has been seen
    least. The observed kind is used once known; before that, Jev's prediction
    stands in. On pages Jev calls a form or search, typing gets more weight,
@@ -189,17 +192,36 @@ non-GET request to a watched origin, where a GraphQL request counts only when
 it carries a mutation. The summary totals writes per endpoint, so you can
 audit what an exploration changed.
 
+## Safety
+
+Exploration is for disposable staging, so safety is off by default: on the
+practice sites, skipping "Remove" from a cart or a checkout's "Continue" hid
+real bugs. Off still means two guards:
+
+- The walk never clicks a target that ends its own session: log out, sign
+  out, or deleting or closing the account it is signed in with.
+- It never follows a link off the start origin.
+
+`--safe` is for shared environments and production-like data, where a
+deleted record, a sent email or a started import costs something:
+
+- Jev is asked, for every click target, whether activating it is destructive
+  or irreversible. It judges a confirming button (Yes, OK, Proceed) by what
+  it confirms, and counts imports, syncs, integrations and signing out as
+  irreversible. A target judged destructive anywhere stays skipped for the
+  rest of the walk.
+- The form macro leaves settings forms alone.
+- `--safe strict` also skips names on a keyword list (delete, remove, send,
+  invite, share, archive, pay…), even when Jev disagrees.
+
+Without `--safe` the per-target safety questions are not asked, so each Jev
+call is smaller.
+
 ## Exploring a real staging account
 
-- `--cookies <storage-state.json>` signs the browser in with the cookies of a
-  Playwright storage-state file. Log in with a separate script, so the
-  exploration never types or records credentials.
-- `--strict-safety` skips a target when either Jev or the destructive keyword
-  list (delete, remove, send, invite, share, archive, log out…) says so. Jev
-  judges a confirming button (Yes, OK, Proceed) by what it confirms, and
-  counts imports, syncs, integrations and signing out as irreversible. Once a
-  target is judged destructive anywhere, it stays skipped for the rest of the
-  walk.
+- `--cookies <storage-state.json>` signs the browser in with the cookies and
+  local storage of a Playwright storage-state file. Log in with a separate
+  script, so the exploration never types or records credentials.
 - A step still running after 60 s restarts the walk from the start page, and
   the walk stops when it keeps leaving the site, for example after the
   session expires.
@@ -215,11 +237,34 @@ so it stops looking new on every page. After a click the page refuses (for
 example, one covered by an open panel), the walk offers Escape, and each
 refusal halves that target's weight everywhere it appears.
 
-## Reproduce, replay and shrink
+## Output
+
+Each run writes into `--out` (default `.sedum/explore`), in a directory named
+after its start time and seed:
+
+- `trace.jsonl`: one line per action, with its route, page kind, the weights
+  behind the choice, oracle events and server writes.
+- `result.json`: the run as data. It holds the verdict, each finding with its
+  step, page and test, coverage (states, pages, page kinds), the write log,
+  the targets not clicked, Jev's receipt and a step timeline. The format is
+  experimental, version 1.
+- `report.md`: for a person or a coding agent. It gives the verdict, then
+  each finding with its evidence, frame, emitted test and the commands that
+  reproduce it, then what the walk changed, covered and cost. Page text is
+  fenced and labelled untrusted.
+- `report.html`: one offline file with the findings first, a step viewer
+  over the frames, the write log, coverage and the Jev receipt.
+- `frames/`, with `--replay`: a frame per step, plus the page as each click
+  or fill was about to run with the target's box. The HTML report embeds
+  them. Frames can show private page pixels: `--sensitive-origin <url>`
+  takes none on that origin.
+- `tests/finding-F<n>.test.yaml`, with `--shrink`.
+
+## Rerun and shrink
 
 - `--seed` makes the choices of a random or heuristic walk repeat exactly.
   A guided walk repeats as long as Jev's answers do.
-- `--replay trace.jsonl` re-runs the recorded actions. Every action kind is
+- `--rerun trace.jsonl` runs the recorded actions again. Every action kind is
   matched by identity, including reload, which Bombadil's replay cannot match.
   Typed values are stored, so a replay does not depend on the seed.
 - `--shrink` cuts each failing trace with delta debugging (complement removal,

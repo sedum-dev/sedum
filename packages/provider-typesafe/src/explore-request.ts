@@ -29,6 +29,11 @@ export interface ExploreRequest {
   readonly targetIds: readonly string[];
 }
 
+/** Safety questions are asked only when the walk will use them (--safe). */
+function asksDestructive(input: ExploreAdviceRequest): boolean {
+  return input.askDestructive !== false;
+}
+
 function targetQuestions(
   input: ExploreAdviceRequest,
   kinds: readonly string[],
@@ -37,13 +42,14 @@ function targetQuestions(
     null,
   ) as SystemOneRequest["questions"];
   for (const id of Object.keys(input.targets)) {
-    questions[`destructive_${id}`] = noul(
-      {
-        question: `Would activating \`targets.${id}\` on this page perform a destructive or irreversible action?`,
-        rules: `${CONFIRMATION} ${UNTRUSTED}`,
-      },
-      DESTRUCTIVE,
-    );
+    if (asksDestructive(input))
+      questions[`destructive_${id}`] = noul(
+        {
+          question: `Would activating \`targets.${id}\` on this page perform a destructive or irreversible action?`,
+          rules: `${CONFIRMATION} ${UNTRUSTED}`,
+        },
+        DESTRUCTIVE,
+      );
     if (input.predictTargets)
       questions[`leads_${id}`] = choice(
         {
@@ -159,7 +165,8 @@ export function validateExploreAdvice(
   const destructive: Record<string, number> = {};
   const leadsTo: Record<string, Record<string, number>> = {};
   for (const id of targetIds) {
-    destructive[id] = validateNoul(answers[`destructive_${id}`]);
+    if (asksDestructive(input))
+      destructive[id] = validateNoul(answers[`destructive_${id}`]);
     if (input.predictTargets)
       leadsTo[id] = validateChoice(answers[`leads_${id}`], kinds).probabilities;
   }

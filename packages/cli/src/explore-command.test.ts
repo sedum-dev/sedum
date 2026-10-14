@@ -1,6 +1,6 @@
 import { InvalidArgumentError } from "commander";
 import { describe, expect, it } from "vitest";
-import { exploreDetect } from "./cli-arguments.js";
+import { exploreDetect, exploreSafe } from "./cli-arguments.js";
 import {
   exploreMode,
   seedValue,
@@ -67,6 +67,25 @@ describe("explore arguments", () => {
         "--detect-allow",
         "console_error:re:(",
       ],
+      "0.0.0",
+    );
+    expect(output.exitCode).not.toBe(0);
+  });
+
+  it("takes --safe and --safe strict, and has no --allow-destructive", async () => {
+    expect(exploreSafe("strict")).toBe("strict");
+    expect(() => exploreSafe("maybe")).toThrow(/--safe strict/u);
+    const removed = await runCli(
+      ["explore", "https://example.test/", "--allow-destructive"],
+      "0.0.0",
+    );
+    expect(removed.exitCode).not.toBe(0);
+    expect(removed.stderr).toContain("unknown option");
+  });
+
+  it("reruns only an exploration trace", async () => {
+    const output = await runCli(
+      ["explore", "--rerun", "package.json"],
       "0.0.0",
     );
     expect(output.exitCode).not.toBe(0);

@@ -1,6 +1,6 @@
 import { targetSignature, type Leaf } from "./actions.js";
 import type { Candidate } from "../page-protocol.js";
-import { looksDestructive, novelty } from "./kinds.js";
+import { endsSession, looksDestructive, novelty } from "./kinds.js";
 import { normalize } from "./random.js";
 import type {
   ChoiceWhy,
@@ -112,6 +112,9 @@ function destructiveProbability(
   index: number,
 ): number | undefined {
   if (leaf.kind !== "click" || !leaf.identity) return undefined;
+  // The walk never ends its own session, with or without safety.
+  if (endsSession(leaf.identity.name)) return 1;
+  if (input.tuning.safety === "off") return undefined;
   const id = input.advice?.ids.get(index);
   const judged =
     id === undefined ? undefined : input.advice?.answer.destructive[id];
@@ -131,7 +134,7 @@ function cautious(
   if (leaf.candidate && input.coverage.dangerous(leaf.candidate)) return 1;
   const keyword = looksDestructive(leaf.identity!.name) ? 1 : 0;
   if (judged === undefined) return keyword;
-  return input.tuning.strictSafety ? Math.max(judged, keyword) : judged;
+  return input.tuning.safety === "strict" ? Math.max(judged, keyword) : judged;
 }
 
 /** Guided adds Jev's part: favour destinations of rarely seen page kinds. */

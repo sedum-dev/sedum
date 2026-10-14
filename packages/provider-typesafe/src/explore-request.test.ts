@@ -214,3 +214,15 @@ describe("page checks in the exploration request", () => {
     ).toBe(false);
   });
 });
+
+describe("exploration without safety", () => {
+  it("asks no destructive questions", () => {
+    const { request } = buildExploreRequest(
+      { ...input, askDestructive: false },
+      "jev-latest",
+    );
+    expect(
+      Object.keys(request.questions).some((k) => k.startsWith("destructive_")),
+    ).toBe(false);
+  });
+});

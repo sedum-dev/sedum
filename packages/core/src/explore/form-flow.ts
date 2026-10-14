@@ -76,6 +76,8 @@ export interface FormFlowDeps {
   /** False for targets judged destructive; the flow never clicks those. */
   readonly safe: (candidate: Candidate) => boolean;
   readonly judge: FormJudge;
+  /** Leave settings forms alone (safety on); off by default, as on staging. */
+  readonly skipSettings?: boolean;
 }
 
 const MAX_ATTEMPTS = 3;
@@ -257,7 +259,8 @@ export class FormFlow {
   ): Promise<boolean> {
     const purpose = await this.#purpose(observation);
     // A sign-in form needs real credentials; settings change the account.
-    if (purpose === "settings" || purpose === "signin") return false;
+    if (purpose === "signin") return false;
+    if (purpose === "settings" && this.deps.skipSettings) return false;
     const empty = fieldsToFill(fields, false).length > 0;
     if (purpose === "create") return empty || continues(observation, fields);
     return empty && !editsExistingRecord(fields);
@@ -274,7 +277,9 @@ export class FormFlow {
     return this.deps.judge.purpose(observation, labels);
   }
 
+  /** With safety on, a settings page met inside a wizard stops it too. */
   async #notSettings(observation: Observation): Promise<boolean> {
+    if (!this.deps.skipSettings) return true;
     return (await this.#purpose(observation)) !== "settings";
   }
 

@@ -102,6 +102,8 @@ try {
           mode,
           advisor: adapter,
           measureKinds: true,
+          // The comparison counts destructive actions, so safety is on.
+          tuning: { safety: "on" },
           onStep: (entry) => {
             trace.push(JSON.stringify(entry));
           },

@@ -30,6 +30,17 @@ export function looksDestructive(name: string): boolean {
   return DESTRUCTIVE_WORDS.test(name);
 }
 
+/**
+ * Targets that would end the walk's own session: logging out, or closing
+ * the account it is signed in with. Never clicked, with or without --safe.
+ */
+const SESSION_ENDING =
+  /\b(log ?out|sign ?out|log ?off|sign ?off)\b|\b(delete|close|deactivate|cancel)\s+(my\s+|your\s+|this\s+)?account\b/iu;
+
+export function endsSession(name: string): boolean {
+  return SESSION_ENDING.test(name);
+}
+
 /** Coverage weight of reaching a kind seen `visits` times before. */
 export function novelty(visits: number): number {
   return 1 / Math.sqrt(1 + visits);

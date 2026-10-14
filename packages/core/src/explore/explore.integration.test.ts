@@ -215,7 +215,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
     }, 120_000);
 
     /** The form macro with rules only: random options, no model. */
-    function macro(page: BrowserPage): FormFlow {
+    function macro(page: BrowserPage, skipSettings = false): FormFlow {
       const random = new SeededRandom(5);
       const tools = formatTools(random);
       const generators = goalGenerators(1);
@@ -228,6 +228,7 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
           formatById(generator, tools, field) ?? generators.generate(generator),
         safe: () => true,
         judge: RULE_JUDGE,
+        skipSettings,
       });
     }
 
@@ -344,11 +345,14 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       }
     }, 120_000);
 
-    it("leaves a firm-wide settings form alone", async () => {
+    it("leaves a firm-wide settings form alone with safety on", async () => {
       const fresh = await freshPage();
       try {
         await fresh.page.goto(`${site.baseUrl}/explore/account/branding`);
-        const flow = macro(fresh.page);
+        expect(await macro(fresh.page).offers(await observe(fresh.page))).toBe(
+          true,
+        );
+        const flow = macro(fresh.page, true);
         const observation = await observe(fresh.page);
         expect(await flow.offers(observation)).toBe(false);
         expect(await flow.start(observation)).toBeNull();
