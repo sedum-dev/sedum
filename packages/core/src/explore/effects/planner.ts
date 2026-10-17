@@ -602,8 +602,7 @@ export class EffectPlanner {
   /** A submit its filled form did not enable: give it up. */
   #stillDisabled(intent: Intent): undefined {
     debug(`still disabled after filling: ${intent.key}`);
-    this.map.tried(intent.key);
-    this.map.failed(intent.key);
+    this.map.giveUp(intent.key);
     this.#intent = undefined;
     return undefined;
   }

@@ -410,6 +410,25 @@ describe("failing controls", () => {
     map.failed("tab-1");
     expect(map.plan(step1.key, () => 0)).toBeUndefined();
   });
+
+  it("given up one at a time (a submit left disabled) keep their class open", () => {
+    const map = new StateMap();
+    const cart = map.learn(
+      view("/cart", "cart", [["go-cart", "proceed", "proceed|Continue"]]),
+      0,
+    );
+    for (const [key, step] of [
+      ["go-a", "a"],
+      ["go-b", "b"],
+    ])
+      map.learn(
+        view(`/${step}`, step!, [[key!, "proceed", "proceed|Continue"]]),
+        1,
+      );
+    map.giveUp("go-a");
+    map.giveUp("go-b");
+    expect(map.plan(cart.key, () => 0)?.key).toBe("go-cart");
+  });
 });
 
 describe("re-arming", () => {

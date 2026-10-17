@@ -5,11 +5,15 @@ import {
 } from "../../../../../fixtures/site/explore-site.js";
 import {
   PlaywrightBrowserDriver,
+  type BrowserContextSession,
   type BrowserSession,
 } from "../../browser-driver.js";
 import type { GoalChoice } from "../../goal-runner.js";
 import { explore } from "../explorer.js";
+import { observe, settle } from "../observe.js";
+import { SeededRandom } from "../random.js";
 import type { ExplorationAdvisor, ExploreDecisionRequest } from "../types.js";
+import { fillActions } from "./form-fill.js";
 
 const call = {
   requestedModel: "scripted",
@@ -113,5 +117,123 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         await context.close();
       }
     }, 240_000);
+  },
+);
+
+const PAGES = "http://pages.test";
+
+/** Serve small pages on a made-up origin, in one context. */
+async function served(
+  browser: BrowserSession,
+  pages: Record<string, string>,
+): Promise<{
+  page: Awaited<ReturnType<BrowserContextSession["newPage"]>>;
+  close: () => Promise<void>;
+}> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.playwright!().context.route(`${PAGES}/**`, (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const body = pages[path];
+    return body === undefined
+      ? route.fulfill({ status: 404, body: "not found" })
+      : route.fulfill({
+          contentType: "text/html",
+          body: `<!doctype html><html><body>${body}</body></html>`,
+        });
+  });
+  return { page, close: () => context.close() };
+}
+
+describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
+  "the effects planner on small served pages",
+  () => {
+    let browser: BrowserSession;
+    beforeAll(async () => {
+      browser = await new PlaywrightBrowserDriver().launch({
+        browser: "chromium",
+      });
+    });
+    afterAll(async () => {
+      await browser?.close();
+    });
+
+    it("fills only the form of the control it submits", async () => {
+      const { page, close } = await served(browser, {
+        "/": `<form><label>Email <input name="email" type="email"></label><button type="button">Subscribe</button></form>
+          <form><label>Message <textarea name="message"></textarea></label><button type="button">Send</button></form>`,
+      });
+      try {
+        await page.goto(`${PAGES}/`);
+        await settle(page);
+        const observation = await observe(page);
+        const target = observation.clicks.find((c) => c.name === "Subscribe")!;
+        const { actions } = await fillActions({
+          page,
+          observation,
+          roleOf: (fill) => (fill.name.includes("Email") ? "email" : "message"),
+          listControl: () => false,
+          safe: () => true,
+          token: "1",
+          random: new SeededRandom(1),
+          retries: () => 0,
+          password: undefined,
+          account: () => undefined,
+          target,
+        });
+        expect(
+          actions.map((a) => (a.kind === "type" ? a.target.name : a.kind)),
+        ).toEqual(["Email"]);
+      } finally {
+        await close();
+      }
+    }, 60_000);
+
+    it("keeps a forward control that stays disabled on two steps from closing it everywhere", async () => {
+      const step = (next: string) =>
+        `<h1>Step</h1><form><label>Name <input name="n"></label><button type="button" disabled>Continue</button></form><a href="${next}">Next part</a>`;
+      const { page, close } = await served(browser, {
+        "/": `<a href="/a">Begin</a>`,
+        "/a": step("/b"),
+        "/b": step("/cart"),
+        "/cart": `<h1>Cart</h1><button type="button" onclick="location.href='/done'">Continue</button>`,
+        "/done": `<h1>Done</h1><p>Thank you</p>`,
+      });
+      const advisor: ExplorationAdvisor = {
+        assess: () => Promise.reject(new Error("never assessed")),
+        decide: (request: ExploreDecisionRequest) => {
+          const answers = Object.fromEntries(
+            Object.keys(request.questions).map((id) => {
+              const subject = request.subject[id.replace(/^\w+?_/u, "")] ?? "";
+              const choice = id.startsWith("eff_")
+                ? /Continue/u.test(subject)
+                  ? "proceed"
+                  : "navigate_section"
+                : id.startsWith("gate")
+                  ? "complete_fields"
+                  : "full_name";
+              return [id, answer(choice)];
+            }),
+          );
+          return Promise.resolve({ answers, call });
+        },
+      };
+      try {
+        const result = await explore(page, {
+          startUrl: `${PAGES}/`,
+          steps: 30,
+          seed: 1,
+          mode: "guided",
+          planner: "effects",
+          advisor,
+        });
+        // The cart's enabled "Continue" is still tried, by the effects planner itself.
+        const done = result.trace.find((e) => e.route === "/done");
+        expect(done).toBeDefined();
+        expect(done!.step).toBeLessThan(result.effects?.walkFrom ?? Infinity);
+      } finally {
+        await close();
+      }
+    }, 120_000);
   },
 );

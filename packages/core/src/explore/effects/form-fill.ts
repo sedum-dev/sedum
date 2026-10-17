@@ -11,6 +11,7 @@ import { identityOf, type Observation } from "../observe.js";
 import { samplePattern } from "../pattern-sample.js";
 import type { SeededRandom } from "../random.js";
 import type { ExploreAction } from "../types.js";
+import { BY_PATHS } from "./element-path.js";
 import { FIELD_VALUES, type FieldRole } from "./vocabulary.js";
 
 /** What filling a form needs from the planner. */
@@ -159,10 +160,11 @@ function typedValue(
  * The fields of the target's form, when it is in one: a chat box or a
  * newsletter field elsewhere on the page is not part of it.
  */
-const SAME_FORM = String.raw`((target, refs) => {
+const SAME_FORM = String.raw`((targetPath, refs) => {
+  ${BY_PATHS}
   const q = (ref) => document.querySelector('[data-sedum-ref="' + CSS.escape(ref) + '"]');
   const formOf = (e) => e.form || e.closest("form");
-  const t = q(target);
+  const t = byPaths([targetPath]).get(targetPath);
   const form = t && formOf(t);
   if (!form) return refs;
   return refs.filter((ref) => { const e = q(ref); return !!e && formOf(e) === form; });
@@ -173,7 +175,9 @@ async function formFills(context: FillContext): Promise<readonly Candidate[]> {
   if (!target || !observation.fills.length) return observation.fills;
   const refs = JSON.stringify(observation.fills.map((c) => c.ref));
   const kept = await context.page
-    .evaluate<string[]>(`${SAME_FORM}(${JSON.stringify(target.ref)}, ${refs})`)
+    .evaluate<string[]>(
+      `${SAME_FORM}(${JSON.stringify(target.signals.path)}, ${refs})`,
+    )
     .catch(() => null);
   if (!kept) return observation.fills;
   const keep = new Set(kept);

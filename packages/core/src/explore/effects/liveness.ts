@@ -1,5 +1,6 @@
 import type { BrowserPage } from "../../browser-driver.js";
 import type { Candidate } from "../../page-protocol.js";
+import { BY_PATHS } from "./element-path.js";
 
 /**
  * Click targets that cannot take a click: disabled (natively, by
@@ -18,12 +19,8 @@ const DEAD_PATHS = String.raw`((paths) => {
   const probe = (b, [fx, fy]) => document.elementFromPoint(b.left + b.width * fx, b.top + b.height * fy);
   const covered = (e) => { const b = e.getBoundingClientRect(); return measurable(b) && PROBES.every((p) => blocks(e, probe(b, p))); };
   const disabled = (e) => !!e.closest(":disabled, [aria-disabled='true']") || getComputedStyle(e).pointerEvents === "none";
-  // The scanner's element path: tag and index among same-tag siblings, 12 levels up.
-  const step = (n) => n.tagName.toLowerCase() + ":" + (n.parentElement ? [...n.parentElement.children].filter((c) => c.tagName === n.tagName).indexOf(n) : 0);
-  const pathOf = (e) => { const steps = []; for (let n = e; n && steps.length < 12; n = n.parentElement) steps.unshift(step(n)); return steps.join("/"); };
-  const tags = [...new Set(paths.map((p) => p.split("/").pop().split(":")[0]))].filter((t) => /^[a-z][a-z0-9-]*$/.test(t));
-  const byPath = new Map();
-  if (tags.length) for (const e of document.querySelectorAll(tags.join(","))) byPath.set(pathOf(e), e);
+  ${BY_PATHS}
+  const byPath = byPaths(paths);
   return paths.filter((p) => { const e = byPath.get(p); return !!e && (disabled(e) || covered(e)); });
 })`;
 

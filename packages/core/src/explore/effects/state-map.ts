@@ -270,6 +270,15 @@ export class StateMap {
     );
   }
 
+  /**
+   * The control cannot be used here (a submit its form did not enable):
+   * give up this record only. Its class stays open, so the same control
+   * where it is enabled is still tried.
+   */
+  giveUp(key: AffordanceKey): void {
+    this.records.get(key)!.blocked = true;
+  }
+
   /** An effect that was boosted has been taken: its obligation is met. */
   discharge(effect: Effect): void {
     if (this.boost[effect]) this.boost = { ...this.boost, [effect]: 1 };
