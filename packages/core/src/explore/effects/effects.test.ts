@@ -721,22 +721,32 @@ describe("credentials", () => {
 
   it("are remembered from a submitted sign-up and used to sign in", () => {
     const credentials = new Credentials();
-    credentials.typed(signUp);
-    expect(credentials.submitted(true)).toBe("registered");
+    credentials.typed("register", signUp);
+    expect(credentials.submitted("register", true)).toBe("registered");
     expect(credentials.valueFor("email")).toBe("ada+1@example.com");
     expect(credentials.valueFor("password")).toBe("pw");
     expect(credentials.valueFor("first_name")).toBeUndefined();
-    credentials.typed({ email: "ada+1@example.com", password: "pw" });
-    expect(credentials.submitted(true)).toBe("signed_in");
+    credentials.typed("login", { email: "ada+1@example.com", password: "pw" });
+    expect(credentials.submitted("login", true)).toBe("signed_in");
     expect(credentials.signedIn).toBe(true);
   });
 
-  it("are not taken from a form that did not move on, or that had no password", () => {
+  it("survive a rejected submit whose retry refills only some fields", () => {
     const credentials = new Credentials();
-    credentials.typed(signUp);
-    expect(credentials.submitted(false)).toBeUndefined();
-    credentials.typed({ email: "ada+1@example.com", message: "hi" });
-    expect(credentials.submitted(true)).toBeUndefined();
+    credentials.typed("register", signUp);
+    expect(credentials.submitted("register", false)).toBeUndefined();
+    credentials.typed("register", { postal_code: "10115" });
+    expect(credentials.submitted("register", true)).toBe("registered");
+    expect(credentials.valueFor("password")).toBe("pw");
+  });
+
+  it("are not taken from another state's submit, or from a form without a password", () => {
+    const credentials = new Credentials();
+    credentials.typed("register", signUp);
+    expect(credentials.submitted("home", true)).toBeUndefined();
+    expect(credentials.submitted("register", true)).toBeUndefined();
+    credentials.typed("contact", { email: "ada+1@example.com", message: "hi" });
+    expect(credentials.submitted("contact", true)).toBeUndefined();
     expect(credentials.known).toBeUndefined();
   });
 
@@ -758,6 +768,27 @@ describe("controls a page shows", () => {
     ]);
     expect(offered(page, "proceed")).toHaveLength(1);
     expect(offered(page, "paginate")).toHaveLength(0);
+  });
+
+  it("keep a disabled button out of the class of the same enabled control", () => {
+    const page = observation(`${ORIGIN}/list`, [
+      candidate("Add to cart", { location: "main", peers: ["Pliers"] }),
+      candidate("Add to cart", { location: "main", peers: ["Saw"] }),
+      candidate("Proceed"),
+      candidate("Add to cart", {
+        location: "main",
+        peers: ["Drill"],
+        disabled: true,
+      }),
+      candidate("Proceed", { disabled: true }),
+    ]);
+    const classes = controlClasses(page, ORIGIN);
+    expect(
+      classes.map((c) => [c.members.length, c.members.some((m) => m.disabled)]),
+    ).toEqual([
+      [2, false],
+      [1, false],
+    ]);
   });
 
   it("never take a link to the page they are on for a forward step", () => {

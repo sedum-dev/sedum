@@ -126,14 +126,20 @@ const PAGES = "http://pages.test";
 async function served(
   browser: BrowserSession,
   pages: Record<string, string>,
+  /** Fail this request (the path and its how-manyth load) once. */
+  failOnce?: { path: string; load: number },
 ): Promise<{
   page: Awaited<ReturnType<BrowserContextSession["newPage"]>>;
   close: () => Promise<void>;
 }> {
   const context = await browser.newContext();
   const page = await context.newPage();
+  const loads = new Map<string, number>();
   await page.playwright!().context.route(`${PAGES}/**`, (route) => {
     const path = new URL(route.request().url()).pathname;
+    loads.set(path, (loads.get(path) ?? 0) + 1);
+    if (failOnce?.path === path && failOnce.load === loads.get(path))
+      return route.abort("failed");
     const body = pages[path];
     return body === undefined
       ? route.fulfill({ status: 404, body: "not found" })
@@ -231,6 +237,53 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
         const done = result.trace.find((e) => e.route === "/done");
         expect(done).toBeDefined();
         expect(done!.step).toBeLessThan(result.effects?.walkFrom ?? Infinity);
+      } finally {
+        await close();
+      }
+    }, 120_000);
+
+    it("still loads a page whose URL failed to load once", async () => {
+      const { page, close } = await served(
+        browser,
+        {
+          "/": `<a href="/a">Alpha</a> <a href="/b">Beta</a>`,
+          "/a": `<h1>Alpha</h1><p>A dead end.</p>`,
+          "/b": `<h1>Beta</h1>`,
+        },
+        // The start page loads once at the start; its next load is travel.
+        { path: "/", load: 2 },
+      );
+      const advisor: ExplorationAdvisor = {
+        assess: () => Promise.reject(new Error("never assessed")),
+        decide: (request: ExploreDecisionRequest) =>
+          Promise.resolve({
+            answers: Object.fromEntries(
+              Object.keys(request.questions).map((id) => [
+                id,
+                answer("navigate_section"),
+              ]),
+            ),
+            call,
+          }),
+      };
+      try {
+        const result = await explore(page, {
+          startUrl: `${PAGES}/`,
+          steps: 12,
+          seed: 1,
+          mode: "guided",
+          planner: "effects",
+          advisor,
+        });
+        const travel = result.trace.find(
+          (e) => e.action.kind === "goto" && e.outcome === "failed",
+        );
+        expect(travel).toBeDefined();
+        const visited = result.trace.filter(
+          (e) => e.step < (result.effects?.walkFrom ?? Infinity),
+        );
+        expect(visited.map((e) => e.route)).toContain("/a");
+        expect(visited.map((e) => e.route)).toContain("/b");
       } finally {
         await close();
       }

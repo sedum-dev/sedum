@@ -97,6 +97,14 @@ function buttonGroup(candidate: Candidate): string | null {
     : `button|${candidate.role}|${foldName(candidate.name)}|${candidate.location ?? ""}`;
 }
 
+/** The group a candidate's records share, or null when it has none. */
+function groupKey(candidate: Candidate, base: string): string | null {
+  return (
+    linkGroup(candidate, hrefTemplate(candidate, base)) ??
+    buttonGroup(candidate)
+  );
+}
+
 interface Grouped {
   readonly key: string;
   readonly template: string;
@@ -139,10 +147,12 @@ export function controlClasses(
   const clicks = inOpenDialog(observation.clicks);
   const records = new Map<string, Grouped>();
   for (const candidate of clicks) {
+    // A disabled button is never one of a list's records.
+    if (candidate.disabled) continue;
     if (!onStartOrigin(candidate.signals.href, observation.url, origin))
       continue;
     const template = hrefTemplate(candidate, observation.url);
-    const key = linkGroup(candidate, template) ?? buttonGroup(candidate);
+    const key = groupKey(candidate, observation.url);
     if (key) addTo(records, key, template, candidate);
   }
   const recordOf = new Map<Candidate, Grouped>();
@@ -152,6 +162,12 @@ export function controlClasses(
   const classes = new Map<string, ControlClass>();
   for (const candidate of clicks) {
     if (!safe(candidate)) continue;
+    // The enabled control is the one to click; a disabled twin is left out.
+    if (
+      candidate.disabled &&
+      records.has(groupKey(candidate, observation.url) ?? "")
+    )
+      continue;
     if (!onStartOrigin(candidate.signals.href, observation.url, origin))
       continue;
     const record = recordOf.get(candidate);
@@ -161,7 +177,7 @@ export function controlClasses(
       : singleKey(candidate, template);
     const known = classes.get(labelKey);
     if (known) {
-      (known.members as Candidate[]).push(candidate);
+      if (!candidate.disabled) (known.members as Candidate[]).push(candidate);
       continue;
     }
     const choices = options.get(candidate);

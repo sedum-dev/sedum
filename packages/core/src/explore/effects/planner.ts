@@ -289,7 +289,10 @@ export class EffectPlanner {
     if (pending.failed) return this.#failed(pending, observation);
     this.#idle(pending, view);
     if (pending.kind === "other") return;
-    this.#account(node.key !== pending.from.key || this.#answered(pending));
+    this.#account(
+      pending.from.key,
+      node.key !== pending.from.key || this.#answered(pending),
+    );
     if (pending.kind === "travel") return this.#arrived(pending, node);
     const changed = this.#changed(pending, view);
     this.#connect(pending, view, node, changed);
@@ -302,7 +305,9 @@ export class EffectPlanner {
   /** The target could not be used: give it up, after dismissing a cover. */
   #failed(pending: Pending, observation: Observation): void {
     if (pending.key && pending.kind === "act") this.map.failed(pending.key);
-    if (pending.kind === "travel") this.#offCourse(pending);
+    // A load that failed (a timeout, a dropped connection) says nothing
+    // about what the URL restores; it counts as a failed trip.
+    if (pending.kind === "travel") this.#tripFailed();
     // A refused click usually means an overlay covers the page; dismiss it.
     if (pending.refused) {
       this.#queue = [{ kind: "press", key: "Escape" }];
@@ -323,8 +328,8 @@ export class EffectPlanner {
   }
 
   /** A submitted form with a password made the account, or signed in with it. */
-  #account(progressed: boolean): void {
-    const outcome = this.#credentials.submitted(progressed);
+  #account(state: string, progressed: boolean): void {
+    const outcome = this.#credentials.submitted(state, progressed);
     if (!outcome) return;
     debug(`account: ${outcome}`);
     if (outcome === "registered") {
@@ -437,6 +442,11 @@ export class EffectPlanner {
     if (onTheWay(intent.travel)) return;
     if (node.key === intent.target.key) intent.travel = undefined;
     else this.#offCourse(pending);
+  }
+
+  #tripFailed(): void {
+    if (this.#intent) this.#intent.target.failedTravel++;
+    this.#intent = undefined;
   }
 
   #offCourse(pending: Pending): void {
@@ -750,7 +760,7 @@ export class EffectPlanner {
       target: affordance.control.members[0]!,
       ...searchWord(view),
     });
-    this.#credentials.typed(typed);
+    this.#credentials.typed(view.stateKey, typed);
     // Choosing an option is the act itself when the target is that dropdown.
     return actions.filter(
       (a) =>
