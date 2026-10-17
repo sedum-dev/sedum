@@ -17,6 +17,7 @@ import type {
   ExploreAction,
   ExploreFailure,
   ExploreMode,
+  ExplorePlanner,
   ExploreResult,
   ExploreSafety,
   FindingTest,
@@ -30,6 +31,8 @@ export interface ExploreCommandOptions {
   readonly steps: number;
   readonly seed?: number;
   readonly mode: ExploreMode;
+  /** "walk" by default; "effects" plans over Jev's labels (guided only). */
+  readonly planner?: ExplorePlanner;
   readonly out: string;
   readonly shrink: boolean;
   readonly headed: boolean;
@@ -69,13 +72,20 @@ export const EXPLORE_MODES: readonly ExploreMode[] = [
   "random",
 ];
 
-export function exploreMode(value: string): ExploreMode {
-  if (!EXPLORE_MODES.includes(value as ExploreMode))
-    throw new InvalidArgumentError(
-      `Expected one of ${EXPLORE_MODES.join(", ")}.`,
-    );
-  return value as ExploreMode;
+/** A parser that accepts one of a closed set of names. */
+function oneOf<T extends string>(names: readonly T[]): (value: string) => T {
+  return (value) => {
+    if (!names.includes(value as T))
+      throw new InvalidArgumentError(`Expected one of ${names.join(", ")}.`);
+    return value as T;
+  };
 }
+
+export const exploreMode = oneOf(EXPLORE_MODES);
+
+export const EXPLORE_PLANNERS: readonly ExplorePlanner[] = ["walk", "effects"];
+
+export const explorePlanner = oneOf(EXPLORE_PLANNERS);
 
 export function seedValue(value: string): number {
   const seed = /^\d{1,10}$/u.test(value) ? Number(value) : NaN;
@@ -390,7 +400,10 @@ function summary(result: ExploreResult): string {
     .map(([kind, n]) => `${kind} ${n}`)
     .join(", ");
   const lines = [
-    `\nExplored ${result.trace.length} actions in ${(result.elapsedMs / 1000).toFixed(1)}s (seed ${result.seed}, ${result.mode}).`,
+    `\nExplored ${result.trace.length} actions in ${(result.elapsedMs / 1000).toFixed(1)}s (seed ${result.seed}, ${result.mode}${result.planner === "effects" ? ", effects planner" : ""}).`,
+    result.effects
+      ? `Effects map: ${result.effects.states} states, deepest at ${result.effects.maxDepth} forward steps.${result.effects.walkFrom === undefined ? "" : ` The walk planner took over at step ${result.effects.walkFrom}.`}`
+      : "",
     `States: ${result.states} distinct, ${result.routes.length} routes.${kinds ? ` Page kinds: ${kinds}.` : ""}`,
     result.skippedDestructive.length
       ? `Not clicked (destructive or session-ending): ${result.skippedDestructive.join(", ")}.`
@@ -444,6 +457,7 @@ async function openRun(options: ExploreCommandOptions): Promise<RunPlace> {
     startUrl: options.url,
     seed,
     mode: options.mode,
+    ...(options.planner === "effects" ? { planner: options.planner } : {}),
     steps: options.steps,
   };
   await writeFile(trace, `${JSON.stringify(header)}\n`);
@@ -468,6 +482,7 @@ async function walk(
     steps: options.steps,
     seed: place.seed,
     mode: options.mode,
+    ...(options.planner ? { planner: options.planner } : {}),
     ...(guide ? { advisor: guide } : {}),
     ...tuning(options),
     ...watched(options),
@@ -597,6 +612,7 @@ export interface ExploreFlags {
   readonly steps: number;
   readonly seed?: number;
   readonly mode: ExploreMode;
+  readonly planner?: ExplorePlanner;
   readonly out: string;
   readonly shrink: boolean;
   /** A trace.jsonl to run again instead of exploring. */
@@ -639,6 +655,7 @@ async function run(
     steps: flags.steps,
     ...(flags.seed === undefined ? {} : { seed: flags.seed }),
     mode: flags.mode,
+    ...(flags.planner ? { planner: flags.planner } : {}),
     out: path.resolve(io.cwd, flags.out),
     shrink: flags.shrink,
     headed: flags.headed,
@@ -665,6 +682,8 @@ function usageProblem({
   readonly url?: string | undefined;
   readonly flags: ExploreFlags;
 }): string | null {
+  if (flags.planner === "effects" && flags.mode !== "guided")
+    return "--planner effects asks Jev what each control does.\nFix: use it with --mode guided.\n";
   if (flags.detect === "semantic" && flags.mode !== "guided")
     return "--detect semantic asks Jev in each new page's guided call.\nFix: use it with --mode guided.\n";
   return url ? null : "Missing start URL.\nFix: use `sedum explore <url>`.\n";
