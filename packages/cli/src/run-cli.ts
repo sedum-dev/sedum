@@ -23,6 +23,7 @@ import type { RelevanceProviderFactory } from "./affected-selection.js";
 import type { DoctorProbes } from "./doctor-command.js";
 import {
   exploreMode,
+  explorePlanner,
   seedValue,
   startUrl,
   watchOrigin,
@@ -647,6 +648,12 @@ export async function runCli(
       "guided (Jev), heuristic (no model) or random (blind walk)",
       exploreMode,
       "guided",
+    )
+    .option(
+      "--planner <planner>",
+      "walk (weighted random walk) or effects (Jev labels what each control does; code plans over a map of the app; guided mode)",
+      explorePlanner,
+      "walk",
     )
     .option(
       "--out <dir>",

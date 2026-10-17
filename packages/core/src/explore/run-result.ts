@@ -1,6 +1,6 @@
 import type { ProviderCall } from "../provider.js";
 import { routeTemplate } from "./archive.js";
-import type { ExploreResult } from "./explorer.js";
+import type { ExplorePlanner, ExploreResult } from "./explorer.js";
 import type {
   ExploreAction,
   ExploreFailure,
@@ -81,6 +81,13 @@ export interface ExploreRunResult {
   readonly startUrl: string;
   readonly seed: number;
   readonly mode: ExploreMode;
+  /** The weighted walk, or the effects planner. */
+  readonly planner?: ExplorePlanner;
+  /** The effects planner's abstract map: states and the deepest one. */
+  readonly effects?: {
+    readonly states: number;
+    readonly maxDepth: number;
+  } | null;
   readonly safety: ExploreSafety;
   readonly detect: "browser" | "semantic";
   readonly startedAt: string;
@@ -288,6 +295,8 @@ export function buildExploreRunResult(
     startUrl: result.startUrl,
     seed: result.seed,
     mode: result.mode,
+    planner: result.planner ?? "walk",
+    effects: result.effects ?? null,
     safety: meta.safety,
     detect: meta.detect,
     startedAt: meta.startedAt,

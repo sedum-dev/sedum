@@ -144,6 +144,58 @@ actions) that reached the page. A path that wrote to the server is never
 kept, so a return never repeats a create or a save. This is go-explore
 without snapshots: most web pages can be restored from their URL. Random mode never returns.
 
+## The effects planner (experimental)
+
+`--planner effects` (guided mode) replaces the weighted walk. Jev only
+labels; code decides where to go.
+
+- **One call per page structure.** Each click target gets one closed
+  question, "what does activating it do?", over 19 effects
+  (`navigate_section`, `open_item_detail`, `add_to_collection`,
+  `remove_from_collection`, `change_quantity`, `open_collection`,
+  `sort_items`, `filter_items`, `search`, `paginate`, `open_form`,
+  `submit_form`, `proceed`, `sign_in`, `toggle_view`, `cancel_or_back`,
+  `log_out_or_reset`, `external`, `other`). Each field gets "what does it ask
+  for?" over 22 roles. Labels below 0.5 confidence become `other`. Labels are
+  cached per control (role, name with digits folded, link template) and per
+  field, so only targets the run has not seen are asked about. Repeated controls
+  of a list (each product's link, each row's "Add to cart") are one control,
+  asked once and tried on two records. With `--safe`, the same call asks
+  whether each control is destructive.
+- **An abstract map.** A state is a route template (ids, UUIDs and other
+  dashed ids folded, the query dropped, hash routes kept) plus its form's
+  field names, its step's forward controls and an open dialog. Each state
+  remembers the affordances it offers and which affordance led to which
+  state.
+- **Planning over the whole map.** Each untried affordance in each known
+  state scores `value × boost × depth × decay × jitter / (1 + 0.7 ×
+distance)`. Forward steps (`proceed` 5, `submit_form` 4) gain 20% per level
+  of depth and never decay. Other kinds lose 65% per earlier try of the same
+  kind on the same kind of page, or of the same control anywhere. Toggles decay
+  together with the other toggles in their menu. Site-wide controls
+  count once. The walk travels to the best state by replaying a short clean
+  path (never one that wrote to the server) or by loading its URL. A
+  seeded draw breaks ties.
+- **Depth.** Before a forward step or search, the planner fills every empty or
+  rejected field from its role and answers placeholder dropdowns and radio
+  groups. A forward step that changes nothing asks one more question: what
+  must happen first (add items, sign in, complete fields, choose an option,
+  nothing)? The answer raises what clears the gate, and the step is tried
+  again. Adding to a collection raises opening it and re-opens its forward
+  steps. A control that a toggle revealed is reached by opening the
+  toggle first.
+- **Scope.** Links are kept only on the start origin, not the registrable
+  domain. Logging out and external links are never chosen. When nothing is
+  left, the planner tries one more record of each list, reloads, and then
+  stops with "The effects planner has nothing left to try."
+
+Safety, the oracles, traces, replay, shrinking and `result.json` work as with
+the walk. `result.json` names the planner and, for the effects planner, its
+number of abstract states and the deepest one (`effects.maxDepth`, in forward
+steps from the start). `--detect semantic` adds one page-check call per new
+state, as the walk does. Set `SEDUM_EFFECTS_DEBUG=1` to print each plan to
+stderr.
+
 ## Oracles
 
 The walk always reports:

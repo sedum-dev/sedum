@@ -1,6 +1,7 @@
 export {
   explore,
   type ExploreOptions,
+  type ExplorePlanner,
   type ExploreResult,
 } from "./explorer.js";
 export { replay, shrink, type FreshPage, type ShrinkResult } from "./replay.js";
