@@ -1,7 +1,13 @@
 import type { Candidate } from "../../page-protocol.js";
 import type { Observation } from "../observe.js";
 import { foldName, onStartOrigin, pageTemplate } from "./template.js";
-import { FORWARD, GLOBAL, VALUE, type Effect } from "./vocabulary.js";
+import {
+  FORWARD,
+  GLOBAL,
+  NEEDS_FORM,
+  VALUE,
+  type Effect,
+} from "./vocabulary.js";
 
 /**
  * Controls that are the same thing: one control, or the repeated control of
@@ -199,14 +205,10 @@ export function stateKey(
   template: string,
   fields: readonly string[],
   forward: readonly string[],
-  dialog?: string,
 ): string {
   const join = (names: readonly string[], limit: number) =>
     foldName([...names].sort().join(",")).slice(0, limit);
-  const parts = [template, join(fields, 80), join(forward, 60)];
-  if (dialog !== undefined)
-    parts.push(`dialog:${foldName(dialog).slice(0, 40)}`);
-  return parts.join("|");
+  return [template, join(fields, 80), join(forward, 60)].join("|");
 }
 
 /** The heading of an open dialog, "" when it has none; undefined when none is open. */
@@ -239,7 +241,10 @@ export function forwardNames(
 }
 
 interface AffordanceContext {
+  /** Where the affordances belong: the page template, or an open dialog. */
   readonly template: string;
+  /** The page's own template. */
+  readonly page: string;
   readonly stateKey: string;
   readonly effectOf: EffectOf;
   readonly chrome: Chrome;
@@ -257,12 +262,21 @@ function affordancesOf(
   control: ControlClass,
   context: AffordanceContext,
 ): Affordance[] {
-  const effect = context.effectOf(control) ?? "other";
+  const effect = effectHere(control, context);
   if (VALUE[effect] === 0) return [];
+  // A disabled control is worth a try only as a submit its form may enable.
+  if (control.members[0]!.disabled && !NEEDS_FORM.has(effect)) return [];
   if (control.record) return [recordAffordance(control, effect, context)];
   if (control.members[0]!.tag === "select")
     return selectAffordances(control, effect, context);
   return [controlAffordance(control, effect, context)];
+}
+
+/** A link to the page it is on moves nothing forward, whatever Jev calls it. */
+function effectHere(control: ControlClass, context: AffordanceContext): Effect {
+  const effect = context.effectOf(control) ?? "other";
+  const samePage = control.hrefTemplate === context.page;
+  return FORWARD.has(effect) && samePage ? "other" : effect;
 }
 
 /** A list's repeated control: one affordance, tried on two records. */
@@ -367,6 +381,17 @@ function toggleGroup(effect: Effect, first: Candidate): string | undefined {
     : undefined;
 }
 
+/**
+ * Where a page's affordances belong: its template, or an open dialog,
+ * which is the same dialog on whatever page it opens over.
+ */
+function scopeOfPage(observation: Observation, template: string): string {
+  const dialog = openDialog(observation);
+  return dialog === undefined
+    ? template
+    : `dialog:${foldName(dialog).slice(0, 40)}`;
+}
+
 /** Build the planner's view of an observation whose controls are labelled. */
 export function pageView(
   observation: Observation,
@@ -376,11 +401,11 @@ export function pageView(
 ): PageView {
   const template = pageTemplate(observation.url);
   chrome.note(template, controls);
+  const scope = scopeOfPage(observation, template);
   const key = stateKey(
-    template,
+    scope,
     observation.fills.map((fill) => fill.name),
     forwardNames(controls, effectOf, chrome),
-    openDialog(observation),
   );
   return {
     url: observation.url,
@@ -389,7 +414,8 @@ export function pageView(
     snapshot: observation.state,
     controls,
     affordances: affordances(controls, {
-      template,
+      template: scope,
+      page: template,
       stateKey: key,
       effectOf,
       chrome,

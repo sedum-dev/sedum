@@ -28,6 +28,18 @@ export interface FillContext {
   readonly random: SeededRandom;
   /** How often this field was filled while it showed as invalid before. */
   readonly retries: (fill: Candidate) => number;
+  /** What password fields get; none are typed into without one. */
+  readonly password: string | undefined;
+  /** The run's account value for a role, once it has one. */
+  readonly account: (role: FieldRole) => string | undefined;
+  /** The control the form is filled for: only its form's fields are filled. */
+  readonly target?: Candidate;
+}
+
+/** The fill actions for a form, and what each role was given. */
+export interface FormFill {
+  readonly actions: ExploreAction[];
+  readonly typed: Partial<Record<FieldRole, string>>;
 }
 
 /** Other valid shapes to try when a field rejects the first one. */
@@ -45,8 +57,6 @@ const AGREEING = new RegExp(
   "iu",
 );
 
-/** A sign-in form has at most this many fields; a password is only made up for larger forms. */
-const SIGN_IN_FIELDS = 3;
 const SKIPPED_TYPES = new Set(["file", "checkbox", "radio", "range", "color"]);
 
 type ValueContext = Pick<FillContext, "token" | "searchWord">;
@@ -67,6 +77,12 @@ function email(context: ValueContext): string {
   return `ada.lovelace+${context.token}@example.com`;
 }
 
+/** Values that must be new on every run: an account's identifiers. */
+const PER_RUN: Partial<Record<FieldRole, (context: ValueContext) => string>> = {
+  email,
+  username: (context) => `${FIELD_VALUES.username}_${context.token}`,
+};
+
 /** The value a field gets from its role and its constraints. */
 export function valueFor(
   role: FieldRole,
@@ -78,7 +94,8 @@ export function valueFor(
   if (retry && alternatives) return alternatives[retry % alternatives.length]!;
   const byType = BY_TYPE[field.type];
   if (byType) return byType(field, context);
-  if (role === "email") return email(context);
+  const perRun = PER_RUN[role];
+  if (perRun) return perRun(context);
   if (role === "search_term")
     return context.searchWord ?? FIELD_VALUES.search_term;
   return FIELD_VALUES[role];
@@ -86,35 +103,81 @@ export function valueFor(
 
 /**
  * Type into every empty or invalid field from its role, then answer
- * placeholder dropdowns and unanswered radio groups. A password is made up
- * only for a form too large to be a sign-in form.
+ * placeholder dropdowns and unanswered radio groups. Password fields get
+ * the context's password, or are left alone without one.
  */
-export async function fillActions(
-  context: FillContext,
-): Promise<ExploreAction[]> {
+export async function fillActions(context: FillContext): Promise<FormFill> {
   const { observation } = context;
-  const fields = await inspectFields(context.page, observation.fills);
-  const byRef = new Map(observation.fills.map((c) => [c.ref, c]));
+  const fills = await formFills(context);
+  const fields = await inspectFields(context.page, fills);
+  const byRef = new Map(fills.map((c) => [c.ref, c]));
   const actions: ExploreAction[] = [];
+  const typed: Partial<Record<FieldRole, string>> = {};
   for (const field of fields) {
     const fill = byRef.get(field.ref);
     if (!fill || !needsValue(field)) continue;
     const role = field.type === "password" ? "password" : context.roleOf(fill);
-    if (role === "password" && observation.fills.length <= SIGN_IN_FIELDS)
-      continue;
+    const value = typedValue(role, field, fill, context);
+    if (value === undefined) continue;
+    typed[role] = value.text;
     actions.push({
       kind: "type",
       target: identityOf(observation.fills, fill, observation.url),
-      value: valueOf(role, field, fill, context),
-      source: { kind: "faker", generator: `role.${role}` },
+      value: value.text,
+      source: { kind: "faker", generator: value.generator },
     });
   }
   // Dropdowns first: choosing a country may reset or re-check the fields.
-  return [
-    ...(await dropdownActions(context)),
-    ...actions,
-    ...(await choiceActions(context)),
-  ];
+  return {
+    actions: [
+      ...(await dropdownActions(context, fills)),
+      ...actions,
+      ...(await choiceActions(context)),
+    ],
+    typed,
+  };
+}
+
+/** The account's value, the password, or a value from the role and constraints. */
+function typedValue(
+  role: FieldRole,
+  field: FieldInfo,
+  fill: Candidate,
+  context: FillContext,
+): { text: string; generator: string } | undefined {
+  const account = context.account(role);
+  if (account !== undefined)
+    return { text: account, generator: `format.account.${role}` };
+  if (role === "password")
+    return context.password === undefined
+      ? undefined
+      : { text: context.password, generator: "format.newPassword" };
+  return valueOf(role, field, fill, context);
+}
+
+/**
+ * The fields of the target's form, when it is in one: a chat box or a
+ * newsletter field elsewhere on the page is not part of it.
+ */
+const SAME_FORM = String.raw`((target, refs) => {
+  const q = (ref) => document.querySelector('[data-sedum-ref="' + CSS.escape(ref) + '"]');
+  const formOf = (e) => e.form || e.closest("form");
+  const t = q(target);
+  const form = t && formOf(t);
+  if (!form) return refs;
+  return refs.filter((ref) => { const e = q(ref); return !!e && formOf(e) === form; });
+})`;
+
+async function formFills(context: FillContext): Promise<readonly Candidate[]> {
+  const { observation, target } = context;
+  if (!target || !observation.fills.length) return observation.fills;
+  const refs = JSON.stringify(observation.fills.map((c) => c.ref));
+  const kept = await context.page
+    .evaluate<string[]>(`${SAME_FORM}(${JSON.stringify(target.ref)}, ${refs})`)
+    .catch(() => null);
+  if (!kept) return observation.fills;
+  const keep = new Set(kept);
+  return observation.fills.filter((c) => keep.has(c.ref));
 }
 
 /** An empty or rejected field that takes typed text. */
@@ -129,13 +192,17 @@ function valueOf(
   field: FieldInfo,
   fill: Candidate,
   context: FillContext,
-): string {
+): { text: string; generator: string } {
   const retry = field.invalid ? context.retries(fill) : 0;
   const sampled =
     field.invalid && field.pattern
       ? samplePattern(field.pattern, context.random)
       : null;
-  return sampled ?? valueFor(role, field, context, retry);
+  if (sampled !== null) return { text: sampled, generator: "format.pattern" };
+  return {
+    text: valueFor(role, field, context, retry),
+    generator: `format.field.${role}`,
+  };
 }
 
 function selectOf(
@@ -174,9 +241,12 @@ const AGREEING_OPTIONS = String.raw`(() => {
     .map((s) => { const o = [...s.options].find((o) => o.value && agrees.test(label(o))); return o ? label(o) : ""; });
 })()`;
 
-async function dropdownActions(context: FillContext): Promise<ExploreAction[]> {
+async function dropdownActions(
+  context: FillContext,
+  fills: readonly Candidate[],
+): Promise<ExploreAction[]> {
   const { observation } = context;
-  const dropdowns = await unansweredDropdowns(context.page, observation.fills);
+  const dropdowns = await unansweredDropdowns(context.page, fills);
   const agreeing = await agreeingOptions(context, dropdowns.length > 0);
   const actions: ExploreAction[] = [];
   for (const dropdown of dropdowns) {

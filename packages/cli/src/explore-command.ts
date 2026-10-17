@@ -402,7 +402,7 @@ function summary(result: ExploreResult): string {
   const lines = [
     `\nExplored ${result.trace.length} actions in ${(result.elapsedMs / 1000).toFixed(1)}s (seed ${result.seed}, ${result.mode}${result.planner === "effects" ? ", effects planner" : ""}).`,
     result.effects
-      ? `Effects map: ${result.effects.states} states, deepest at ${result.effects.maxDepth} forward steps.`
+      ? `Effects map: ${result.effects.states} states, deepest at ${result.effects.maxDepth} forward steps.${result.effects.walkFrom === undefined ? "" : ` The walk planner took over at step ${result.effects.walkFrom}.`}`
       : "",
     `States: ${result.states} distinct, ${result.routes.length} routes.${kinds ? ` Page kinds: ${kinds}.` : ""}`,
     result.skippedDestructive.length

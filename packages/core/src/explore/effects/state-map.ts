@@ -50,15 +50,37 @@ export interface Edge {
   readonly clean: boolean;
 }
 
-/** The best thing to do next: an affordance in a state, and how far it is. */
+/** How to reach a state: load a restorable state's URL, or not, then replay steps. */
+export interface Route {
+  /** The state whose URL is loaded first, or null to start from here. */
+  readonly load: StateNode | null;
+  /** Affordance keys to replay after the load. */
+  readonly path: readonly AffordanceKey[];
+  /** The state each replayed step should land in. */
+  readonly expect: readonly StateKey[];
+  /** 0 here, else a load and the replayed steps. */
+  readonly distance: number;
+}
+
+/** The best thing to do next: an affordance in a state, and how to get there. */
 export interface PlanChoice {
   readonly state: StateNode;
   readonly key: string;
   readonly score: number;
-  /** 0 here, else the travel cost. */
-  readonly distance: number;
-  /** Affordance keys to replay from here, or null to load the state's URL. */
-  readonly path: readonly string[] | null;
+  readonly route: Route;
+}
+
+/** How the planner looks over the map. */
+export interface PlanOptions {
+  /**
+   * Hysteresis: while the current state offers an open affordance this
+   * accepts (a flow's forward step), the plan stays on it.
+   */
+  readonly focus?: (record: AffordanceRecord) => boolean;
+  /** Replay steps that wrote, too: a fresh session has to redo them. */
+  readonly dirty?: boolean;
+  /** Paths longer than this are not replayed. */
+  readonly maxPath?: number;
 }
 
 /** Each further try of a kind of control is worth this much less. */
@@ -70,7 +92,7 @@ export const TRAVEL_COST = 0.7;
 /** Seeded tie-breaking: up to this much extra, so seeds take different paths. */
 export const JITTER = 0.3;
 /** Paths longer than this are not replayed. */
-const MAX_PATH = 4;
+export const MAX_PATH = 4;
 const MAX_FAILED_TRAVEL = 2;
 /** Failed tries after which an affordance is given up. */
 const MAX_FAILURES = 2;
@@ -110,22 +132,59 @@ export function decay(effect: Effect, earlierTries: number): number {
   return DECAY ** earlierTries;
 }
 
-/** Shortest known paths over clean edges, as affordance keys. */
-export function distances(
-  edges: ReadonlyMap<StateKey, ReadonlyMap<AffordanceKey, Edge>>,
-  from: StateKey,
-): Map<StateKey, readonly AffordanceKey[]> {
-  const paths = new Map<StateKey, readonly AffordanceKey[]>([[from, []]]);
-  const queue = [from];
+type Edges = ReadonlyMap<StateKey, ReadonlyMap<AffordanceKey, Edge>>;
+
+/**
+ * The cheapest route to every state: replay known steps from here, or load
+ * the URL of a state that loading restores and replay from there. Only
+ * clean steps are replayed unless `dirty` is set.
+ */
+export function routes(
+  edges: Edges,
+  sources: readonly StateNode[],
+  current: StateKey,
+  options: Pick<PlanOptions, "dirty" | "maxPath"> = {},
+): Map<StateKey, Route> {
+  const maxPath = options.maxPath ?? MAX_PATH;
+  const done = new Map<StateKey, Route>();
+  const queue: [StateKey, Route][] = [
+    [current, { load: null, path: [], expect: [], distance: 0 }],
+    ...sources
+      .filter((s) => s.key !== current)
+      .map((s): [StateKey, Route] => [
+        s.key,
+        { load: s, path: [], expect: [], distance: 1 },
+      ]),
+  ];
   while (queue.length) {
-    const key = queue.shift()!;
+    const [key, route] = takeNearest(queue);
+    if (done.has(key)) continue;
+    done.set(key, route);
+    if (route.path.length >= maxPath) continue;
     for (const [affordance, edge] of edges.get(key) ?? []) {
-      if (!edge.clean || paths.has(edge.to)) continue;
-      paths.set(edge.to, [...paths.get(key)!, affordance]);
-      queue.push(edge.to);
+      if ((!edge.clean && !options.dirty) || done.has(edge.to)) continue;
+      queue.push([edge.to, extend(route, affordance, edge.to)]);
     }
   }
-  return paths;
+  return done;
+}
+
+function extend(route: Route, affordance: AffordanceKey, to: StateKey): Route {
+  return {
+    load: route.load,
+    path: [...route.path, affordance],
+    expect: [...route.expect, to],
+    distance: route.distance + 1,
+  };
+}
+
+/** The nearest queued route; on a tie, one that loads nothing. */
+function takeNearest(queue: [StateKey, Route][]): [StateKey, Route] {
+  const rank = ([, r]: [StateKey, Route]) => r.distance * 2 + (r.load ? 1 : 0);
+  let best = 0;
+  for (let i = 1; i < queue.length; i++)
+    if (rank(queue[i]!) < rank(queue[best]!)) best = i;
+  return queue.splice(best, 1)[0]!;
 }
 
 /** The abstract map of the app: states, what they offer, and how they connect. */
@@ -140,6 +199,8 @@ export class StateMap {
   readonly #classFailures = new Map<string, number>();
   /** Templates reached by opening the collection or stepping forward. */
   readonly collections = new Set<string>();
+  /** Offers dropped because they were not shown; a sweep gives them back. */
+  readonly #forgotten = new Map<StateKey, Set<AffordanceKey>>();
   /** Effect multipliers raised by gates; reset once the effect is taken. */
   boost: Partial<Record<Effect, number>> = {};
 
@@ -226,9 +287,15 @@ export class StateMap {
     this.refreshCollection();
   }
 
-  /** The state did not show the affordance this time: it is not reliably there. */
-  forget(state: StateKey, key: AffordanceKey): void {
-    this.states.get(state)?.offers.delete(key);
+  /**
+   * The state did not show the affordance this time: it is not reliably
+   * there. A sweep gives it back, unless it is dead (`remember` false).
+   */
+  forget(state: StateKey, key: AffordanceKey, remember = true): void {
+    if (!this.states.get(state)?.offers.delete(key) || !remember) return;
+    const keys = this.#forgotten.get(state) ?? new Set<AffordanceKey>();
+    keys.add(key);
+    this.#forgotten.set(state, keys);
   }
 
   /**
@@ -278,10 +345,50 @@ export class StateMap {
         this.revealedBy.set(affordance, key);
   }
 
+  /** A state reached from another at the same URL: loading the URL gives the other one. */
+  cameFrom(from: StateNode, to: StateNode, url: string): void {
+    if (firstArrival(from, to) && url === from.url) to.restorable = false;
+  }
+
+  /** Re-arm records for one more try each; false when none was spent. */
+  rearm(keys: Iterable<AffordanceKey>): boolean {
+    let any = false;
+    for (const key of keys) {
+      const record = this.records.get(key);
+      if (!record || !spent(record)) continue;
+      record.instances = record.tried + 1;
+      any = true;
+    }
+    return any;
+  }
+
+  /** Every remaining record of every list, and what was not shown, gets a try. */
+  sweep(): boolean {
+    let any = false;
+    for (const record of this.records.values())
+      if (widenable(record)) {
+        record.instances = record.members;
+        any = true;
+      }
+    for (const [state, keys] of this.#forgotten) {
+      for (const key of keys) this.states.get(state)?.offers.add(key);
+      any ||= keys.size > 0;
+    }
+    this.#forgotten.clear();
+    return any;
+  }
+
   /** Plan over the whole map: the best untried affordance anywhere, minus travel. */
-  plan(current: StateKey, random: () => number): PlanChoice | undefined {
+  plan(
+    current: StateKey,
+    random: () => number,
+    options: PlanOptions = {},
+  ): PlanChoice | undefined {
     let best: PlanChoice | undefined;
-    for (const option of this.#options(current)) {
+    for (const option of this.#focused(
+      this.#options(current, options),
+      options,
+    )) {
       const { state, record } = option;
       const value = score({
         effect: record.effect,
@@ -289,36 +396,47 @@ export class StateMap {
         depth: state.depth,
         decay: decay(record.effect, this.earlierTries(record)),
         jitter: random(),
-        distance: option.distance,
+        distance: option.route.distance,
       });
       if (!best || value > best.score)
-        best = {
-          state,
-          key: option.key,
-          score: value,
-          distance: option.distance,
-          path: option.path,
-        };
+        best = { state, key: option.key, score: value, route: option.route };
     }
     return best;
   }
 
+  /** Hysteresis: the current state's flow steps, when it has any. */
+  #focused(options: Option[], plan: PlanOptions): Option[] {
+    const focus = plan.focus;
+    if (!focus) return options;
+    const here = options.filter(
+      (o) => o.route.distance === 0 && focus(o.record),
+    );
+    return here.length ? here : options;
+  }
+
   /** Every open affordance in every reachable state, with how to get there. */
-  *#options(current: StateKey): Generator<
-    Pick<PlanChoice, "state" | "key" | "distance" | "path"> & {
-      readonly record: AffordanceRecord;
-    }
-  > {
-    const paths = distances(this.edges, current);
-    for (const state of this.states.values()) {
-      const travel = this.#travel(state, current, paths);
-      if (!travel) continue;
-      const open = [...state.offers].filter((key) =>
-        this.#open(this.records.get(key)!),
-      );
-      for (const key of open)
-        yield { state, key, record: this.records.get(key)!, ...travel };
-    }
+  #options(current: StateKey, plan: PlanOptions): Option[] {
+    const sources = [...this.states.values()].filter(
+      (s) => s.restorable && s.failedTravel < MAX_FAILED_TRAVEL,
+    );
+    const reach = routes(this.edges, sources, current, plan);
+    return [...this.states.values()].flatMap((state) => {
+      const route = reach.get(state.key);
+      return route && this.#reachable(state, current)
+        ? this.#openOffers(state, route)
+        : [];
+    });
+  }
+
+  #openOffers(state: StateNode, route: Route): Option[] {
+    return [...state.offers].flatMap((key) => {
+      const record = this.records.get(key)!;
+      return this.#open(record) ? [{ state, key, record, route }] : [];
+    });
+  }
+
+  #reachable(state: StateNode, current: StateKey): boolean {
+    return state.key === current || state.failedTravel < MAX_FAILED_TRAVEL;
   }
 
   /** Untried, and neither it nor its control failed too often. */
@@ -326,28 +444,29 @@ export class StateMap {
     if (record.tried >= record.instances || record.blocked) return false;
     return (this.#classFailures.get(record.cls) ?? 0) < MAX_FAILURES;
   }
+}
 
-  /** How to reach a state: by replaying a short known path or loading its URL. */
-  #travel(
-    state: StateNode,
-    current: StateKey,
-    paths: ReadonlyMap<StateKey, readonly AffordanceKey[]>,
-  ): Pick<PlanChoice, "distance" | "path"> | undefined {
-    if (state.key === current) return { distance: 0, path: [] };
-    if (state.failedTravel >= MAX_FAILED_TRAVEL) return undefined;
-    const known = paths.get(state.key);
-    const byPath = known?.length ?? Infinity;
-    const distance = Math.min(byPath, state.restorable ? 1 : Infinity);
-    if (distance === Infinity) return undefined;
-    const replay = distance === byPath && byPath <= MAX_PATH;
-    return { distance, path: replay ? known! : null };
-  }
+interface Option {
+  readonly state: StateNode;
+  readonly key: AffordanceKey;
+  readonly record: AffordanceRecord;
+  readonly route: Route;
 }
 
 /** A list tried on all its instances that has more records to try. */
 function widenable(record: AffordanceRecord): boolean {
   if (record.instances < 2 || record.blocked) return false;
   return record.members > record.instances && record.tried >= record.instances;
+}
+
+/** Tried on all its instances, and not given up: one more try would be new. */
+function spent(record: AffordanceRecord): boolean {
+  return !record.blocked && record.tried >= record.instances;
+}
+
+/** The first time `to` was reached, from another state. */
+function firstArrival(from: StateNode, to: StateNode): boolean {
+  return to.visits === 1 && to.key !== from.key;
 }
 
 function classesOf(record: AffordanceRecord): string[] {

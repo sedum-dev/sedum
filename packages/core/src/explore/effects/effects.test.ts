@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Candidate } from "../../page-protocol.js";
 import type { Observation } from "../observe.js";
+import { Credentials } from "./credentials.js";
 import { valueFor } from "./form-fill.js";
+import { DeadControls } from "./liveness.js";
 import { decay, score, StateMap } from "./state-map.js";
 import { foldName, onStartOrigin, pageTemplate } from "./template.js";
 import {
@@ -266,8 +268,9 @@ describe("the state map", () => {
     map.learn(view("/cart", "cart", [["checkout", "proceed"]]), 1);
     const choice = map.plan(here.key, still)!;
     expect(choice.key).toBe("checkout");
-    expect(choice.path).toBeNull();
-    expect(choice.distance).toBe(1);
+    expect(choice.route.load?.key).toBe("cart");
+    expect(choice.route.path).toEqual([]);
+    expect(choice.route.distance).toBe(1);
   });
 
   it("replays a known clean edge but never one that wrote", () => {
@@ -279,9 +282,15 @@ describe("the state map", () => {
     map.learn(view("/cart", "cart", [["checkout", "proceed"]]), 1);
     map.tried("open-cart");
     map.connect("list", "open-cart", "cart", true);
-    expect(map.plan(here.key, still)!.path).toEqual(["open-cart"]);
+    expect(map.plan(here.key, still)!.route).toMatchObject({
+      load: null,
+      path: ["open-cart"],
+    });
     map.connect("list", "open-cart", "cart", false);
-    expect(map.plan(here.key, still)!.path).toBeNull();
+    expect(map.plan(here.key, still)!.route.load?.key).toBe("cart");
+    expect(map.plan(here.key, still, { dirty: true })!.route.path).toEqual([
+      "open-cart",
+    ]);
   });
 
   it("skips a state that its URL does not restore and no path reaches", () => {
@@ -551,5 +560,191 @@ describe("affordance keys", () => {
     };
     expect(key(["Email"], button)).not.toBe(key(["Street"], button));
     expect(key(["Email"], cartLink)).toBe(key(["Street"], cartLink));
+  });
+});
+
+describe("travel to states a URL does not restore", () => {
+  const still = () => 0;
+
+  /** start → step1 → step2 of a wizard that keeps one URL. */
+  function wizard(): StateMap {
+    const map = new StateMap();
+    const start = map.learn(
+      view("/", "start", [["go", "navigate_section"]]),
+      0,
+    );
+    const step1 = map.learn(
+      view("/checkout", "step1", [["next", "proceed"]]),
+      1,
+    );
+    map.cameFrom(start, step1, `${ORIGIN}/checkout`);
+    const step2 = map.learn(
+      { ...view("/checkout", "step2", [["pay", "proceed"]]) },
+      2,
+    );
+    map.cameFrom(step1, step2, `${ORIGIN}/checkout`);
+    map.tried("go");
+    map.tried("next");
+    map.connect("start", "go", "step1", true);
+    map.connect("step1", "next", "step2", true);
+    map.learn(view("/about", "about", []), 1);
+    return map;
+  }
+
+  it("learns that a state reached at the same URL is not restored by it", () => {
+    const map = wizard();
+    expect(map.states.get("step1")!.restorable).toBe(true);
+    expect(map.states.get("step2")!.restorable).toBe(false);
+  });
+
+  it("loads the nearest restorable ancestor and replays the path from it", () => {
+    const map = wizard();
+    map.states.get("step1")!.restorable = false;
+    const choice = map.plan("about", still)!;
+    expect(choice.key).toBe("pay");
+    expect(choice.route).toMatchObject({
+      path: ["go", "next"],
+      expect: ["step1", "step2"],
+      distance: 3,
+    });
+    expect(choice.route.load?.key).toBe("start");
+  });
+
+  it("does not replay longer paths than allowed", () => {
+    const map = wizard();
+    map.states.get("step1")!.restorable = false;
+    expect(map.plan("about", still, { maxPath: 1 })).toBeUndefined();
+  });
+});
+
+describe("hysteresis", () => {
+  it("finishes the current state's forward steps before going elsewhere", () => {
+    const map = new StateMap();
+    const here = map.learn(
+      view("/form", "form", [
+        ["send", "submit_form"],
+        ["menu", "toggle_view"],
+      ]),
+      0,
+    );
+    map.learn(view("/deep", "deep", [["pay", "proceed"]]), 6);
+    const focus = (r: { effect: Effect }) =>
+      r.effect === "proceed" || r.effect === "submit_form";
+    expect(map.plan(here.key, () => 0)!.key).toBe("pay");
+    expect(map.plan(here.key, () => 0, { focus })!.key).toBe("send");
+    map.tried("send");
+    expect(map.plan(here.key, () => 0, { focus })!.key).toBe("pay");
+  });
+});
+
+describe("spending the rest of the budget", () => {
+  it("sweeps every remaining record and what was not shown, but not dead controls", () => {
+    const map = new StateMap();
+    const list = map.learn(
+      view("/list", "list", [["items", "open_item_detail"]], 2),
+      0,
+    );
+    map.learn(
+      view("/list", "list", [
+        ["more", "paginate"],
+        ["off", "other"],
+      ]),
+      0,
+    );
+    map.tried("items");
+    map.tried("items");
+    map.forget(list.key, "more");
+    map.forget(list.key, "off", false);
+    expect(map.plan(list.key, () => 0)).toBeUndefined();
+    expect(map.sweep()).toBe(true);
+    expect(map.records.get("items")!.instances).toBe(4);
+    expect(map.states.get("list")!.offers.has("more")).toBe(true);
+    expect(map.states.get("list")!.offers.has("off")).toBe(false);
+    expect(map.plan(list.key, () => 0)?.key).toBe("more");
+  });
+
+  it("re-arms spent records once, but not blocked ones", () => {
+    const map = new StateMap();
+    const here = map.learn(
+      view("/c", "c", [
+        ["a", "proceed"],
+        ["b", "proceed"],
+      ]),
+      0,
+    );
+    map.tried("a");
+    map.tried("b");
+    map.failed("b");
+    expect(map.rearm(["a", "b"])).toBe(true);
+    expect(map.plan(here.key, () => 0)?.key).toBe("a");
+    expect(map.rearm(["b"])).toBe(false);
+  });
+});
+
+describe("dead controls", () => {
+  it("are dead in a state after two clicks that changed nothing", () => {
+    const dead = new DeadControls();
+    expect(dead.idle("s1", "tab")).toBe(false);
+    expect(dead.dead("s1", "tab")).toBe(false);
+    expect(dead.idle("s2", "tab")).toBe(false);
+    expect(dead.idle("s1", "tab")).toBe(true);
+    expect(dead.dead("s1", "tab")).toBe(true);
+    expect(dead.dead("s2", "tab")).toBe(false);
+  });
+});
+
+describe("credentials", () => {
+  const signUp = {
+    email: "ada+1@example.com",
+    password: "pw",
+    first_name: "Ada",
+  };
+
+  it("are remembered from a submitted sign-up and used to sign in", () => {
+    const credentials = new Credentials();
+    credentials.typed(signUp);
+    expect(credentials.submitted(true)).toBe("registered");
+    expect(credentials.valueFor("email")).toBe("ada+1@example.com");
+    expect(credentials.valueFor("password")).toBe("pw");
+    expect(credentials.valueFor("first_name")).toBeUndefined();
+    credentials.typed({ email: "ada+1@example.com", password: "pw" });
+    expect(credentials.submitted(true)).toBe("signed_in");
+    expect(credentials.signedIn).toBe(true);
+  });
+
+  it("are not taken from a form that did not move on, or that had no password", () => {
+    const credentials = new Credentials();
+    credentials.typed(signUp);
+    expect(credentials.submitted(false)).toBeUndefined();
+    credentials.typed({ email: "ada+1@example.com", message: "hi" });
+    expect(credentials.submitted(true)).toBeUndefined();
+    expect(credentials.known).toBeUndefined();
+  });
+
+  it("give a sign-up a username new on every run", () => {
+    const one = valueFor("username", { type: "text" }, { token: "1" });
+    const two = valueFor("username", { type: "text" }, { token: "2" });
+    expect(one).not.toBe(two);
+  });
+});
+
+describe("controls a page shows", () => {
+  const offered = (page: Observation, effect: Effect) =>
+    pageView(page, controlClasses(page, ORIGIN), () => effect, new Chrome())
+      .affordances;
+
+  it("offer a disabled button only as a submit its form may enable", () => {
+    const page = observation(`${ORIGIN}/checkout`, [
+      candidate("Proceed", { disabled: true }),
+    ]);
+    expect(offered(page, "proceed")).toHaveLength(1);
+    expect(offered(page, "paginate")).toHaveLength(0);
+  });
+
+  it("never take a link to the page they are on for a forward step", () => {
+    const page = observation(`${ORIGIN}/checkout`, [
+      link("cart", "/checkout", "navigation"),
+    ]);
+    expect(offered(page, "proceed").map((a) => a.effect)).toEqual(["other"]);
   });
 });

@@ -156,7 +156,7 @@ labels; code decides where to go.
   `sort_items`, `filter_items`, `search`, `paginate`, `open_form`,
   `submit_form`, `proceed`, `sign_in`, `toggle_view`, `cancel_or_back`,
   `log_out_or_reset`, `external`, `other`). Each field gets "what does it ask
-  for?" over 22 roles. Labels below 0.5 confidence become `other`. Labels are
+  for?" over 23 roles. Labels below 0.5 confidence become `other`. Labels are
   cached per control (role, name with digits folded, link template) and per
   field, so only targets the run has not seen are asked about. Repeated controls
   of a list (each product's link, each row's "Add to cart") are one control,
@@ -164,7 +164,8 @@ labels; code decides where to go.
   whether each control is destructive.
 - **An abstract map.** A state is a route template (ids, UUIDs and other
   dashed ids folded, the query dropped, hash routes kept) plus its form's
-  field names, its step's forward controls and an open dialog. Each state
+  field names and its step's forward controls. An open dialog replaces the
+  template, so a dialog that opens over every page is one state. Each state
   remembers the affordances it offers and which affordance led to which
   state.
 - **Planning over the whole map.** Each untried affordance in each known
@@ -173,9 +174,15 @@ distance)`. Forward steps (`proceed` 5, `submit_form` 4) gain 20% per level
   of depth and never decay. Other kinds lose 65% per earlier try of the same
   kind on the same kind of page, or of the same control anywhere. Toggles decay
   together with the other toggles in their menu. Site-wide controls
-  count once. The walk travels to the best state by replaying a short clean
-  path (never one that wrote to the server) or by loading its URL. A
-  seeded draw breaks ties.
+  count once. A seeded draw breaks ties. While the current state still
+  offers an untried forward step, the plan stays on it and finishes the flow
+  before going elsewhere.
+- **Travel.** The walk reaches the best state by replaying a short clean
+  path (never one that wrote to the server), or by loading the URL of a
+  state that loading restores and replaying from there. A URL is not
+  trusted to restore a state: a state reached at the same URL as the one
+  before it (a wizard step, a dialog) is marked as not restorable, and so
+  is any state whose URL, once loaded, showed another state.
 - **Depth.** Before a forward step or search, the planner fills every empty or
   rejected field from its role and answers placeholder dropdowns and radio
   groups. A forward step that changes nothing asks one more question: what
@@ -183,16 +190,34 @@ distance)`. Forward steps (`proceed` 5, `submit_form` 4) gain 20% per level
   nothing)? The answer raises what clears the gate, and the step is tried
   again. Adding to a collection raises opening it and re-opens its forward
   steps. A control that a toggle revealed is reached by opening the
-  toggle first.
+  toggle first. Only the target's own form is filled (not a chat box or a
+  newsletter field elsewhere), and never before a link to another page. A
+  disabled submit counts as a target: its form is filled first, and it is
+  given up if it stays disabled.
+- **Controls that cannot act.** Targets that are disabled, `aria-disabled`,
+  `pointer-events: none`, or covered at their centre by an unrelated
+  element (not a fixed or sticky bar) are left out. A control whose clicks
+  changed nothing twice in a state is dead in that state.
+- **Accounts.** A form submitted with a password and an email or username
+  that moves on gives the run an account (the email and username carry a
+  per-run token). Sign-in forms (a password and at most two other fields)
+  then get the same credentials, sign-in steps are tried again, and forward
+  steps a sign-in gate stopped are re-opened once signed in.
 - **Scope.** Links are kept only on the start origin, not the registrable
-  domain. Logging out and external links are never chosen. When nothing is
-  left, the planner tries one more record of each list, reloads, and then
-  stops with "The effects planner has nothing left to try."
+  domain. Logging out and external links are never chosen.
+- **The whole budget.** When nothing is left, the planner tries one more
+  record of each list, reloads, then sweeps every remaining record and
+  every control a state did not show the last time. Then it starts a fresh
+  session (the cookies and storage the run started with, such as
+  `--cookies`) and replays its way back to the deepest states, redoing
+  writes such as adding to the cart. After that, the walk planner spends
+  the rest of the steps.
 
 Safety, the oracles, traces, replay, shrinking and `result.json` work as with
 the walk. `result.json` names the planner and, for the effects planner, its
-number of abstract states and the deepest one (`effects.maxDepth`, in forward
-steps from the start). `--detect semantic` adds one page-check call per new
+number of abstract states, the deepest one (`effects.maxDepth`, in forward
+steps from the start) and, if the walk took over, the step it took over at
+(`effects.walkFrom`). `--detect semantic` adds one page-check call per new
 state, as the walk does. Set `SEDUM_EFFECTS_DEBUG=1` to print each plan to
 stderr.
 
