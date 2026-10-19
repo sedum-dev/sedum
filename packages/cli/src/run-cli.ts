@@ -583,39 +583,29 @@ export async function runCli(
             : {}),
           onSnapshot: emit,
         });
-        if (!execution.reporterFailed && reporters.length) {
-          try {
-            emit(execution.result, execution.artifacts);
-            writeOut(
-              renderRunSummary(
-                execution.result,
-                capabilities,
-                execution.artifacts,
-                options.costs,
-              ),
-            );
-            for (const [index, reporter] of reporters.entries()) {
-              const output = reporter.onResult(execution.result, {
-                ...context(execution.artifacts),
-                includeSharedSummary: index === 0,
-              });
-              if (output) writeOut(output);
-            }
-          } catch {
-            const failure = await execution.onReporterFailure?.();
-            if (upload && failure) writeErr(await upload(failure));
-            writeErr(
-              renderDiagnostic(
-                failure?.diagnostic ?? {
-                  code: "reporter_output_error",
-                  message: "The selected reporter could not write output.",
-                  fix: "Check terminal output access and rerun the command.",
-                },
-              ),
-            );
-            exitCode = 3;
-            return;
-          }
+        try {
+          writeFinalRunReport(execution, {
+            reporters,
+            emit,
+            context,
+            writeOut,
+            capabilities,
+            showCosts: options.costs,
+          });
+        } catch {
+          const failure = await execution.onReporterFailure?.();
+          if (upload && failure) writeErr(await upload(failure));
+          writeErr(
+            renderDiagnostic(
+              failure?.diagnostic ?? {
+                code: "reporter_output_error",
+                message: "The selected reporter could not write output.",
+                fix: "Check terminal output access and rerun the command.",
+              },
+            ),
+          );
+          exitCode = 3;
+          return;
         }
         // Without a terminal reporter, still say where the agent report is,
         // and the JUnit file beside it for a CI step reading both.
@@ -917,4 +907,37 @@ export async function runCli(
     }
   }
   return { stdout: stdout.join(""), stderr: stderr.join(""), exitCode };
+}
+
+interface FinalRunReportOutput {
+  readonly reporters: readonly ReturnType<typeof createTerminalReporter>[];
+  readonly emit: (result: RunResult, artifacts: RunArtifactPaths) => void;
+  readonly context: (artifacts: RunArtifactPaths) => ReporterContext;
+  readonly writeOut: (value: string) => void;
+  readonly capabilities: OutputCapabilities;
+  readonly showCosts: boolean;
+}
+
+/** Finish terminal rendering before Cloud delivery can observe the result. */
+function writeFinalRunReport(
+  execution: RunCommandExecution,
+  output: FinalRunReportOutput,
+): void {
+  if (execution.reporterFailed || !output.reporters.length) return;
+  output.emit(execution.result, execution.artifacts);
+  output.writeOut(
+    renderRunSummary(
+      execution.result,
+      output.capabilities,
+      execution.artifacts,
+      output.showCosts,
+    ),
+  );
+  for (const [index, reporter] of output.reporters.entries()) {
+    const text = reporter.onResult(execution.result, {
+      ...output.context(execution.artifacts),
+      includeSharedSummary: index === 0,
+    });
+    if (text) output.writeOut(text);
+  }
 }

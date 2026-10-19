@@ -8,6 +8,23 @@ import { validAffectedGlob } from "./affected-paths.js";
 
 export const CONFIG_FILE = "sedum.config.yaml";
 
+const integrationCredentials = [
+  "TYPESAFE_API_KEY",
+  "OPENROUTER_API_KEY",
+  "OPEN_ROUTER_API_KEY",
+  "CLOUDFLARE_ACCOUNT_ID",
+  "CLOUDFLARE_AUTH_TOKEN",
+  "CLOUDFLARE_API_TOKEN",
+  "SEDUM_UPLOAD_TOKEN",
+  "SEDUM_READ_TOKEN",
+];
+
+function removeIntegrationCredentials(
+  variables: Record<string, string | undefined>,
+): void {
+  for (const name of integrationCredentials) variables[name] = undefined;
+}
+
 export interface ConfigDiagnostic {
   readonly code: string;
   readonly file: string;
@@ -280,18 +297,7 @@ function scalarVariables(
   }
   const result: Record<string, string> = {};
   for (const [name, item] of Object.entries(value)) {
-    if (
-      [
-        "TYPESAFE_API_KEY",
-        "OPENROUTER_API_KEY",
-        "OPEN_ROUTER_API_KEY",
-        "CLOUDFLARE_ACCOUNT_ID",
-        "CLOUDFLARE_AUTH_TOKEN",
-        "CLOUDFLARE_API_TOKEN",
-        "SEDUM_UPLOAD_TOKEN",
-        "SEDUM_READ_TOKEN",
-      ].includes(name)
-    ) {
+    if (integrationCredentials.includes(name)) {
       diagnostic(
         diagnostics,
         file,
@@ -1172,15 +1178,9 @@ export async function loadProjectConfig(
         );
     }
   }
-  variables["OPENROUTER_API_KEY"] = undefined;
   // Credentials configure integrations; they are not test variables and must
   // not be forwarded through the flow environment.
-  variables.OPEN_ROUTER_API_KEY = undefined;
-  variables.CLOUDFLARE_ACCOUNT_ID = undefined;
-  variables.CLOUDFLARE_AUTH_TOKEN = undefined;
-  variables.SEDUM_UPLOAD_TOKEN = undefined;
-  variables.SEDUM_READ_TOKEN = undefined;
-  variables.CLOUDFLARE_API_TOKEN = undefined;
+  removeIntegrationCredentials(variables);
   const visionEnabledValue = overrides.vision?.enabled ?? vision.enabled;
   const visionEnabled = visionEnabledValue ?? DEFAULTS.vision.enabled;
   if (typeof visionEnabled !== "boolean")
