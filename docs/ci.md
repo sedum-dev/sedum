@@ -121,6 +121,61 @@ To show the JUnit file as a test summary instead, add a JUnit action such as
 `mikepenz/action-junit-report` with `report_paths: .sedum/reports/*/junit.xml`.
 Its `annotate_only: true` mode needs no `checks: write` permission.
 
+## Automatic Sedum Cloud history
+
+Once configured, the normal `sedum run` command uploads its final JSON report
+automatically. There is no additional CI step or upload command:
+
+```yaml
+- name: Sedum
+  run: npx sedum run --reporter list,markdown,junit
+  env:
+    TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+    SEDUM_CLOUD_URL: ${{ vars.SEDUM_CLOUD_URL }}
+    SEDUM_PROJECT_ID: ${{ vars.SEDUM_PROJECT_ID }}
+    SEDUM_UPLOAD_TOKEN: ${{ secrets.SEDUM_UPLOAD_TOKEN }}
+```
+
+Create a project and an upload credential in Sedum Cloud. Set
+`SEDUM_CLOUD_URL` to your instance's HTTPS base URL, `SEDUM_PROJECT_ID` to the
+project UUID, and `SEDUM_UPLOAD_TOKEN` to that project's revocable `sdu_…`
+credential. A read-only credential cannot upload. Locally, put the same settings
+in the project-root `.env` or export them; process values override `.env`.
+Never commit a credential or make it available to untrusted fork pull requests.
+HTTP is accepted only for loopback development instances.
+
+Branch and commit context are captured **before** the tests start. GitHub Actions
+and GitLab CI supply the source branch and CI link; otherwise Sedum uses the
+current Git branch. The commit is the checked-out `HEAD` (including a CI merge
+commit), falling back to the CI commit variable if Git is unavailable. Explicit
+`SEDUM_BRANCH` and `SEDUM_COMMIT_SHA` override detection. For other CI systems or
+detached checkouts without a known source branch, set both explicitly; the SHA
+must be the full lowercase 40- or 64-character commit hash. Sedum never guesses
+that an unknown branch is `main`.
+Unicode branch names are preserved. The optional CI link is included only when
+it is a valid HTTPS URL without embedded credentials; an invalid link is omitted
+without preventing the report upload.
+
+Passed, failed, flagged, errored and interrupted runs upload when an authoritative
+terminal report was saved. Upload problems only warn on stderr: they never
+replace the test exit code or remove the local reports. Network failures, HTTP
+408, 429 and 5xx responses retry up to three total attempts, with one five-second
+delivery budget covering requests, response bodies and backoff. Other HTTP
+errors do not retry. A revoked token, configuration error or conflicting run ID
+therefore cannot turn a passing suite red. This is best-effort delivery, not a
+persistent delivery queue; keep the CI report artifacts for recovery.
+
+Without Cloud settings, runs remain local-only. Use `sedum run --no-cloud` to
+disable uploading for a particular invocation, even when configured. Upload
+credentials are excluded from Sedum's test variables and provider flow context.
+
+An agent can keep monitoring local `progress.json` and investigating failures
+while the suite runs. Uploading the terminal `result.json` adds the completed
+run to Cloud history for cross-branch and weekly flakiness analysis. It does not
+stream in-progress results or upload replay/evidence image files. Reports larger
+than 8 MB remain local and produce a warning. Hard-killed processes that cannot
+save a terminal report cannot upload one.
+
 ## GitLab CI
 
 ```yaml

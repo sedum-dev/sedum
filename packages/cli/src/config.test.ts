@@ -192,6 +192,41 @@ environments:
     expect(Object.isFrozen(config.thresholds)).toBe(true);
   });
 
+  it.each(["SEDUM_UPLOAD_TOKEN", "SEDUM_READ_TOKEN"])(
+    "keeps %s out of test variables and YAML configuration",
+    async (name) => {
+      const root = await temporaryRoot();
+      await writeFile(path.join(root, ".env"), `${name}=dotenv-secret\n`);
+      expect(
+        (await loadProjectConfig(root, {})).variables[name],
+      ).toBeUndefined();
+      expect(
+        (await loadProjectConfig(root, { [name]: "process-secret" })).variables[
+          name
+        ],
+      ).toBeUndefined();
+      await writeFile(
+        path.join(root, "sedum.config.yaml"),
+        `variables:\n  ${name}: yaml-secret\n`,
+      );
+      try {
+        await loadProjectConfig(root, {});
+        expect.fail("integration credentials must be rejected in YAML");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ProjectConfigError);
+        expect((error as ProjectConfigError).diagnostics).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              code: "api_key_in_config",
+              key: `variables.${name}`,
+            }),
+          ]),
+        );
+        expect(JSON.stringify(error)).not.toContain("yaml-secret");
+      }
+    },
+  );
+
   it("selects Clef credentials and excludes Cloudflare secrets from test variables", async () => {
     const root = await temporaryRoot();
     await writeFile(

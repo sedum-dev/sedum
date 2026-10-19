@@ -9,7 +9,9 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { rmSync, symlinkSync } from "node:fs";
+import { readFileSync, rmSync, symlinkSync } from "node:fs";
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runFlow, validateRunResult, type ResultStep } from "@sedum-dev/core";
 
@@ -83,6 +85,7 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
 });
 
 import { executeRunCommand } from "./run-command.js";
+import { runCli } from "./run-cli.js";
 import { renderDiagnostic } from "./diagnostics.js";
 import { ProgressWriter, ProgressWriterError } from "./progress-writer.js";
 
@@ -237,6 +240,76 @@ describe("run output failure contract", () => {
         JSON.parse(await readFile(initial.artifacts.resultPath, "utf8")),
       ),
     ).toEqual(failure?.result);
+  });
+
+  it("uploads the saved rewritten report after final terminal output fails", async () => {
+    await inTemporaryRoot();
+    const projectId = "11111111-2222-4333-8444-555555555555";
+    const received: unknown[] = [];
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(chunk as Buffer);
+      const report = validateRunResult(
+        JSON.parse(Buffer.concat(chunks).toString("utf8")),
+      );
+      received.push(report);
+      response.end(
+        JSON.stringify({
+          id: "cloud-run",
+          run_id: report.runId,
+          project_id: projectId,
+          status: "accepted",
+        }),
+      );
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string")
+        throw new Error("Missing test server address");
+      vi.stubEnv("SEDUM_CLOUD_URL", `http://127.0.0.1:${address.port}`);
+      vi.stubEnv("SEDUM_PROJECT_ID", projectId);
+      vi.stubEnv("SEDUM_UPLOAD_TOKEN", `sdu_${"a".repeat(43)}`);
+      vi.stubEnv("SEDUM_BRANCH", "topic/checkout");
+      vi.stubEnv("SEDUM_COMMIT_SHA", "a".repeat(40));
+      let committed = false;
+      let resultPath = "";
+      let beforeFailure: unknown;
+      const output = await runCli(["run", "fixture.test.yaml"], "0.0.0", {
+        onRunCommitted: () => {
+          committed = true;
+        },
+        stdout: (value) => {
+          const progress = value.match(/^progress (.+)$/mu);
+          if (progress)
+            resultPath = path.join(path.dirname(progress[1]!), "result.json");
+          if (committed) {
+            beforeFailure = JSON.parse(readFileSync(resultPath, "utf8"));
+            throw new Error("broken terminal after commit");
+          }
+        },
+      });
+      expect(output.exitCode).toBe(3);
+      expect(beforeFailure).toMatchObject({
+        state: "completed",
+        verdict: "passed",
+      });
+      const saved = validateRunResult(
+        JSON.parse(await readFile(resultPath, "utf8")),
+      );
+      expect(saved).toMatchObject({
+        state: "error",
+        verdict: null,
+        error: { code: "reporter_output_error" },
+        totals: { passedTests: 1 },
+      });
+      expect(received).toEqual([saved]);
+      expect(output.stderr).toContain("Cloud upload: accepted");
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("writes report.md beside result.json only when markdown is requested", async () => {

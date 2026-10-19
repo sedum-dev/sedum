@@ -72,6 +72,16 @@ Filters apply after discovery: repeat `--include <glob>` or `--exclude <glob>` f
 
 `--retries <n>` adds up to `n` whole-test attempts after a failed attempt. Each attempt starts a fresh browser context and repeats its `before`, `steps`, and `after` phases. The JSON result keeps every attempt; the terminal summary shows the outcome sequence. Model usage and cost include all attempts, while final pass/fail counts use the last attempt. A test that passes only after a failed attempt is flagged `flaky`: it still counts as passed, but it appears in the flags summary, and `--strict` exits 2 for it as for any flagged pass. `--timeout-minutes <minutes>` sets a run deadline; expiration records `run_timeout`, preserves partial results, and exits 3. It requests cancellation of the current browser or provider operation before finalizing. If an external operation does not unwind within ten seconds, the executable exits 3 and the last atomic `progress.json` may be the only available result.
 
+### Automatic Cloud upload
+
+Set `SEDUM_CLOUD_URL`, `SEDUM_PROJECT_ID` and `SEDUM_UPLOAD_TOKEN` in your CI
+environment or project-root `.env` to upload terminal reports automatically
+after `sedum run`. No separate upload command is needed. Local live progress
+reporting is unchanged, and delivery failures warn without changing the suite's
+exit code. Use `--no-cloud` to opt out for an invocation. See
+[Cloud configuration and CI context](ci.md#automatic-sedum-cloud-history) for
+branch detection, credential handling and delivery limits.
+
 ### Experimental Git-diff selection
 
 ```sh

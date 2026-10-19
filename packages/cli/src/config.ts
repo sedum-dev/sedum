@@ -288,6 +288,8 @@ function scalarVariables(
         "CLOUDFLARE_ACCOUNT_ID",
         "CLOUDFLARE_AUTH_TOKEN",
         "CLOUDFLARE_API_TOKEN",
+        "SEDUM_UPLOAD_TOKEN",
+        "SEDUM_READ_TOKEN",
       ].includes(name)
     ) {
       diagnostic(
@@ -942,7 +944,7 @@ export async function loadProjectConfig(
   const environmentFile = path.join(found.root, ".env");
   try {
     if (loadOptions.readEnvironmentFile !== false)
-      fileEnvironment = parseEnv(await readFile(environmentFile, "utf8"));
+      fileEnvironment = await readProjectEnvironment(found.root);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT")
       diagnostic(
@@ -1176,6 +1178,8 @@ export async function loadProjectConfig(
   variables.OPEN_ROUTER_API_KEY = undefined;
   variables.CLOUDFLARE_ACCOUNT_ID = undefined;
   variables.CLOUDFLARE_AUTH_TOKEN = undefined;
+  variables.SEDUM_UPLOAD_TOKEN = undefined;
+  variables.SEDUM_READ_TOKEN = undefined;
   variables.CLOUDFLARE_API_TOKEN = undefined;
   const visionEnabledValue = overrides.vision?.enabled ?? vision.enabled;
   const visionEnabled = visionEnabledValue ?? DEFAULTS.vision.enabled;

@@ -299,6 +299,7 @@ export async function runCli(
     )
     .option("--replay", "capture replay frames for executed steps", false)
     .option("--no-evidence", "disable non-passing evidence frames")
+    .option("--no-cloud", "disable automatic upload to Sedum Cloud")
     .option("--no-locator-cache", "disable the local locator cache")
     .option("--locator-cache-ci", "enable the local locator cache in CI", false)
     .option(
@@ -366,6 +367,7 @@ export async function runCli(
           providerConcurrency?: number;
           replay: boolean;
           evidence: boolean;
+          cloud: boolean;
           sensitiveOrigin: string[];
           detect?: "off" | "browser" | "semantic";
           detectAllow: string[];
@@ -515,6 +517,11 @@ export async function runCli(
               if (output) writeOut(output);
             }
         };
+        const upload = options.cloud
+          ? await (
+              await import("./cloud-upload.js")
+            ).prepareCloudUpload(process.cwd())
+          : undefined;
         const execution = await executeRun({
           command,
           ...(runtime.onStrayRejection
@@ -596,6 +603,7 @@ export async function runCli(
             }
           } catch {
             const failure = await execution.onReporterFailure?.();
+            if (upload && failure) writeErr(await upload(failure));
             writeErr(
               renderDiagnostic(
                 failure?.diagnostic ?? {
@@ -622,6 +630,7 @@ export async function runCli(
         }
         if (execution.diagnostic)
           writeErr(renderDiagnostic(execution.diagnostic));
+        if (upload) writeErr(await upload(execution));
         exitCode = runExitCode(execution.result, options.strict);
       },
     );
