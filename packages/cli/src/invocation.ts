@@ -13,7 +13,7 @@ export function sedumCommand(
 }
 
 const SUBCOMMAND =
-  /(?<![\w./-]|npx )sedum (?=(?:run|browsers|doctor|validate|init|list|auth)\b|--help\b|--version\b)/g;
+  /(?<![\w./-]|npx )sedum (?=(?:run|runs|tests|browsers|doctor|validate|init|list|auth)\b|--help\b|--version\b)/g;
 
 /** Rewrite `sedum <subcommand>` hints in terminal text for this invocation. */
 export function withCommand(text: string, command: string): string {

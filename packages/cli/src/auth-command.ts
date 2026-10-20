@@ -298,22 +298,79 @@ async function refreshSession(store: Store, session: Tokens, context: Context) {
   return next;
 }
 
-async function membership(store: Store, context: Context) {
+async function authenticatedGet(
+  store: Store,
+  context: Context,
+  endpoint: string,
+) {
   const session = await currentSession(store, context);
-  let response = await request(store.origin, "/api/auth/me", context.signal, {
+  let response = await request(store.origin, endpoint, context.signal, {
     access: session.access_token,
   });
   if (response.status === 401) {
     const next = await refreshSession(store, session, context);
-    response = await request(store.origin, "/api/auth/me", context.signal, {
+    response = await request(store.origin, endpoint, context.signal, {
       access: next.access_token,
     });
   }
+  return response;
+}
+
+async function membership(store: Store, context: Context) {
+  const response = await authenticatedGet(store, context, "/api/auth/me");
   if (!response.ok)
     throw new AuthError(
       "Cloud could not validate this session or current membership. Run `sedum auth login` again.",
     );
   return parse(membershipSchema, response.body);
+}
+
+/** Noninteractive reads share membership, selection, rotation and the exclusive store lock. */
+export async function readCloudProject<T>(
+  options: AuthOptions,
+  runtime: AuthRuntime,
+  signal: AbortSignal,
+  read: (scope: {
+    origin: string;
+    organization: Choice;
+    project: Choice;
+    get: (endpoint: string) => ReturnType<typeof request>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withAuthStore(runtime.configDirectory, async (state, save) => {
+    const store = { state, save, origin: selectedOrigin(options, state) };
+    const context: Context = {
+      options,
+      runtime: {},
+      signal,
+      write: () => {},
+      writeErr: () => {},
+    };
+    const me = await membership(store, context);
+    const previous = state.selections[store.origin];
+    const organization = await select(
+      "organization",
+      me.organizations,
+      previous?.organization,
+      context,
+    );
+    const project = await select(
+      "project",
+      organization?.projects ?? [],
+      previous?.project,
+      context,
+    );
+    if (!organization || !project)
+      throw new AuthError(
+        "No current project available. Select --organization and --project or create a Cloud project.",
+      );
+    return read({
+      origin: store.origin,
+      organization,
+      project,
+      get: (endpoint) => authenticatedGet(store, context, endpoint),
+    });
+  });
 }
 
 async function status(store: Store, context: Context) {
@@ -362,17 +419,19 @@ function showSelection(
   );
 }
 
+function selectedOrigin(options: AuthOptions, state: AuthState): string {
+  const configured =
+    options.url ?? process.env.SEDUM_CLOUD_URL ?? state.selectedOrigin;
+  if (!configured)
+    throw new AuthError(
+      "No Cloud instance selected. Use `sedum auth login --url <your Cloud origin>` or set SEDUM_CLOUD_URL.",
+    );
+  return cloudOrigin(configured);
+}
+
 async function authenticate(command: string, context: Context) {
   return withAuthStore(context.runtime.configDirectory, async (state, save) => {
-    const configured =
-      context.options.url ??
-      process.env.SEDUM_CLOUD_URL ??
-      state.selectedOrigin;
-    if (!configured)
-      throw new AuthError(
-        "No Cloud instance selected. Use `sedum auth login --url <your Cloud origin>` or set SEDUM_CLOUD_URL.",
-      );
-    const origin = cloudOrigin(configured);
+    const origin = selectedOrigin(context.options, state);
     const store = { state, save, origin };
     if (command === "logout") return logout(store, context);
     if (command === "login") await login(store, context);

@@ -2,6 +2,83 @@
 title: "CLI commands"
 ---
 
+## Cloud result reads
+
+```sh
+npx sedum runs list --since 7d --branch main --json
+npx sedum runs show <cloud-run-uuid> --json
+npx sedum runs show <cloud-run-uuid> --report --json
+npx sedum tests history --test-id 'checkout/cart' --since 24h --json
+npx sedum tests stats --sort flaky-runs --min-observations 3 --json
+npx sedum tests stats --sort duration-regression --compare previous --json
+```
+
+These commands use an existing `auth login` session, live `/me` memberships,
+and saved organization/project choices. They never launch login or prompt.
+All accept `--url`, `--organization`, `--project` (ID or unambiguous name), and
+`--json`. Explicit selections do not change saved defaults. Ambiguity requires
+explicit flags. Credentials refresh under the same exclusive store lock as auth;
+GET requests retry once after a 401 with refreshed credentials.
+
+`runs list` returns compact recent summaries. `runs show` takes the **Cloud run
+UUID**, not a report's external run ID, and requests no full report unless
+`--report` is present. `tests history --test-id` matches the exact test identity
+across branches, not a substring; use `--branch` to scope it.
+
+List, history and stats share these filters:
+
+| Option         | Meaning                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| `--since`      | Positive integer `Nd` or `Nh`, or ISO timestamp with timezone; default `7d` |
+| `--until`      | ISO timestamp with timezone; default captures now once                      |
+| `--branch`     | Exact branch                                                                |
+| `--commit-sha` | Full lowercase 40- or 64-character hexadecimal commit SHA                   |
+| `--state`      | `completed`, `interrupted`, `error`                                         |
+| `--verdict`    | `passed`, `failed`                                                          |
+| `--limit`      | Integer 1..100, default 25                                                  |
+
+`--state` and `--verdict` filter the **run**, not an individual test. Inspect
+the test's evidence for its outcome; a failed run may contain passing tests.
+
+Relative `--since` is anchored to `--until`, not to the clock independently.
+Windows must be positive and at most 31 days. List/history accept `--cursor`
+and fetch exactly one page; reuse `next_cursor` with the **same explicit window
+and filters** to continue. There is no automatic page draining.
+
+### Ranked test statistics
+
+`tests stats` optionally accepts `--test-id` for an exact identity, and
+`--min-observations` (integer 1..1000, default 1). `--sort` is one of:
+
+- `flaky-runs` (default): recovered-retry observation count.
+- `flake-rate`: recovered-retry rate.
+- `failures`: failed observation count.
+- `retry-overhead`: total recorded nonselected-attempt elapsed time.
+- `duration-p95`: selected-attempt duration p95.
+- `duration-regression`: p95 increase, requiring `--compare previous`.
+
+Rates are **fractions**, not percentages, divided by completed observations
+(passed plus failed), or null when that denominator is zero. One observation is a test in a run;
+recovered retry means a passing selected attempt with an earlier completed failure. `mixed_outcomes`
+records both passed and failed observations. p50/p95 use nearest-rank percentiles
+of recorded selected-attempt durations. Retry time sums all nonselected attempts;
+missing durations are not invented. `--compare previous` evaluates the immediately
+preceding equal-length window with the same filters. Only current-window tests
+are ranked. Each row includes `previous` (or null), `p95_change_ms` and
+`p95_change_ratio`; missing durations yield null, as does a zero-baseline ratio.
+
+Stats return complete rankings over at most 1000 runs and 5000 test identities
+per window, then the top `limit`; a 422 means narrow time or branch, **not** a
+partial result. Output includes the window, run/test sample counts and, when
+comparing, previous-window coverage counts. JSON uses `schemaVersion: 1`,
+`origin`, `organization`, `project`, plus the API result fields; report/test
+strings are never rewritten as invocation hints. No auth status text accompanies
+JSON. Successful response shape is validated before printing.
+
+Read failures exit 3. A 401 suggests login; 403/404 mean the project/run is
+unavailable, 400 means invalid filters, 422 asks for a narrower query, and 429
+asks for backoff. Arbitrary server error bodies and credentials are never printed.
+
 ## `sedum auth login`, `status`, and `logout`
 
 Connect your Sedum account through a browser, including on self-hosted instances:

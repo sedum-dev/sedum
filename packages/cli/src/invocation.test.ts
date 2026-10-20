@@ -19,6 +19,7 @@ describe("sedum invocation hints", () => {
       "  sedum browsers install chromium",
       "  rerun sedum run 'tests/a.test.yaml'",
       "Fix: run `sedum doctor`, then rerun.",
+      "Read `sedum runs list` or `sedum tests stats`.",
       "Edit sedum.config.yaml; see the sedum docs.",
       "already npx sedum run x",
     ].join("\n");
@@ -27,6 +28,7 @@ describe("sedum invocation hints", () => {
         "  npx sedum browsers install chromium",
         "  rerun npx sedum run 'tests/a.test.yaml'",
         "Fix: run `npx sedum doctor`, then rerun.",
+        "Read `npx sedum runs list` or `npx sedum tests stats`.",
         "Edit sedum.config.yaml; see the sedum docs.",
         "already npx sedum run x",
       ].join("\n"),

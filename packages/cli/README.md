@@ -93,6 +93,26 @@ Between steps you can use Playwright's `page` and `expect`, any test-data librar
 - **No black box.** Prompts, scoring, and caching are in the repository.
 - **Made for coding agents.** `npx sedum run --reporter markdown` writes a failure report that Claude Code or Cursor can read and fix from.
 
+## Read Cloud results
+
+After `npx sedum auth login --url https://your-cloud.example`, read recent results
+without a browser or interactive prompt:
+
+```sh
+npx sedum runs list --since 7d --json
+npx sedum runs show <cloud-run-uuid> --json
+npx sedum runs show <cloud-run-uuid> --report --json
+npx sedum tests history --test-id checkout --since 7d --json
+npx sedum tests stats --sort flaky-runs --json
+npx sedum tests stats --sort duration-regression --compare previous --json
+```
+
+Reads use current membership and saved project choices; override with
+`--url`, `--organization`, and `--project` (ID or unambiguous name). They do not
+change saved choices. Reports are opt-in, list/history return one page, and stats
+are bounded, fully computed rankings. See the CLI reference for metric definitions,
+time windows, pagination, comparisons, and filters.
+
 ## Documentation
 
 - [Full README and quickstart](https://github.com/sedum-dev/sedum#readme)

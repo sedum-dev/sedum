@@ -133,6 +133,14 @@ export async function runCli(
       exitCode = value;
     },
   });
+  const { registerCloudCommands } = await import("./cloud-command.js");
+  registerCloudCommands(program, runtime, {
+    rawOut,
+    writeErr,
+    setExitCode: (value) => {
+      exitCode = value;
+    },
+  });
 
   program
     .command("init")
@@ -1001,12 +1009,20 @@ function promptAuthChoice(
         signal: AbortSignal.any([signal, controller.signal]),
       });
       return choices[Number(answer) - 1]?.id ?? "";
-    } catch {
-      throw new AuthError("Authentication cancelled.");
+    } catch (error) {
+      throw choiceFailure(error, [signal, controller.signal]);
     } finally {
       prompt.close();
     }
   };
+}
+
+function choiceFailure(error: unknown, signals: AbortSignal[]): unknown {
+  if (signals.some((signal) => signal.aborted))
+    return new AuthError("Authentication cancelled.");
+  if (error instanceof Error && error.name === "AbortError")
+    return new AuthError("Authentication cancelled.");
+  return error;
 }
 
 interface FinalRunReportOutput {

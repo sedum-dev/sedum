@@ -60,11 +60,11 @@ export async function request(
       signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       ...requestOptions(options),
     });
-    const body: unknown =
+    const readBody =
       (response.ok && endpoint !== "/api/oauth/revoke") ||
-      (response.status === 400 && endpoint === "/api/oauth/token")
-        ? await response.json()
-        : {};
+      (response.status === 400 && endpoint === "/api/oauth/token");
+    const body: unknown = readBody ? await response.json() : {};
+    if (!readBody) await response.body?.cancel().catch(() => {});
     return {
       ok: response.ok,
       status: response.status,
