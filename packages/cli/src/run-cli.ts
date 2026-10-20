@@ -126,20 +126,11 @@ export async function runCli(
   let exitCode = 3;
 
   const program = createProgram(version, writeOut, writeErr);
-  registerAuthCommands(program, runtime, {
+  await registerAccountCommands(program, runtime, {
+    rawOut,
     writeOut,
     writeErr,
-    setExitCode: (value) => {
-      exitCode = value;
-    },
-  });
-  const { registerCloudCommands } = await import("./cloud-command.js");
-  registerCloudCommands(program, runtime, {
-    rawOut,
-    writeErr,
-    setExitCode: (value) => {
-      exitCode = value;
-    },
+    setExitCode: (value) => (exitCode = value),
   });
 
   program
@@ -935,15 +926,16 @@ function createProgram(
   return program;
 }
 
-function registerAuthCommands(
+async function registerAccountCommands(
   program: Command,
   runtime: CliRuntime,
   output: {
+    rawOut: (value: string) => void;
     writeOut: (value: string) => void;
     writeErr: (value: string) => void;
     setExitCode: (value: number) => void;
   },
-): void {
+): Promise<void> {
   const { writeOut, writeErr } = output;
   const auth = program
     .command("auth")
@@ -984,6 +976,8 @@ function registerAuthCommands(
         );
       });
   }
+  const { registerCloudCommands } = await import("./cloud-command.js");
+  registerCloudCommands(program, runtime, output);
 }
 
 function promptAuthChoice(

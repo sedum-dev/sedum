@@ -60,11 +60,7 @@ export async function request(
       signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       ...requestOptions(options),
     });
-    const readBody =
-      (response.ok && endpoint !== "/api/oauth/revoke") ||
-      (response.status === 400 && endpoint === "/api/oauth/token");
-    const body: unknown = readBody ? await response.json() : {};
-    if (!readBody) await response.body?.cancel().catch(() => {});
+    const body = await responseBody(response, endpoint);
     return {
       ok: response.ok,
       status: response.status,
@@ -78,6 +74,18 @@ export async function request(
         : "Cloud request failed or timed out. Check the instance URL and connection; redirects are not allowed.",
     );
   }
+}
+
+async function responseBody(
+  response: Response,
+  endpoint: string,
+): Promise<unknown> {
+  const readBody =
+    (response.ok && endpoint !== "/api/oauth/revoke") ||
+    (response.status === 400 && endpoint === "/api/oauth/token");
+  if (readBody) return response.json();
+  await response.body?.cancel().catch(() => {});
+  return {};
 }
 
 function requestOptions({
