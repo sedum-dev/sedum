@@ -200,6 +200,19 @@ steps:
 steps in a `*.module.yaml` file and call it with `use:`. See the
 [YAML format](https://docs.sedum.dev/format).
 
+## Agent skill for Claude Code and Codex
+
+Install Sedum's investigation and test-gardening skill in your project:
+
+```sh
+npx skills add sedum-dev/sedum --skill investigating-sedum-tests -a claude-code -a codex
+```
+
+The skill uses the Sedum CLI and your authenticated Cloud history to investigate
+exact tests and shortlist failures, recovered retries, slow tests, and regressions.
+It requires no MCP server. See [installation and copy instructions](docs/agent-skills.md)
+for per-agent and personal installs, prerequisites, and example prompts.
+
 ## Learn more
 
 - [TypeScript tests](https://docs.sedum.dev/typescript-tests): `test()`, `ai`, values and

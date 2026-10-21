@@ -21,7 +21,7 @@
       },
       {
         "group": "Use Sedum",
-        "pages": ["configuration", "cli", "ci"]
+        "pages": ["configuration", "cli", "ci", "agent-skills"]
       },
       {
         "group": "How it works",

@@ -113,6 +113,11 @@ change saved choices. Reports are opt-in, list/history return one page, and stat
 are bounded, fully computed rankings. See the CLI reference for metric definitions,
 time windows, pagination, comparisons, and filters.
 
+For agent-guided investigation and test gardening, install the portable
+`investigating-sedum-tests` skill in Claude Code or Codex. See the
+[skill installation guide](https://github.com/sedum-dev/sedum/blob/main/docs/agent-skills.md)
+for a one-command install, manual copying, and example prompts. No MCP server is required.
+
 ## Documentation
 
 - [Full README and quickstart](https://github.com/sedum-dev/sedum#readme)
