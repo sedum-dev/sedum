@@ -444,29 +444,56 @@ function validStepTimeout(value: unknown): value is number {
   return (value as number) >= 0 && (value as number) <= 120_000;
 }
 
-/** Keys of every invalid `stepTimeoutMs`, selected environment or not. */
-function invalidStepTimeoutKeys(
+interface DiagnosticSink {
+  readonly diagnostics: ConfigDiagnostic[];
+  readonly file: string;
+  readonly counter: LineCounter;
+  readonly node: (key: string) => Node | null | undefined;
+}
+
+/** Report every invalid `stepTimeoutMs`, selected environment or not. */
+function reportInvalidStepTimeouts(
   raw: RawConfig,
   environments: Record<string, unknown>,
-): string[] {
+  sink: DiagnosticSink,
+): void {
   const layers: [string, unknown][] = [["stepTimeoutMs", raw.stepTimeoutMs]];
   for (const [name, value] of Object.entries(environments))
     if (object(value))
       layers.push([`environments.${name}.stepTimeoutMs`, value.stepTimeoutMs]);
-  return layers
-    .filter(([, value]) => value !== undefined && !validStepTimeout(value))
-    .map(([key]) => key);
+  for (const [key, value] of layers) {
+    if (value === undefined || validStepTimeout(value)) continue;
+    diagnostic(
+      sink.diagnostics,
+      sink.file,
+      sink.counter,
+      sink.node(key),
+      key,
+      "invalid_config_step_timeout",
+      `Configuration key \`${key}\` must be a whole number of milliseconds from 0 to 120000.`,
+      "Use a value such as 30000 for 30 seconds, or 0 to judge each step once.",
+    );
+  }
 }
 
-/** The selected environment's timeout wins over the top-level one. */
+/**
+ * Check `stepTimeoutMs` in every environment, so a mistake in one that is not
+ * selected still shows; the selected environment's value wins.
+ */
 function resolveStepTimeout(
   raw: RawConfig,
   environment: RawEnvironment,
+  sink: DiagnosticSink,
 ): number {
+  reportInvalidStepTimeouts(raw, environmentMap(raw), sink);
   return (
     [environment.stepTimeoutMs, raw.stepTimeoutMs].find(validStepTimeout) ??
     DEFAULTS.stepTimeoutMs
   );
+}
+
+function environmentMap(raw: RawConfig): Record<string, unknown> {
+  return object(raw.environments) ? raw.environments : {};
 }
 
 function stringList(
@@ -798,18 +825,6 @@ export async function loadProjectConfig(
     string,
     Record<string, unknown>,
   ][];
-  invalidStepTimeoutKeys(raw, environments).forEach((key) =>
-    diagnostic(
-      diagnostics,
-      file,
-      counter,
-      node(key),
-      key,
-      "invalid_config_step_timeout",
-      `Configuration key \`${key}\` must be a whole number of milliseconds from 0 to 120000.`,
-      "Use a value such as 30000 for 30 seconds, or 0 to judge each step once.",
-    ),
-  );
   for (const [name, value] of Object.entries(environments)) {
     if (!object(value)) {
       diagnostic(
@@ -1307,7 +1322,8 @@ export async function loadProjectConfig(
     counter,
     node("viewport.height"),
   );
-  const stepTimeoutMs = resolveStepTimeout(raw, environment);
+  const sink = { diagnostics, file, counter, node };
+  const stepTimeoutMs = resolveStepTimeout(raw, environment, sink);
   if (diagnostics.length) throw new ProjectConfigError(diagnostics);
 
   return freeze({
