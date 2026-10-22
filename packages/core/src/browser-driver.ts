@@ -229,7 +229,16 @@ function clickDispatched(error: unknown): boolean {
   return message.includes("performing click action");
 }
 
-function clickRefusal(error: unknown): AimResult {
+/** Why a failed click is safe to retry, or the non-retryable outcome. A
+ * hover already moved the pointer, so a hovered click never counts as safe. */
+function clickFailure(hover: boolean, error: unknown): ClickResult {
+  if (hover || clickDispatched(error))
+    return {
+      actionable: false,
+      reason: "action_started",
+      retryable: false,
+      callLog: safeCallLog(error),
+    };
   const message = error instanceof Error ? error.message : "";
   return message.includes("not attached to the DOM")
     ? { actionable: false, reason: "stale" }
@@ -749,13 +758,7 @@ class PlaywrightPage implements BrowserPage {
         });
         return { actionable: true, aim: dispatchAim };
       } catch (error) {
-        if (!aim.hover && !clickDispatched(error)) return clickRefusal(error);
-        return {
-          actionable: false,
-          reason: "action_started",
-          retryable: false,
-          callLog: safeCallLog(error),
-        };
+        return clickFailure(Boolean(aim.hover), error);
       } finally {
         await hide();
       }

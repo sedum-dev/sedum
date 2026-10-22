@@ -83,6 +83,21 @@ export interface SentencePresentation {
 }
 
 /** @internal Execute one classified sentence and record it as one step. */
+/** Unresolved targets that fail the attempt, so retries rerun it. */
+const FAILED_LOCATOR_REASONS: readonly string[] = [
+  "none",
+  "ambiguous",
+  "no_candidates",
+  "stale",
+];
+
+/** Action refusals that prove no input was dispatched. */
+const FAILED_ACTION_CODES: readonly string[] = [
+  "not_actionable",
+  "stale",
+  "invalid_input",
+];
+
 export async function executeSentence(
   page: BrowserPage,
   step: ClassifiedFlowSentence,
@@ -800,12 +815,7 @@ export async function executeSentence(
   if (resolved.kind !== "resolved") {
     // A page that never held still is a failed attempt, like an empty one:
     // retries rerun it, and the step says why.
-    if (
-      resolved.reason === "none" ||
-      resolved.reason === "ambiguous" ||
-      resolved.reason === "no_candidates" ||
-      resolved.reason === "stale"
-    )
+    if (FAILED_LOCATOR_REASONS.includes(resolved.reason))
       return record("failed", {
         locator: resolved,
         error: {
@@ -985,10 +995,7 @@ export async function executeSentence(
     if (isRunWideProviderError(error)) throw await runWide(error);
     const actionError = error instanceof StepExecutionError ? error : null;
     const failed =
-      actionError &&
-      (actionError.code === "not_actionable" ||
-        actionError.code === "stale" ||
-        actionError.code === "invalid_input");
+      actionError && FAILED_ACTION_CODES.includes(actionError.code);
     const facts = {
       locator: resolved,
       replayFrame,

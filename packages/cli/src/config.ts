@@ -444,6 +444,31 @@ function validStepTimeout(value: unknown): value is number {
   return (value as number) >= 0 && (value as number) <= 120_000;
 }
 
+/** Keys of every invalid `stepTimeoutMs`, selected environment or not. */
+function invalidStepTimeoutKeys(
+  raw: RawConfig,
+  environments: Record<string, unknown>,
+): string[] {
+  const layers: [string, unknown][] = [["stepTimeoutMs", raw.stepTimeoutMs]];
+  for (const [name, value] of Object.entries(environments))
+    if (object(value))
+      layers.push([`environments.${name}.stepTimeoutMs`, value.stepTimeoutMs]);
+  return layers
+    .filter(([, value]) => value !== undefined && !validStepTimeout(value))
+    .map(([key]) => key);
+}
+
+/** The selected environment's timeout wins over the top-level one. */
+function resolveStepTimeout(
+  raw: RawConfig,
+  environment: RawEnvironment,
+): number {
+  return (
+    [environment.stepTimeoutMs, raw.stepTimeoutMs].find(validStepTimeout) ??
+    DEFAULTS.stepTimeoutMs
+  );
+}
+
 function stringList(
   value: unknown,
   fallback: readonly string[],
@@ -773,8 +798,7 @@ export async function loadProjectConfig(
     string,
     Record<string, unknown>,
   ][];
-  const checkStepTimeout = (key: string, value: unknown): void => {
-    if (value === undefined || validStepTimeout(value)) return;
+  invalidStepTimeoutKeys(raw, environments).forEach((key) =>
     diagnostic(
       diagnostics,
       file,
@@ -784,9 +808,8 @@ export async function loadProjectConfig(
       "invalid_config_step_timeout",
       `Configuration key \`${key}\` must be a whole number of milliseconds from 0 to 120000.`,
       "Use a value such as 30000 for 30 seconds, or 0 to judge each step once.",
-    );
-  };
-  checkStepTimeout("stepTimeoutMs", raw.stepTimeoutMs);
+    ),
+  );
   for (const [name, value] of Object.entries(environments)) {
     if (!object(value)) {
       diagnostic(
@@ -801,7 +824,6 @@ export async function loadProjectConfig(
       );
       continue;
     }
-    checkStepTimeout(`environments.${name}.stepTimeoutMs`, value.stepTimeoutMs);
     const key = `environments.${name}.provider`;
     const settings = value.provider;
     mapUnknownKeys(
@@ -1285,10 +1307,7 @@ export async function loadProjectConfig(
     counter,
     node("viewport.height"),
   );
-  // Every layer was validated above; the selected environment wins.
-  const stepTimeoutMs =
-    [environment.stepTimeoutMs, raw.stepTimeoutMs].find(validStepTimeout) ??
-    DEFAULTS.stepTimeoutMs;
+  const stepTimeoutMs = resolveStepTimeout(raw, environment);
   if (diagnostics.length) throw new ProjectConfigError(diagnostics);
 
   return freeze({
