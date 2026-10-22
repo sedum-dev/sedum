@@ -165,7 +165,7 @@ await ai.group("Checkout", async () => {
 test can branch when a screen appears only sometimes. It returns `true` or
 `false`, never fails the test just because the claim is false, and is recorded
 without a pass/fail verdict. Unlike a verify step, it does not use the
-configured verify grace period.
+configured [step timeout](configuration.md#step-timeout).
 
 ```ts
 if (await ai.holds("the passkey enrollment screen is shown")) {

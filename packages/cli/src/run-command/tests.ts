@@ -285,7 +285,10 @@ function testDependencies(
     browserKind: config.browser,
     viewport: config.viewport,
     verifyPolicy: config.thresholds,
-    verifyGraceMs: verifyGraceMs(process.env.SEDUM_VERIFY_GRACE_MS),
+    verifyGraceMs: verifyGraceMs(
+      process.env.SEDUM_VERIFY_GRACE_MS,
+      config.stepTimeoutMs,
+    ),
     ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
     ...(options.urlOverride ? { urlOverride: options.urlOverride } : {}),
     ...(options.headed ? { headless: false, headedOverlay: true } : {}),

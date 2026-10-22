@@ -643,11 +643,8 @@ describe("runner report facts", () => {
           saveFrame,
         },
       });
-      expect(result.status).toBe("could_not_run");
-      await recorder.finish({
-        code: "execution_error",
-        message: "The run could not complete.",
-      });
+      expect(result.status).toBe("failed");
+      await recorder.finish();
       expect(recorder.snapshot.tests[0]?.attempts[0]?.steps[0]).toMatchObject({
         replayFrame: { status: "unavailable", reason: "stale_frame" },
         targetBox: null,

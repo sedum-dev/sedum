@@ -32,6 +32,9 @@ screenshots: true
 vision:
   enabled: false
 
+# How long a step waits for the page, in milliseconds (0 to 120000).
+stepTimeoutMs: 5000
+
 outputDir: .sedum/runs
 reporterDir: .sedum/reports
 baseUrl: http://127.0.0.1:3000
@@ -44,6 +47,8 @@ environments:
     baseUrl: http://127.0.0.1:3000
     variables:
       ACCOUNT: local-user
+  ci:
+    stepTimeoutMs: 30000
 ```
 
 Every key is optional. With no positional file, `sedum run` discovers regular
@@ -54,7 +59,7 @@ explicit `sedum run path/to/file.test.ts` remains supported.
 
 Settings resolve from defaults, then the top-level config, then the selected
 named environment, then explicit command overrides. Named environments may
-override `baseUrl`, `variables`, and `provider.apiKeyEnv`. Nested settings
+override `baseUrl`, `variables`, `provider.apiKeyEnv`, and `stepTimeoutMs`. Nested settings
 merge by field, so an override of viewport width retains the configured height.
 For `sedum run`, `--env` selects the named environment before `--browser` and
 `--output-dir` override their configured values. `--url-override` then replaces
@@ -200,6 +205,24 @@ The `thresholds` settings control assertion verdicts. Locator and step
 classification safety gates are deliberately not configurable. An explicit
 JSON reporter writes to `reporterDir/<run-id>/result.json`; canonical progress
 and result artifacts are always written under `outputDir/<run-id>/`.
+
+## Step timeout
+
+`stepTimeoutMs` is how long one step waits for the page before it fails. It
+defaults to 5000 (5 seconds) and accepts whole milliseconds from 0 to 120000.
+It covers every step that depends on the page settling:
+
+- A `verify` step is judged again each time the page changes until its claim
+  holds. A quoted-text check keeps reading a page that is mid-navigation.
+- A `click` or `type` step whose target is not on the page yet is located
+  again each time the page changes.
+- A located target that is not ready yet, such as a disabled or covered button
+  or a read-only field, is retried for at least 8 seconds, or for
+  `stepTimeoutMs` when that is longer.
+
+`0` judges and locates each step once. An explicit `wait up to 90 seconds
+until …` step uses its own limit instead. The `SEDUM_VERIFY_GRACE_MS`
+environment variable overrides the configured value for one run.
 
 ## Experimental affected selection
 

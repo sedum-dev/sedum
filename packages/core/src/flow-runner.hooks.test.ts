@@ -490,8 +490,27 @@ describe("hook and module attempt lifecycle", () => {
         },
       );
       expect(run.result.status).toBe("failed");
-      // One fresh observation, never an unbounded loop.
-      expect(resolve).toHaveBeenCalledTimes(2);
+      // A few fresh observations, never an unbounded loop.
+      expect(resolve).toHaveBeenCalledTimes(5);
+      expect(run.report.tests[0]?.attempts[0]?.steps[0]?.error?.code).toBe(
+        "stale",
+      );
+    } finally {
+      resolve.mockRestore();
+    }
+  });
+
+  it("fails a click whose target never holds still, so retries rerun it", async () => {
+    const resolve = vi.spyOn(locatorModule, "resolveTarget").mockResolvedValue({
+      kind: "unresolved",
+      reason: "stale",
+      calls: [],
+      diagnostic: { candidateCount: 1, rounds: 1, topOptions: [] },
+    });
+    try {
+      const run = await runHooks("steps:\n  - click the Save button\n");
+      // "could not run" is never retried; a failed attempt is.
+      expect(run.result.status).toBe("failed");
       expect(run.report.tests[0]?.attempts[0]?.steps[0]?.error?.code).toBe(
         "stale",
       );

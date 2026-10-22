@@ -218,6 +218,24 @@ export interface BrowserInstallResult {
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
 const DEFAULT_SETTLE_TIMEOUT_MS = 4_000;
 const DEFAULT_ACTION_TIMEOUT_MS = 8_000;
+
+/**
+ * Playwright logs "performing click action" just before it moves the mouse.
+ * A failure whose call log lacks that line never sent input to the page.
+ */
+function clickDispatched(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  if (!message.includes("\nCall log:")) return true;
+  return message.includes("performing click action");
+}
+
+function clickRefusal(error: unknown): AimResult {
+  const message = error instanceof Error ? error.message : "";
+  return message.includes("not attached to the DOM")
+    ? { actionable: false, reason: "stale" }
+    : { actionable: false, reason: "not_actionable" };
+}
+
 function actionTimeout(value?: number): number {
   if (value === undefined) return DEFAULT_ACTION_TIMEOUT_MS;
   if (!Number.isFinite(value) || value <= 0 || value > 2_147_483_647)
@@ -731,6 +749,7 @@ class PlaywrightPage implements BrowserPage {
         });
         return { actionable: true, aim: dispatchAim };
       } catch (error) {
+        if (!aim.hover && !clickDispatched(error)) return clickRefusal(error);
         return {
           actionable: false,
           reason: "action_started",

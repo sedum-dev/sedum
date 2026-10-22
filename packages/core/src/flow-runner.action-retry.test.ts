@@ -216,7 +216,7 @@ describe("action retry boundary", () => {
   });
   it("does not re-resolve, dispatch, or cache after a vision-selected target becomes stale", async () => {
     const run = await runClick("stale", { vision: true });
-    expect(run.result.status).toBe("could_not_run");
+    expect(run.result.status).toBe("failed");
     expect(run.visionChoose).toHaveBeenCalledTimes(1);
     expect(run.choose).toHaveBeenCalledTimes(1);
     expect(run.clickRef).toHaveBeenCalledTimes(1);

@@ -76,6 +76,46 @@ const PAGES: Record<string, string> = {
     setTimeout(() => { document.querySelector("p").textContent = "Ready"; }, 1500);
   </script></main>`,
   "/static": "<main><p>Nothing changes here</p></main>",
+  // Saving changes the route at once and renders the next screen in four
+  // passes, each replacing the button node. "?quiet" stops the background
+  // ticker that otherwise keeps the page from ever being quiet for a second.
+  // "?route=dashboard" opens mid-render, with the button already shown.
+  "/client": `<main id="app"></main><p id="ticker" aria-live="polite"></p><script>
+    const app = document.getElementById("app");
+    if (!location.search.includes("quiet")) setInterval(() => {
+      document.getElementById("ticker").textContent = "Synced " + Date.now();
+    }, 300);
+    let pending;
+    function dashboard(pass) {
+      const last = pass === 3;
+      app.innerHTML = "<h1>" + (last ? "Client dashboard" : "Loading") + "</h1>" +
+        (pass === 0 ? "" : '<button id="plan">Create financial plan</button>');
+      const plan = document.getElementById("plan");
+      // The click is a route change, so it cancels the passes still pending.
+      if (plan) plan.onclick = () => { clearTimeout(pending); app.innerHTML = "<h1>Basic info of your client</h1>"; };
+      if (!last) pending = setTimeout(() => dashboard(pass + 1), 400);
+    }
+    if (location.search.includes("dashboard")) dashboard(1);
+    else app.innerHTML = '<h1>New client</h1><button id="save">Save client</button>';
+    document.getElementById("save").onclick = () => {
+      history.pushState({}, "", "?route=dashboard");
+      dashboard(0);
+    };
+  </script>`,
+  // Two modal dialogs overlap while one fades out, so the page text has no
+  // single scope and cannot be read until the first one is gone.
+  "/dialogs": `<main><div id="confirm" role="dialog" aria-modal="true">Delete the plan?
+    <button onclick="document.body.insertAdjacentHTML('beforeend', '<div role=dialog aria-modal=true>Plan deleted</div>'); setTimeout(() => document.getElementById('confirm').remove(), 1000)">Delete</button></div></main>`,
+  // A field that stays read-only past the 8-second action budget.
+  "/slow-editable": `<main><label>Name <input id="name" readonly></label><p id="echo"></p>
+    <script>
+      const name = document.getElementById("name");
+      name.addEventListener("input", () => { document.getElementById("echo").textContent = "Hello " + name.value; });
+      setTimeout(() => { name.readOnly = false; }, 9000);
+    </script></main>`,
+  // A button that stays disabled past the 8-second action budget.
+  "/slow-enable": `<main><button disabled onclick="this.outerHTML='<h1>Saved</h1>'">Save</button>
+    <script>setTimeout(() => { document.querySelector("button").disabled = false; }, 9000);</script></main>`,
   "/redirect": `<main><p>Redirecting</p><script>setTimeout(() => { location.href = "/done"; }, 600);</script></main>`,
   "/done": "<main><h1>All done</h1></main>",
   "/semantic": "<main><button>Add account</button></main>",
@@ -341,6 +381,96 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       const once = await run("/late", ["click the Continue button"], 0);
       expect(once.flow.status).toBe("failed");
       expect(once.steps[0]?.error?.code).toBe("no_match");
+    }, 30_000);
+
+    // A model takes a moment to answer; a render pass lands meanwhile.
+    const slowChoose =
+      (delayMs: number): Resolver["choose"] =>
+      async (sentence, offered) => {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        return choose(sentence, offered);
+      };
+
+    it("re-resolves a target that goes stale while the next screen renders", async () => {
+      const outcome = await run(
+        "/client?quiet",
+        [
+          "click the Save client button",
+          "click the Create financial plan button",
+          "verify the text Basic info of your client is shown",
+        ],
+        5_000,
+        undefined,
+        { choose: slowChoose(250) },
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+    }, 30_000);
+
+    it("re-resolves a stale target on a page that is never quiet", async () => {
+      const outcome = await run(
+        "/client?route=dashboard",
+        [
+          "click the Create financial plan button",
+          "verify the text Basic info of your client is shown",
+        ],
+        5_000,
+        undefined,
+        { choose: slowChoose(450) },
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+    }, 30_000);
+
+    it("clicks a target that the next render pass replaces mid-click", async () => {
+      // The gist repro: a busy page that re-renders the button every 400 ms.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const outcome = await run(
+          "/client",
+          [
+            "click the Save client button",
+            "click the Create financial plan button",
+            "verify the text Basic info of your client is shown",
+          ],
+          5_000,
+          undefined,
+          { choose: slowChoose(250) },
+        );
+        expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe(
+          "passed",
+        );
+      }
+    }, 60_000);
+
+    it("waits for a read-only field to type into within the grace", async () => {
+      const outcome = await run(
+        "/slow-editable",
+        [
+          "type {{name}} in the Name field",
+          'verify the text "Hello Ada" is shown',
+        ],
+        12_000,
+        undefined,
+        {},
+        { name: "Ada" },
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+    }, 30_000);
+
+    it("waits for a disabled target within the grace", async () => {
+      const outcome = await run(
+        "/slow-enable",
+        ["click the Save button", "verify the text Saved is shown"],
+        12_000,
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
+    }, 30_000);
+
+    it("reads the page text again while it cannot be read", async () => {
+      const outcome = await run(
+        "/dialogs",
+        ["click the Delete button", 'verify the text "Plan deleted" is shown'],
+        4_000,
+      );
+      expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
     }, 30_000);
 
     it("waits through a near-tie with no match without clicking the old screen", async () => {

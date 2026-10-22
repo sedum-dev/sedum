@@ -17,4 +17,10 @@ describe("verifyGraceMs", () => {
       expect(verifyGraceMs(String(120_000 + index / 10))).toBe(5_000);
     }
   });
+
+  it("falls back to the configured step timeout", () => {
+    expect(verifyGraceMs(undefined, 30_000)).toBe(30_000);
+    expect(verifyGraceMs("not-a-duration", 30_000)).toBe(30_000);
+    expect(verifyGraceMs("0", 30_000)).toBe(0);
+  });
 });

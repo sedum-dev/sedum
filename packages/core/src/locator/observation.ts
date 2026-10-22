@@ -15,37 +15,13 @@ interface ReobserveOptions {
   readonly signal?: AbortSignal;
 }
 
-function shouldRetryStale(result: LocatorResult, enabled: boolean): boolean {
-  if (!enabled || result.kind === "resolved") return false;
-  return result.reason === "stale";
-}
+type Recovery = "stale" | "empty" | "none";
 
-async function retryStaleResolution(
-  page: BrowserPage,
-  resolved: LocatorResult,
-  locate: () => Promise<LocatorResult>,
-  enabled: boolean,
-): Promise<LocatorResult> {
-  if (!shouldRetryStale(resolved, enabled)) return resolved;
-
-  const priorCalls = resolved.calls;
-  const settled = await quietPage(page, 1_000, 4_000).catch(() => ({
-    quiet: false,
-  }));
-  if (!settled.quiet) return resolved;
-
-  try {
-    const retried = await locate();
-    return { ...retried, calls: [...priorCalls, ...retried.calls] };
-  } catch (error) {
-    if (isRunWideProviderError(error)) throw error;
-    throw new LocateRetryError(priorCalls);
-  }
-}
-
-function hasNoCandidates(result: LocatorResult): boolean {
-  if (result.kind === "resolved") return false;
-  return result.reason === "no_candidates";
+/** What a failed resolution needs: a fresh read, a later read, or nothing. */
+function recoveryFor(result: LocatorResult, staleRetry: boolean): Recovery {
+  if (result.kind === "resolved") return "none";
+  if (result.reason === "no_candidates") return "empty";
+  return staleRetry && result.reason === "stale" ? "stale" : "none";
 }
 
 function mayRetry(deadline: number, signal?: AbortSignal): boolean {
@@ -53,7 +29,32 @@ function mayRetry(deadline: number, signal?: AbortSignal): boolean {
   return signal?.aborted !== true;
 }
 
-async function observeAfterDelay(
+/** A fresh read, or undefined when only this read failed (not the run). */
+async function tryLocate(
+  locate: () => Promise<LocatorResult>,
+): Promise<LocatorResult | undefined> {
+  try {
+    return await locate();
+  } catch (error) {
+    if (isRunWideProviderError(error)) throw error;
+    return undefined;
+  }
+}
+
+async function relocateAfterRender(
+  page: BrowserPage,
+  locate: () => Promise<LocatorResult>,
+  priorCalls: readonly ProviderCall[],
+): Promise<LocatorResult> {
+  // A busy page (a ticker, a poll, a spinner) is never quiet for long, so wait
+  // out the current render pass only; the page script still guards identity.
+  await quietPage(page, 80, 1_000).catch(() => undefined);
+  const fresh = await tryLocate(locate);
+  if (!fresh) throw new LocateRetryError(priorCalls);
+  return fresh;
+}
+
+async function relocateWhenFilled(
   page: BrowserPage,
   locate: () => Promise<LocatorResult>,
 ): Promise<LocatorResult | undefined> {
@@ -61,47 +62,23 @@ async function observeAfterDelay(
   const settled = await quietPage(page, 80, 1_000).catch(() => ({
     quiet: false,
   }));
-  if (!settled.quiet) return undefined;
-  try {
-    return await locate();
-  } catch (error) {
-    if (isRunWideProviderError(error)) throw error;
-    // A redirect can invalidate the read-only execution context.
-    return undefined;
-  }
+  // A redirect can invalidate the read-only execution context; poll again.
+  return settled.quiet ? tryLocate(locate) : undefined;
 }
 
-interface EmptyRetryContext {
-  readonly locate: () => Promise<LocatorResult>;
-  readonly deadline: number;
-  readonly signal?: AbortSignal;
-}
-
-async function pollEmptyObservation(
+async function readAgain(
   page: BrowserPage,
-  resolved: LocatorResult,
-  context: EmptyRetryContext,
-): Promise<LocatorResult> {
-  if (!mayRetry(context.deadline, context.signal)) return resolved;
-  const fresh = await observeAfterDelay(page, context.locate);
-  if (!fresh) return pollEmptyObservation(page, resolved, context);
-  const accumulated = { ...fresh, calls: [...resolved.calls, ...fresh.calls] };
-  if (!hasNoCandidates(accumulated)) return accumulated;
-  return pollEmptyObservation(page, accumulated, context);
-}
-
-async function retryEmptyObservation(
-  page: BrowserPage,
-  initial: LocatorResult,
+  recovery: Exclude<Recovery, "none">,
   locate: () => Promise<LocatorResult>,
-  signal?: AbortSignal,
+  current: LocatorResult,
 ): Promise<LocatorResult> {
-  if (!hasNoCandidates(initial)) return initial;
-  return pollEmptyObservation(page, initial, {
-    locate,
-    deadline: performance.now() + 8_000,
-    ...(signal ? { signal } : {}),
-  });
+  const fresh =
+    recovery === "stale"
+      ? await relocateAfterRender(page, locate, current.calls)
+      : await relocateWhenFilled(page, locate);
+  return fresh
+    ? { ...fresh, calls: [...current.calls, ...fresh.calls] }
+    : current;
 }
 
 /**
@@ -114,17 +91,20 @@ export async function reobserveLocator(
   locate: () => Promise<LocatorResult>,
   options: ReobserveOptions,
 ): Promise<LocatorResult> {
-  // A resolver response can arrive during an unrelated DOM revision. One fresh
-  // read after a longer quiet period reuses neither a target nor a prior action.
-  const fresh = await retryStaleResolution(
-    page,
-    first,
-    locate,
-    options.staleRetry,
-  );
-  // Navigation can briefly leave a quiet, empty document before the real page
-  // commits. Retry only the empty candidate set within the original deadline.
-  return retryEmptyObservation(page, fresh, locate, options.signal);
+  // A page that renders in passes can be empty on one read and replace the
+  // chosen node on the next, in either order; read again until it holds still.
+  // Each stale read costs a model call, so a target that never holds still
+  // gets a few fresh reads, not the whole deadline.
+  const deadline = performance.now() + 8_000;
+  let staleReads = 0;
+  let current = first;
+  for (;;) {
+    const recovery = recoveryFor(current, options.staleRetry && staleReads < 4);
+    if (recovery === "none" || !mayRetry(deadline, options.signal))
+      return current;
+    staleReads += Number(recovery === "stale");
+    current = await readAgain(page, recovery, locate, current);
+  }
 }
 
 function unresolvedReason(reason: string, op: string): string {
@@ -134,6 +114,8 @@ function unresolvedReason(reason: string, op: string): string {
     const action = op === "type" ? "type into" : op;
     return `the page had nothing to ${action}`;
   }
+  if (reason === "stale")
+    return "the page kept replacing it while it was located; wait for the page to settle first";
   return "several elements match it; name the one you mean more precisely";
 }
 
@@ -152,7 +134,8 @@ function visionFallbackNote(
   const vision = resolved.diagnostic.vision;
   if (vision?.outcome === "abstained")
     return "the vision model did not find it either";
-  if (vision || resolved.reason === "no_candidates") return undefined;
+  if (vision || ["no_candidates", "stale"].includes(resolved.reason))
+    return undefined;
   return "vision fallback could not run (it needs 2 to 40 fully visible, unobscured controls on screen)";
 }
 

@@ -62,6 +62,16 @@ function unreadable(context: SentenceAssertionContext) {
   );
 }
 
+function lastReadFailure(
+  context: SentenceAssertionContext,
+  claim: TextClaim,
+  found: number | null,
+) {
+  if (found === null) return unreadable(context);
+  const message = failureMessage(claim, found);
+  return context.record("failed", { error: { code: "text_check", message } });
+}
+
 export async function executeTextAssertion(
   context: SentenceAssertionContext,
   claim: TextClaim,
@@ -71,19 +81,17 @@ export async function executeTextAssertion(
   const wanted = (claim.alternatives ?? [claim.text]).map((text) =>
     revealValues(text, context.data),
   );
-  let message = "";
+  // A page mid-navigation cannot be read yet; like absent text, that is
+  // "not yet" until the deadline, and it is read again shortly.
+  let found: number | null = null;
   for (;;) {
     const before = await readPageVersion(context.page);
     await quietPage(context.page, 80, 2_000).catch(() => undefined);
-    let found: number;
-    try {
-      found = await countMatches(context, claim, wanted);
-    } catch {
-      return unreadable(context);
-    }
-    if (expectationHolds(claim, found)) return context.record("continue");
-    message = failureMessage(claim, found);
-    if (!(await waitForPageChange(context, before, deadline, false))) break;
+    found = await countMatches(context, claim, wanted).catch(() => null);
+    if (found !== null && expectationHolds(claim, found))
+      return context.record("continue");
+    const since = found === null ? null : before;
+    if (!(await waitForPageChange(context, since, deadline, false))) break;
   }
-  return context.record("failed", { error: { code: "text_check", message } });
+  return lastReadFailure(context, claim, found);
 }

@@ -51,6 +51,7 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     providerModel: "jev-latest",
     vision: { enabled: false },
     screenshots: false,
+    stepTimeoutMs: 5_000,
   };
 }
 

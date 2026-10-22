@@ -3,13 +3,16 @@ import path from "node:path";
 import type { ResolvedProjectConfig } from "../config.js";
 import type { CliDiagnostic } from "../diagnostics.js";
 
-/** Internal escape hatch: default to 5 s and reject unbounded timer values. */
-export function verifyGraceMs(value: string | undefined): number {
-  if (value === undefined) return 5_000;
+/** `SEDUM_VERIFY_GRACE_MS` overrides the configured step timeout when valid. */
+export function verifyGraceMs(
+  value: string | undefined,
+  configured = 5_000,
+): number {
+  if (value === undefined) return configured;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 120_000
     ? parsed
-    : 5_000;
+    : configured;
 }
 
 /** A run-level diagnostic for rejections that no running test owned. */

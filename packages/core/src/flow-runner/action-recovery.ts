@@ -4,6 +4,9 @@ import type { LocatorOptionDiagnostic, LocatorResult } from "../locator.js";
 import type { BrowserPage } from "../browser-driver.js";
 import { quietPage } from "../page-bridge.js";
 
+/** How long an action waits for its target to become ready, by default. */
+export const DEFAULT_ACTION_BUDGET_MS = 8_000;
+
 export async function refreshAfterQuiet(
   page: BrowserPage,
   remainingMs: number,
@@ -63,9 +66,10 @@ class ActionAttempts {
   private readonly signal: AbortSignal;
   private last: StepExecutionError;
   private attempts = 0;
+  private staleRefusals = 0;
 
   constructor(private readonly options: ActionRecovery) {
-    const budget = options.timeoutMs ?? 8_000;
+    const budget = options.timeoutMs ?? DEFAULT_ACTION_BUDGET_MS;
     this.deadline = this.started + budget;
     const timeout = AbortSignal.timeout(Math.max(1, Math.ceil(budget)));
     this.signal = options.signal
@@ -113,9 +117,12 @@ class ActionAttempts {
   private retryable(error: unknown): error is StepExecutionError {
     if (!(error instanceof StepExecutionError)) return false;
     if (!error.retryable || !this.options.allowed()) return false;
-    if (this.options.op !== "click")
-      return this.attempts === 0 && error.code === "stale";
-    return ["stale", "not_actionable"].includes(error.code);
+    // A field that is not editable yet was never filled, so wait it out like a
+    // click. A field gets one fresh read when it goes stale, even after a wait,
+    // since becoming editable is itself a page change.
+    if (error.code === "not_actionable") return true;
+    if (error.code !== "stale") return false;
+    return this.options.op === "click" || this.staleRefusals++ === 0;
   }
 
   private async perform(): Promise<boolean> {

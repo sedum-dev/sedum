@@ -419,6 +419,39 @@ environments:
     });
   });
 
+  it("resolves the step timeout per environment and rejects invalid ones", async () => {
+    const root = await temporaryRoot();
+    const load = async (config: string, environment?: string) => {
+      await writeFile(path.join(root, "sedum.config.yaml"), config);
+      return loadProjectConfig(root, {}, environment ? { environment } : {});
+    };
+    expect((await load("")).stepTimeoutMs).toBe(5_000);
+    const config =
+      "stepTimeoutMs: 30000\nenvironments:\n  ci: { stepTimeoutMs: 60000 }\n  local: {}\n";
+    expect((await load(config)).stepTimeoutMs).toBe(30_000);
+    expect((await load(config, "local")).stepTimeoutMs).toBe(30_000);
+    expect((await load(config, "ci")).stepTimeoutMs).toBe(60_000);
+    for (const value of ["-1", "120001", "30s"])
+      await expect(load(`stepTimeoutMs: ${value}\n`)).rejects.toMatchObject({
+        diagnostics: [expect.objectContaining({ key: "stepTimeoutMs" })],
+      });
+    // An unselected environment is checked too, so CI-only mistakes show locally.
+    await expect(
+      load("environments:\n  ci: { stepTimeoutMs: 30s }\n"),
+    ).rejects.toMatchObject({
+      diagnostics: [
+        expect.objectContaining({ key: "environments.ci.stepTimeoutMs" }),
+      ],
+    });
+    await expect(
+      load("environment: ci\nenvironments:\n  ci: { stepTimeoutMs: 1.5 }\n"),
+    ).rejects.toMatchObject({
+      diagnostics: [
+        expect.objectContaining({ key: "environments.ci.stepTimeoutMs" }),
+      ],
+    });
+  });
+
   it("validates vision settings and names the removed OpenRouter keys", async () => {
     const root = await temporaryRoot();
     await writeFile(

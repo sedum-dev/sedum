@@ -217,6 +217,49 @@ describe("PlaywrightBrowserDriver", () => {
     await session.close();
   });
 
+  it("retries a click only when Playwright never dispatched it", async () => {
+    const browser = new FakeBrowser();
+    launch.mockResolvedValue(browser);
+    const session = await new PlaywrightBrowserDriver().launch({
+      browser: "chromium",
+    });
+    const page = await (await session.newContext()).newPage();
+    const aim = {
+      ref: "target",
+      document: "doc",
+      route: "https://example.test",
+      revision: 1,
+      tag: "button",
+      name: "Submit",
+      point: { x: 5, y: 5 },
+    };
+    vi.spyOn(browser.context.page, "evaluate").mockResolvedValue({
+      actionable: true,
+      aim,
+    } as never);
+    const click = browser.context.page.target.click;
+    // Recorded from a render pass that replaced the button mid-click.
+    click.mockRejectedValueOnce(
+      new Error(
+        "elementHandle.click: Element is not attached to the DOM\nCall log:\n  - attempting click action\n    - waiting for element to be visible, enabled and stable\n",
+      ),
+    );
+    await expect(page.clickRef(aim)).resolves.toEqual({
+      actionable: false,
+      reason: "stale",
+    });
+    click.mockRejectedValueOnce(
+      new Error(
+        "elementHandle.click: Element is not attached to the DOM\nCall log:\n  - attempting click action\n    - waiting for element to be visible, enabled and stable\n    - element is visible, enabled and stable\n    - scrolling into view if needed\n    - done scrolling\n    - performing click action\n",
+      ),
+    );
+    await expect(page.clickRef(aim)).resolves.toMatchObject({
+      actionable: false,
+      reason: "action_started",
+    });
+    await session.close();
+  });
+
   it("captures a frame without writing to the page", async () => {
     const browser = new FakeBrowser();
     launch.mockResolvedValue(browser);

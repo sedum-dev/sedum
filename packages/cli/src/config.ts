@@ -87,12 +87,15 @@ export interface ResolvedProjectConfig {
    * On by default for the direct TypeSafe endpoint only.
    */
   readonly screenshots: boolean;
+  /** How long a step waits for the page: a verify, a missing or busy target. */
+  readonly stepTimeoutMs: number;
 }
 
 interface RawEnvironment {
   readonly baseUrl?: unknown;
   readonly variables?: unknown;
   readonly provider?: unknown;
+  readonly stepTimeoutMs?: unknown;
 }
 
 interface RawConfig extends RawEnvironment {
@@ -124,6 +127,7 @@ const DEFAULTS = {
   outputDir: ".sedum/runs",
   reporterDir: ".sedum/reports",
   vision: { enabled: false },
+  stepTimeoutMs: 5_000,
 };
 
 export const DEFAULT_PROVIDER_BASE_URL = "https://api.typesafe.ai";
@@ -145,12 +149,13 @@ const allowed = {
     "vision",
     "provider",
     "screenshots",
+    "stepTimeoutMs",
   ]),
   tests: new Set(["directory", "include", "exclude"]),
   affected: new Set(["ignore"]),
   viewport: new Set(["width", "height"]),
   thresholds: new Set(["verify", "lowConfidenceBand", "contradiction"]),
-  environment: new Set(["baseUrl", "variables", "provider"]),
+  environment: new Set(["baseUrl", "variables", "provider", "stepTimeoutMs"]),
   vision: new Set(["enabled"]),
   provider: new Set(["name", "model", "apiKeyEnv"]),
 };
@@ -432,6 +437,11 @@ function positiveInteger(
     return fallback;
   }
   return value as number;
+}
+
+function validStepTimeout(value: unknown): value is number {
+  if (!Number.isSafeInteger(value)) return false;
+  return (value as number) >= 0 && (value as number) <= 120_000;
 }
 
 function stringList(
@@ -763,6 +773,20 @@ export async function loadProjectConfig(
     string,
     Record<string, unknown>,
   ][];
+  const checkStepTimeout = (key: string, value: unknown): void => {
+    if (value === undefined || validStepTimeout(value)) return;
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node(key),
+      key,
+      "invalid_config_step_timeout",
+      `Configuration key \`${key}\` must be a whole number of milliseconds from 0 to 120000.`,
+      "Use a value such as 30000 for 30 seconds, or 0 to judge each step once.",
+    );
+  };
+  checkStepTimeout("stepTimeoutMs", raw.stepTimeoutMs);
   for (const [name, value] of Object.entries(environments)) {
     if (!object(value)) {
       diagnostic(
@@ -777,6 +801,7 @@ export async function loadProjectConfig(
       );
       continue;
     }
+    checkStepTimeout(`environments.${name}.stepTimeoutMs`, value.stepTimeoutMs);
     const key = `environments.${name}.provider`;
     const settings = value.provider;
     mapUnknownKeys(
@@ -1260,6 +1285,10 @@ export async function loadProjectConfig(
     counter,
     node("viewport.height"),
   );
+  // Every layer was validated above; the selected environment wins.
+  const stepTimeoutMs =
+    [environment.stepTimeoutMs, raw.stepTimeoutMs].find(validStepTimeout) ??
+    DEFAULTS.stepTimeoutMs;
   if (diagnostics.length) throw new ProjectConfigError(diagnostics);
 
   return freeze({
@@ -1286,6 +1315,7 @@ export async function loadProjectConfig(
     providerModel,
     vision: { enabled: visionEnabled === true },
     screenshots: screenshots && providerName !== "clef",
+    stepTimeoutMs,
   });
 }
 

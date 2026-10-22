@@ -5,6 +5,7 @@ import type { ClassifiedFlowSentence } from "../flow-classification.js";
 import { executeAssertion } from "./assertions.js";
 import { detectStep } from "./detection.js";
 import {
+  DEFAULT_ACTION_BUDGET_MS,
   pendingTarget,
   performWithRecovery,
   refreshAfterQuiet,
@@ -797,10 +798,13 @@ export async function executeSentence(
       },
     );
   if (resolved.kind !== "resolved") {
+    // A page that never held still is a failed attempt, like an empty one:
+    // retries rerun it, and the step says why.
     if (
       resolved.reason === "none" ||
       resolved.reason === "ambiguous" ||
-      resolved.reason === "no_candidates"
+      resolved.reason === "no_candidates" ||
+      resolved.reason === "stale"
     )
       return record("failed", {
         locator: resolved,
@@ -880,6 +884,9 @@ export async function executeSentence(
     let observation = 1;
     await performWithRecovery({
       op: step.op,
+      // A target can stay disabled while the app works; wait as long as the
+      // step's grace allows, never less than the default action budget.
+      timeoutMs: Math.max(DEFAULT_ACTION_BUDGET_MS, actionGraceMs),
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
       perform: performAction,
       allowed: () => !visionAttempted,
@@ -980,6 +987,7 @@ export async function executeSentence(
     const failed =
       actionError &&
       (actionError.code === "not_actionable" ||
+        actionError.code === "stale" ||
         actionError.code === "invalid_input");
     const facts = {
       locator: resolved,
