@@ -635,6 +635,130 @@ export interface ProjectConfigLoadOptions {
   readonly readEnvironmentFile?: boolean;
 }
 
+type ConfigDocument = ReturnType<typeof parseDocument>;
+
+/** Parse the YAML safely and flag keys Sedum does not know. */
+async function readConfigDocument(
+  file: string,
+  counter: LineCounter,
+  diagnostics: ConfigDiagnostic[],
+): Promise<{ raw: RawConfig; document: ConfigDocument }> {
+  let raw: RawConfig = {};
+  const contents = await readFile(file, "utf8");
+  const document = parseDocument(contents, {
+    lineCounter: counter,
+    strict: true,
+    uniqueKeys: true,
+  });
+  for (const error of document.errors)
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      undefined,
+      "<yaml>",
+      "invalid_config_yaml",
+      `Could not parse ${CONFIG_FILE}: ${error.message}`,
+      "Correct the YAML syntax and duplicate keys.",
+    );
+  let unsafeYaml = false;
+  visit(document, {
+    Alias(_key, alias) {
+      unsafeYaml = true;
+      diagnostic(
+        diagnostics,
+        file,
+        counter,
+        alias,
+        "<yaml>",
+        "unsupported_config_alias",
+        "YAML aliases are not supported in sedum.config.yaml.",
+        "Write the value explicitly instead of using an anchor or alias.",
+      );
+    },
+    Node(_key, value) {
+      if ("tag" in value && value.tag) {
+        unsafeYaml = true;
+        diagnostic(
+          diagnostics,
+          file,
+          counter,
+          value,
+          "<yaml>",
+          "unsupported_config_tag",
+          "YAML tags are not supported in sedum.config.yaml.",
+          "Use ordinary YAML scalar, mapping, and sequence values.",
+        );
+      }
+    },
+  });
+  let value: unknown = {};
+  if (!unsafeYaml)
+    try {
+      value = document.toJS({ maxAliasCount: 0 }) as unknown;
+    } catch {
+      diagnostic(
+        diagnostics,
+        file,
+        counter,
+        document.contents as Node,
+        "<yaml>",
+        "invalid_config_yaml",
+        `Could not safely decode ${CONFIG_FILE}.`,
+        "Remove aliases, tags, or recursive YAML structures.",
+      );
+    }
+  if (value !== null && !object(value))
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      document.contents as Node,
+      "<root>",
+      "invalid_config_root",
+      `${CONFIG_FILE} must contain a YAML mapping.`,
+      "Write configuration as key/value pairs.",
+    );
+  else raw = (value ?? {}) as RawConfig;
+  mapUnknownKeys(
+    document.contents,
+    allowed.root,
+    "",
+    file,
+    counter,
+    diagnostics,
+  );
+  const maps = [
+    ["tests", allowed.tests],
+    ["affected", allowed.affected],
+    ["viewport", allowed.viewport],
+    ["thresholds", allowed.thresholds],
+    ["vision", allowed.vision],
+    ["provider", allowed.provider],
+  ] as const;
+  for (const [key, names] of maps)
+    mapUnknownKeys(
+      document.get(key, true),
+      names,
+      key,
+      file,
+      counter,
+      diagnostics,
+    );
+  const environmentNode = document.get("environments", true);
+  if (isMap(environmentNode))
+    for (const pair of environmentNode.items)
+      mapUnknownKeys(
+        pair.value,
+        allowed.environment,
+        `environments.${String(pair.key)}`,
+        file,
+        counter,
+        diagnostics,
+      );
+  return { raw, document };
+}
+
 export async function loadProjectConfig(
   start = process.cwd(),
   hostEnvironment: Readonly<Record<string, string | undefined>> = process.env,
@@ -645,123 +769,9 @@ export async function loadProjectConfig(
   const file = found.file ?? path.join(found.root, CONFIG_FILE);
   const counter = new LineCounter();
   const diagnostics: ConfigDiagnostic[] = [];
-  let raw: RawConfig = {};
-  let document: ReturnType<typeof parseDocument> | null = null;
-  if (found.file) {
-    const contents = await readFile(found.file, "utf8");
-    document = parseDocument(contents, {
-      lineCounter: counter,
-      strict: true,
-      uniqueKeys: true,
-    });
-    for (const error of document.errors)
-      diagnostic(
-        diagnostics,
-        file,
-        counter,
-        undefined,
-        "<yaml>",
-        "invalid_config_yaml",
-        `Could not parse ${CONFIG_FILE}: ${error.message}`,
-        "Correct the YAML syntax and duplicate keys.",
-      );
-    let unsafeYaml = false;
-    visit(document, {
-      Alias(_key, alias) {
-        unsafeYaml = true;
-        diagnostic(
-          diagnostics,
-          file,
-          counter,
-          alias,
-          "<yaml>",
-          "unsupported_config_alias",
-          "YAML aliases are not supported in sedum.config.yaml.",
-          "Write the value explicitly instead of using an anchor or alias.",
-        );
-      },
-      Node(_key, value) {
-        if ("tag" in value && value.tag) {
-          unsafeYaml = true;
-          diagnostic(
-            diagnostics,
-            file,
-            counter,
-            value,
-            "<yaml>",
-            "unsupported_config_tag",
-            "YAML tags are not supported in sedum.config.yaml.",
-            "Use ordinary YAML scalar, mapping, and sequence values.",
-          );
-        }
-      },
-    });
-    let value: unknown = {};
-    if (!unsafeYaml)
-      try {
-        value = document.toJS({ maxAliasCount: 0 }) as unknown;
-      } catch {
-        diagnostic(
-          diagnostics,
-          file,
-          counter,
-          document.contents as Node,
-          "<yaml>",
-          "invalid_config_yaml",
-          `Could not safely decode ${CONFIG_FILE}.`,
-          "Remove aliases, tags, or recursive YAML structures.",
-        );
-      }
-    if (value !== null && !object(value))
-      diagnostic(
-        diagnostics,
-        file,
-        counter,
-        document.contents as Node,
-        "<root>",
-        "invalid_config_root",
-        `${CONFIG_FILE} must contain a YAML mapping.`,
-        "Write configuration as key/value pairs.",
-      );
-    else raw = (value ?? {}) as RawConfig;
-    mapUnknownKeys(
-      document.contents,
-      allowed.root,
-      "",
-      file,
-      counter,
-      diagnostics,
-    );
-    const maps = [
-      ["tests", allowed.tests],
-      ["affected", allowed.affected],
-      ["viewport", allowed.viewport],
-      ["thresholds", allowed.thresholds],
-      ["vision", allowed.vision],
-      ["provider", allowed.provider],
-    ] as const;
-    for (const [key, names] of maps)
-      mapUnknownKeys(
-        document.get(key, true),
-        names,
-        key,
-        file,
-        counter,
-        diagnostics,
-      );
-    const environmentNode = document.get("environments", true);
-    if (isMap(environmentNode))
-      for (const pair of environmentNode.items)
-        mapUnknownKeys(
-          pair.value,
-          allowed.environment,
-          `environments.${String(pair.key)}`,
-          file,
-          counter,
-          diagnostics,
-        );
-  }
-
+  const { raw, document } = found.file
+    ? await readConfigDocument(found.file, counter, diagnostics)
+    : { raw: {} as RawConfig, document: null };
   const node = (key: string): Node | null | undefined =>
     document?.getIn(key.split("."), true) as Node | null | undefined;
   const tests = object(raw.tests) ? raw.tests : {};
