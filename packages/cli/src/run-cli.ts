@@ -25,6 +25,7 @@ import type { AuthOptions, AuthRuntime } from "./auth-command.js";
 import { AuthError } from "./auth-api.js";
 import {
   exploreMode,
+  explorePlanner,
   seedValue,
   startUrl,
   watchOrigin,
@@ -635,6 +636,12 @@ export async function runCli(
       "guided (Jev), heuristic (no model) or random (blind walk)",
       exploreMode,
       "guided",
+    )
+    .option(
+      "--planner <planner>",
+      "walk (weighted random walk) or effects (Jev labels what each control does; code plans over a map of the app; guided mode)",
+      explorePlanner,
+      "walk",
     )
     .option(
       "--out <dir>",

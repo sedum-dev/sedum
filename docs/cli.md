@@ -457,7 +457,9 @@ into `--out/<run-id>/`. `--replay` adds a frame per step to the HTML report
 (`--sensitive-origin` turns frames off for an origin), and `--shrink` writes
 each failure as a plain-English test. `--rerun <trace>` runs a recorded
 trace again. Use `--steps`, `--seed` and `--mode guided|heuristic|random`.
-See [Exploration mode](explore-mode.md).
+`--planner effects` (guided mode, experimental) replaces the weighted walk
+with a planner that asks Jev what each control does and plans over a map of
+the app. See [Exploration mode](explore-mode.md).
 
 ## `sedum validate`
 
