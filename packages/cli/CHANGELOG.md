@@ -1,5 +1,30 @@
 # sedum-cli
 
+## 0.1.0-alpha.19
+
+### Minor Changes
+
+- 8e4f5d6: Automatically upload finalized run reports to Sedum Cloud when configured through the environment or project-root dotenv file. Preserve local live reporting and test exit codes, support `--no-cloud`, and retry transient delivery failures within a bounded budget.
+- 87cf92f: Choose the browser per machine or environment. `SEDUM_BROWSER` (process or
+  project `.env`) and a named environment's `browser` key now set the browser,
+  below `--browser` and above the top-level `browser` key. `sedum doctor` accepts
+  `--browser` and reports where the browser setting came from.
+- 56db450: Add browser device authentication for self-hosted Cloud instances with per-origin user sessions, live membership selection, refresh rotation and logout revocation. CI upload credentials remain separate.
+
+### Patch Changes
+
+- eca2e3f: Add authenticated, noninteractive Cloud run summaries, exact test history, and bounded test statistics with previous-period comparisons and versioned JSON output.
+- 01541dc: Click and type steps right after a page change no longer need a `wait until …` step before them. A target that a render pass replaces while it is being located is located again, on busy pages too, until the page holds still. A click that Playwright refused before sending any input is retried against the new target. A step whose target never holds still now fails instead of "could not run", so `--retries` reruns it. A located button that stays disabled, or a field that stays read-only, now waits for the step timeout when that is longer than 8 seconds, and a quoted-text check keeps reading a page that is mid-navigation. Set the step timeout with `stepTimeoutMs` in `sedum.config.yaml`, per environment if needed.
+- fc24458: Stabilize Cloud authentication cancellation, device polling, HTTP error handling, and refresh-token rotation when access expires during status checks. Terminal EOF and Ctrl-C now release the authentication store lock safely.
+- Updated dependencies [75e5784]
+- Updated dependencies [30780f1]
+- Updated dependencies [01541dc]
+- Updated dependencies [18d0aff]
+  - @sedum-dev/core@0.1.0-alpha.19
+  - @sedum-dev/provider-clef@0.1.0-alpha.19
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.19
+  - @sedum-dev/reporters@0.1.0-alpha.19
+
 ## 0.1.0-alpha.18
 
 ### Patch Changes
