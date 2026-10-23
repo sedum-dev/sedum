@@ -451,6 +451,41 @@ interface DiagnosticSink {
   readonly node: (key: string) => Node | null | undefined;
 }
 
+/** Report top-level sections that are present but not mappings. */
+function reportNonMappingSections(raw: RawConfig, sink: DiagnosticSink): void {
+  const { diagnostics, file, counter, node } = sink;
+  if (raw.tests !== undefined && !object(raw.tests))
+    diagnostic(
+      diagnostics,
+      file,
+      counter,
+      node("tests"),
+      "tests",
+      "invalid_config_type",
+      "Configuration key `tests` must be a mapping.",
+      "Use `tests: { directory: tests }`.",
+    );
+  for (const [key, value] of [
+    ["affected", raw.affected],
+    ["viewport", raw.viewport],
+    ["thresholds", raw.thresholds],
+    ["environments", raw.environments],
+    ["vision", raw.vision],
+    ["provider", raw.provider],
+  ] as const)
+    if (value !== undefined && !object(value))
+      diagnostic(
+        diagnostics,
+        file,
+        counter,
+        node(key),
+        key,
+        "invalid_config_type",
+        `Configuration key \`${key}\` must be a mapping.`,
+        `Write \`${key}: {}\` and add its documented child keys.`,
+      );
+}
+
 /** Report every invalid `stepTimeoutMs`, selected environment or not. */
 function reportInvalidStepTimeouts(
   raw: RawConfig,
@@ -774,37 +809,9 @@ export async function loadProjectConfig(
     : { raw: {} as RawConfig, document: null };
   const node = (key: string): Node | null | undefined =>
     document?.getIn(key.split("."), true) as Node | null | undefined;
+  const sink = { diagnostics, file, counter, node };
+  reportNonMappingSections(raw, sink);
   const tests = object(raw.tests) ? raw.tests : {};
-  if (raw.tests !== undefined && !object(raw.tests))
-    diagnostic(
-      diagnostics,
-      file,
-      counter,
-      node("tests"),
-      "tests",
-      "invalid_config_type",
-      "Configuration key `tests` must be a mapping.",
-      "Use `tests: { directory: tests }`.",
-    );
-  for (const [key, value] of [
-    ["affected", raw.affected],
-    ["viewport", raw.viewport],
-    ["thresholds", raw.thresholds],
-    ["environments", raw.environments],
-    ["vision", raw.vision],
-    ["provider", raw.provider],
-  ] as const)
-    if (value !== undefined && !object(value))
-      diagnostic(
-        diagnostics,
-        file,
-        counter,
-        node(key),
-        key,
-        "invalid_config_type",
-        `Configuration key \`${key}\` must be a mapping.`,
-        `Write \`${key}: {}\` and add its documented child keys.`,
-      );
   const viewport = object(raw.viewport) ? raw.viewport : {};
   const affected = object(raw.affected) ? raw.affected : {};
   const affectedIgnore = stringList(
@@ -1332,7 +1339,6 @@ export async function loadProjectConfig(
     counter,
     node("viewport.height"),
   );
-  const sink = { diagnostics, file, counter, node };
   const stepTimeoutMs = resolveStepTimeout(raw, environment, sink);
   if (diagnostics.length) throw new ProjectConfigError(diagnostics);
 
