@@ -116,6 +116,8 @@ function unresolvedReason(reason: string, op: string): string {
   }
   if (reason === "stale")
     return "the page kept replacing it while it was located; wait for the page to settle first";
+  if (reason === "provider_error")
+    return "the model call that picks the target failed; run the test again";
   return "several elements match it; name the one you mean more precisely";
 }
 

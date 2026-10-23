@@ -89,6 +89,9 @@ const FAILED_LOCATOR_REASONS: readonly string[] = [
   "ambiguous",
   "no_candidates",
   "stale",
+  // Run-wide provider failures are thrown before this; what reaches here is
+  // one failed model call, which a retry can get past.
+  "provider_error",
 ];
 
 /** Action refusals that prove no input was dispatched. */
