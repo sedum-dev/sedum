@@ -1,5 +1,19 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.19
+
+### Patch Changes
+
+- 75e5784: Count a click, press or history move as done once it has opened a new document
+  or route, even if the new page is still loading or changing. Such an action
+  used to end with `action_uncertain` (the test could not run, with no retry)
+  when the next page took more than about 4 seconds to load, as a cross-app page
+  on a busy machine does. Later steps wait for the page as before; the action is
+  still never replayed, and an unreadable new document is still uncertain.
+- 30780f1: A click or type step whose one model call to pick the target fails, for example on a timeout, now fails instead of "could not run", so `--retries` reruns the test. Provider failures that affect the whole run, such as a rejected API key, a configuration error or a rate limit, still stop the run as before.
+- 01541dc: Click and type steps right after a page change no longer need a `wait until …` step before them. A target that a render pass replaces while it is being located is located again, on busy pages too, until the page holds still. A click that Playwright refused before sending any input is retried against the new target. A step whose target never holds still now fails instead of "could not run", so `--retries` reruns it. A located button that stays disabled, or a field that stays read-only, now waits for the step timeout when that is longer than 8 seconds, and a quoted-text check keeps reading a page that is mid-navigation. Set the step timeout with `stepTimeoutMs` in `sedum.config.yaml`, per environment if needed.
+- 18d0aff: A quoted-text check whose page text is still unreadable when the step times out now fails with `text_unreadable` instead of "could not run", so `--retries` reruns the test.
+
 ## 0.1.0-alpha.18
 
 ### Patch Changes
