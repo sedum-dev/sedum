@@ -5,7 +5,6 @@ import {
   waitForPageChange,
   type SentenceAssertionContext,
 } from "./assertion-support.js";
-import { unsupported } from "./support.js";
 import { quietPage, visibleText } from "../page-bridge.js";
 import { countText, type TextClaim } from "../step-operands.js";
 
@@ -54,22 +53,18 @@ function failureMessage(claim: TextClaim, found: number) {
   return `The text appears ${frequency} on the page.`;
 }
 
-function unreadable(context: SentenceAssertionContext) {
-  const message = "The page text could not be read.";
-  return context.record(
-    unsupported(context.step.source.file, context.step.source, message),
-    { error: { code: "text_unreadable", message } },
-  );
-}
-
+// Text still unreadable at the deadline fails the step, like absent text, so
+// retries can repeat a test whose page never finished loading.
 function lastReadFailure(
   context: SentenceAssertionContext,
   claim: TextClaim,
   found: number | null,
 ) {
-  if (found === null) return unreadable(context);
-  const message = failureMessage(claim, found);
-  return context.record("failed", { error: { code: "text_check", message } });
+  const error =
+    found === null
+      ? { code: "text_unreadable", message: "The page text could not be read." }
+      : { code: "text_check", message: failureMessage(claim, found) };
+  return context.record("failed", { error });
 }
 
 export async function executeTextAssertion(
