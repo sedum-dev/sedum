@@ -126,7 +126,11 @@ export function renderConfigErrors(
 ): string {
   return errors
     .map((item) => {
-      const file = path.relative(cwd, item.file).split(path.sep).join("/");
+      // A setting from outside any file, such as `<process environment>`,
+      // keeps its label.
+      const file = path.isAbsolute(item.file)
+        ? path.relative(cwd, item.file).split(path.sep).join("/")
+        : item.file;
       return `${file}:${item.line}:${item.col}: error ${item.code}: ${item.message}\nFix: ${item.fix}\n`;
     })
     .join("");

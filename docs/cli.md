@@ -158,6 +158,8 @@ sedum run tests/example.test.ts --headed
 
 `sedum doctor` checks whether this project can run Sedum before starting a test. It reports each prerequisite as `PASS` or `FAIL`, with a fix for every failure: Node 20.19 or newer, valid config and `.env`, an installed browser, network and authenticated access to the configured model provider, and output directory write access. The authentication check sends one small request and may incur a provider charge. Doctor does not launch a browser or run tests.
 
+`--env <name>` and `--browser chrome|chromium` check the environment and browser a run with the same options would use; the browser check says where the browser setting came from (see [configuration](configuration.md)).
+
 `sedum doctor --json` writes one versioned JSON object, including when checks fail. Both output forms omit the API key and raw provider errors. The exit code is `0` when every check passes and `3` otherwise.
 
 ## `sedum browsers install`

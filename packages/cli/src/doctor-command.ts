@@ -9,6 +9,8 @@ import {
   DEFAULT_PROVIDER_BASE_URL,
   DEFAULT_PROVIDER_MODEL,
   loadProjectConfig,
+  ProjectConfigError,
+  type ProjectConfigOverrides,
   type ResolvedProjectConfig,
 } from "./config.js";
 import { providerDiagnostic } from "./diagnostics.js";
@@ -51,6 +53,18 @@ export interface DoctorProbes {
 
 export interface DoctorOptions {
   readonly environment?: string;
+  readonly browser?: BrowserKind;
+}
+
+/** Doctor options from the parsed `doctor` command line. */
+export function doctorOptions(options: {
+  env?: string;
+  browser?: string;
+}): DoctorOptions {
+  return {
+    ...(options.env ? { environment: options.env } : {}),
+    ...(options.browser ? { browser: options.browser as BrowserKind } : {}),
+  };
 }
 
 const pass = (id: DoctorCheckId, message: string): DoctorCheck => ({
@@ -157,6 +171,36 @@ const VISION_CHECKS = {
   ),
 };
 
+function browserOrigin(config: ResolvedProjectConfig): string {
+  return config.browserSource === "default"
+    ? "the default"
+    : `from ${config.browserSource}`;
+}
+
+function configOverrides(options: DoctorOptions): ProjectConfigOverrides {
+  return {
+    ...(options.environment ? { environment: options.environment } : {}),
+    ...(options.browser ? { browser: options.browser } : {}),
+  };
+}
+
+/** The config check for a configuration that did not load, naming its first problem. */
+function configFailure(error: unknown): DoctorCheck {
+  const detail =
+    error instanceof ProjectConfigError ? error.diagnostics[0] : undefined;
+  if (!detail)
+    return fail(
+      "config",
+      "Project configuration could not be loaded.",
+      "Correct sedum.config.yaml or the project-root .env and check file permissions.",
+    );
+  return fail(
+    "config",
+    `Project configuration could not be loaded: ${detail.message}`,
+    detail.fix,
+  );
+}
+
 export async function executeDoctorCommand(
   cwd: string,
   probes: DoctorProbes = {},
@@ -178,20 +222,10 @@ export async function executeDoctorCommand(
   try {
     config = probes.loadConfig
       ? await probes.loadConfig(cwd)
-      : await loadProjectConfig(
-          cwd,
-          process.env,
-          options.environment ? { environment: options.environment } : {},
-        );
+      : await loadProjectConfig(cwd, process.env, configOverrides(options));
     checks.push(pass("config", "Project configuration is valid."));
-  } catch {
-    checks.push(
-      fail(
-        "config",
-        "Project configuration could not be loaded.",
-        "Correct sedum.config.yaml or the project-root .env and check file permissions.",
-      ),
-    );
+  } catch (error) {
+    checks.push(configFailure(error));
   }
 
   if (config) {
@@ -199,10 +233,13 @@ export async function executeDoctorCommand(
       const available = (probes.browser ?? browserAvailable)(config.browser);
       checks.push(
         available
-          ? pass("browser", `${config.browser} is available.`)
+          ? pass(
+              "browser",
+              `${config.browser} is available (${browserOrigin(config)}).`,
+            )
           : fail(
               "browser",
-              `${config.browser} was not found.`,
+              `${config.browser} was not found (${browserOrigin(config)}).`,
               "Install Chrome or run `sedum browsers install chromium`; check the configured browser.",
             ),
       );

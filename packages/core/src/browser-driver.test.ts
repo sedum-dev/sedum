@@ -179,6 +179,21 @@ describe("PlaywrightBrowserDriver", () => {
     expect(launch).toHaveBeenNthCalledWith(2, { headless: false, slowMo: 20 });
   });
 
+  it("falls back to managed Chromium when Linux has no Chrome distribution", async () => {
+    const browser = new FakeBrowser();
+    launch.mockRejectedValueOnce(
+      new Error(
+        "browserType.launch: Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome",
+      ),
+    );
+    launch.mockResolvedValueOnce(browser);
+
+    const session = await new PlaywrightBrowserDriver().launch();
+
+    expect(session).toBeDefined();
+    expect(launch).toHaveBeenNthCalledWith(2, { headless: true, slowMo: 0 });
+  });
+
   it("marks a headed action with a browser overlay and removes it after dispatch", async () => {
     const browser = new FakeBrowser();
     launch.mockResolvedValue(browser);

@@ -284,7 +284,7 @@ function errorText(error: unknown): string {
 }
 
 function isMissingExecutable(error: unknown): boolean {
-  return /executable does not exist|executable.*doesn't exist|executable.*not found|channel .* is not installed|ENOENT/i.test(
+  return /executable does not exist|executable.*doesn't exist|executable.*not found|channel .* is not installed|distribution '.*' is not found|ENOENT/i.test(
     errorText(error),
   );
 }

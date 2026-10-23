@@ -227,6 +227,122 @@ environments:
     },
   );
 
+  it("picks the browser from the flag, SEDUM_BROWSER, the environment, then the root key", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "browser: chrome\nenvironment: ci\nenvironments:\n  ci:\n    browser: chromium\n  local: {}\n",
+    );
+    const pick = async (
+      host: Record<string, string>,
+      overrides: Parameters<typeof loadProjectConfig>[2] = {},
+    ) => {
+      const config = await loadProjectConfig(root, host, overrides);
+      return [config.browser, config.browserSource];
+    };
+    expect(await pick({})).toEqual(["chromium", "environments.ci.browser"]);
+    expect(await pick({}, { environment: "local" })).toEqual([
+      "chrome",
+      "browser",
+    ]);
+    expect(await pick({ SEDUM_BROWSER: "chrome" })).toEqual([
+      "chrome",
+      "SEDUM_BROWSER",
+    ]);
+    expect(
+      await pick({ SEDUM_BROWSER: "chrome" }, { browser: "chromium" }),
+    ).toEqual(["chromium", "--browser"]);
+    expect(await pick({ SEDUM_BROWSER: " " })).toEqual([
+      "chromium",
+      "environments.ci.browser",
+    ]);
+  });
+
+  it("reads SEDUM_BROWSER from the project .env below the process environment", async () => {
+    const root = await temporaryRoot();
+    await writeFile(path.join(root, ".env"), "SEDUM_BROWSER=chromium\n");
+    const fromFile = await loadProjectConfig(root, {});
+    expect([fromFile.browser, fromFile.browserSource]).toEqual([
+      "chromium",
+      "SEDUM_BROWSER",
+    ]);
+    const fromHost = await loadProjectConfig(root, { SEDUM_BROWSER: "chrome" });
+    expect(fromHost.browser).toBe("chrome");
+    const noFile = await loadProjectConfig(
+      root,
+      {},
+      {},
+      { readEnvironmentFile: false },
+    );
+    expect([noFile.browser, noFile.browserSource]).toEqual([
+      "chrome",
+      "default",
+    ]);
+  });
+
+  it("checks every environment's browser, selected or not, whatever overrides it", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "browser: chromiun\nenvironments:\n  ci:\n    browser: firefox\n  local:\n    browser: chromium\n",
+    );
+    const error = await loadProjectConfig(
+      root,
+      { SEDUM_BROWSER: "chromium" },
+      { browser: "chrome" },
+    ).catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(ProjectConfigError);
+    expect(
+      (error as ProjectConfigError).diagnostics.map((item) => [
+        item.key,
+        item.line,
+      ]),
+    ).toEqual([
+      ["browser", 1],
+      ["environments.ci.browser", 4],
+    ]);
+  });
+
+  it("names the source of an unsupported browser", async () => {
+    const root = await temporaryRoot();
+    await writeFile(
+      path.join(root, "sedum.config.yaml"),
+      "environment: ci\nenvironments:\n  ci:\n    browser: firefox\n",
+    );
+    const keys = async (host: Record<string, string>) => {
+      const error = await loadProjectConfig(root, host).catch(
+        (value: unknown) => value,
+      );
+      expect(error).toBeInstanceOf(ProjectConfigError);
+      return (error as ProjectConfigError).diagnostics
+        .filter((item) => item.code === "invalid_config_browser")
+        .map((item) => item.key);
+    };
+    expect(await keys({})).toEqual(["environments.ci.browser"]);
+    // A higher-precedence setting does not hide a bad key in the shared config.
+    expect(await keys({ SEDUM_BROWSER: "safari" })).toEqual([
+      "environments.ci.browser",
+      "SEDUM_BROWSER",
+    ]);
+    const fromProcess = await loadProjectConfig(root, {
+      SEDUM_BROWSER: "safari",
+    }).catch((value: unknown) => value);
+    expect(
+      (fromProcess as ProjectConfigError).diagnostics.find(
+        (item) => item.key === "SEDUM_BROWSER",
+      )?.file,
+    ).toBe("<process environment>");
+    await writeFile(path.join(root, ".env"), "SEDUM_BROWSER=safari\n");
+    const error = await loadProjectConfig(root, {}).catch(
+      (value: unknown) => value,
+    );
+    expect(
+      (error as ProjectConfigError).diagnostics.find(
+        (item) => item.key === "SEDUM_BROWSER",
+      )?.file,
+    ).toBe(path.join(root, ".env"));
+  });
+
   it("selects Clef credentials and excludes Cloudflare secrets from test variables", async () => {
     const root = await temporaryRoot();
     await writeFile(

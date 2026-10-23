@@ -38,6 +38,7 @@ async function fixture(): Promise<ResolvedProjectConfig> {
     exclude: [],
     affected: { ignore: [] },
     browser: "chrome",
+    browserSource: "default",
     viewport: { width: 1280, height: 900 },
     thresholds: { minP: 0.75, band: 0.15, contradictionCutoff: 0.5 },
     outputDir: path.join(root, ".sedum", "runs"),
@@ -67,6 +68,54 @@ function probes(config: ResolvedProjectConfig): DoctorProbes {
 }
 
 describe("sedum doctor", () => {
+  it("checks the browser given by --browser and says where it came from", async () => {
+    const { projectRoot: cwd } = await fixture();
+    await writeFile(path.join(cwd, "sedum.config.yaml"), "browser: chrome\n");
+    await writeFile(path.join(cwd, ".env"), "TYPESAFE_API_KEY=key\n");
+    const browser = vi.fn<NonNullable<DoctorProbes["browser"]>>(() => true);
+    const doctorProbes: DoctorProbes = {
+      browser,
+      network: async () => true,
+      auth: async () => "accepted",
+      output: async () => undefined,
+    };
+    const message = async (args: string[]) => {
+      const result = await runCli(["doctor", "--json", ...args], "0.0.0", {
+        cwd,
+        doctorProbes,
+      });
+      const checks = JSON.parse(result.stdout).checks as {
+        id: string;
+        message: string;
+      }[];
+      return checks.find((check) => check.id === "browser")?.message;
+    };
+    expect(await message(["--browser", "chromium"])).toBe(
+      "chromium is available (from --browser).",
+    );
+    expect(browser).toHaveBeenLastCalledWith("chromium");
+    expect(await message([])).toBe("chrome is available (from browser).");
+  });
+
+  it("explains an unsupported SEDUM_BROWSER instead of a bare config failure", async () => {
+    const { projectRoot: cwd } = await fixture();
+    await writeFile(
+      path.join(cwd, ".env"),
+      "TYPESAFE_API_KEY=key\nSEDUM_BROWSER=firefox\n",
+    );
+    const result = await runCli(["doctor", "--json"], "0.0.0", {
+      cwd,
+      doctorProbes: { browser: () => true },
+    });
+    const config = (
+      JSON.parse(result.stdout).checks as { id: string; message: string }[]
+    ).find((check) => check.id === "config");
+    expect(result.exitCode).toBe(3);
+    expect(config?.message).toBe(
+      "Project configuration could not be loaded: `SEDUM_BROWSER` must be `chrome` or `chromium`.",
+    );
+  });
+
   it("uses named environment credentials and reports custom names when missing", async () => {
     const { projectRoot: cwd } = await fixture();
     await writeFile(

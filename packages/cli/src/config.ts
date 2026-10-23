@@ -65,6 +65,8 @@ export interface ResolvedProjectConfig {
   readonly exclude: readonly string[];
   readonly affected: { readonly ignore: readonly string[] };
   readonly browser: BrowserKind;
+  /** Where `browser` came from: `--browser`, `SEDUM_BROWSER`, a config key, or `default`. */
+  readonly browserSource: BrowserSource;
   readonly viewport: { readonly width: number; readonly height: number };
   readonly thresholds: Required<VerifyPolicy>;
   readonly outputDir: string;
@@ -93,6 +95,7 @@ export interface ResolvedProjectConfig {
 
 interface RawEnvironment {
   readonly baseUrl?: unknown;
+  readonly browser?: unknown;
   readonly variables?: unknown;
   readonly provider?: unknown;
   readonly stepTimeoutMs?: unknown;
@@ -155,7 +158,13 @@ const allowed = {
   affected: new Set(["ignore"]),
   viewport: new Set(["width", "height"]),
   thresholds: new Set(["verify", "lowConfidenceBand", "contradiction"]),
-  environment: new Set(["baseUrl", "variables", "provider", "stepTimeoutMs"]),
+  environment: new Set([
+    "baseUrl",
+    "browser",
+    "variables",
+    "provider",
+    "stepTimeoutMs",
+  ]),
   vision: new Set(["enabled"]),
   provider: new Set(["name", "model", "apiKeyEnv"]),
 };
@@ -186,6 +195,128 @@ function diagnostic(
     message,
     fix,
   });
+}
+
+export type BrowserSource =
+  | "--browser"
+  | "SEDUM_BROWSER"
+  | `environments.${string}.browser`
+  | "browser"
+  | "default";
+
+function isBrowserKind(value: unknown): value is BrowserKind {
+  return value === "chrome" || value === "chromium";
+}
+
+interface BrowserSettings {
+  readonly flag: unknown;
+  readonly host: string | undefined;
+  readonly file: string | undefined;
+  readonly environment: unknown;
+  readonly environmentName: unknown;
+  readonly root: unknown;
+}
+
+/**
+ * Where an unsupported browser setting outside sedum.config.yaml is reported;
+ * config keys are null because every one of them is checked on its own.
+ */
+type BrowserOrigin = "<command line>" | "<process environment>" | ".env" | null;
+
+/** The highest-precedence browser setting and where it came from. */
+function browserSetting(settings: BrowserSettings): {
+  readonly value: unknown;
+  readonly source: BrowserSource;
+  readonly origin: BrowserOrigin;
+} {
+  const name = settings.environmentName;
+  const candidates: readonly {
+    readonly value: unknown;
+    readonly source: BrowserSource;
+    readonly origin: BrowserOrigin;
+  }[] = [
+    { value: settings.flag, source: "--browser", origin: "<command line>" },
+    {
+      value: settings.host?.trim() || undefined,
+      source: "SEDUM_BROWSER",
+      origin: "<process environment>",
+    },
+    {
+      value: settings.file?.trim() || undefined,
+      source: "SEDUM_BROWSER",
+      origin: ".env",
+    },
+    {
+      value: typeof name === "string" ? settings.environment : undefined,
+      source: `environments.${String(name)}.browser`,
+      origin: null,
+    },
+    { value: settings.root, source: "browser", origin: null },
+  ];
+  return (
+    candidates.find((candidate) => candidate.value !== undefined) ?? {
+      value: DEFAULTS.browser,
+      source: "default",
+      origin: null,
+    }
+  );
+}
+
+/** Report every unsupported `browser` key, selected environment or not. */
+function reportInvalidConfigBrowsers(
+  raw: RawConfig,
+  sink: DiagnosticSink,
+): void {
+  const layers: [string, unknown][] = [["browser", raw.browser]];
+  for (const [name, value] of Object.entries(environmentMap(raw)))
+    if (object(value))
+      layers.push([`environments.${name}.browser`, value.browser]);
+  for (const [key, value] of layers)
+    if (value !== undefined && !isBrowserKind(value))
+      reportInvalidBrowser(sink, sink.file, sink.node(key), key);
+}
+
+function reportInvalidBrowser(
+  sink: DiagnosticSink,
+  file: string,
+  node: Node | null | undefined,
+  key: string,
+): void {
+  diagnostic(
+    sink.diagnostics,
+    file,
+    sink.counter,
+    node,
+    key,
+    "invalid_config_browser",
+    `\`${key}\` must be \`chrome\` or \`chromium\`.`,
+    "Choose one of the supported browser names.",
+  );
+}
+
+/**
+ * The browser to use and where it came from. A bad `browser` key in any
+ * environment is reported even when a flag or `SEDUM_BROWSER` overrides it,
+ * so a machine that overrides it cannot hide a mistake in the shared config.
+ */
+function resolveBrowser(
+  raw: RawConfig,
+  settings: BrowserSettings,
+  sink: DiagnosticSink,
+  environmentFile: string,
+): { readonly browser: BrowserKind; readonly source: BrowserSource } {
+  reportInvalidConfigBrowsers(raw, sink);
+  const setting = browserSetting(settings);
+  if (isBrowserKind(setting.value))
+    return { browser: setting.value, source: setting.source };
+  if (setting.origin)
+    reportInvalidBrowser(
+      sink,
+      setting.origin === ".env" ? environmentFile : setting.origin,
+      undefined,
+      setting.source,
+    );
+  return { browser: DEFAULTS.browser, source: setting.source };
 }
 
 /** Keys that once configured the OpenRouter vision resolver. */
@@ -938,23 +1069,6 @@ export async function loadProjectConfig(
     : {};
   const apiKeyEnv = selectedProvider.apiKeyEnv ?? provider.apiKeyEnv;
 
-  const browserValue = overrides.browser ?? raw.browser ?? DEFAULTS.browser;
-  const browser =
-    browserValue === "chrome" || browserValue === "chromium"
-      ? browserValue
-      : DEFAULTS.browser;
-  if (browserValue !== "chrome" && browserValue !== "chromium")
-    diagnostic(
-      diagnostics,
-      file,
-      counter,
-      node("browser"),
-      "browser",
-      "invalid_config_browser",
-      "Configuration key `browser` must be `chrome` or `chromium`.",
-      "Choose one of the supported browser names.",
-    );
-
   const verify = probability(
     overrides.thresholds?.minP ?? thresholds.verify,
     DEFAULTS.thresholds.minP,
@@ -1043,6 +1157,21 @@ export async function loadProjectConfig(
         "Correct its dotenv syntax and permissions, or remove it.",
       );
   }
+
+  const browserChoice = resolveBrowser(
+    raw,
+    {
+      flag: overrides.browser,
+      host: hostEnvironment.SEDUM_BROWSER,
+      file: fileEnvironment.SEDUM_BROWSER,
+      environment: environment.browser,
+      environmentName: selected,
+      root: raw.browser,
+    },
+    sink,
+    environmentFile,
+  );
+  const browser = browserChoice.browser;
 
   const include = stringList(
     tests.include,
@@ -1351,6 +1480,7 @@ export async function loadProjectConfig(
     exclude,
     affected: { ignore: affectedIgnore },
     browser,
+    browserSource: browserChoice.source,
     viewport: { width, height },
     thresholds: { minP: verify, band, contradictionCutoff },
     outputDir,

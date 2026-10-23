@@ -59,11 +59,19 @@ explicit `sedum run path/to/file.test.ts` remains supported.
 
 Settings resolve from defaults, then the top-level config, then the selected
 named environment, then explicit command overrides. Named environments may
-override `baseUrl`, `variables`, `provider.apiKeyEnv`, and `stepTimeoutMs`. Nested settings
+override `baseUrl`, `browser`, `variables`, `provider.apiKeyEnv`, and `stepTimeoutMs`. Nested settings
 merge by field, so an override of viewport width retains the configured height.
 For `sedum run`, `--env` selects the named environment before `--browser` and
 `--output-dir` override their configured values. `--url-override` then replaces
 the origin of the resolved entry URL, preserving its path, query, and fragment.
+
+The browser resolves from, highest first: `--browser` (on `run` and `doctor`),
+the `SEDUM_BROWSER` environment variable (from the process, then `.env`), the
+selected environment's `browser`, the top-level `browser`, then `chrome`. Set
+`SEDUM_BROWSER=chromium` on a machine without Google Chrome, such as a Linux CI
+or cloud container, instead of changing the shared config. `sedum doctor`
+names the source it used.
+
 Run-only `--include`, `--exclude`, `--labels`, and `--name` filters narrow the
 discovered candidate files after config selection; explicit file and directory
 arguments supply their own candidate set instead of applying the configured
