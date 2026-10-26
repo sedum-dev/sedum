@@ -1,10 +1,21 @@
 import { once } from "node:events";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -412,6 +423,34 @@ it("honors the auth store exclusive lock without fetching or prompting", async (
   expect(result.stderr).toContain("store is locked");
   expect(seen).toHaveLength(0);
 });
+it("ends quietly and releases the auth lock when the stdout reader closes early", async () => {
+  // The real binary: the crash was an unhandled EPIPE on process.stdout.
+  await mkdir(path.join(root, "sedum"), { mode: 0o700 });
+  await rename(
+    path.join(root, "auth.json"),
+    path.join(root, "sedum/auth.json"),
+  );
+  const child = spawn(
+    process.execPath,
+    [
+      fileURLToPath(new URL("../dist/cli.js", import.meta.url)),
+      "tests",
+      "stats",
+      "--json",
+    ],
+    { env: { ...process.env, XDG_CONFIG_HOME: root } },
+  );
+  child.stdout.destroy();
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  const [code] = await once(child, "exit");
+  expect(reads()).toHaveLength(1);
+  expect(stderr).toBe("");
+  expect(code).toBe(0);
+  expect(await readdir(path.join(root, "sedum"))).toEqual(["auth.json"]);
+}, 15_000);
 it("uses current memberships, not removed saved projects or interactive chooser", async () => {
   projects = [
     { id: "a", name: "A" },

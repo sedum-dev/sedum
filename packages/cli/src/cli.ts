@@ -28,6 +28,13 @@ process.on("unhandledRejection", (reason) => {
     `A promise nobody awaited rejected outside any running test: ${describeRejection(reason)}`,
   );
 });
+// A reader that closes the pipe early (`| head`, a failing `jq`) must end the
+// command quietly, not crash it before it releases the auth store lock.
+const ignoreClosedPipe = (error: NodeJS.ErrnoException) => {
+  if (error.code !== "EPIPE") throw error;
+};
+process.stdout.on("error", ignoreClosedPipe);
+process.stderr.on("error", ignoreClosedPipe);
 const onSigint = () => interrupts.request("SIGINT");
 const onSigterm = () => interrupts.request("SIGTERM");
 process.on("SIGINT", onSigint);
