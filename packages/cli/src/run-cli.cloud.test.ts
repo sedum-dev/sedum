@@ -19,6 +19,7 @@ import { runCli, type CliRuntime } from "./run-cli.js";
 import type { RunCommandExecution } from "./run-command.js";
 
 const projectId = "11111111-2222-4333-8444-555555555555";
+const cloudRunId = "99999999-8888-4777-8666-555555555555";
 const token = `sdu_${"a".repeat(43)}`;
 const sha = "1234567890abcdef1234567890abcdef12345678";
 const originalEnv = process.env;
@@ -40,7 +41,7 @@ beforeEach(async () => {
     response.setHeader("content-type", "application/json");
     response.end(
       JSON.stringify({
-        id: "cloud-run",
+        id: cloudRunId,
         run_id: body.runId,
         project_id: projectId,
         status: "accepted",
@@ -159,7 +160,11 @@ describe("automatic Cloud upload through sedum run", () => {
         signal: controller.signal,
       });
       expect(output.exitCode).toBe(code);
-      expect(output.stderr).toContain("Cloud upload: accepted");
+      // The printed ID is the one `sedum runs show` reads, not the local run ID.
+      expect(output.stderr).toContain(
+        `Cloud upload: accepted run ${cloudRunId} (local run ${value.result.runId})`,
+      );
+      expect(output.stderr).toContain(`sedum runs show ${cloudRunId}`);
       expect(requests).toHaveLength(1);
       expect(requests[0]!.url).toBe(`/cloud/api/projects/${projectId}/runs`);
       expect(requests[0]!.headers).toMatchObject({
@@ -241,13 +246,44 @@ describe("automatic Cloud upload through sedum run", () => {
   });
 
   it.each([
-    [401, "passed", 0, 1],
-    [409, "failed", 1, 1],
-    [422, "failed", 1, 1],
-    [503, "passed", 0, 3],
+    {
+      status: 401,
+      outcome: "passed",
+      code: 0,
+      attempts: 1,
+      cause: `SEDUM_UPLOAD_TOKEN is revoked or is not an upload credential for SEDUM_PROJECT_ID ${projectId}`,
+    },
+    {
+      status: 409,
+      outcome: "failed",
+      code: 1,
+      attempts: 1,
+      cause: "Cloud already has a different report for run",
+    },
+    {
+      status: 404,
+      outcome: "passed",
+      code: 0,
+      attempts: 1,
+      cause: "no Sedum Cloud upload endpoint at http://127.0.0.1",
+    },
+    {
+      status: 422,
+      outcome: "failed",
+      code: 1,
+      attempts: 1,
+      cause: "HTTP 422.",
+    },
+    {
+      status: 503,
+      outcome: "passed",
+      code: 0,
+      attempts: 3,
+      cause: "HTTP 503.",
+    },
   ] as const)(
-    "HTTP %i preserves the test verdict and retries only transient failures",
-    async (status, outcome, code, attempts) => {
+    "HTTP $status preserves the test verdict and retries only transient failures",
+    async ({ status, outcome, code, attempts, cause }) => {
       respond = (response) => {
         response.writeHead(status);
         response.end(token);
@@ -257,6 +293,7 @@ describe("automatic Cloud upload through sedum run", () => {
       expect(output.exitCode).toBe(code);
       expect(requests).toHaveLength(attempts);
       expect(output.stderr).toContain(`Cloud upload warning: HTTP ${status}`);
+      expect(output.stderr).toContain(cause);
       expect(output.stderr).toContain(value.artifacts.resultPath);
       expect(output.stderr).not.toContain(token);
       expect(
@@ -273,39 +310,79 @@ describe("automatic Cloud upload through sedum run", () => {
     const started = Date.now();
     const output = await invoke(await execution());
     expect(output.exitCode).toBe(0);
-    expect(output.stderr).toContain("5 second budget");
+    expect(output.stderr).toContain(
+      `delivery to ${new URL(process.env.SEDUM_CLOUD_URL!).origin} exceeded the 5 second budget`,
+    );
     expect(Date.now() - started).toBeLessThan(8_000);
     expect(requests).toHaveLength(1);
   }, 15_000);
 
-  it.each(["unconfigured", "opt-out", "partial", "no-context", "unsafe-url"])(
-    "does not upload when %s",
-    async (mode) => {
-      const value = await execution();
-      if (mode === "unconfigured") {
-        delete process.env.SEDUM_CLOUD_URL;
-        delete process.env.SEDUM_PROJECT_ID;
-        delete process.env.SEDUM_UPLOAD_TOKEN;
-      }
-      if (mode === "partial") delete process.env.SEDUM_UPLOAD_TOKEN;
-      if (mode === "no-context") {
-        delete process.env.SEDUM_BRANCH;
-        delete process.env.SEDUM_COMMIT_SHA;
-      }
-      if (mode === "unsafe-url")
-        process.env.SEDUM_CLOUD_URL =
-          "https://user:secret@example.invalid/?token=secret";
-      const output = await invoke(
-        value,
-        mode === "opt-out" ? ["--no-cloud"] : [],
-      );
-      expect(requests).toHaveLength(0);
-      if (mode === "unconfigured" || mode === "opt-out")
-        expect(output.stderr).not.toContain("Cloud upload");
-      else expect(output.stderr).toMatch(/Cloud upload (?:warning|skipped)/u);
-      expect(output.stderr).not.toContain("secret");
-    },
-  );
+  it("names an unreachable Cloud host without changing the exit code", async () => {
+    const closed = createServer();
+    closed.listen(0, "127.0.0.1");
+    await once(closed, "listening");
+    const address = closed.address();
+    if (!address || typeof address === "string")
+      throw new Error("Missing test server address");
+    await new Promise<void>((resolve) => closed.close(() => resolve()));
+    process.env.SEDUM_CLOUD_URL = `http://127.0.0.1:${address.port}`;
+    const output = await invoke(await execution("failed"));
+    expect(output.exitCode).toBe(1);
+    expect(output.stderr).toContain(
+      `Cloud upload warning: could not reach http://127.0.0.1:${address.port} (ECONNREFUSED); check SEDUM_CLOUD_URL`,
+    );
+    expect(output.stderr).not.toContain(token);
+  });
+
+  it.each([
+    ["unconfigured", ""],
+    ["opt-out", ""],
+    ["partial", "SEDUM_UPLOAD_TOKEN not set"],
+    ["malformed-token", "SEDUM_UPLOAD_TOKEN must be the project's sdu_"],
+    ["read-token", "SEDUM_UPLOAD_TOKEN must be the project's sdu_"],
+    ["bad-project", "SEDUM_PROJECT_ID must be the Cloud project UUID"],
+    ["remote-http", "SEDUM_CLOUD_URL must be an https:// base URL"],
+    ["unsafe-url", "SEDUM_CLOUD_URL must be an https:// base URL"],
+    [
+      "no-context",
+      "no source branch detected (for example a detached checkout); set SEDUM_BRANCH; no commit detected; set SEDUM_COMMIT_SHA",
+    ],
+  ])("does not upload when %s", async (mode, cause) => {
+    const value = await execution();
+    const overrides: Record<string, string> = {
+      "malformed-token": "SEDUM_UPLOAD_TOKEN=sdu_secret",
+      "read-token": `SEDUM_UPLOAD_TOKEN=sdr_${"s".repeat(43)}`,
+      "bad-project": "SEDUM_PROJECT_ID=secret-project",
+      "remote-http": "SEDUM_CLOUD_URL=http://cloud.example/secret",
+    };
+    if (overrides[mode]) {
+      const [key, setting] = overrides[mode].split("=") as [string, string];
+      process.env[key] = setting;
+    }
+    if (mode === "unconfigured") {
+      delete process.env.SEDUM_CLOUD_URL;
+      delete process.env.SEDUM_PROJECT_ID;
+      delete process.env.SEDUM_UPLOAD_TOKEN;
+    }
+    if (mode === "partial") delete process.env.SEDUM_UPLOAD_TOKEN;
+    if (mode === "no-context") {
+      delete process.env.SEDUM_BRANCH;
+      delete process.env.SEDUM_COMMIT_SHA;
+    }
+    if (mode === "unsafe-url")
+      process.env.SEDUM_CLOUD_URL =
+        "https://user:secret@example.invalid/?token=secret";
+    const output = await invoke(
+      value,
+      mode === "opt-out" ? ["--no-cloud"] : [],
+    );
+    expect(requests).toHaveLength(0);
+    expect(output.exitCode).toBe(0);
+    if (cause)
+      expect(output.stderr).toContain(`Cloud upload skipped: ${cause}`);
+    else expect(output.stderr).not.toContain("Cloud upload");
+    expect(output.stderr).not.toContain("secret");
+  });
 
   it.each(["unsaved", "running"])("never uploads a %s report", async (mode) => {
     const value = await execution();
@@ -425,7 +502,7 @@ describe("automatic Cloud upload through sedum run", () => {
     };
     const value = await execution();
     expect((await invoke(value)).stderr).toContain(
-      "Cloud upload warning: HTTP 302",
+      "Cloud upload warning: HTTP 302 (Cloud redirected; set SEDUM_CLOUD_URL",
     );
     expect(requests).toHaveLength(1);
     expect(

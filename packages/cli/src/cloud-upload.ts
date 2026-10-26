@@ -19,13 +19,32 @@ interface UploadRequest {
   readonly runId: string;
 }
 
+/** A configuration problem whose message names settings, never their values. */
+class UploadSkipped extends Error {}
+
 const settingsSchema = z.object({
   SEDUM_CLOUD_URL: z
     .string()
-    .transform((value) => cloudBaseUrl(new URL(value))),
+    .refine((value) => URL.canParse(value))
+    .transform((value) => new URL(value))
+    .refine(isCloudBaseUrl),
   SEDUM_PROJECT_ID: z.uuid().transform((value) => value.toLowerCase()),
   SEDUM_UPLOAD_TOKEN: z.string().regex(/^sdu_[a-z0-9_-]{43}$/iu),
 });
+
+const settingProblems: Record<string, string> = {
+  SEDUM_CLOUD_URL:
+    "SEDUM_CLOUD_URL must be an https:// base URL without credentials, query or fragment (http:// only for localhost)",
+  SEDUM_PROJECT_ID: "SEDUM_PROJECT_ID must be the Cloud project UUID",
+  SEDUM_UPLOAD_TOKEN:
+    "SEDUM_UPLOAD_TOKEN must be the project's sdu_ upload credential",
+};
+
+const gitProblems: Record<string, string> = {
+  branch:
+    "no source branch detected (for example a detached checkout); set SEDUM_BRANCH",
+  sha: "no commit detected; set SEDUM_COMMIT_SHA to the full lowercase commit hash",
+};
 
 const sourceSchema = z.object({
   branch: z.string().trim().min(1).max(512),
@@ -43,32 +62,60 @@ const sourceSchema = z.object({
 export async function prepareCloudUpload(
   cwd: string,
 ): Promise<CloudUpload | undefined> {
+  // Neither dotenv parser errors nor URL/Git errors may disclose secrets, so
+  // warnings name the setting at fault, never its value or the raw error.
+  const env = await readProjectEnvironment(cwd).then(
+    (file) => ({ ...file, ...process.env }),
+    () => undefined,
+  );
+  if (!env) return skipped("the project-root .env could not be read or parsed");
+  const values = [
+    env.SEDUM_CLOUD_URL,
+    env.SEDUM_PROJECT_ID,
+    env.SEDUM_UPLOAD_TOKEN,
+  ];
+  if (!values.some(Boolean)) return undefined;
   try {
-    const env = { ...(await readProjectEnvironment(cwd)), ...process.env };
-    const values = [
-      env.SEDUM_CLOUD_URL,
-      env.SEDUM_PROJECT_ID,
-      env.SEDUM_UPLOAD_TOKEN,
-    ];
-    if (!values.some(Boolean)) return undefined;
     const target = await uploadTarget(cwd, env);
     return (execution) => uploadReport(target, execution);
-  } catch {
-    // Neither dotenv parser errors nor URL/Git errors may disclose secrets.
-    return async () =>
-      "Cloud upload skipped: check SEDUM_CLOUD_URL, SEDUM_PROJECT_ID, SEDUM_UPLOAD_TOKEN and Git context (SEDUM_BRANCH / SEDUM_COMMIT_SHA). Local reporting is unchanged.\n";
+  } catch (error) {
+    return skipped(
+      error instanceof UploadSkipped
+        ? error.message
+        : "the source branch cannot be sent as an HTTP header; set SEDUM_BRANCH",
+    );
   }
+}
+
+function skipped(reason: string): CloudUpload {
+  return async () =>
+    `Cloud upload skipped: ${reason}. Local reporting is unchanged.\n`;
+}
+
+function parseOrSkip<T extends z.ZodType>(
+  schema: T,
+  value: unknown,
+  messages: Record<string, string>,
+): z.output<T> {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const keys = new Set(
+    parsed.error.issues.map((issue) => String(issue.path[0])),
+  );
+  throw new UploadSkipped([...keys].map((key) => messages[key]).join("; "));
 }
 
 async function uploadTarget(
   cwd: string,
   env: Readonly<Record<string, string | undefined>>,
 ): Promise<UploadTarget> {
+  const unset = Object.keys(settingProblems).filter((key) => !env[key]);
+  if (unset.length) throw new UploadSkipped(`${unset.join(", ")} not set`);
   const {
     SEDUM_CLOUD_URL: url,
     SEDUM_PROJECT_ID: projectId,
     SEDUM_UPLOAD_TOKEN: token,
-  } = settingsSchema.parse(env);
+  } = parseOrSkip(settingsSchema, env, settingProblems);
   url.pathname = `${url.pathname.replace(/\/$/u, "")}/api/projects/${projectId}/runs`;
   return {
     url,
@@ -81,13 +128,12 @@ async function uploadTarget(
   };
 }
 
-function cloudBaseUrl(url: URL): URL {
+function isCloudBaseUrl(url: URL): boolean {
   if ([url.username, url.password, url.search, url.hash].some(Boolean))
-    throw new Error("Invalid Cloud URL");
-  if (url.protocol === "https:") return url;
+    return false;
+  if (url.protocol === "https:") return true;
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-  if (url.protocol === "http:" && loopback) return url;
-  throw new Error("Cloud requires HTTPS or loopback HTTP");
+  return url.protocol === "http:" && loopback;
 }
 
 function ciContext(env: Readonly<Record<string, string | undefined>>) {
@@ -148,11 +194,15 @@ async function sourceHeaders(
     env.SEDUM_COMMIT_SHA ? undefined : gitValue(cwd, ["HEAD"]),
   ]);
   const ci = ciContext(env);
-  const source = sourceSchema.parse({
-    branch: env.SEDUM_BRANCH || ci.branch || gitBranch,
-    sha: env.SEDUM_COMMIT_SHA || gitSha || ci.sha,
-    url: ci.url,
-  });
+  const source = parseOrSkip(
+    sourceSchema,
+    {
+      branch: env.SEDUM_BRANCH || ci.branch || gitBranch,
+      sha: env.SEDUM_COMMIT_SHA || gitSha || ci.sha,
+      url: ci.url,
+    },
+    gitProblems,
+  );
   const headers: Record<string, string> = {
     // Fetch takes ByteString header values; Cloud reads the raw UTF-8 bytes.
     "x-sedum-branch": Buffer.from(source.branch, "utf8").toString("latin1"),
@@ -186,12 +236,15 @@ async function uploadReport(
     body,
     runId: execution.result.runId,
   });
-  return outcome.accepted
-    ? `Cloud upload: accepted run ${execution.result.runId}.\n`
+  // `runs show` reads the Cloud row's UUID, not the report's local run ID.
+  return outcome.cloudRunId
+    ? `Cloud upload: accepted run ${outcome.cloudRunId} (local run ${execution.result.runId}). View it with \`sedum runs show ${outcome.cloudRunId}\`.\n`
     : warning(outcome.reason);
 }
 
-async function deliverReport(request: UploadRequest) {
+async function deliverReport(
+  request: UploadRequest,
+): Promise<{ cloudRunId?: string | undefined; reason: string }> {
   // Independent of the run signal so interrupted runs can still be delivered.
   // The total budget includes response bodies, retries and backoff.
   const signal = AbortSignal.timeout(5_000);
@@ -203,8 +256,10 @@ async function deliverReport(request: UploadRequest) {
       if (outcome.retryAfter === null) return outcome;
       reason = outcome.reason;
       wait = outcome.retryAfter ?? wait;
-    } catch {
+    } catch (error) {
       // Fetch errors and response bodies can contain credentials or report data.
+      if (error instanceof TypeError)
+        reason = unreachable(request.target.url, error);
     }
     if (attempt < 2) {
       try {
@@ -215,9 +270,30 @@ async function deliverReport(request: UploadRequest) {
     }
   }
   return {
-    accepted: false,
-    reason: signal.aborted ? "delivery exceeded the 5 second budget" : reason,
+    reason: signal.aborted
+      ? `delivery to ${request.target.url.origin} exceeded the 5 second budget`
+      : reason,
   };
+}
+
+function unreachable(url: URL, error: TypeError): string {
+  // Only a system error code such as ECONNREFUSED, never the error message.
+  const code = String(Object(error.cause).code);
+  const detail = /^[A-Z0-9_]{1,64}$/u.test(code) ? ` (${code})` : "";
+  return `could not reach ${url.origin}${detail}; check SEDUM_CLOUD_URL and the network`;
+}
+
+function httpReason(status: number, request: UploadRequest): string {
+  const hints: Record<number, string> = {
+    401: `SEDUM_UPLOAD_TOKEN is revoked or is not an upload credential for SEDUM_PROJECT_ID ${request.target.projectId}`,
+    404: `no Sedum Cloud upload endpoint at ${request.target.url.href}; check SEDUM_CLOUD_URL`,
+    409: `Cloud already has a different report for run ${request.runId}`,
+  };
+  const hint =
+    status >= 300 && status < 400
+      ? "Cloud redirected; set SEDUM_CLOUD_URL to the final https:// address"
+      : hints[status];
+  return hint ? `HTTP ${status} (${hint})` : `HTTP ${status}`;
 }
 
 async function sendReport(request: UploadRequest, signal: AbortSignal) {
@@ -229,16 +305,16 @@ async function sendReport(request: UploadRequest, signal: AbortSignal) {
     redirect: "manual",
   });
   if (response.ok) {
-    const receipt: unknown = await response.json();
+    const receipt = z
+      .object({
+        id: z.uuid(),
+        status: z.literal("accepted"),
+        project_id: z.literal(request.target.projectId),
+        run_id: z.literal(request.runId),
+      })
+      .safeParse(await response.json());
     return {
-      accepted: z
-        .object({
-          id: z.string().min(1),
-          status: z.literal("accepted"),
-          project_id: z.literal(request.target.projectId),
-          run_id: z.literal(request.runId),
-        })
-        .safeParse(receipt).success,
+      cloudRunId: receipt.data?.id,
       reason: "Cloud returned an invalid upload receipt",
       retryAfter: null,
     };
@@ -248,8 +324,7 @@ async function sendReport(request: UploadRequest, signal: AbortSignal) {
   const wait = parseRetryAfter(response.headers, Date.now());
   await response.body?.cancel();
   return {
-    accepted: false,
-    reason: `HTTP ${response.status}`,
+    reason: httpReason(response.status, request),
     // null stops delivery; undefined uses this attempt's exponential backoff.
     retryAfter: retryable ? (wait ?? undefined) : null,
   };
