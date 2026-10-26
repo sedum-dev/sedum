@@ -218,6 +218,7 @@ export interface BrowserInstallResult {
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 30_000;
 const DEFAULT_SETTLE_TIMEOUT_MS = 4_000;
 const DEFAULT_ACTION_TIMEOUT_MS = 8_000;
+const PAGE_CLOSE_TIMEOUT_MS = 2_000;
 
 /**
  * Playwright logs "performing click action" just before it moves the mouse.
@@ -414,7 +415,7 @@ class PlaywrightPage implements BrowserPage {
 
   private async terminateTimedOutInput(): Promise<void> {
     this.terminalAfterInputTimeout = true;
-    if (!this.page.isClosed()) await this.page.close().catch(() => undefined);
+    await this.close().catch(() => undefined);
   }
 
   private state(): BrowserDriverState {
@@ -854,9 +855,35 @@ class PlaywrightPage implements BrowserPage {
     }
   }
 
+  /**
+   * Chromium can accept a close while the page reloads and keep the tab open,
+   * and Playwright then waits for it forever. Give up after a bound: closing
+   * the page's context still disposes it, and every owner closes that next.
+   */
   async close(): Promise<void> {
     if (this.page.isClosed()) return;
-    await this.page.close();
+    const closing = this.page.close();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        closing,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () =>
+              reject(
+                new BrowserDriverError(
+                  "operation-failed",
+                  "The page did not close; close its context to dispose it.",
+                ),
+              ),
+            PAGE_CLOSE_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+      closing.catch(() => undefined);
+    }
   }
 }
 
