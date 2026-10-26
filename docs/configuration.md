@@ -220,6 +220,10 @@ and result artifacts are always written under `outputDir/<run-id>/`.
 defaults to 5000 (5 seconds) and accepts whole milliseconds from 0 to 120000.
 It covers every step that depends on the page settling:
 
+- Before a step is located or judged, a page that keeps re-rendering, such as
+  one that just changed route, gets at least 4 seconds to hold still, or
+  `stepTimeoutMs` when that is longer. A page that never holds still fails the
+  step with `observation_timeout`, so `--retries` reruns the test.
 - A `verify` step is judged again each time the page changes until its claim
   holds. A quoted-text check keeps reading a page that is mid-navigation.
 - A `click` or `type` step whose target is not on the page yet is located

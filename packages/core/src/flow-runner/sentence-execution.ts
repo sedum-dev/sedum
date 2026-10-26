@@ -348,27 +348,21 @@ export async function executeSentence(
   };
   // Observe one settled DOM before locating/judging the next step. This avoids
   // treating the mutation from the previous action as a fresh locator target;
-  // it does not retry or replay an action.
-  const quiet = await quietPage(page, 80, 4_000).catch(() => ({
+  // it does not retry or replay an action. A busy page gets the step timeout
+  // to settle; one that never does fails the attempt, so retries rerun it.
+  const settleMs = Math.max(4_000, dependencies.verifyGraceMs ?? 0);
+  const quiet = await quietPage(page, 80, settleMs).catch(() => ({
     quiet: false,
   }));
   // A wait polls the page itself, busy or not: that is what it waits through.
   const waits = step.op === "verify" && waitUntilTimeoutMs(step.text) !== null;
   if (!quiet.quiet && !waits)
-    return record(
-      unsupported(
-        step.source.file,
-        step.source,
-        "The page did not settle before this step could be resolved.",
-      ),
-      {
-        error: {
-          code: "observation_timeout",
-          message:
-            "The page did not settle before this step could be resolved.",
-        },
+    return record("failed", {
+      error: {
+        code: "observation_timeout",
+        message: "The page did not settle before this step could be resolved.",
       },
-    );
+    });
   let typeValue: RuntimeValue | undefined;
   if (step.op === "type") {
     const operand = validateTypeOperand(step);
