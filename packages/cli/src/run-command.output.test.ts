@@ -255,7 +255,7 @@ describe("run output failure contract", () => {
       received.push(report);
       response.end(
         JSON.stringify({
-          id: "cloud-run",
+          id: "99999999-8888-4777-8666-555555555555",
           run_id: report.runId,
           project_id: projectId,
           status: "accepted",

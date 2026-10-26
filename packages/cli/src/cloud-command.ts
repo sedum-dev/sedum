@@ -357,6 +357,10 @@ async function execute(
         const response = await get(
           `/api/projects/${encodeURIComponent(project.id)}/${route}?${params}`,
         );
+        if (kind === "show" && response.status === 404)
+          throw new AuthError(
+            "Run not found in this project. `runs show` takes the Cloud run UUID that the upload printed (`id` in `runs list`), not the local run ID.",
+          );
         if (!response.ok) throw statusError(response.status);
         const result = resultBody(kind, response.body);
         publish(

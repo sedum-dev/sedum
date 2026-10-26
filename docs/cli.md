@@ -21,9 +21,13 @@ explicit flags. Credentials refresh under the same exclusive store lock as auth;
 GET requests retry once after a 401 with refreshed credentials.
 
 `runs list` returns compact recent summaries. `runs show` takes the **Cloud run
-UUID**, not a report's external run ID, and requests no full report unless
-`--report` is present. `tests history --test-id` matches the exact test identity
-across branches, not a substring; use `--branch` to scope it.
+UUID**, not a report's local run ID, and requests no full report unless
+`--report` is present. An automatic upload prints the Cloud run UUID
+(`Cloud upload: accepted run <cloud-run-uuid> (local run <run-id>)`); in
+`runs list --json` it is `id`, and the local run ID is `run_id`. Passing a local
+run ID to `runs show` reports that the run was not found.
+`tests history --test-id` matches the exact test identity across branches, not
+a substring; use `--branch` to scope it.
 
 List, history and stats share these filters:
 
@@ -192,7 +196,10 @@ Set `SEDUM_CLOUD_URL`, `SEDUM_PROJECT_ID` and `SEDUM_UPLOAD_TOKEN` in your CI
 environment or project-root `.env` to upload terminal reports automatically
 after `sedum run`. No separate upload command is needed. Local live progress
 reporting is unchanged, and delivery failures warn without changing the suite's
-exit code. Use `--no-cloud` to opt out for an invocation. See
+exit code. Each warning names the setting at fault, such as a malformed
+`SEDUM_UPLOAD_TOKEN`, a non-HTTPS or unreachable `SEDUM_CLOUD_URL`, or an HTTP
+401 for a token that is revoked or belongs to another `SEDUM_PROJECT_ID`.
+Use `--no-cloud` to opt out for an invocation. See
 [Cloud configuration and CI context](ci.md#automatic-sedum-cloud-history) for
 branch detection, credential handling and delivery limits.
 

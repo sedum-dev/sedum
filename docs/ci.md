@@ -165,6 +165,30 @@ errors do not retry. A revoked token, configuration error or conflicting run ID
 therefore cannot turn a passing suite red. This is best-effort delivery, not a
 persistent delivery queue; keep the CI report artifacts for recovery.
 
+A successful upload prints the Cloud run UUID and the local run ID:
+
+```text
+Cloud upload: accepted run <cloud-run-uuid> (local run <run-id>). View it with `npx sedum runs show <cloud-run-uuid>`.
+```
+
+Pass the Cloud run UUID to [`sedum runs show`](cli.md#cloud-result-reads).
+Warnings name the likely cause without printing secret values:
+
+| Warning names                                                   | Likely cause                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `skipped: SEDUM_… not set`                                      | Only some of the three settings are configured                                 |
+| `skipped: SEDUM_UPLOAD_TOKEN must be the project's sdu_ …`      | The token is malformed, truncated, or a read-only `sdr_` credential            |
+| `skipped: SEDUM_PROJECT_ID must be the Cloud project UUID`      | The project ID is not a UUID                                                   |
+| `skipped: SEDUM_CLOUD_URL must be an https:// base URL …`       | Plain HTTP to a non-loopback host, embedded credentials, a query or a fragment |
+| `skipped: no source branch detected …` / `no commit detected …` | Detached checkout or no Git; set `SEDUM_BRANCH` and `SEDUM_COMMIT_SHA`         |
+| `could not reach <origin> (<code>)`                             | DNS, connection or TLS failure for `SEDUM_CLOUD_URL`                           |
+| `HTTP 401 (SEDUM_UPLOAD_TOKEN is revoked or is not … for …)`    | Revoked token, or a token issued for a different `SEDUM_PROJECT_ID`            |
+| `HTTP 404 (no Sedum Cloud upload endpoint at …)` or `HTTP 3xx`  | `SEDUM_CLOUD_URL` points at the wrong host or path, or at a redirect           |
+
+Cloud does not reveal whether a well-formed token or the project ID is wrong; an
+HTTP 401 means one of the two, so check that the credential was issued for that
+project.
+
 Without Cloud settings, runs remain local-only. Use `sedum run --no-cloud` to
 disable uploading for a particular invocation, even when configured. Upload
 credentials are excluded from Sedum's test variables and provider flow context.

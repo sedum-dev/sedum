@@ -379,6 +379,17 @@ it.each([400, 401, 403, 404, 422, 429, 500])(
     if (code === 422) expect(result.stderr).toContain("Narrow");
   },
 );
+it("explains that a missing run needs the Cloud run UUID, not the local run ID", async () => {
+  status = 404;
+  const shown = await cli(["runs", "show", id]);
+  expect(shown.exitCode).toBe(3);
+  expect(shown.stderr).toContain("Cloud run UUID");
+  expect(shown.stderr).toContain("not the local run ID");
+  expect(shown.stderr).not.toContain("membership");
+  const listed = await cli(["runs", "list"]);
+  expect(listed.exitCode).toBe(3);
+  expect(listed.stderr).toContain("membership");
+});
 it("fails safely on revoked refresh and malformed success", async () => {
   failures = 1;
   tokenStatus = 400;
