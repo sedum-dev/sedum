@@ -116,6 +116,21 @@ const PAGES: Record<string, string> = {
   // A button that stays disabled past the 8-second action budget.
   "/slow-enable": `<main><button disabled onclick="this.outerHTML='<h1>Saved</h1>'">Save</button>
     <script>setTimeout(() => { document.querySelector("button").disabled = false; }, 9000);</script></main>`,
+  // Opening the list re-renders it every 50 ms for 6 seconds, or forever with
+  // "?forever", so the page is never quiet for 80 ms until it stops.
+  "/projects": `<main><button id="open">Open projects</button><div id="app"></div><p id="msg"></p><script>
+    const forever = location.search.includes("forever");
+    document.getElementById("open").onclick = () => {
+      history.pushState({}, "", "/projects/list");
+      const render = () => {
+        app.innerHTML = '<h2>Projects</h2><button>New project</button>';
+        app.querySelector("button").onclick = () => { msg.textContent = "Project created"; };
+      };
+      render();
+      const ticker = setInterval(render, 50);
+      if (!forever) setTimeout(() => clearInterval(ticker), 6000);
+    };
+  </script></main>`,
   "/redirect": `<main><p>Redirecting</p><script>setTimeout(() => { location.href = "/done"; }, 600);</script></main>`,
   "/done": "<main><h1>All done</h1></main>",
   "/semantic": "<main><button>Add account</button></main>",
@@ -419,6 +434,25 @@ describe.skipIf(process.env.SEDUM_BROWSER_INTEGRATION !== "1")(
       );
       expect(outcome.flow.status, JSON.stringify(outcome.flow)).toBe("passed");
     }, 30_000);
+
+    it("waits the step timeout for a busy page to settle, then fails one that never does", async () => {
+      const steps = [
+        "click the Open projects button",
+        "click the New project button",
+        "verify the text Project created is shown",
+      ];
+      const settled = await run("/projects", steps, 8_000);
+      expect(settled.flow.status, JSON.stringify(settled.flow)).toBe("passed");
+      const busy = await run("/projects?forever", steps, 5_000);
+      // A failed attempt, not "could not run", so --retries reruns it.
+      expect(busy.flow.status).toBe("failed");
+      expect(busy.steps[1]).toMatchObject({
+        verdict: "failed",
+        error: { code: "observation_timeout" },
+      });
+      expect(busy.steps[1]!.elapsedMs).toBeGreaterThanOrEqual(4_900);
+      expect(busy.steps[1]!.elapsedMs).toBeLessThan(6_000);
+    }, 40_000);
 
     it("clicks a target that the next render pass replaces mid-click", async () => {
       // The gist repro: a busy page that re-renders the button every 400 ms.
