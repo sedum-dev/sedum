@@ -395,6 +395,32 @@ describe("PlaywrightBrowserDriver", () => {
     await session.close();
   });
 
+  it("stops waiting for a page close that Chromium never completes", async () => {
+    vi.useFakeTimers();
+    try {
+      const browser = new FakeBrowser();
+      launch.mockResolvedValue(browser);
+      const session = await new PlaywrightBrowserDriver().launch({
+        browser: "chromium",
+      });
+      const context = await session.newContext();
+      const page = await context.newPage();
+      // A page that reloads in a loop: Chromium accepts the close and the
+      // tab stays open, so Playwright's close never settles.
+      browser.context.page.close = () => new Promise<void>(() => undefined);
+
+      const closing = expect(page.close()).rejects.toBeInstanceOf(
+        BrowserDriverError,
+      );
+      await vi.advanceTimersByTimeAsync(2_000);
+      await closing;
+      await context.close();
+      await session.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("normalizes operation failures instead of hiding them", async () => {
     const browser = new FakeBrowser();
     launch.mockResolvedValue(browser);
