@@ -1,6 +1,15 @@
-import { constants, type Stats } from "node:fs";
-import { lstat, mkdir, open, rename, unlink } from "node:fs/promises";
-import { homedir } from "node:os";
+import { constants, readlinkSync, unlinkSync, type Stats } from "node:fs";
+import {
+  link,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { homedir, hostname } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
@@ -76,19 +85,132 @@ async function prepareDirectory(root: string) {
       "Credential directory must be owned by you with mode 0700.",
     );
 }
+const lockedMessage =
+  "Authentication store is locked. Wait for other auth commands; if none are running, remove auth.lock (and auth.lock.break, if present) from your Sedum user config directory.";
+const lockOwnerSchema = z.object({
+  pid: z.number().int().positive(),
+  host: z.string(),
+  pidNamespace: z.string().optional(),
+});
+// Containers that share a hostname and a config directory can still have
+// separate PID namespaces, where a live owner's PID means nothing here.
+function currentPidNamespace(): string | undefined {
+  try {
+    return readlinkSync("/proc/self/ns/pid");
+  } catch {
+    return undefined;
+  }
+}
+const lockOwner = JSON.stringify({
+  pid: process.pid,
+  host: hostname(),
+  pidNamespace: currentPidNamespace(),
+});
+// A breaker holds auth.lock.break for a few local file operations, so a guard
+// this old belongs to a breaker that was killed inside it.
+const abandonedGuardMs = 10_000;
+// Locks this process holds. A crash skips the async unlock, so release them
+// synchronously on exit; only SIGKILL or power loss can leave one behind.
+const heldLocks = new Set<string>();
+process.on("exit", () => {
+  for (const file of heldLocks) {
+    try {
+      unlinkSync(file);
+    } catch {
+      // Already gone.
+    }
+  }
+});
+// Publish a lock file that already names its owner, so no reader sees it
+// empty. Resolve to its release, or undefined when another owner holds it.
+async function acquireLock(
+  file: string,
+): Promise<(() => Promise<void>) | undefined> {
+  const temporary = `${file}-${randomUUID()}`;
+  await writeFile(temporary, lockOwner, { flag: "wx", mode: 0o600 });
+  try {
+    await link(temporary, file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return undefined;
+    throw error;
+  } finally {
+    await unlink(temporary);
+  }
+  heldLocks.add(file);
+  return async () => {
+    heldLocks.delete(file);
+    await unlink(file);
+  };
+}
+function ownerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+async function ownerDied(file: string): Promise<boolean> {
+  let content: string;
+  try {
+    content = await readFile(file, "utf8");
+  } catch (error) {
+    if (missing(error)) return true;
+    throw error;
+  }
+  let owner: unknown;
+  try {
+    owner = JSON.parse(content);
+  } catch {
+    return false;
+  }
+  const parsed = lockOwnerSchema.safeParse(owner);
+  // Unknown owners (older CLIs write empty locks), other hosts and other PID
+  // namespaces sharing this directory cannot be checked, so they keep the lock.
+  if (!parsed.success) return false;
+  const { pid, host, pidNamespace } = parsed.data;
+  if (host !== hostname() || pidNamespace !== currentPidNamespace())
+    return false;
+  return !ownerAlive(pid);
+}
+function ignoreMissing(error: unknown) {
+  if (!missing(error)) throw error;
+}
+// Take auth.lock.break, replacing one abandoned by a breaker that was killed.
+async function acquireGuard(guard: string) {
+  const release = await acquireLock(guard);
+  if (release) return release;
+  const age = await lstat(guard).then(
+    (info) => Date.now() - info.mtimeMs,
+    (error: unknown) => {
+      ignoreMissing(error);
+      return Infinity;
+    },
+  );
+  if (age < abandonedGuardMs || !(await ownerDied(guard))) return undefined;
+  await unlink(guard).catch(ignoreMissing);
+  return acquireLock(guard);
+}
+// Breakers take auth.lock.break first, so one cannot delete a lock that
+// another breaker has just created between its owner check and its unlink.
+async function breakDeadLock(file: string): Promise<boolean> {
+  const releaseGuard = await acquireGuard(`${file}.break`);
+  if (!releaseGuard) return false;
+  try {
+    if (!(await ownerDied(file))) return false;
+    await unlink(file).catch(ignoreMissing);
+    return true;
+  } finally {
+    await releaseGuard();
+  }
+}
 async function lockStore(root: string) {
   const lockPath = path.join(root, "auth.lock");
-  try {
-    const lock = await open(lockPath, "wx", 0o600);
-    return async () => {
-      await lock.close();
-      await unlink(lockPath);
-    };
-  } catch {
-    throw new AuthError(
-      "Authentication store is locked. Wait for other auth commands; if none are running, remove auth.lock from your Sedum user config directory.",
-    );
-  }
+  const release =
+    (await acquireLock(lockPath)) ??
+    ((await breakDeadLock(lockPath)) ? await acquireLock(lockPath) : undefined);
+  if (!release) throw new AuthError(lockedMessage);
+  return release;
 }
 function safeFile(info: Stats) {
   if (!info.isFile()) return false;
@@ -132,8 +254,9 @@ async function writeState(root: string, state: AuthState) {
   }
 }
 
-// Hold one exclusive lock across network refresh and atomic rotation. Never
-// auto-break stale locks: a paused process could still own a refresh secret.
+// Hold one exclusive lock across network refresh and atomic rotation. Break a
+// lock only when its owner is gone: a paused process could still own a
+// refresh secret, so a live PID keeps the lock however old it is.
 export async function withAuthStore<T>(
   directory: string | undefined,
   action: (state: AuthState, save: () => Promise<void>) => Promise<T>,

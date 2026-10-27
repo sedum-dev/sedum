@@ -1,10 +1,24 @@
 import { once } from "node:events";
+import { spawn } from "node:child_process";
+import { readlinkSync } from "node:fs";
+import { hostname } from "node:os";
+import { fileURLToPath } from "node:url";
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -423,6 +437,68 @@ it("honors the auth store exclusive lock without fetching or prompting", async (
   expect(result.stderr).toContain("store is locked");
   expect(seen).toHaveLength(0);
 });
+async function deadLock(file: string, pidNamespace: string | undefined) {
+  const child = spawn(process.execPath, ["-e", ""]);
+  await once(child, "exit");
+  await writeFile(
+    file,
+    JSON.stringify({ pid: child.pid, host: hostname(), pidNamespace }),
+    { mode: 0o600 },
+  );
+}
+function pidNamespace(): string | undefined {
+  try {
+    return readlinkSync("/proc/self/ns/pid");
+  } catch {
+    return undefined;
+  }
+}
+it("recovers a lock and an abandoned break guard left by killed processes", async () => {
+  await deadLock(path.join(root, "auth.lock"), pidNamespace());
+  const guard = path.join(root, "auth.lock.break");
+  await deadLock(guard, pidNamespace());
+  const old = new Date(Date.now() - 60_000);
+  await utimes(guard, old, old);
+  const result = await cli(["runs", "list", "--json"]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(await readdir(root)).toEqual(["auth.json"]);
+});
+it("keeps a lock whose owner ran in another PID namespace", async () => {
+  await deadLock(path.join(root, "auth.lock"), "pid:[1]");
+  const result = await cli(["runs", "list", "--json"]);
+  expect(result.exitCode).toBe(3);
+  expect(result.stderr).toContain("store is locked");
+  expect(seen).toHaveLength(0);
+});
+it("ends quietly and releases the auth lock when the stdout reader closes early", async () => {
+  // The real binary: the crash was an unhandled EPIPE on process.stdout.
+  await mkdir(path.join(root, "sedum"), { mode: 0o700 });
+  await rename(
+    path.join(root, "auth.json"),
+    path.join(root, "sedum/auth.json"),
+  );
+  const child = spawn(
+    process.execPath,
+    [
+      fileURLToPath(new URL("../dist/cli.js", import.meta.url)),
+      "tests",
+      "stats",
+      "--json",
+    ],
+    { env: { ...process.env, XDG_CONFIG_HOME: root } },
+  );
+  child.stdout.destroy();
+  let stderr = "";
+  child.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  const [code] = await once(child, "exit");
+  expect(reads()).toHaveLength(1);
+  expect(stderr).toBe("");
+  expect(code).toBe(0);
+  expect(await readdir(path.join(root, "sedum"))).toEqual(["auth.json"]);
+}, 15_000);
 it("uses current memberships, not removed saved projects or interactive chooser", async () => {
   projects = [
     { id: "a", name: "A" },
