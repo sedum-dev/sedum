@@ -1,4 +1,4 @@
-import { constants, unlinkSync, type Stats } from "node:fs";
+import { constants, readlinkSync, unlinkSync, type Stats } from "node:fs";
 import {
   link,
   lstat,
@@ -90,7 +90,25 @@ const lockedMessage =
 const lockOwnerSchema = z.object({
   pid: z.number().int().positive(),
   host: z.string(),
+  pidNamespace: z.string().optional(),
 });
+// Containers that share a hostname and a config directory can still have
+// separate PID namespaces, where a live owner's PID means nothing here.
+function currentPidNamespace(): string | undefined {
+  try {
+    return readlinkSync("/proc/self/ns/pid");
+  } catch {
+    return undefined;
+  }
+}
+const lockOwner = JSON.stringify({
+  pid: process.pid,
+  host: hostname(),
+  pidNamespace: currentPidNamespace(),
+});
+// A breaker holds auth.lock.break for a few local file operations, so a guard
+// this old belongs to a breaker that was killed inside it.
+const abandonedGuardMs = 10_000;
 // Locks this process holds. A crash skips the async unlock, so release them
 // synchronously on exit; only SIGKILL or power loss can leave one behind.
 const heldLocks = new Set<string>();
@@ -109,11 +127,7 @@ async function acquireLock(
   file: string,
 ): Promise<(() => Promise<void>) | undefined> {
   const temporary = `${file}-${randomUUID()}`;
-  await writeFile(
-    temporary,
-    JSON.stringify({ pid: process.pid, host: hostname() }),
-    { flag: "wx", mode: 0o600 },
-  );
+  await writeFile(temporary, lockOwner, { flag: "wx", mode: 0o600 });
   try {
     await link(temporary, file);
   } catch (error) {
@@ -151,21 +165,40 @@ async function ownerDied(file: string): Promise<boolean> {
     return false;
   }
   const parsed = lockOwnerSchema.safeParse(owner);
-  // Unknown owners (older CLIs write empty locks) and other hosts sharing this
-  // directory cannot be checked, so they keep the lock.
-  if (!parsed.success || parsed.data.host !== hostname()) return false;
-  return !ownerAlive(parsed.data.pid);
+  // Unknown owners (older CLIs write empty locks), other hosts and other PID
+  // namespaces sharing this directory cannot be checked, so they keep the lock.
+  if (!parsed.success) return false;
+  const { pid, host, pidNamespace } = parsed.data;
+  if (host !== hostname() || pidNamespace !== currentPidNamespace())
+    return false;
+  return !ownerAlive(pid);
+}
+function ignoreMissing(error: unknown) {
+  if (!missing(error)) throw error;
+}
+// Take auth.lock.break, replacing one abandoned by a breaker that was killed.
+async function acquireGuard(guard: string) {
+  const release = await acquireLock(guard);
+  if (release) return release;
+  const age = await lstat(guard).then(
+    (info) => Date.now() - info.mtimeMs,
+    (error: unknown) => {
+      ignoreMissing(error);
+      return Infinity;
+    },
+  );
+  if (age < abandonedGuardMs || !(await ownerDied(guard))) return undefined;
+  await unlink(guard).catch(ignoreMissing);
+  return acquireLock(guard);
 }
 // Breakers take auth.lock.break first, so one cannot delete a lock that
 // another breaker has just created between its owner check and its unlink.
 async function breakDeadLock(file: string): Promise<boolean> {
-  const releaseGuard = await acquireLock(`${file}.break`);
+  const releaseGuard = await acquireGuard(`${file}.break`);
   if (!releaseGuard) return false;
   try {
     if (!(await ownerDied(file))) return false;
-    await unlink(file).catch((error: unknown) => {
-      if (!missing(error)) throw error;
-    });
+    await unlink(file).catch(ignoreMissing);
     return true;
   } finally {
     await releaseGuard();

@@ -1,5 +1,7 @@
 import { once } from "node:events";
 import { spawn } from "node:child_process";
+import { readlinkSync } from "node:fs";
+import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   createServer,
@@ -14,6 +16,7 @@ import {
   realpath,
   rename,
   rm,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -420,6 +423,40 @@ it("honors the auth store exclusive lock without fetching or prompting", async (
   const result = await cli(["runs", "list", "--json"]);
   expect(result.exitCode).toBe(3);
   expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("store is locked");
+  expect(seen).toHaveLength(0);
+});
+async function deadLock(file: string, pidNamespace: string | undefined) {
+  const child = spawn(process.execPath, ["-e", ""]);
+  await once(child, "exit");
+  await writeFile(
+    file,
+    JSON.stringify({ pid: child.pid, host: hostname(), pidNamespace }),
+    { mode: 0o600 },
+  );
+}
+function pidNamespace(): string | undefined {
+  try {
+    return readlinkSync("/proc/self/ns/pid");
+  } catch {
+    return undefined;
+  }
+}
+it("recovers a lock and an abandoned break guard left by killed processes", async () => {
+  await deadLock(path.join(root, "auth.lock"), pidNamespace());
+  const guard = path.join(root, "auth.lock.break");
+  await deadLock(guard, pidNamespace());
+  const old = new Date(Date.now() - 60_000);
+  await utimes(guard, old, old);
+  const result = await cli(["runs", "list", "--json"]);
+  expect(result.stderr).toBe("");
+  expect(result.exitCode).toBe(0);
+  expect(await readdir(root)).toEqual(["auth.json"]);
+});
+it("keeps a lock whose owner ran in another PID namespace", async () => {
+  await deadLock(path.join(root, "auth.lock"), "pid:[1]");
+  const result = await cli(["runs", "list", "--json"]);
+  expect(result.exitCode).toBe(3);
   expect(result.stderr).toContain("store is locked");
   expect(seen).toHaveLength(0);
 });
