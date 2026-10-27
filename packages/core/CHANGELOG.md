@@ -1,5 +1,18 @@
 # @sedum-dev/core
 
+## 0.1.0-alpha.20
+
+### Patch Changes
+
+- 6751e12: A run on a page that keeps reloading now finishes. Chromium can accept a page
+  close while the page reloads and then keep the tab open, and the run waited for
+  it forever: it wrote no `result.json`, stayed `running` in `progress.json`, and
+  ignored Ctrl-C. Sedum now stops waiting after 2 seconds and closes the page's
+  browser context, which always disposes it, so retries, Ctrl-C and
+  `--timeout-minutes` report their results again.
+- d20c714: A step after a page change now waits for a busy page to hold still for `stepTimeoutMs` when that is longer than 4 seconds, instead of always giving up after 4 seconds. A page that never holds still now fails the step with `observation_timeout` instead of "could not run", so `--retries` reruns the test.
+- 038122d: Update zod from 4.6.5 to 4.6.7. Zod before 4.6.6 can exhaust memory while validating oversized constrained collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)), so a fresh `npm install -D sedum-cli` reported 6 high-severity vulnerabilities in `npm audit`. It now reports none.
+
 ## 0.1.0-alpha.19
 
 ### Patch Changes

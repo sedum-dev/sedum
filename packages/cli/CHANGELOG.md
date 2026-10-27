@@ -1,5 +1,20 @@
 # sedum-cli
 
+## 0.1.0-alpha.20
+
+### Patch Changes
+
+- 7b762c9: End quietly when a reader closes stdout early, as with `| true`, `| head`, or a failing `jq`, instead of crashing with an unhandled `EPIPE`. The authentication store lock is now released on any exit, and a lock left by a killed process on the same host and PID namespace is detected and cleared automatically. A lock held by a live or paused process still blocks, so concurrent refresh-token rotation stays serialized.
+- f194e9e: After an automatic Cloud upload, `sedum run` now prints the Cloud run UUID that `sedum runs show` accepts, next to the local run ID. Upload warnings name the likely cause: an unset or malformed `SEDUM_UPLOAD_TOKEN`, `SEDUM_PROJECT_ID` or `SEDUM_CLOUD_URL`, missing Git context, an unreachable host, or an HTTP 401 for a token that is revoked or issued for another project. `runs show` with a local run ID now says the run was not found instead of reporting a membership problem. Uploads still never change the exit code.
+- 038122d: Update zod from 4.6.5 to 4.6.7. Zod before 4.6.6 can exhaust memory while validating oversized constrained collections ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)), so a fresh `npm install -D sedum-cli` reported 6 high-severity vulnerabilities in `npm audit`. It now reports none.
+- Updated dependencies [6751e12]
+- Updated dependencies [d20c714]
+- Updated dependencies [038122d]
+  - @sedum-dev/core@0.1.0-alpha.20
+  - @sedum-dev/provider-clef@0.1.0-alpha.20
+  - @sedum-dev/provider-typesafe@0.1.0-alpha.20
+  - @sedum-dev/reporters@0.1.0-alpha.20
+
 ## 0.1.0-alpha.19
 
 ### Minor Changes

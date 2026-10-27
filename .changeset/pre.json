@@ -13,7 +13,9 @@
     "affected-monorepo-hardening",
     "agent-markdown-report",
     "ai-holds",
+    "auth-lock-epipe",
     "automatic-cloud-history",
+    "bounded-page-close",
     "bounded-sentence-cache",
     "browser-setting-sources",
     "cache-not-cacheable",
@@ -23,6 +25,7 @@
     "click-actionability-wait",
     "click-confirmed-navigation",
     "clickable-rows-hover-controls",
+    "cloud-upload-run-id",
     "compact-cloud-result-reads",
     "configurable-provider-key-env",
     "configurable-system-one-provider",
@@ -72,6 +75,7 @@
     "screenshot-checks",
     "sed-51-release-pipeline",
     "settle-after-page-change",
+    "settle-step-timeout",
     "simplify-locator-guards",
     "stable-cli-auth",
     "static-goal-bindings",
@@ -86,6 +90,7 @@
     "vision-feedback",
     "wait-until-auto-wait",
     "warm-html-report",
-    "yaml-goal-tests"
+    "yaml-goal-tests",
+    "zod-4-6-7"
   ]
 }
