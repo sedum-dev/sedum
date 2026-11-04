@@ -113,6 +113,10 @@ export interface ChoiceWhy {
   readonly restore?: boolean;
   /** Destructive candidates removed from this state's action set. */
   readonly skipped?: readonly string[];
+  /** Effects planner: what Jev says the target does. */
+  readonly effect?: string;
+  /** Effects planner: the chosen affordance's score. */
+  readonly score?: number;
 }
 
 export interface TraceEntry {

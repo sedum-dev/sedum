@@ -63,6 +63,28 @@ describe("explore arguments", () => {
     expect(output.stderr).toContain("--mode guided");
   });
 
+  it("takes --planner effects only with guided mode", async () => {
+    const output = await runCli(
+      [
+        "explore",
+        "https://example.test/",
+        "--mode",
+        "heuristic",
+        "--planner",
+        "effects",
+      ],
+      "0.0.0",
+    );
+    expect(output.exitCode).toBe(3);
+    expect(output.stderr).toContain("--planner effects");
+    const bad = await runCli(
+      ["explore", "https://example.test/", "--planner", "smart"],
+      "0.0.0",
+    );
+    expect(bad.exitCode).not.toBe(0);
+    expect(bad.stderr).toContain("walk, effects");
+  });
+
   it("rejects malformed --detect-allow rules", async () => {
     const output = await runCli(
       [
