@@ -54,6 +54,8 @@ const state = vi.hoisted(() => ({
   envs: [] as Array<Readonly<Record<string, string | undefined>>>,
   retryable: true,
   errorCode: "browser-disconnected",
+  /** Files that fail before their test starts, as a bad entry URL does. */
+  notStarted: new Set<string>(),
 }));
 
 vi.mock("@sedum-dev/core", async (importOriginal) => {
@@ -67,11 +69,19 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
         const report = dependencies.report!;
         const slot = report.slot!;
         state.envs.push(dependencies.env);
+        if (state.notStarted.has(path.basename(file)))
+          return {
+            status: "could_not_run" as const,
+            file,
+            code: "invalid_test",
+            message: "The test entry URL could not be resolved.",
+          };
         const existing = report.recorder.testAt(slot.ordinal);
         const test = existing?.currentAttempt?.running
           ? existing
           : await report.recorder.beginTest({
-              id: `test:${path.basename(file)}`,
+              // The path identity, as discovery lists it.
+              id: path.basename(file),
               file: path.basename(file),
               ordinal: slot.ordinal,
               ...(slot.lane === undefined ? {} : { lane: slot.lane }),
@@ -79,49 +89,7 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
         state.active++;
         state.peak = Math.max(state.peak, state.active);
         try {
-          const outcome =
-            (await state.behavior?.(file, dependencies)) ?? "passed";
-          if (outcome === "could_not_run")
-            return {
-              status: "could_not_run" as const,
-              file,
-              code: state.errorCode,
-              message: "The test could not run.",
-            };
-          if (outcome === "hang") {
-            await new Promise((resolve) =>
-              dependencies.signal?.addEventListener("abort", resolve, {
-                once: true,
-              }),
-            );
-            return {
-              status: "could_not_run" as const,
-              file,
-              code: "execution_error",
-              message: "canceled",
-            };
-          }
-          const attempt = test.currentAttempt!;
-          const frame = await report.saveFrame(
-            { id: attempt.id, ordinal: attempt.ordinal },
-            `${attempt.id}:step:1:evidence`,
-            new TextEncoder().encode(`frame ${attempt.id}`),
-          );
-          await test.addStep({
-            ...step,
-            evidence: frame,
-            id: `${attempt.id}:step:1`,
-            ...(outcome === "failed" ? { verdict: "failed" as const } : {}),
-          });
-          await test.finishTest(outcome);
-          return outcome === "passed"
-            ? { status: "passed" as const, file }
-            : {
-                status: "failed" as const,
-                file,
-                source: { file, line: 1, col: 1 },
-                ...(!state.retryable ? { retryable: false as const } : {}),
-              };
+          return await settle(report, test, file, dependencies);
         } finally {
           state.active--;
         }
@@ -131,6 +99,69 @@ vi.mock("@sedum-dev/core", async (importOriginal) => {
 });
 
 import { executeRunCommand, verifyGraceMs } from "./run-command.js";
+
+type Report = NonNullable<FlowRunnerDependencies["report"]>;
+type Recording = NonNullable<ReturnType<Report["recorder"]["testAt"]>>;
+
+/** Plays the scripted behavior for one started attempt of the mocked runFlow. */
+async function settle(
+  report: Report,
+  test: Recording,
+  file: string,
+  dependencies: FlowRunnerDependencies,
+) {
+  const outcome = (await state.behavior?.(file, dependencies)) ?? "passed";
+  if (outcome === "could_not_run")
+    return {
+      status: "could_not_run" as const,
+      file,
+      code: state.errorCode,
+      message: "The test could not run.",
+    };
+  if (outcome === "hang") {
+    await new Promise((resolve) =>
+      dependencies.signal?.addEventListener("abort", resolve, {
+        once: true,
+      }),
+    );
+    return {
+      status: "could_not_run" as const,
+      file,
+      code: "execution_error",
+      message: "canceled",
+    };
+  }
+  return recordVerdict(report, test, file, outcome);
+}
+
+async function recordVerdict(
+  report: Report,
+  test: Recording,
+  file: string,
+  outcome: "passed" | "failed",
+) {
+  const attempt = test.currentAttempt!;
+  const frame = await report.saveFrame(
+    { id: attempt.id, ordinal: attempt.ordinal },
+    `${attempt.id}:step:1:evidence`,
+    new TextEncoder().encode(`frame ${attempt.id}`),
+  );
+  await test.addStep({
+    ...step,
+    evidence: frame,
+    id: `${attempt.id}:step:1`,
+    ...(outcome === "failed" ? { verdict: "failed" as const } : {}),
+  });
+  await test.finishTest(outcome);
+  return outcome === "passed"
+    ? { status: "passed" as const, file }
+    : {
+        status: "failed" as const,
+        file,
+        source: { file, line: 1, col: 1 },
+        ...(!state.retryable ? { retryable: false as const } : {}),
+      };
+}
 
 let root: string | undefined;
 let previous: string | undefined;
@@ -144,6 +175,7 @@ afterEach(async () => {
   state.envs = [];
   state.retryable = true;
   state.errorCode = "browser-disconnected";
+  state.notStarted.clear();
   if (previous) process.chdir(previous);
   if (root) await rm(root, { recursive: true, force: true });
   root = undefined;
@@ -448,6 +480,69 @@ describe("parallel sedum run", () => {
     expect(output.result.verdict).toBeNull();
     expect(output.diagnostic?.code).toBe("browser-disconnected");
     expect(runExitCode(output.result, false)).toBe(3);
+  });
+
+  it("keeps failed and errored non-blocking tests from deciding the run", async () => {
+    const names = await project(3);
+    for (const name of names.slice(0, 2))
+      await writeFile(
+        path.join(root!, name),
+        "url: https://example.test\ntags: [clients, quarantine]\nsteps: [verify page]\n",
+      );
+    const outcomes = ["failed", "could_not_run", "passed"] as const;
+    state.behavior = async (file) =>
+      outcomes[names.indexOf(path.basename(file))]!;
+    const quarantined = await executeRunCommand({
+      ...base,
+      paths: names,
+      nonBlockingLabels: ["quarantine"],
+      retries: 1,
+    });
+    expect(
+      quarantined.result.tests.map((test) => [test.blocking, test.state]),
+    ).toEqual([
+      [false, "completed"],
+      [false, "error"],
+      [undefined, "completed"],
+    ]);
+    // Non-blocking tests are still retried like any other test.
+    expect(quarantined.result.tests[0]!.attempts).toHaveLength(2);
+    expect(quarantined.diagnostic).toBeNull();
+    expect(quarantined.result).toMatchObject({
+      state: "completed",
+      verdict: "passed",
+      totals: { passedTests: 1, failedTests: 0, nonBlockingFailedTests: 2 },
+    });
+    expect(runExitCode(quarantined.result, true)).toBe(0);
+
+    state.behavior = async (file) =>
+      path.basename(file) === names[2] ? "failed" : "passed";
+    const blockingFailure = await executeRunCommand({
+      ...base,
+      paths: names,
+      nonBlockingLabels: ["quarantine"],
+    });
+    expect(blockingFailure.result.verdict).toBe("failed");
+    expect(blockingFailure.result.totals).toMatchObject({
+      failedTests: 1,
+      nonBlockingFailedTests: 0,
+    });
+    expect(runExitCode(blockingFailure.result, false)).toBe(1);
+
+    // A non-blocking test that fails before it starts has no test record;
+    // it must fail the run rather than vanish from the result.
+    state.behavior = undefined;
+    state.notStarted.add(names[0]!);
+    const unstarted = await executeRunCommand({
+      ...base,
+      paths: names,
+      nonBlockingLabels: ["quarantine"],
+    });
+    expect(unstarted.result.tests.map((test) => test.file)).toEqual(
+      names.slice(1),
+    );
+    expect(unstarted.diagnostic?.code).toBe("invalid_test");
+    expect(runExitCode(unstarted.result, false)).toBe(3);
   });
 
   it("summarizes several test-scoped errors in the run diagnostic", async () => {

@@ -36,6 +36,7 @@ import type { CliDiagnostic } from "../diagnostics.js";
 interface SelectedTest {
   readonly file: string;
   readonly id: string;
+  readonly blocking: boolean;
 }
 
 interface TestExecutionRequest {
@@ -143,17 +144,21 @@ async function selectTests(
   providerConcurrency: number,
   visionModel: string | null,
 ): Promise<void> {
-  await request.recorder.selectTests(request.files.length, {
-    parallel: { requested: request.options.parallel ?? 1, lanes },
-    shard: request.options.shard
-      ? {
-          ...request.options.shard,
-          globalSelectedTests: request.globalSelectedTests,
-        }
-      : null,
-    providerConcurrency,
-    ...(visionModel ? { vision: { model: visionModel } } : {}),
-  });
+  await request.recorder.selectTests(
+    request.files.length,
+    {
+      parallel: { requested: request.options.parallel ?? 1, lanes },
+      shard: request.options.shard
+        ? {
+            ...request.options.shard,
+            globalSelectedTests: request.globalSelectedTests,
+          }
+        : null,
+      providerConcurrency,
+      ...(visionModel ? { vision: { model: visionModel } } : {}),
+    },
+    request.files.filter((test) => !test.blocking).map((test) => test.id),
+  );
   if (request.discoveryProblems.length)
     await request.recorder.addDiscoveryProblems(request.discoveryProblems);
 }
@@ -325,11 +330,18 @@ async function handleOperationalFailure(
     request.config.providerName,
     request.config.apiKeyEnv,
   );
-  outcome.operational ??= diagnostic;
-  if (stopsRun(result.code)) return "stop";
-  outcome.erroredTests += 1;
-  await request.recorder
-    .testAt(slot.ordinal)
-    ?.errorTest(canonicalDiagnosticError(diagnostic));
+  if (stopsRun(result.code)) {
+    outcome.operational ??= diagnostic;
+    return "stop";
+  }
+  const recording = request.recorder.testAt(slot.ordinal);
+  // A non-blocking test that could not run is reported on its test only. One
+  // that failed before it started has no test to report on, so it fails the
+  // run like a blocking test instead of disappearing from the result.
+  if (slot.test.blocking || !recording) {
+    outcome.operational ??= diagnostic;
+    outcome.erroredTests += 1;
+  }
+  await recording?.errorTest(canonicalDiagnosticError(diagnostic));
   return "complete";
 }

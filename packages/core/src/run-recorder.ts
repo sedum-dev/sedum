@@ -10,6 +10,7 @@ import {
   type ResultTest,
   type RunResult,
 } from "./run-result.js";
+import { completedRunVerdict, runFlags } from "./run-result/validation.js";
 
 export type ResultSink = (snapshot: RunResult) => Promise<void>;
 
@@ -115,11 +116,31 @@ function newAttempt(
   };
 }
 
+function newTest(
+  input: TestStartInput,
+  attempt: ResultAttempt,
+  blocking: boolean,
+): ResultTest {
+  return {
+    id: input.id,
+    file: input.file,
+    description: input.description ?? "",
+    tags: [...(input.tags ?? [])],
+    ...(blocking ? {} : { blocking: false as const }),
+    state: "running",
+    verdict: null,
+    flags: [],
+    selectedAttemptId: attempt.id,
+    attempts: [attempt],
+  };
+}
+
 /** One run owns the mutable journal; each published value is a validated copy. */
 export class RunRecorder {
   private readonly started = performance.now();
   private value: RunResult;
   private readonly ordinals = new Map<string, number>();
+  private nonBlocking: ReadonlySet<string> = new Set();
   private lastTestId: string | null = null;
 
   constructor(
@@ -163,9 +184,7 @@ export class RunRecorder {
         this.value.setupCalls,
         Math.max(this.value.selectedTestCount ?? 0, this.value.tests.length),
       ),
-      flags: [
-        ...new Set(this.value.tests.flatMap((test) => test.flags)),
-      ] as RunResult["flags"],
+      flags: runFlags(this.value.tests),
     };
     await this.sink(validateRunResult(this.value));
   }
@@ -230,10 +249,19 @@ export class RunRecorder {
     await this.publish();
   }
 
-  /** Record the selection size and, for parallel or sharded runs, how it runs. */
-  async selectTests(count: number, execution?: ResultExecution): Promise<void> {
+  /**
+   * Record the selection size and, for parallel or sharded runs, how it runs.
+   * Tests named in `nonBlockingIds` are recorded with `blocking: false` when
+   * they start.
+   */
+  async selectTests(
+    count: number,
+    execution?: ResultExecution,
+    nonBlockingIds: readonly string[] = [],
+  ): Promise<void> {
     if (!Number.isSafeInteger(count) || count < this.value.tests.length)
       throw new Error("Selected test count is invalid");
+    this.nonBlocking = new Set(nonBlockingIds);
     this.value = {
       ...this.value,
       selectedTestCount: count,
@@ -268,18 +296,11 @@ export class RunRecorder {
       input.ordinal ?? Math.max(-1, ...this.ordinals.values()) + 1;
     if ([...this.ordinals.values()].includes(ordinal))
       throw new Error("Test ordinal already started");
-    const attempt = newAttempt(this.value.runId, 1, input.lane);
-    const test: ResultTest = {
-      id: input.id,
-      file: input.file,
-      description: input.description ?? "",
-      tags: [...(input.tags ?? [])],
-      state: "running",
-      verdict: null,
-      flags: [],
-      selectedAttemptId: attempt.id,
-      attempts: [attempt],
-    };
+    const test = newTest(
+      input,
+      newAttempt(this.value.runId, 1, input.lane),
+      !this.nonBlocking.has(input.id),
+    );
     const position = this.value.tests.findIndex(
       (entry) => (this.ordinals.get(entry.id) ?? 0) > ordinal,
     );
@@ -535,19 +556,13 @@ export class RunRecorder {
     }
     const tests = this.value.tests;
     const verdict =
-      error || tests.length === 0 || tests.some((test) => test.verdict === null)
-        ? null
-        : tests.some((test) => test.verdict === "failed")
-          ? "failed"
-          : "passed";
+      error || tests.length === 0 ? null : completedRunVerdict(tests);
     this.value = {
       ...this.value,
       state: error ? terminalState : "completed",
       error,
       verdict,
-      flags: [
-        ...new Set(tests.flatMap((test) => test.flags)),
-      ] as RunResult["flags"],
+      flags: runFlags(tests),
       finishedAt: at,
     };
     await this.publish();

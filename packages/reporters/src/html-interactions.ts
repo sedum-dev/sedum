@@ -12,22 +12,27 @@ export const REPORT_JS = `
     try { localStorage.setItem('sedum-theme', root.dataset.theme); } catch {}
   });
 
+  const showOnly = (filter) => {
+    document.querySelectorAll('[data-group]').forEach(head => {
+      head.hidden = filter !== 'all' && head.dataset.group !== filter;
+    });
+    document.querySelectorAll('.test').forEach(section => {
+      const show = filter === 'all' || section.dataset.status === filter;
+      section.hidden = !show;
+      const body = section.querySelector('.test-body');
+      if (body) body.open = filter === 'all' ? section.dataset.status === 'failed' : show;
+    });
+  };
   const filters = document.querySelector('.filters');
   filters?.addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button) return;
     if (button.dataset.filter) {
-      const filter = button.dataset.filter;
       filters.querySelectorAll('[data-filter]').forEach(b => {
         if (b === button) b.setAttribute('aria-current', 'true');
         else b.removeAttribute('aria-current');
       });
-      document.querySelectorAll('.test').forEach(section => {
-        const show = filter === 'all' || section.dataset.status === filter;
-        section.hidden = !show;
-        const body = section.querySelector('.test-body');
-        if (body) body.open = filter === 'all' ? section.dataset.status === 'failed' : show;
-      });
+      showOnly(button.dataset.filter);
     }
     if (button.dataset.act === 'expand-all') {
       const open = button.getAttribute('aria-pressed') !== 'true';

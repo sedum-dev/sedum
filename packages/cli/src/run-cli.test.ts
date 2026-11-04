@@ -1,6 +1,7 @@
 import { RunRecorder, type ResultStep, type RunResult } from "@sedum-dev/core";
 import { describe, expect, it, vi } from "vitest";
 import { runCli } from "./run-cli.js";
+import type { RunCommandOptions } from "./run-command.js";
 
 function step(
   id: string,
@@ -508,6 +509,47 @@ describe("CLI command framework", () => {
         "",
       ),
     ).toContain(plain.stdout);
+  });
+
+  it("passes --non-blocking-labels to the run and exits on blocking tests only", async () => {
+    const recorder = new RunRecorder(async () => undefined, "non-blocking");
+    await recorder.start();
+    await recorder.selectTests(2, undefined, ["quarantined"]);
+    await recorder.startTest({ id: "quarantined", file: "q.test.yaml" });
+    await recorder.addStep(step("q", "failed"));
+    await recorder.finishTest("failed");
+    await recorder.startTest({ id: "stable", file: "s.test.yaml" });
+    await recorder.addStep(step("s", "passed"));
+    await recorder.finishTest("passed");
+    await recorder.finish();
+    const canonical = recorder.snapshot;
+    let options: RunCommandOptions | undefined;
+    const output = await runCli(
+      [
+        "run",
+        "--non-blocking-labels",
+        "quarantine,flaky",
+        "--non-blocking-labels",
+        "slow",
+      ],
+      "1.2.3",
+      {
+        executeRun: async (received) => {
+          options = received;
+          return execution(canonical);
+        },
+      },
+    );
+    expect(options).toMatchObject({
+      nonBlockingLabels: ["quarantine", "flaky", "slow"],
+    });
+    expect(output.stdout).toContain(
+      "tests 2 selected, 2 executed, 1 passed, 0 failed, 1 non-blocking failed",
+    );
+    expect(output.stdout).toContain("non-blocking failure: q.test.yaml");
+    expect(output.exitCode).toBe(0);
+    const help = await runCli(["run", "--help"], "1.2.3");
+    expect(help.stdout).toContain("--non-blocking-labels <tags>");
   });
 
   it("shows costs by default only for a TTY", async () => {

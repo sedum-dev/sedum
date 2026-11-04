@@ -1,4 +1,10 @@
-import type { ResultStep, RunResult } from "@sedum-dev/core";
+import {
+  isBlocking,
+  nonBlockingFailure,
+  type ResultStep,
+  type ResultTest,
+  type RunResult,
+} from "@sedum-dev/core";
 import path from "node:path";
 import type { ReporterEvent } from "./lifecycle.js";
 import {
@@ -68,6 +74,15 @@ function flags(value: readonly string[]): string {
   return value.length ? ` [${value.join(", ")}]` : "";
 }
 
+function attentionHeading(test: ResultTest): string {
+  return nonBlockingFailure(test) ? "non-blocking failure" : "needs attention";
+}
+
+/** Marks a test whose failure does not decide the run. */
+function role(test: ResultTest): string {
+  return isBlocking(test) ? "" : " (non-blocking)";
+}
+
 function source(
   stack: readonly { file: string; line: number; col: number }[],
 ): string {
@@ -96,7 +111,7 @@ function attention(result: RunResult, context: ReporterContext): string {
     )
       continue;
     reruns.add(rerunArgs(test));
-    lines.push(`\nneeds attention: ${testLabel(test)}`);
+    lines.push(`\n${attentionHeading(test)}: ${testLabel(test)}`);
     for (const step of affectedSteps) {
       lines.push(
         `  ${label(step.state, step.verdict)}${flags(step.flags)} ${step.phase} step ${step.index}: ${stepText(step)}`,
@@ -211,7 +226,7 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
     completed++;
     const attempts =
       test.attempts.length > 1 ? ` (${test.attempts.length} attempts)` : "";
-    return `[${completed}/${context.parallel!.total}] test ${coloredLabel(test.state, test.verdict, context)}${flags(test.flags)} ${testLabel(test)}${attempts}\n`;
+    return `[${completed}/${context.parallel!.total}] test ${coloredLabel(test.state, test.verdict, context)}${flags(test.flags)}${role(test)} ${testLabel(test)}${attempts}\n`;
   };
   return {
     onEvent(event, context) {
@@ -234,7 +249,7 @@ export function createTerminalReporter(name: TerminalReporterName): Reporter {
       if (event.type === "testCompleted") {
         if (!parallel)
           return name === "list"
-            ? `test ${coloredLabel(event.test.state, event.test.verdict, context)}${flags(event.test.flags)} ${testLabel(event.test)}\n`
+            ? `test ${coloredLabel(event.test.state, event.test.verdict, context)}${flags(event.test.flags)}${role(event.test)} ${testLabel(event.test)}\n`
             : "";
         // The run retries exactly a failed test with attempts left; wait for
         // that retry so the live line shows the outcome that counts.

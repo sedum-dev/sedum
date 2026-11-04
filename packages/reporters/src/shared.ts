@@ -1,3 +1,4 @@
+import { nonBlockingFailure } from "@sedum-dev/core";
 import type {
   ResultCall,
   ResultAttempt,
@@ -63,14 +64,20 @@ export function usageLines(result: RunResult): string[] {
   return lines;
 }
 
-/** How a test reads in a report, from most to least urgent. */
-export type TestStatus = "failed" | "incomplete" | "flagged" | "passed";
+/**
+ * How a test reads in a report, from most to least urgent. `non-blocking`
+ * is a failed or errored test that `--non-blocking-labels` kept from
+ * deciding the run.
+ */
+export type TestStatus =
+  "failed" | "incomplete" | "non-blocking" | "flagged" | "passed";
 
 export function selectedAttempt(test: ResultTest): ResultAttempt | undefined {
   return test.attempts.find((attempt) => attempt.id === test.selectedAttemptId);
 }
 
 export function testStatus(test: ResultTest): TestStatus {
+  if (nonBlockingFailure(test)) return "non-blocking";
   if (test.verdict === "failed") return "failed";
   if (test.verdict === null) return "incomplete";
   if (test.flags.length) return "flagged";
@@ -79,15 +86,26 @@ export function testStatus(test: ResultTest): TestStatus {
 
 export function testStatusLabel(test: ResultTest): string {
   const value = testStatus(test);
+  if (value === "non-blocking")
+    return test.verdict === "failed"
+      ? "failed, non-blocking"
+      : "could not run, non-blocking";
   return value === "flagged" ? "passed, flagged" : value;
 }
 
 /**
- * Failed first, then tests that never reached a verdict, then flagged passes.
- * An incomplete test says nothing about the app yet, so it outranks a pass.
+ * Failed first, then tests that never reached a verdict, then non-blocking
+ * failures, then flagged passes. An incomplete test says nothing about the
+ * app yet, so it outranks a pass.
  */
 export function testOrder(test: ResultTest): number {
-  return { failed: 0, incomplete: 1, flagged: 2, passed: 3 }[testStatus(test)];
+  return {
+    failed: 0,
+    incomplete: 1,
+    "non-blocking": 2,
+    flagged: 3,
+    passed: 4,
+  }[testStatus(test)];
 }
 
 /**

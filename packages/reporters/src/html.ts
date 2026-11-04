@@ -1,4 +1,5 @@
 import {
+  nonBlockingFailure,
   validateRunResult,
   type ResultAttempt,
   type ResultCall,
@@ -21,6 +22,7 @@ import {
   testOrder,
   testStatus,
   testStatusLabel,
+  type TestStatus,
 } from "./shared.js";
 import { REPORT_FONTS } from "./html-fonts.js";
 import { REPORT_JS } from "./html-interactions.js";
@@ -458,6 +460,14 @@ function attemptSection(
   );
 }
 
+const BADGE_TONE: Record<TestStatus, string> = {
+  failed: "failed",
+  incomplete: "diverged",
+  "non-blocking": "marginal",
+  flagged: "marginal",
+  passed: "ok",
+};
+
 function testSection(
   test: ResultTest,
   index: number,
@@ -494,13 +504,7 @@ function testSection(
     esc(summary) +
     "</span>" +
     '<span class="badge b-' +
-    (tone === "flagged"
-      ? "marginal"
-      : tone === "incomplete"
-        ? "diverged"
-        : tone === "passed"
-          ? "ok"
-          : "failed") +
+    BADGE_TONE[tone] +
     '">' +
     esc(testStatusLabel(test)) +
     "</span></span></summary>" +
@@ -685,6 +689,7 @@ function receipt(result: RunResult): string {
 }
 
 const extraCss = `
+.group-head{padding-top:clamp(2rem,4vw,3rem);border-bottom:1.5px solid var(--strong);padding-bottom:.8rem}.group-head[hidden]{display:none}
 .test-head-right{display:flex;align-items:center;gap:1.2rem}.test-summary{max-width:32ch;text-align:right}
 .goal-context .goal-text,.goal-context .goal-claim{white-space:pre-wrap;overflow-wrap:anywhere}
 .goal-context .goal-until .label{display:block}
@@ -716,6 +721,25 @@ const extraCss = `
 }
 `;
 
+/** Opens the group of non-blocking failures; tests sort them together. */
+const NON_BLOCKING_HEAD =
+  '<section class="group-head" data-group="non-blocking"><span class="label">non-blocking failures</span><p class="soft">These tests have a <code>--non-blocking-labels</code> tag. They ran and failed, but they do not fail the run.</p></section>';
+
+/**
+ * The headline's verdict: the most urgent count. Non-blocking failures do
+ * not fail the run, but a passed run with them must not read "all passed".
+ */
+function headlineVerdict(counts: Record<TestStatus, number>): string {
+  const [tone, text] = counts.failed
+    ? ["failed", counts.failed + " failed"]
+    : counts["non-blocking"]
+      ? ["marginal", counts["non-blocking"] + " non-blocking failed"]
+      : counts.flagged
+        ? ["marginal", counts.flagged + " flagged"]
+        : ["ok", "all passed"];
+  return '<em class="v-' + tone + '">' + text + "</em>";
+}
+
 function renderHtmlBody(
   result: RunResult,
   options: HtmlReportOptions = {},
@@ -724,8 +748,17 @@ function renderHtmlBody(
   const tests = value.tests
     .map((test, index) => ({ test, index }))
     .sort((a, b) => testOrder(a.test) - testOrder(b.test));
-  const counts = { failed: 0, flagged: 0, passed: 0, incomplete: 0 };
+  const counts = {
+    failed: 0,
+    flagged: 0,
+    passed: 0,
+    incomplete: 0,
+    "non-blocking": 0,
+  };
   for (const test of value.tests) counts[testStatus(test)]++;
+  const firstNonBlocking = tests.findIndex(({ test }) =>
+    nonBlockingFailure(test),
+  );
   const headline =
     value.state === "error" || value.state === "interrupted"
       ? value.tests.length +
@@ -735,20 +768,14 @@ function renderHtmlBody(
       : value.tests.length +
         " " +
         (value.tests.length === 1 ? "flow" : "flows") +
-        ', <em class="v-' +
-        (counts.failed ? "failed" : counts.flagged ? "marginal" : "ok") +
-        '">' +
-        (counts.failed
-          ? counts.failed + " failed"
-          : counts.flagged
-            ? counts.flagged + " flagged"
-            : "all passed") +
-        "</em>.";
+        ", " +
+        headlineVerdict(counts) +
+        ".";
   const chips = [
     '<button type="button" data-filter="all" aria-current="true">all · ' +
       value.tests.length +
       "</button>",
-    ...(["failed", "incomplete", "flagged", "passed"] as const)
+    ...(["failed", "incomplete", "non-blocking", "flagged", "passed"] as const)
       .filter((key) => counts[key] > 0)
       .map(
         (key) =>
@@ -791,6 +818,9 @@ function renderHtmlBody(
     counts.passed +
     " passed" +
     (counts.incomplete ? " · " + counts.incomplete + " incomplete" : "") +
+    (counts["non-blocking"]
+      ? " · " + counts["non-blocking"] + " non-blocking failed"
+      : "") +
     ". Open a flow for its attempts, steps, evidence and exact decision lines.";
   return (
     '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
@@ -833,6 +863,11 @@ function renderHtmlBody(
     '<div><span class="label">failed</span><div class="num">' +
     value.totals.failedTests +
     "</div></div>" +
+    (value.totals.nonBlockingFailedTests === undefined
+      ? ""
+      : '<div><span class="label">non-blocking failed</span><div class="num">' +
+        value.totals.nonBlockingFailedTests +
+        "</div></div>") +
     '<div><span class="label">flagged steps</span><div class="num">' +
     value.totals.flaggedSteps +
     "</div></div>" +
@@ -846,8 +881,10 @@ function renderHtmlBody(
     runError +
     issues +
     tests
-      .map(({ test, index }) =>
-        testSection(test, index + 1, options.replayFrames),
+      .map(
+        ({ test, index }, position) =>
+          (position === firstNonBlocking ? NON_BLOCKING_HEAD : "") +
+          testSection(test, index + 1, options.replayFrames),
       )
       .join("") +
     (value.tests.length

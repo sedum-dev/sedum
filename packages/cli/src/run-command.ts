@@ -20,6 +20,11 @@ export interface RunCommandOptions {
   readonly file?: string;
   readonly paths?: readonly string[];
   readonly filters?: RunFilters;
+  /**
+   * `--non-blocking-labels`: tests with any of these tags run and are
+   * reported, but their failures and errors do not decide the run.
+   */
+  readonly nonBlockingLabels?: readonly string[];
   readonly environment?: string;
   readonly browser?: string;
   readonly vision?: boolean;

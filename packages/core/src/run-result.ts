@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { validateRunResultInvariants } from "./run-result/validation.js";
 
-export { resultTotals } from "./run-result/validation.js";
+export {
+  isBlocking,
+  nonBlockingFailure,
+  resultTotals,
+} from "./run-result/validation.js";
 
 const probability = z.number().finite().min(0).max(1);
 const nonnegative = z.number().finite().nonnegative();
@@ -247,6 +251,12 @@ export const ResultTestSchema = z.strictObject({
   description: z.string().max(512),
   goal: z.strictObject({ text: z.string(), verify: z.string() }).optional(),
   tags: z.array(z.string().max(120)),
+  /**
+   * `false` when `--non-blocking-labels` matched a tag: the test runs and is
+   * reported, but its failure or error does not decide the run. Absent means
+   * blocking.
+   */
+  blocking: z.literal(false).optional(),
   state,
   verdict: verdict.nullable(),
   flags: z.array(flag),
@@ -257,7 +267,10 @@ export const ResultTotalsSchema = z.strictObject({
   selectedTests: count,
   executedTests: count,
   passedTests: count,
+  /** Failed blocking tests; non-blocking failures count separately. */
   failedTests: count,
+  /** Non-blocking tests that failed or could not run; present when any test is non-blocking. */
+  nonBlockingFailedTests: count.optional(),
   passedSteps: count,
   failedSteps: count,
   historicalAttempts: count,

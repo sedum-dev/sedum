@@ -1,4 +1,5 @@
 import {
+  nonBlockingFailure,
   validateRunResult,
   type ResultAttempt,
   type ResultProblem,
@@ -321,6 +322,56 @@ function flowDetail(test: ResultTest): string[] {
   return out;
 }
 
+function countParts(counts: Record<string, number>): string[] {
+  const nonBlocking = counts["non-blocking"]
+    ? [`${counts["non-blocking"]} non-blocking failed`]
+    : [];
+  return [
+    `${counts.failed} failed`,
+    `${counts.incomplete} incomplete`,
+    ...nonBlocking,
+    `${counts.flagged} flagged`,
+    `${counts.passed} passed`,
+  ];
+}
+
+interface AttentionItem {
+  readonly test: ResultTest;
+  readonly attempt: ResultAttempt | undefined;
+  readonly steps: readonly ResultStep[];
+  readonly bindings: readonly ResultProblem[];
+  readonly attemptError: ResultAttempt | null;
+}
+
+/**
+ * Numbered sections for every item that needs attention, with failures of
+ * non-blocking tests apart. Numbering runs on across both lists.
+ */
+function attentionSections(items: readonly AttentionItem[]): {
+  readonly blocking: string[];
+  readonly nonBlocking: string[];
+} {
+  const blocking: string[] = [];
+  const nonBlocking: string[] = [];
+  let number = 0;
+  for (const item of items) {
+    if (!item.attempt) continue;
+    const target = nonBlockingFailure(item.test) ? nonBlocking : blocking;
+    for (const step of item.steps)
+      target.push(...stepSection(++number, item.test, item.attempt, step));
+    for (const problem of item.bindings)
+      target.push(...problemSection(++number, item.test, problem));
+    if (item.attemptError)
+      target.push(
+        ...attemptErrorSection(++number, item.test, item.attemptError),
+      );
+  }
+  return { blocking, nonBlocking };
+}
+
+const NON_BLOCKING_INTRO =
+  "These tests have a `--non-blocking-labels` tag. They ran and failed, but they do not fail the run.";
+
 function verdictLine(
   result: RunResult,
   counts: Record<string, number>,
@@ -337,12 +388,7 @@ function verdictLine(
           : counts.flagged
             ? "passed, flagged"
             : "passed";
-  const parts = [
-    `${counts.failed} failed`,
-    `${counts.incomplete} incomplete`,
-    `${counts.flagged} flagged`,
-    `${counts.passed} passed`,
-  ];
+  const parts = countParts(counts);
   const extra = [
     `${result.tests.length} ${result.tests.length === 1 ? "flow" : "flows"}`,
     result.totals.historicalAttempts
@@ -352,6 +398,29 @@ function verdictLine(
     duration(result.elapsedMs),
   ].filter(Boolean);
   return `**${verdict}** — ${parts.join(" · ")} (${extra.join(", ")})`;
+}
+
+function nextSteps(state: {
+  readonly needsAttention: boolean;
+  readonly nonBlocking: boolean;
+  readonly reruns: readonly string[];
+}): string[] {
+  if (!state.needsAttention)
+    return [
+      state.nonBlocking
+        ? "Nothing blocks this run. Fix the tests under **Non-blocking failures** before you remove their quarantine tag."
+        : "Nothing needs attention.",
+    ];
+  const steps = [
+    "1. Fix the items under **Needs attention** in order; the first is the most urgent.",
+    "2. Open the linked frames to see the page at the moment each step stopped.",
+    "3. Read `result.json` in this folder for every recorded field.",
+  ];
+  if (state.reruns.length)
+    steps.push(
+      `4. Rerun: ${code("sedum run " + state.reruns.map(shellArg).join(" "))}`,
+    );
+  return steps;
 }
 
 /** Render one validated run as Markdown for a reader who has to fix it. */
@@ -364,6 +433,7 @@ function renderMarkdownBody(input: RunResult): string {
   const counts: Record<string, number> = {
     failed: 0,
     incomplete: 0,
+    "non-blocking": 0,
     flagged: 0,
     passed: 0,
   };
@@ -441,20 +511,16 @@ function renderMarkdownBody(input: RunResult): string {
     out.push("");
   }
 
-  const sections: string[] = [];
-  let number = 0;
-  for (const item of attention) {
-    if (!item.attempt) continue;
-    for (const step of item.steps)
-      sections.push(...stepSection(++number, item.test, item.attempt, step));
-    for (const problem of item.bindings)
-      sections.push(...problemSection(++number, item.test, problem));
-    if (item.attemptError)
-      sections.push(
-        ...attemptErrorSection(++number, item.test, item.attemptError),
-      );
-  }
+  const { blocking: sections, nonBlocking } = attentionSections(attention);
   if (sections.length) out.push("## Needs attention", "", ...sections);
+  if (nonBlocking.length)
+    out.push(
+      "## Non-blocking failures",
+      "",
+      NON_BLOCKING_INTRO,
+      "",
+      ...nonBlocking,
+    );
 
   out.push("## Flow detail", "");
   out.push(
@@ -480,28 +546,25 @@ function renderMarkdownBody(input: RunResult): string {
       attention
         .filter(
           (item) =>
-            item.steps.length ||
-            item.bindings.length ||
-            item.attemptError ||
-            testStatus(item.test) !== "passed",
+            !nonBlockingFailure(item.test) &&
+            (item.steps.length ||
+              item.bindings.length ||
+              item.attemptError ||
+              testStatus(item.test) !== "passed"),
         )
         .map((item) => item.test.file),
     ),
   ];
-  out.push("## Next steps", "");
-  if (!sections.length && !discovery.length && !result.error)
-    out.push("Nothing needs attention.");
-  else {
-    out.push(
-      "1. Fix the items under **Needs attention** in order; the first is the most urgent.",
-      "2. Open the linked frames to see the page at the moment each step stopped.",
-      "3. Read `result.json` in this folder for every recorded field.",
-    );
-    if (reruns.length)
-      out.push(
-        `4. Rerun: ${code("sedum run " + reruns.map(shellArg).join(" "))}`,
-      );
-  }
+  out.push(
+    "## Next steps",
+    "",
+    ...nextSteps({
+      needsAttention:
+        sections.length > 0 || discovery.length > 0 || !!result.error,
+      nonBlocking: nonBlocking.length > 0,
+      reruns,
+    }),
+  );
   return out.join("\n") + "\n";
 }
 
