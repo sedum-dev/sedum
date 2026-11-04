@@ -1,5 +1,16 @@
 # @sedum-dev/reporters
 
+## 0.1.0-alpha.21
+
+### Minor Changes
+
+- 42a1892: Add `sedum run --non-blocking-labels <tags>` to quarantine flaky tests without skipping them. Tests with any of the tags run and are reported as usual, but their failures and test-scoped errors do not fail the run or the exit code. `result.json` marks them `"blocking": false` and counts their failures in `totals.nonBlockingFailedTests`; `totals.failedTests` now counts blocking failures only. The terminal summary, the Markdown and HTML reports, and JUnit show non-blocking failures separately. JUnit records them as skipped.
+
+### Patch Changes
+
+- Updated dependencies [42a1892]
+  - @sedum-dev/core@0.1.0-alpha.21
+
 ## 0.1.0-alpha.20
 
 ### Patch Changes
