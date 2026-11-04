@@ -1,5 +1,6 @@
 import {
   isBlocking,
+  nonBlockingFailure,
   type ResultStep,
   type ResultTest,
   type RunResult,
@@ -74,7 +75,7 @@ function flags(value: readonly string[]): string {
 }
 
 function attentionHeading(test: ResultTest): string {
-  return isBlocking(test) ? "needs attention" : "non-blocking failure";
+  return nonBlockingFailure(test) ? "non-blocking failure" : "needs attention";
 }
 
 /** Marks a test whose failure does not decide the run. */

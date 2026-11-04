@@ -5,6 +5,7 @@ import {
   validateRunResult,
 } from "@sedum-dev/core";
 import {
+  createTerminalReporter,
   renderHtml,
   renderJson,
   renderJunit,
@@ -142,6 +143,7 @@ describe("non-blocking failures", () => {
     expect(markdown).toMatch(
       /## Non-blocking failures\n[\s\S]*tests\/quarantined\.test\.yaml/u,
     );
+    expect(markdown).toContain("Nothing blocks this run.");
 
     const html = renderHtml(result);
     expect(html).toContain(
@@ -160,5 +162,36 @@ describe("non-blocking failures", () => {
     expect(junit).toContain(
       '<property name="sedum.tests.non_blocking_failed" value="1"/>',
     );
+  });
+
+  it("leave a flagged non-blocking pass out of the failures", async () => {
+    const recorder = new RunRecorder(async () => {}, "non-blocking-flagged");
+    await recorder.start();
+    await recorder.selectTests(1, undefined, ["quarantined"]);
+    await recorder.startTest({
+      id: "quarantined",
+      file: "tests/quarantined.test.yaml",
+      tags: ["quarantine"],
+    });
+    await recorder.addStep(
+      step("tests/quarantined.test.yaml", 1, "low_confidence"),
+    );
+    await recorder.finishTest("passed");
+    await recorder.finish();
+    const result = validateRunResult(recorder.snapshot);
+
+    const markdown = renderMarkdown(result);
+    expect(markdown).toContain("## Needs attention");
+    expect(markdown).not.toContain("## Non-blocking failures");
+    const terminal = createTerminalReporter("list").onResult(result, {
+      stdoutIsTTY: false,
+      color: false,
+      showCosts: false,
+      progressPath: "progress.json",
+      resultPath: "result.json",
+      authoritative: true,
+      includeSharedSummary: true,
+    });
+    expect(terminal).toContain("needs attention: tests/quarantined.test.yaml");
   });
 });

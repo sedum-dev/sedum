@@ -1,5 +1,5 @@
 import {
-  isBlocking,
+  nonBlockingFailure,
   validateRunResult,
   type ResultAttempt,
   type ResultProblem,
@@ -344,8 +344,8 @@ interface AttentionItem {
 }
 
 /**
- * Numbered sections for every item that needs attention, split by whether
- * the test blocks the run. Numbering runs on across both lists.
+ * Numbered sections for every item that needs attention, with failures of
+ * non-blocking tests apart. Numbering runs on across both lists.
  */
 function attentionSections(items: readonly AttentionItem[]): {
   readonly blocking: string[];
@@ -356,7 +356,7 @@ function attentionSections(items: readonly AttentionItem[]): {
   let number = 0;
   for (const item of items) {
     if (!item.attempt) continue;
-    const target = isBlocking(item.test) ? blocking : nonBlocking;
+    const target = nonBlockingFailure(item.test) ? nonBlocking : blocking;
     for (const step of item.steps)
       target.push(...stepSection(++number, item.test, item.attempt, step));
     for (const problem of item.bindings)
@@ -398,6 +398,29 @@ function verdictLine(
     duration(result.elapsedMs),
   ].filter(Boolean);
   return `**${verdict}** — ${parts.join(" · ")} (${extra.join(", ")})`;
+}
+
+function nextSteps(state: {
+  readonly needsAttention: boolean;
+  readonly nonBlocking: boolean;
+  readonly reruns: readonly string[];
+}): string[] {
+  if (!state.needsAttention)
+    return [
+      state.nonBlocking
+        ? "Nothing blocks this run. Fix the tests under **Non-blocking failures** before you remove their quarantine tag."
+        : "Nothing needs attention.",
+    ];
+  const steps = [
+    "1. Fix the items under **Needs attention** in order; the first is the most urgent.",
+    "2. Open the linked frames to see the page at the moment each step stopped.",
+    "3. Read `result.json` in this folder for every recorded field.",
+  ];
+  if (state.reruns.length)
+    steps.push(
+      `4. Rerun: ${code("sedum run " + state.reruns.map(shellArg).join(" "))}`,
+    );
+  return steps;
 }
 
 /** Render one validated run as Markdown for a reader who has to fix it. */
@@ -523,7 +546,7 @@ function renderMarkdownBody(input: RunResult): string {
       attention
         .filter(
           (item) =>
-            isBlocking(item.test) &&
+            !nonBlockingFailure(item.test) &&
             (item.steps.length ||
               item.bindings.length ||
               item.attemptError ||
@@ -532,20 +555,16 @@ function renderMarkdownBody(input: RunResult): string {
         .map((item) => item.test.file),
     ),
   ];
-  out.push("## Next steps", "");
-  if (!sections.length && !discovery.length && !result.error)
-    out.push("Nothing needs attention.");
-  else {
-    out.push(
-      "1. Fix the items under **Needs attention** in order; the first is the most urgent.",
-      "2. Open the linked frames to see the page at the moment each step stopped.",
-      "3. Read `result.json` in this folder for every recorded field.",
-    );
-    if (reruns.length)
-      out.push(
-        `4. Rerun: ${code("sedum run " + reruns.map(shellArg).join(" "))}`,
-      );
-  }
+  out.push(
+    "## Next steps",
+    "",
+    ...nextSteps({
+      needsAttention:
+        sections.length > 0 || discovery.length > 0 || !!result.error,
+      nonBlocking: nonBlocking.length > 0,
+      reruns,
+    }),
+  );
   return out.join("\n") + "\n";
 }
 
