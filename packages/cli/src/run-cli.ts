@@ -175,161 +175,10 @@ export async function runCli(
       exitCode = result.exitCode;
     });
 
-  program
-    .command("run")
+  addRunReportOptions(
+    addRunExecutionOptions(addRunSelectionOptions(program.command("run"))),
+  )
     .description("run configured tests, files, or directories")
-    .argument(
-      "[paths...]",
-      "test files or directories relative to the project root",
-    )
-    .option(
-      "--affected",
-      "experimental: send Git diff and test sources to the text provider; run relevant tests",
-      false,
-    )
-    .option("--base <ref>", "base ref for --affected (default main or master)")
-    .option(
-      "--affected-ignore <glob>",
-      "exclude matching repository-relative diff paths (repeatable)",
-      collectAffectedGlob,
-      [],
-    )
-    .option(
-      "--threshold <probability>",
-      "minimum relevance probability for --affected (default 0.3)",
-      relevanceThreshold,
-    )
-    .option(
-      "--selection-only",
-      "with --affected, print selection JSON without running tests (calls the text provider)",
-      false,
-    )
-    .option(
-      "--include <glob>",
-      "include matching project-relative paths (repeatable)",
-      collectGlob,
-      [],
-    )
-    .option(
-      "--exclude <glob>",
-      "exclude matching project-relative paths (repeatable)",
-      collectGlob,
-      [],
-    )
-    .option(
-      "--labels <tags>",
-      "require all comma-separated test tags (repeatable)",
-      collectLabels,
-      [],
-    )
-    .option(
-      "--non-blocking-labels <tags>",
-      "run tests with any of these comma-separated tags, but do not let their failures fail the run (repeatable)",
-      collectLabels,
-      [],
-    )
-    .option(
-      "--name <text>",
-      "match id or description substring (repeatable)",
-      collectValue,
-      [],
-    )
-    .option(
-      "--id <id>",
-      "select a test by its exact id (repeatable)",
-      collectValue,
-      [],
-    )
-    .option("--env <name>", "select a named environment")
-    .option("--browser <kind>", "chrome or chromium")
-    .option("--vision", "enable vision fallback for ambiguous clicks")
-    .option("--no-vision", "disable vision fallback")
-    .option(
-      "--screenshots",
-      "send screenshots to TypeSafe to check targets and judge claims (default for the TypeSafe API)",
-    )
-    .option("--no-screenshots", "send page text only, never screenshots")
-    .option(
-      "--url-override <url>",
-      "replace entry URL origin for preview deployments",
-    )
-    .option("--output-dir <path>", "run output directory")
-    .option("--reporter-dir <path>", "reporter artifact directory")
-    .option("--headed", "show the browser", false)
-    .option(
-      "--slow <ms>",
-      "slow browser actions by milliseconds",
-      nonnegativeSlow,
-    )
-    .option(
-      "--retries <count>",
-      "additional whole-test attempts",
-      nonnegativeInteger,
-      0,
-    )
-    .option(
-      "--timeout-minutes <minutes>",
-      "whole-run deadline",
-      positiveMinutes,
-    )
-    .option(
-      "--parallel <n|auto>",
-      "run tests in parallel lanes; auto uses half the CPU cores (default 1)",
-      parallelValue,
-    )
-    .option(
-      "--shard-index <index>",
-      "run only this 1-based shard of the selection (with --shard-count)",
-      positiveCount(10_000),
-    )
-    .option(
-      "--shard-count <count>",
-      "split the selection into this many deterministic shards",
-      positiveCount(10_000),
-    )
-    .option(
-      "--provider-concurrency <n>",
-      "cap concurrent model-provider requests (default min(4, 2 x lanes))",
-      positiveCount(32),
-    )
-    .option("--replay", "capture replay frames for executed steps", false)
-    .option("--no-evidence", "disable non-passing evidence frames")
-    .option("--no-cloud", "disable automatic upload to Sedum Cloud")
-    .option("--no-locator-cache", "disable the local locator cache")
-    .option("--locator-cache-ci", "enable the local locator cache in CI", false)
-    .option(
-      "--sensitive-origin <url>",
-      "omit sensitive page details and frames (repeatable)",
-      collectOrigin,
-      [],
-    )
-    .option(
-      "--detect <mode>",
-      "flag steps whose page reported console errors, uncaught exceptions, unhandled rejections, or HTTP errors: off, browser, or semantic (also asks Jev whether each new page looks broken)",
-      detectMode,
-    )
-    .option(
-      "--detect-allow <rule>",
-      "ignore a known detector finding: [check:]substring or [check:]re:regex (repeatable)",
-      collectAllowRule,
-      [],
-    )
-    .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
-    .option(
-      "--reporter <name>",
-      "reporter: list, steps, terminal, json, markdown, or junit (repeatable or comma-separated; default list)",
-      collectReporter,
-      [],
-    )
-    .option(
-      "--costs",
-      "show model tokens and cost even when stdout is redirected",
-      false,
-    )
-    .addHelpText(
-      "after",
-      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and configure the selected provider's credentials. TypeSafe uses TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible gateway); OpenRouter uses OPENROUTER_API_KEY; Clef uses CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN.\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n  sedum run --non-blocking-labels quarantine\n",
-    )
     .action(
       async (
         paths: string[],
@@ -909,6 +758,173 @@ export async function runCli(
     }
   }
   return { stdout: stdout.join(""), stderr: stderr.join(""), exitCode };
+}
+
+/** The `run` command's path argument and test selection options. */
+function addRunSelectionOptions(command: Command): Command {
+  return command
+    .argument(
+      "[paths...]",
+      "test files or directories relative to the project root",
+    )
+    .option(
+      "--affected",
+      "experimental: send Git diff and test sources to the text provider; run relevant tests",
+      false,
+    )
+    .option("--base <ref>", "base ref for --affected (default main or master)")
+    .option(
+      "--affected-ignore <glob>",
+      "exclude matching repository-relative diff paths (repeatable)",
+      collectAffectedGlob,
+      [],
+    )
+    .option(
+      "--threshold <probability>",
+      "minimum relevance probability for --affected (default 0.3)",
+      relevanceThreshold,
+    )
+    .option(
+      "--selection-only",
+      "with --affected, print selection JSON without running tests (calls the text provider)",
+      false,
+    )
+    .option(
+      "--include <glob>",
+      "include matching project-relative paths (repeatable)",
+      collectGlob,
+      [],
+    )
+    .option(
+      "--exclude <glob>",
+      "exclude matching project-relative paths (repeatable)",
+      collectGlob,
+      [],
+    )
+    .option(
+      "--labels <tags>",
+      "require all comma-separated test tags (repeatable)",
+      collectLabels,
+      [],
+    )
+    .option(
+      "--non-blocking-labels <tags>",
+      "run tests with any of these comma-separated tags, but do not let their failures fail the run (repeatable)",
+      collectLabels,
+      [],
+    )
+    .option(
+      "--name <text>",
+      "match id or description substring (repeatable)",
+      collectValue,
+      [],
+    )
+    .option(
+      "--id <id>",
+      "select a test by its exact id (repeatable)",
+      collectValue,
+      [],
+    );
+}
+
+/** The `run` command's environment, browser and scheduling options. */
+function addRunExecutionOptions(command: Command): Command {
+  return command
+    .option("--env <name>", "select a named environment")
+    .option("--browser <kind>", "chrome or chromium")
+    .option("--vision", "enable vision fallback for ambiguous clicks")
+    .option("--no-vision", "disable vision fallback")
+    .option(
+      "--screenshots",
+      "send screenshots to TypeSafe to check targets and judge claims (default for the TypeSafe API)",
+    )
+    .option("--no-screenshots", "send page text only, never screenshots")
+    .option(
+      "--url-override <url>",
+      "replace entry URL origin for preview deployments",
+    )
+    .option("--output-dir <path>", "run output directory")
+    .option("--reporter-dir <path>", "reporter artifact directory")
+    .option("--headed", "show the browser", false)
+    .option(
+      "--slow <ms>",
+      "slow browser actions by milliseconds",
+      nonnegativeSlow,
+    )
+    .option(
+      "--retries <count>",
+      "additional whole-test attempts",
+      nonnegativeInteger,
+      0,
+    )
+    .option(
+      "--timeout-minutes <minutes>",
+      "whole-run deadline",
+      positiveMinutes,
+    )
+    .option(
+      "--parallel <n|auto>",
+      "run tests in parallel lanes; auto uses half the CPU cores (default 1)",
+      parallelValue,
+    )
+    .option(
+      "--shard-index <index>",
+      "run only this 1-based shard of the selection (with --shard-count)",
+      positiveCount(10_000),
+    )
+    .option(
+      "--shard-count <count>",
+      "split the selection into this many deterministic shards",
+      positiveCount(10_000),
+    )
+    .option(
+      "--provider-concurrency <n>",
+      "cap concurrent model-provider requests (default min(4, 2 x lanes))",
+      positiveCount(32),
+    );
+}
+
+/** The `run` command's evidence, detection and report options, and its help text. */
+function addRunReportOptions(command: Command): Command {
+  return command
+    .option("--replay", "capture replay frames for executed steps", false)
+    .option("--no-evidence", "disable non-passing evidence frames")
+    .option("--no-cloud", "disable automatic upload to Sedum Cloud")
+    .option("--no-locator-cache", "disable the local locator cache")
+    .option("--locator-cache-ci", "enable the local locator cache in CI", false)
+    .option(
+      "--sensitive-origin <url>",
+      "omit sensitive page details and frames (repeatable)",
+      collectOrigin,
+      [],
+    )
+    .option(
+      "--detect <mode>",
+      "flag steps whose page reported console errors, uncaught exceptions, unhandled rejections, or HTTP errors: off, browser, or semantic (also asks Jev whether each new page looks broken)",
+      detectMode,
+    )
+    .option(
+      "--detect-allow <rule>",
+      "ignore a known detector finding: [check:]substring or [check:]re:regex (repeatable)",
+      collectAllowRule,
+      [],
+    )
+    .option("--strict", "exit 2 when a passed run has uncertainty flags", false)
+    .option(
+      "--reporter <name>",
+      "reporter: list, steps, terminal, json, markdown, or junit (repeatable or comma-separated; default list)",
+      collectReporter,
+      [],
+    )
+    .option(
+      "--costs",
+      "show model tokens and cost even when stdout is redirected",
+      false,
+    )
+    .addHelpText(
+      "after",
+      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and configure the selected provider's credentials. TypeSafe uses TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible gateway); OpenRouter uses OPENROUTER_API_KEY; Clef uses CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN.\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n  sedum run --non-blocking-labels quarantine\n",
+    );
 }
 
 function createProgram(
