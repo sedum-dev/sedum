@@ -1,4 +1,5 @@
 import {
+  isBlocking,
   validateRunResult,
   type ResultAttempt,
   type ResultProblem,
@@ -321,6 +322,56 @@ function flowDetail(test: ResultTest): string[] {
   return out;
 }
 
+function countParts(counts: Record<string, number>): string[] {
+  const nonBlocking = counts["non-blocking"]
+    ? [`${counts["non-blocking"]} non-blocking failed`]
+    : [];
+  return [
+    `${counts.failed} failed`,
+    `${counts.incomplete} incomplete`,
+    ...nonBlocking,
+    `${counts.flagged} flagged`,
+    `${counts.passed} passed`,
+  ];
+}
+
+interface AttentionItem {
+  readonly test: ResultTest;
+  readonly attempt: ResultAttempt | undefined;
+  readonly steps: readonly ResultStep[];
+  readonly bindings: readonly ResultProblem[];
+  readonly attemptError: ResultAttempt | null;
+}
+
+/**
+ * Numbered sections for every item that needs attention, split by whether
+ * the test blocks the run. Numbering runs on across both lists.
+ */
+function attentionSections(items: readonly AttentionItem[]): {
+  readonly blocking: string[];
+  readonly nonBlocking: string[];
+} {
+  const blocking: string[] = [];
+  const nonBlocking: string[] = [];
+  let number = 0;
+  for (const item of items) {
+    if (!item.attempt) continue;
+    const target = isBlocking(item.test) ? blocking : nonBlocking;
+    for (const step of item.steps)
+      target.push(...stepSection(++number, item.test, item.attempt, step));
+    for (const problem of item.bindings)
+      target.push(...problemSection(++number, item.test, problem));
+    if (item.attemptError)
+      target.push(
+        ...attemptErrorSection(++number, item.test, item.attemptError),
+      );
+  }
+  return { blocking, nonBlocking };
+}
+
+const NON_BLOCKING_INTRO =
+  "These tests have a `--non-blocking-labels` tag. They ran and failed, but they do not fail the run.";
+
 function verdictLine(
   result: RunResult,
   counts: Record<string, number>,
@@ -337,12 +388,7 @@ function verdictLine(
           : counts.flagged
             ? "passed, flagged"
             : "passed";
-  const parts = [
-    `${counts.failed} failed`,
-    `${counts.incomplete} incomplete`,
-    `${counts.flagged} flagged`,
-    `${counts.passed} passed`,
-  ];
+  const parts = countParts(counts);
   const extra = [
     `${result.tests.length} ${result.tests.length === 1 ? "flow" : "flows"}`,
     result.totals.historicalAttempts
@@ -364,6 +410,7 @@ function renderMarkdownBody(input: RunResult): string {
   const counts: Record<string, number> = {
     failed: 0,
     incomplete: 0,
+    "non-blocking": 0,
     flagged: 0,
     passed: 0,
   };
@@ -441,20 +488,16 @@ function renderMarkdownBody(input: RunResult): string {
     out.push("");
   }
 
-  const sections: string[] = [];
-  let number = 0;
-  for (const item of attention) {
-    if (!item.attempt) continue;
-    for (const step of item.steps)
-      sections.push(...stepSection(++number, item.test, item.attempt, step));
-    for (const problem of item.bindings)
-      sections.push(...problemSection(++number, item.test, problem));
-    if (item.attemptError)
-      sections.push(
-        ...attemptErrorSection(++number, item.test, item.attemptError),
-      );
-  }
+  const { blocking: sections, nonBlocking } = attentionSections(attention);
   if (sections.length) out.push("## Needs attention", "", ...sections);
+  if (nonBlocking.length)
+    out.push(
+      "## Non-blocking failures",
+      "",
+      NON_BLOCKING_INTRO,
+      "",
+      ...nonBlocking,
+    );
 
   out.push("## Flow detail", "");
   out.push(
@@ -480,10 +523,11 @@ function renderMarkdownBody(input: RunResult): string {
       attention
         .filter(
           (item) =>
-            item.steps.length ||
-            item.bindings.length ||
-            item.attemptError ||
-            testStatus(item.test) !== "passed",
+            isBlocking(item.test) &&
+            (item.steps.length ||
+              item.bindings.length ||
+              item.attemptError ||
+              testStatus(item.test) !== "passed"),
         )
         .map((item) => item.test.file),
     ),

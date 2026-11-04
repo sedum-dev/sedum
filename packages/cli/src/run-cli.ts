@@ -223,6 +223,12 @@ export async function runCli(
       [],
     )
     .option(
+      "--non-blocking-labels <tags>",
+      "run tests with any of these comma-separated tags, but do not let their failures fail the run (repeatable)",
+      collectLabels,
+      [],
+    )
+    .option(
       "--name <text>",
       "match id or description substring (repeatable)",
       collectValue,
@@ -322,7 +328,7 @@ export async function runCli(
     )
     .addHelpText(
       "after",
-      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and configure the selected provider's credentials. TypeSafe uses TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible gateway); OpenRouter uses OPENROUTER_API_KEY; Clef uses CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN.\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n",
+      "\nPrerequisites:\n  Install Chromium with `sedum browsers install chromium` and configure the selected provider's credentials. TypeSafe uses TYPESAFE_API_KEY (and TYPESAFE_BASE_URL for a compatible gateway); OpenRouter uses OPENROUTER_API_KEY; Clef uses CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN.\n\nExamples:\n  sedum run tests/login.test.ts\n  sedum run tests/login.test.ts --id 'tests/login.test.ts#signs in'\n  sedum run tests/login.test.yaml --strict --costs\n  sedum run --non-blocking-labels quarantine\n",
     )
     .action(
       async (
@@ -336,6 +342,7 @@ export async function runCli(
           include: string[];
           exclude: string[];
           labels: string[];
+          nonBlockingLabels: string[];
           name: string[];
           id: string[];
           env?: string;
@@ -524,6 +531,7 @@ export async function runCli(
             names: options.name,
             ids: options.id,
           },
+          nonBlockingLabels: options.nonBlockingLabels,
           ...(options.env ? { environment: options.env } : {}),
           ...(options.browser ? { browser: options.browser } : {}),
           ...(options.vision !== undefined ? { vision: options.vision } : {}),

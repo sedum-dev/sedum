@@ -1,4 +1,6 @@
 import {
+  isBlocking,
+  nonBlockingFailure,
   validateRunResult,
   type ResultAttempt,
   type ResultStep,
@@ -373,18 +375,72 @@ function testStatusElement(
   return null;
 }
 
+/**
+ * A non-blocking test never fails the JUnit file, so a CI step that gates on
+ * it agrees with the exit code. Its failure is kept as a skip with the detail.
+ */
+function nonBlockingStatus(
+  test: ResultTest,
+  status: Status | null,
+): Status | null {
+  if (isBlocking(test) || !status) return status;
+  // `--strict` does not apply to a non-blocking pass.
+  if (test.verdict === "passed") return null;
+  if (!nonBlockingFailure(test)) return status;
+  return {
+    element: "skipped",
+    message: `non-blocking ${status.element}: ${status.message}`,
+    body: status.body,
+  };
+}
+
+function testProperties(
+  test: ResultTest,
+  result: RunResult,
+  strict: boolean,
+): Suite["properties"] {
+  const optional = (name: string, value: string | false) =>
+    value === false ? [] : [[name, value] as const];
+  return [
+    ["sedum.run_id", result.runId],
+    ["sedum.test_id", test.id],
+    ["sedum.verdict", test.verdict ?? "none"],
+    ...optional("sedum.state", test.state !== "completed" && test.state),
+    ...optional("sedum.flags", test.flags.length > 0 && test.flags.join(",")),
+    ...optional("sedum.tags", test.tags.length > 0 && test.tags.join(",")),
+    ...optional("sedum.blocking", !isBlocking(test) && "false"),
+    ["sedum.attempts", String(test.attempts.length)],
+    ["sedum.strict", String(strict)],
+  ];
+}
+
+/** Run-level test counts; the non-blocking count only when it applies. */
+function runCountProperties(result: RunResult): Suite["properties"] {
+  const nonBlocking = result.totals.nonBlockingFailedTests;
+  return [
+    ["sedum.tests.passed", String(result.totals.passedTests)],
+    ["sedum.tests.failed", String(result.totals.failedTests)],
+    ...(nonBlocking === undefined
+      ? []
+      : [["sedum.tests.non_blocking_failed", String(nonBlocking)] as const]),
+  ];
+}
+
 function testSuite(
   test: ResultTest,
   result: RunResult,
   options: JunitReportOptions,
 ): Suite {
   const attempt = selectedAttempt(test);
-  const status = testStatusElement(
+  const status = nonBlockingStatus(
     test,
-    attempt,
-    result,
-    options.strict,
-    options.evidenceDirectory,
+    testStatusElement(
+      test,
+      attempt,
+      result,
+      options.strict,
+      options.evidenceDirectory,
+    ),
   );
   const output: string[] = [];
   if (test.flags.length && attempt) {
@@ -420,22 +476,7 @@ function testSuite(
     file: test.file,
     time: elapsed,
     timestamp: test.attempts[0]?.startedAt ?? result.startedAt,
-    properties: [
-      ["sedum.run_id", result.runId],
-      ["sedum.test_id", test.id],
-      ["sedum.verdict", test.verdict ?? "none"],
-      ...(test.state === "completed"
-        ? []
-        : [["sedum.state", test.state] as const]),
-      ...(test.flags.length
-        ? [["sedum.flags", test.flags.join(",")] as const]
-        : []),
-      ...(test.tags.length
-        ? [["sedum.tags", test.tags.join(",")] as const]
-        : []),
-      ["sedum.attempts", String(test.attempts.length)],
-      ["sedum.strict", String(options.strict)],
-    ],
+    properties: testProperties(test, result, options.strict),
     cases: [
       {
         classname: test.file,
@@ -488,8 +529,7 @@ function runSuite(result: RunResult, strict: boolean): Suite {
       ["sedum.verdict", result.verdict ?? "none"],
       ["sedum.strict", String(strict)],
       ["sedum.tests.selected", String(selected)],
-      ["sedum.tests.passed", String(result.totals.passedTests)],
-      ["sedum.tests.failed", String(result.totals.failedTests)],
+      ...runCountProperties(result),
       ["sedum.flagged_steps", String(result.totals.flaggedSteps)],
       ["sedum.flags.low_confidence", String(flags.low_confidence)],
       ["sedum.flags.contradiction", String(flags.contradiction)],

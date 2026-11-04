@@ -6,7 +6,11 @@ import { discoverRunTests } from "../run-selection.js";
 import { shardProblems, shardTests } from "../run-shard.js";
 
 export interface RunDiscovery {
-  readonly files: readonly { readonly file: string; readonly id: string }[];
+  readonly files: readonly {
+    readonly file: string;
+    readonly id: string;
+    readonly blocking: boolean;
+  }[];
   readonly globalSelectedTests: number;
   readonly problems: NonNullable<RunResult["discoveryProblems"]>;
 }
@@ -24,9 +28,11 @@ export async function discoverCommandTests(
   const selected = options.shard
     ? shardTests(selection.tests, options.shard)
     : selection.tests;
+  const nonBlocking = options.nonBlockingLabels ?? [];
   const files = selected.map((test) => ({
     file: path.join(config.projectRoot, test.file),
     id: test.id,
+    blocking: !test.tags.some((tag) => nonBlocking.includes(tag)),
   }));
   const problems = [
     ...selection.problems,

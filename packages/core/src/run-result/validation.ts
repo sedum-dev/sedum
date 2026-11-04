@@ -7,6 +7,33 @@ import type {
   RunResult,
 } from "../run-result.js";
 
+/** Whether a test's outcome decides the run; see `ResultTest.blocking`. */
+export function isBlocking(test: ResultTest): boolean {
+  return test.blocking !== false;
+}
+
+/** A non-blocking test that failed or could not run. */
+export function nonBlockingFailure(test: ResultTest): boolean {
+  return (
+    !isBlocking(test) && (test.verdict === "failed" || test.state === "error")
+  );
+}
+
+/** The verdict of a completed run: only blocking tests decide it. */
+export function completedRunVerdict(
+  tests: readonly ResultTest[],
+): RunResult["verdict"] {
+  const blocking = tests.filter(isBlocking);
+  if (blocking.some((test) => test.verdict === "failed")) return "failed";
+  if (blocking.every((test) => test.verdict === "passed")) return "passed";
+  return null;
+}
+
+/** Run flags come from blocking tests, so `--strict` ignores quarantined ones. */
+export function runFlags(tests: readonly ResultTest[]): RunResult["flags"] {
+  return [...new Set(tests.filter(isBlocking).flatMap((test) => test.flags))];
+}
+
 export function resultTotals(
   tests: readonly ResultTest[],
   setupCalls: readonly ResultCall[] = [],
@@ -30,7 +57,12 @@ export function resultTotals(
     selectedTests: selectedTestCount,
     executedTests: tests.filter((test) => test.attempts.length > 0).length,
     passedTests: tests.filter((test) => test.verdict === "passed").length,
-    failedTests: tests.filter((test) => test.verdict === "failed").length,
+    failedTests: tests.filter(
+      (test) => isBlocking(test) && test.verdict === "failed",
+    ).length,
+    ...(tests.some((test) => !isBlocking(test))
+      ? { nonBlockingFailedTests: tests.filter(nonBlockingFailure).length }
+      : {}),
     passedSteps: steps.filter((step) => step.verdict === "passed").length,
     failedSteps: steps.filter((step) => step.verdict === "failed").length,
     historicalAttempts: tests.reduce(
@@ -238,9 +270,7 @@ function validateTest(test: ResultTest, ids: ResultIds): void {
 function expectedRunVerdict(result: RunResult): RunResult["verdict"] {
   if (result.error || result.state !== "completed" || result.tests.length === 0)
     return null;
-  if (result.tests.some((test) => test.verdict === "failed")) return "failed";
-  if (result.tests.every((test) => test.verdict === "passed")) return "passed";
-  return null;
+  return completedRunVerdict(result.tests);
 }
 
 function validateRunAggregates(result: RunResult): void {
@@ -257,16 +287,18 @@ function validateRunAggregates(result: RunResult): void {
     result.verdict !== expectedRunVerdict(result),
     "Run verdict differs from tests",
   );
-  const runFlags = [...new Set(result.tests.flatMap((test) => test.flags))];
   rejectIf(
-    JSON.stringify(result.flags) !== JSON.stringify(runFlags),
+    JSON.stringify(result.flags) !== JSON.stringify(runFlags(result.tests)),
     "Run flags differ from tests",
   );
 }
 
 function validateRunCompletion(result: RunResult): void {
+  // A non-blocking test that could not run does not stop the run completing.
   const hasIncompleteTest = result.tests.some(
-    (test) => test.state !== "completed",
+    (test) =>
+      test.state !== "completed" &&
+      (isBlocking(test) || test.state !== "error"),
   );
   rejectIf(
     result.state === "completed" &&

@@ -1,4 +1,4 @@
-import { validateRunResult, type RunResult } from "@sedum-dev/core";
+import { isBlocking, validateRunResult, type RunResult } from "@sedum-dev/core";
 import { testLabel, usageLines, visionSummary } from "@sedum-dev/reporters";
 
 export interface OutputCapabilities {
@@ -234,9 +234,14 @@ function discoveryLine(
 }
 
 function testCountLine(value: RunResult): string {
-  const errored = value.tests.filter((test) => test.state === "error").length;
+  const errored = value.tests.filter(
+    (test) => isBlocking(test) && test.state === "error",
+  ).length;
   const errorCount = errored ? `, ${errored} could not run` : "";
-  return `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed${errorCount}`;
+  const nonBlocking = value.totals.nonBlockingFailedTests;
+  const nonBlockingCount =
+    nonBlocking === undefined ? "" : `, ${nonBlocking} non-blocking failed`;
+  return `tests ${value.totals.selectedTests} selected, ${value.totals.executedTests} executed, ${value.totals.passedTests} passed, ${value.totals.failedTests} failed${errorCount}${nonBlockingCount}`;
 }
 
 function flagCountLine(value: RunResult, counts: FlagCounts): string {
