@@ -52,6 +52,7 @@
     "junit-reporter",
     "locator-accuracy-experiments",
     "native-select-options",
+    "non-blocking-labels",
     "npm-package-readme",
     "npx-hints",
     "openrouter-system-one",
