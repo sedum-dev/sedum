@@ -14,6 +14,8 @@ import { Oracles } from "./oracles.js";
 import { trustedDetections, withoutOwnInput } from "./own-input.js";
 import { Archive, returnPath, routeTemplate, type Cell } from "./archive.js";
 import { FormFlow, type FormJudge } from "./form-flow.js";
+import { Labeler, type Decide } from "./effects/labeler.js";
+import { EffectPlanner } from "./effects/planner.js";
 import { JevJudge, RULE_JUDGE } from "./form-judge.js";
 import {
   formatById,
@@ -45,6 +47,12 @@ export interface ExploreOptions {
   readonly steps: number;
   readonly seed: number;
   readonly mode: ExploreMode;
+  /**
+   * "walk" (the default) is the weighted random walk; "effects" asks Jev
+   * what each control does and plans over an abstract map of the app
+   * (guided mode only).
+   */
+  readonly planner?: ExplorePlanner;
   /** Required for guided mode and for `measureKinds`. */
   readonly advisor?: ExplorationAdvisor;
   readonly tuning?: Partial<ExploreTuning>;
@@ -76,9 +84,22 @@ export interface ExploreOptions {
   readonly signal?: AbortSignal;
 }
 
+export type ExplorePlanner = "walk" | "effects";
+
+/** What the effects planner mapped, and when the walk planner took over. */
+export interface EffectsSummary {
+  readonly states: number;
+  readonly maxDepth: number;
+  /** The step from which the walk planner spent the rest of the budget. */
+  readonly walkFrom?: number;
+}
+
 export interface ExploreResult {
   readonly seed: number;
   readonly mode: ExploreMode;
+  readonly planner?: ExplorePlanner;
+  /** The effects planner's abstract map: states and the deepest one. */
+  readonly effects?: EffectsSummary;
   readonly startUrl: string;
   readonly trace: readonly TraceEntry[];
   readonly failures: readonly ExploreFailure[];
@@ -280,6 +301,9 @@ class Explorer {
   #returning: Cell | undefined;
   #restores = 0;
   #pendingDestination: string | undefined;
+  readonly #effects: EffectPlanner | undefined;
+  /** The step at which the effects planner handed over to the walk. */
+  #walkFrom: number | undefined;
 
   constructor(
     private readonly page: BrowserPage,
@@ -308,6 +332,71 @@ class Explorer {
     });
     if (options.mode === "guided" && !options.advisor)
       throw new TypeError("Guided exploration needs an advisor");
+    this.#effects = this.#effectPlanner();
+  }
+
+  /** The effects planner, when asked for: Jev labels, code plans. */
+  #effectPlanner(): EffectPlanner | undefined {
+    if (this.options.planner !== "effects") return undefined;
+    if (this.options.mode !== "guided" || !this.options.advisor?.decide)
+      throw new TypeError(
+        "The effects planner needs guided mode and an advisor that decides",
+      );
+    return new EffectPlanner({
+      page: this.page,
+      startUrl: this.options.startUrl,
+      random: this.#random,
+      labeler: new Labeler(this.#decide(), this.#tuning.safety !== "off"),
+      safe: (candidate) => this.#safe(candidate),
+      skipDestructive: this.#tuning.skipDestructive,
+      markDangerous: (candidate) => {
+        this.#coverage.markDangerous(candidate);
+        this.#skipped.add(candidate.name);
+      },
+    });
+  }
+
+  /** One Jev call of closed questions, counted like every other call. */
+  #decide(): Decide {
+    return async (request) => {
+      const started = performance.now();
+      const decision = await this.options.advisor!.decide!(
+        request,
+        this.#callOptions(),
+      ).catch((error: unknown) => this.#advisorFailed(error));
+      this.#advisorMs.push(Math.round(performance.now() - started));
+      if (!decision) return null;
+      this.#calls.push(decision.call);
+      this.#failStreak = 0;
+      return decision.answers;
+    };
+  }
+
+  /** The effects planner while it is planning; undefined once the walk took over. */
+  get #planning(): EffectPlanner | undefined {
+    return this.#effects?.done ? undefined : this.#effects;
+  }
+
+  /** One step of the effects planner; false once it has nothing left. */
+  async #effectsStep(
+    step: number,
+    observation: Observation,
+    info: StateInfo,
+  ): Promise<boolean> {
+    const next = await this.#effects!.next(observation);
+    if (!next) return false;
+    const from = this.#trace.length;
+    await this.#act(step, observation, info, next.action, next.why);
+    const entry = this.#trace.slice(from).find((e) => e.outcome !== "forced");
+    if (entry) this.#effects!.after(entry);
+    return true;
+  }
+
+  /** The walk planner spends the rest of the budget, guided from here on. */
+  #handOver(step: number, observation: Observation): Promise<StateInfo> {
+    this.#walkFrom = step;
+    this.#advice.clear();
+    return this.#stateInfo(observation);
   }
 
   /** A cold server (a sleeping demo host) may time out once; try again. */
@@ -348,7 +437,11 @@ class Explorer {
     this.#states.add(observation.state);
     this.#routes.add(observation.route);
     this.#chrome.learn(observation);
-    const info = await this.#stateInfo(observation);
+    let info = await this.#stateInfo(observation);
+    if (this.#planning) {
+      if (await this.#effectsStep(step, observation, info)) return;
+      info = await this.#handOver(step, observation);
+    }
     this.#markJudged(observation, info);
     if (this.#pendingDestination)
       this.#coverage.learn(this.#pendingDestination, info.kind);
@@ -717,13 +810,19 @@ class Explorer {
   async #stateInfo(observation: Observation): Promise<StateInfo> {
     const cached = this.#advice.get(observation.state);
     if (cached) return cached;
-    const steering = this.options.mode === "guided";
-    if (!steering && !this.options.measureKinds) return {};
-    const { ids, targets } = adviceTargets(observation);
+    const purpose = this.#statePurpose();
+    if (!purpose) return {};
+    const steering = purpose === "steer";
+    // The effects planner sends no targets: it asks only the page checks.
+    const { ids, targets } = this.#planning
+      ? { ids: new Map<number, string>(), targets: {} }
+      : adviceTargets(observation);
     const answer = await this.#assess(observation, targets, steering);
     // A failed call leaves this state unguided; the walk goes on.
     if (!answer) return {};
-    (steering ? this.#calls : this.#measurementCalls).push(answer.call);
+    (purpose === "measure" ? this.#measurementCalls : this.#calls).push(
+      answer.call,
+    );
     if (answer.inspection)
       await this.#inspectState(observation, answer.inspection);
     const info: StateInfo = {
@@ -732,6 +831,16 @@ class Explorer {
     };
     this.#advice.set(observation.state, info);
     return info;
+  }
+
+  /**
+   * Why each new state is assessed: to steer the guided walk, for the page
+   * checks the effects planner keeps, only to measure coverage, or not at all.
+   */
+  #statePurpose(): "steer" | "inspect" | "measure" | undefined {
+    if (this.options.mode === "guided" && !this.#planning) return "steer";
+    if (this.#planning && this.options.detect === "semantic") return "inspect";
+    return this.options.measureKinds ? "measure" : undefined;
   }
 
   /**
@@ -789,7 +898,7 @@ class Explorer {
           targets,
           kinds: PAGE_KINDS,
           predictTargets: steering && this.#tuning.predictTargets,
-          askDestructive: this.#tuning.safety !== "off",
+          askDestructive: this.#tuning.safety !== "off" && !this.#planning,
           inspect: this.options.detect === "semantic",
         },
         this.#callOptions(),
@@ -967,6 +1076,18 @@ class Explorer {
     return {
       seed: this.options.seed,
       mode: this.options.mode,
+      planner: this.#effects ? "effects" : "walk",
+      ...(this.#effects
+        ? {
+            effects: {
+              states: this.#effects.map.states.size,
+              maxDepth: this.#effects.maxDepth,
+              ...(this.#walkFrom === undefined
+                ? {}
+                : { walkFrom: this.#walkFrom }),
+            },
+          }
+        : {}),
       startUrl: this.options.startUrl,
       trace: this.#trace,
       failures: [...this.#failures.values()],
